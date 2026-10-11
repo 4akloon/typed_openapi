@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -71,17 +72,32 @@ final class SpecLoader {
   /// duplicate key) is read again with `jsonDecode`, without positions.
   SpecDocument? parse(String text, String file, {Uri? uri}) {
     final location = uri ?? p.toUri(p.normalize(p.absolute(file)));
-    final tooDeep = const NestingScanner().findTooDeep(text);
-    if (tooDeep != null) {
-      _diagnostics.report(
-        .nestingTooDeep,
-        'The document nests deeper than ${NestingScanner.maxDepth} levels.',
-        file: file,
-        span: SourceFile.fromString(
-          text,
-          url: location,
-        ).span(tooDeep, tooDeep + 1),
-      );
+    final found = const NestingScanner().scan(text);
+    if (found != null) {
+      final span = SourceFile.fromString(
+        text,
+        url: location,
+      ).span(found.offset, found.offset + 1);
+      switch (found.problem) {
+        case .tooDeep:
+          _diagnostics.report(
+            .nestingTooDeep,
+            'The document nests deeper than ${NestingScanner.maxDepth} '
+            'levels.',
+            file: file,
+            span: span,
+          );
+        case .aliasKey:
+          _diagnostics.report(
+            .aliasExpansionTooLarge,
+            'A YAML alias is used in a mapping key. OpenAPI keys are '
+            'strings, and an alias there can expand without bound, so the '
+            'document is not read.',
+            file: file,
+            span: span,
+            fix: 'Write the key out instead of aliasing it.',
+          );
+      }
       return null;
     }
     final YamlNode node;
@@ -104,8 +120,9 @@ final class SpecLoader {
       _diagnostics,
       file,
       max(_PlainConverter.minBudget, 20 * text.length),
+      mayHaveAliases: text.contains('*'),
     );
-    final root = converter.convert(node, .root, 1);
+    final root = converter.convert(node, .root, 0);
     if (converter.failed) return null;
     return SpecDocument(
       file: file,
@@ -198,18 +215,37 @@ final class SpecLoader {
 /// tree can take far more steps, and go far deeper, than the text suggests.
 /// The text-level `NestingScanner` cannot see that, so the conversion
 /// enforces both limits itself: it stops at the first node deeper than
-/// [NestingScanner.maxDepth] (`nesting-too-deep`) and once it has converted
-/// more nodes than its budget (`alias-expansion-too-large`). Either is
-/// reported once, at that node, and sets [failed].
+/// [NestingScanner.maxDepth] (`nesting-too-deep`) and once the nodes it has
+/// converted have cost more than its budget (`alias-expansion-too-large`).
+/// Either is reported once, at that node, and sets [failed].
+///
+/// The first visit of a node costs 1: such nodes are written in the text, so
+/// their number is bounded by its length. Every later visit, which only
+/// aliases cause, costs its depth plus one: a converted node keeps a pointer
+/// with a segment per level above it, so thousands of aliases of a node
+/// hundreds of levels deep take as much memory and time as millions of
+/// shallow nodes. Ordinary specs use few aliases, and those sit about ten
+/// levels deep, so the budget is far from them.
 final class _PlainConverter {
-  _PlainConverter(this._diagnostics, this._file, this._budget);
+  _PlainConverter(
+    this._diagnostics,
+    this._file,
+    this._budget, {
+    required this.mayHaveAliases,
+  });
 
-  /// The smallest node budget: ordinary specs never come near it.
+  /// The smallest budget: ordinary specs never come near it.
   static const minBudget = 100000;
 
   final DiagnosticBag _diagnostics;
   final String _file;
   int _budget;
+
+  /// Whether the text may contain aliases, which decides how a depth error
+  /// is worded.
+  final bool mayHaveAliases;
+
+  final Set<YamlNode> _seen = HashSet<YamlNode>.identity();
 
   /// The source range of every converted node, by pointer value.
   final Map<String, SourceSpan> spans = {};
@@ -218,10 +254,11 @@ final class _PlainConverter {
   bool failed = false;
 
   /// Converts [node], which is at [pointer], [depth] collections deep (the
-  /// root is 1).
+  /// root is 0, as for the `NestingScanner`).
   Object? convert(YamlNode node, JsonPointer pointer, int depth) {
     if (failed) return null;
-    if (--_budget < 0) {
+    _budget -= _seen.add(node) ? 1 : depth + 1;
+    if (_budget < 0) {
       _fail(
         .aliasExpansionTooLarge,
         'YAML aliases expand to far more nodes than the text has; the '
@@ -236,8 +273,8 @@ final class _PlainConverter {
     if (isCollection && depth > NestingScanner.maxDepth) {
       _fail(
         .nestingTooDeep,
-        'The document nests deeper than ${NestingScanner.maxDepth} levels, '
-        'counting what its aliases expand to.',
+        'The document nests deeper than ${NestingScanner.maxDepth} levels'
+        '${mayHaveAliases ? ', counting what its aliases expand to' : ''}.',
         node,
         pointer,
       );

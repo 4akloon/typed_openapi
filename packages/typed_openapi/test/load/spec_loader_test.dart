@@ -116,23 +116,33 @@ void main() {
         return '$text';
       }
 
-      test('a chain of aliases that nests too deep is reported', () {
-        final bag = DiagnosticBag();
-        expect(SpecLoader(bag).parse(chain(1500), 'api.yaml'), isNull);
-        final d = bag.all.single;
-        expect(d.code, DiagnosticCode.nestingTooDeep);
-        expect(d.pointer!.tokens, hasLength(NestingScanner.maxDepth));
-        expect(d.pointer!.tokens.take(3), ['components', 'schemas', 'a997']);
-        expect(d.span, isNotNull);
-      }, timeout: limit);
+      /// A document whose text nests [levels] deep, with an alias of it
+      /// inside a text that is [levels] deep again. Comments pad the text so
+      /// that the expansion stays within the budget.
+      String deepAlias(int levels) =>
+          'openapi: 3.1.0\n# ${'p' * 100000}\n'
+          'x-deep: &deep ${'[' * levels}x${']' * levels}\n'
+          'x-use: ${'[' * levels}*deep${']' * levels}\n';
 
       test('aliases whose text is shallow but expand deep are reported, '
           'not a stack overflow', () {
         final bag = DiagnosticBag();
-        final text = chain(80, levelsEach: 60);
+        final text = deepAlias(600);
         expect(const NestingScanner().findTooDeep(text), isNull);
         expect(SpecLoader(bag).parse(text, 'api.yaml'), isNull);
-        expect(bag.all.single.code, DiagnosticCode.nestingTooDeep);
+        final d = bag.all.single;
+        expect(d.code, DiagnosticCode.nestingTooDeep);
+        expect(d.message, contains('alias'));
+        expect(d.pointer!.tokens, hasLength(NestingScanner.maxDepth + 1));
+        expect(d.pointer!.tokens.take(2), ['x-use', '0']);
+        expect(d.span, isNotNull);
+      }, timeout: limit);
+
+      test('a chain of aliases is bounded by cost long before it is deep '
+          'enough to overflow', () {
+        final bag = DiagnosticBag();
+        expect(SpecLoader(bag).parse(chain(1500), 'api.yaml'), isNull);
+        expect(bag.all.single.code, DiagnosticCode.aliasExpansionTooLarge);
       }, timeout: limit);
 
       test('an alias bomb is reported once and not expanded', () {
@@ -153,6 +163,48 @@ void main() {
         expect(d.span, isNotNull);
       }, timeout: limit);
 
+      test('a wide and deep alias chain is bounded by what it costs, '
+          'not by node count', () {
+        // 900 nested anchors, then thousands of aliases of the deepest one:
+        // every expanded node is hundreds of levels down and stores a
+        // pointer that long, so the node count alone is a poor budget.
+        final text = StringBuffer(chain(900));
+        for (var i = 0; text.length < 200 * 1024; i++) {
+          text.writeln('    u$i: *a900');
+        }
+        final bag = DiagnosticBag();
+        final watch = Stopwatch()..start();
+        expect(SpecLoader(bag).parse('$text', 'api.yaml'), isNull);
+        watch.stop();
+        expect(bag.all.single.code, DiagnosticCode.aliasExpansionTooLarge);
+        expect(watch.elapsed, lessThan(const Duration(seconds: 2)));
+      }, timeout: limit);
+
+      test('a document exactly as deep as the limit is accepted', () {
+        final bag = DiagnosticBag();
+        final doc = SpecLoader(bag).parse(
+          'openapi: 3.1.0\nx-deep: '
+              '${'[' * NestingScanner.maxDepth}${']' * NestingScanner.maxDepth}\n',
+          'api.yaml',
+        );
+        expect(doc, isNotNull);
+        expect(bag.all, isEmpty);
+      }, timeout: limit);
+
+      test('one level past the limit is the scanner\'s nesting-too-deep', () {
+        final bag = DiagnosticBag();
+        final doc = SpecLoader(bag).parse(
+          'openapi: 3.1.0\nx-deep: '
+              '${'[' * (NestingScanner.maxDepth + 1)}'
+              '${']' * (NestingScanner.maxDepth + 1)}\n',
+          'api.yaml',
+        );
+        expect(doc, isNull);
+        final d = bag.all.single;
+        expect(d.code, DiagnosticCode.nestingTooDeep);
+        expect(d.message, isNot(contains('alias')));
+      }, timeout: limit);
+
       test('aliases that stay small are expanded as written', () {
         final bag = DiagnosticBag();
         final doc = SpecLoader(bag).parse('''
@@ -167,6 +219,85 @@ x-two: *base
         });
         expect(doc.spanOf(JsonPointer.parse('#/x-two/b/1')), isNotNull);
         expect(bag.all, isEmpty);
+      }, timeout: limit);
+    });
+
+    group('alias keys', () {
+      const limit = Timeout(Duration(seconds: 5));
+
+      String bomb(String key) {
+        final text = StringBuffer(
+          'openapi: 3.1.0\nx-bomb:\n  l0: &l0 [x, x, x, x, x, x, x, x, x]\n',
+        );
+        for (var i = 1; i <= 7; i++) {
+          text.writeln(
+            '  l$i: &l$i [${List.filled(9, '*l${i - 1}').join(', ')}]',
+          );
+        }
+        text.writeln('x-key:');
+        text.writeln(key);
+        return '$text';
+      }
+
+      for (final (name, key) in [
+        ('after a ? marker', '  ? *l7\n  : v'),
+        ('inside a ? key sequence', '  ? [*l7]\n  : v'),
+        ('inside a ? key block sequence', '  ? - *l7\n  : v'),
+        ('before a colon', '  *l7 : v'),
+        ('in a flow mapping', '  {*l7 : v}'),
+        ('as an entry of a flow mapping', '  {a: 1, *l7 : v}'),
+        ('as a bare entry of a flow mapping', '  {*l7, a: 1}'),
+      ]) {
+        test('an alias $name is rejected fast, without expanding', () {
+          final bag = DiagnosticBag();
+          final watch = Stopwatch()..start();
+          expect(SpecLoader(bag).parse(bomb(key), 'api.yaml'), isNull);
+          watch.stop();
+          final d = bag.all.single;
+          expect(d.code, DiagnosticCode.aliasExpansionTooLarge);
+          expect(d.message, contains('key'));
+          expect(d.span, isNotNull);
+          expect(watch.elapsed, lessThan(const Duration(seconds: 1)));
+        }, timeout: limit);
+      }
+
+      test('a merge key and aliases in values are accepted', () {
+        final bag = DiagnosticBag();
+        final doc = SpecLoader(bag).parse(
+          '''
+openapi: 3.1.0
+x-base: &base {a: 1}
+x-ref: &ref [1, 2]
+x-merge:
+  <<: *base
+  b: 2
+x-value: *ref
+x-flow: {k: *ref, j: [*ref, *base]}
+x-seq:
+  - *ref
+  - *base
+''',
+          'api.yaml',
+        );
+        expect(bag.all, isEmpty);
+        expect(doc, isNotNull);
+        expect(doc!.root['x-value'], [1, 2]);
+      }, timeout: limit);
+
+      test('a * inside quotes or plain text is not an alias', () {
+        final bag = DiagnosticBag();
+        final doc = SpecLoader(bag).parse(
+          '''
+openapi: 3.1.0
+x-a: {"*k": 1, '*j': 2, p*q: 3}
+"*l" : 4
+'*m': 5
+x-b: a * b
+''',
+          'api.yaml',
+        );
+        expect(bag.all.where((d) => d.severity == Severity.error), isEmpty);
+        expect(doc, isNotNull);
       }, timeout: limit);
     });
 

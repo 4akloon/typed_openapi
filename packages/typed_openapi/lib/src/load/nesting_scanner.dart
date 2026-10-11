@@ -1,9 +1,16 @@
-/// Finds text that nests too deeply to parse, without parsing it.
+/// Finds text that the YAML parser cannot be trusted with, without parsing
+/// it: text that nests too deeply, and aliases used in mapping keys.
 ///
 /// The YAML parser recurses once per nesting level and overflows the stack
 /// at a few thousand levels. A `StackOverflowError` cannot be handled like
 /// bad input, so loaders run this scan first and report such text as a
 /// diagnostic instead.
+///
+/// An alias in a mapping key (`? *a`, `*a : v`, `{*a : v}`, or any alias
+/// inside a `? ` key) makes the parser compare and hash the aliased value
+/// as a tree, which takes exponential time for an alias bomb and happens
+/// before any later check can see it. OpenAPI keys are strings, so an alias
+/// there is reported as well; `<<: *a` and aliases in values are not keys.
 ///
 /// The scan follows just enough YAML context to find the syntax: `[`, `{`,
 /// `'` and `"` mean something only where a value starts (the first thing on
@@ -36,7 +43,26 @@ final class NestingScanner {
 
   /// The offset in [text] where the nesting first exceeds [limit], or null
   /// when it never does.
-  int? findTooDeep(String text, {int limit = maxDepth}) {
+  int? findTooDeep(String text, {int limit = maxDepth}) =>
+      scan(text, limit: limit, aliasKeys: false)?.offset;
+
+  /// The offset in [text] of the first alias that is part of a mapping key,
+  /// or null when there is none.
+  int? findAliasKey(String text) => scan(text, limit: _unlimited)?.offset;
+
+  static const _unlimited = 1 << 60;
+
+  /// Scans [text] once and returns the first [ScanFinding], or null.
+  ///
+  /// With [aliasKeys] false aliases in keys are not looked for.
+  ScanFinding? scan(
+    String text, {
+    int limit = maxDepth,
+    bool aliasKeys = true,
+  }) {
+    final flowKinds = <bool>[];
+    var keyPosition = false;
+    var keyIndent = -1;
     var flow = 0;
     var block = 0;
     var flowBase = 0;
@@ -88,7 +114,7 @@ final class NestingScanner {
         if (char == ' ' || char == '\t') {
           if (flow == 0) {
             block++;
-            if (block > limit) return i;
+            if (block > limit) return ScanFinding._(.tooDeep, i);
           }
           continue;
         }
@@ -101,15 +127,22 @@ final class NestingScanner {
           atLineStart = false;
           valueStart = false;
         } else {
+          if (flow == 0 &&
+              keyIndent >= 0 &&
+              char != '#' &&
+              block <= keyIndent) {
+            keyIndent = -1;
+          }
           final marker = _markerLength(text, i);
           if (marker > 0) {
             if (flow == 0) {
+              if (char == '?') keyIndent = block;
               markerColumn = block;
               block += marker;
-              if (block > limit) return i;
+              if (block > limit) return ScanFinding._(.tooDeep, i);
             } else {
               lineMarkers += marker == 1 ? 2 : marker;
-              if (lineMarkers > limit) return i;
+              if (lineMarkers > limit) return ScanFinding._(.tooDeep, i);
             }
             i += marker - 1;
             continue;
@@ -133,6 +166,12 @@ final class NestingScanner {
         valueStart = true;
         continue;
       }
+      if (aliasKeys && atValue && char == '*') {
+        final forced = keyIndent >= 0 || (flow > 0 && keyPosition);
+        if (forced || _precedesValueIndicator(text, _propertyEnd(text, i))) {
+          return ScanFinding._(.aliasKey, i);
+        }
+      }
       if (atValue && (char == '"' || char == "'")) {
         plainOpen = false;
         quote = char;
@@ -142,7 +181,9 @@ final class NestingScanner {
         if (flow == 0) flowBase = block;
         plainOpen = false;
         flow++;
-        if (flowBase + flow > limit) return i;
+        flowKinds.add(char == '{');
+        keyPosition = char == '{';
+        if (flowBase + flow > limit) return ScanFinding._(.tooDeep, i);
         valueStart = true;
         continue;
       }
@@ -150,8 +191,11 @@ final class NestingScanner {
         plainOpen = false;
         if (char == ']' || char == '}') {
           flow--;
+          flowKinds.removeLast();
+          keyPosition = false;
         } else if (char == ',' || char == ':') {
           valueStart = true;
+          keyPosition = char == ',' && flowKinds.last;
         }
         continue;
       }
@@ -178,6 +222,17 @@ final class NestingScanner {
       }
     }
     return null;
+  }
+
+  /// Whether a `:` value indicator follows [from] after optional blanks.
+  static bool _precedesValueIndicator(String text, int from) {
+    var i = from;
+    while (i < text.length && (text[i] == ' ' || text[i] == '\t')) {
+      i++;
+    }
+    return i < text.length &&
+        text[i] == ':' &&
+        (_isBlank(text, i + 1) || const {',', ']', '}'}.contains(text[i + 1]));
   }
 
   /// The length of the block marker (`- `, `? `, `: ` or `---`) at [i], or 0.
@@ -248,4 +303,24 @@ final class NestingScanner {
 
   static bool _isBlank(String text, int i) =>
       i >= text.length || const {' ', '\t', '\n', '\r'}.contains(text[i]);
+}
+
+/// What [NestingScanner.scan] found.
+final class ScanFinding {
+  const ScanFinding._(this.problem, this.offset);
+
+  /// The kind of problem.
+  final ScanProblem problem;
+
+  /// The offset in the scanned text where the problem starts.
+  final int offset;
+}
+
+/// A kind of problem [NestingScanner] reports.
+enum ScanProblem {
+  /// The text nests deeper than the limit.
+  tooDeep,
+
+  /// An alias is part of a mapping key.
+  aliasKey,
 }

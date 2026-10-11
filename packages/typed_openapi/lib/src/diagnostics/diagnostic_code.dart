@@ -26,7 +26,8 @@ enum DiagnosticCode {
   /// once YAML aliases are expanded.
   nestingTooDeep('TOA007', 'nesting-too-deep', .error),
 
-  /// YAML aliases expand to far more nodes than the text has.
+  /// YAML aliases expand to far more nodes than the text has, or an alias
+  /// is used in a mapping key.
   aliasExpansionTooLarge('TOA008', 'alias-expansion-too-large', .error),
 
   /// The document has no `openapi` field.

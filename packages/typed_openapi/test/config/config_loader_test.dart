@@ -88,6 +88,34 @@ clients:
     expect(bag.all.single.message, contains('nests deeper'));
   });
 
+  test('rejects an alias used as a key before expanding it', () {
+    final text = StringBuffer('x-l0: &l0 [x, x, x, x, x, x, x, x, x]\n');
+    for (var i = 1; i <= 7; i++) {
+      text.writeln('x-l$i: &l$i [${List.filled(9, '*l${i - 1}').join(', ')}]');
+    }
+    text.writeln('x-key:\n  ? *l7\n  : v');
+    text.writeln('clients:\n  api: {input: a.json, output: lib/api}');
+    final path = TempDir().write('typed_openapi.yaml', '$text');
+    final bag = DiagnosticBag();
+    final watch = Stopwatch()..start();
+    expect(ConfigLoader(bag).load(path), isNull);
+    watch.stop();
+    expect(bag.all.single.code, DiagnosticCode.configInvalid);
+    expect(bag.all.single.message, contains('key'));
+    expect(watch.elapsed, lessThan(const Duration(seconds: 1)));
+  });
+
+  test('accepts an alias in a value', () {
+    final path = TempDir().write('typed_openapi.yaml', '''
+clients:
+  api: {input: &i a.json, output: lib/api}
+  other: {input: *i, output: lib/other}
+''');
+    final bag = DiagnosticBag();
+    expect(ConfigLoader(bag).load(path)!.clients, hasLength(2));
+    expect(bag.all, isEmpty);
+  });
+
   test('reports unknown keys as warnings and keeps going', () {
     final dir = TempDir();
     final path = dir.write('c.yaml', '''

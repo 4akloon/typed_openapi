@@ -143,4 +143,61 @@ c: [1, 2]
     ).join();
     expect(scanner.findTooDeep(text, limit: 10), isNull);
   });
+
+  group('findAliasKey', () {
+    int? find(String text) => scanner.findAliasKey(text);
+
+    test('finds an alias after a ? marker', () {
+      expect(find('a:\n  ? *x\n  : v\n'), 7);
+      expect(find('? *x\n'), 2);
+      expect(find('?\n  *x\n'), 4);
+    });
+
+    test('finds an alias anywhere inside a ? key, not after it', () {
+      expect(find('? [*x]\n: v\n'), 3);
+      expect(find('? - *x\n: v\n'), 4);
+      expect(find('? {a: *x}\n: v\n'), 6);
+      expect(find('? a\n: *x\n'), isNull);
+      expect(find('a:\n  ? k\n  : *x\n  b: *y\n'), isNull);
+      expect(find('? k\n# c\n: [*x]\n'), isNull);
+    });
+
+    test('finds an alias before a value indicator', () {
+      expect(find('*x : v\n'), 0);
+      expect(find('a:\n  *x : v\n'), 5);
+      expect(find('- *x : v\n'), 2);
+      expect(find('*x :\n  v\n'), 0);
+    });
+
+    test('finds an alias key inside a flow collection', () {
+      expect(find('{*x : v}'), 1);
+      expect(find('{a: 1, *x: v}'), 7);
+      expect(find('{*x, a: 1}'), 1);
+      expect(find('{a: 1, *x}'), 7);
+      expect(find('[*x : v]'), 1);
+      expect(find('a: [{b: [1], *x : 2}]'), 13);
+    });
+
+    test('ignores aliases in value position', () {
+      expect(find('a: *x\n'), isNull);
+      expect(find('<<: *x\n'), isNull);
+      expect(find('- *x\n- *y # c\n'), isNull);
+      expect(find('a: {b: *x, c: [*x, *y]}\n'), isNull);
+      expect(find('{a: *x}'), isNull);
+      expect(find('{a: *x , b: 1}'), isNull);
+      expect(find('[*x, *y]'), isNull);
+      expect(find('? a\n: *x\n'), isNull);
+    });
+
+    test('ignores a * that is not an alias', () {
+      expect(find('"*x" : v\n'), isNull);
+      expect(find("'*x' : v\n"), isNull);
+      expect(find('a*b : v\n'), isNull);
+      expect(find('a: b * c\n'), isNull);
+      expect(find('a: |\n  *x : v\n'), isNull);
+      expect(find('# *x : v\n'), isNull);
+      expect(find('a: "[*x : v]"\n'), isNull);
+      expect(find('a: b\n  *x : v\n'), isNull);
+    });
+  });
 }

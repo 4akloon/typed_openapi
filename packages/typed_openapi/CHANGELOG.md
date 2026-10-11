@@ -17,10 +17,12 @@
   (TOA020), `nullable` in 3.1+ (TOA021), 3.2 constructs in older documents
   (TOA022).
 - Loading: nesting deeper than 1000 levels, in the text or once YAML aliases
-  are expanded, is reported (TOA007) instead of crashing; an alias bomb (more
-  than `max(100000, 20 * text length)` expanded nodes) is reported (TOA008)
-  instead of hanging; YAML keys such as `1` and `"1"` that merge into one
-  JSON key are reported (TOA002); a directory given as the spec or the config
-  is reported as such.
+  are expanded, is reported (TOA007) instead of crashing; an alias bomb (alias
+  expansion that costs more than `max(100000, 20 * text length)`, a repeated
+  node costing its depth) is reported (TOA008) instead of hanging, and so is
+  an alias used in a mapping key (`? *a`, `*a : v`, `{*a : v}`), which the
+  YAML parser would expand before any check runs; YAML keys such as `1` and
+  `"1"` that merge into one JSON key are reported (TOA002); a directory given
+  as the spec or the config is reported as such.
 - A region of a spec that several `$ref`s, enclosing nodes or clients reach is
-  read once, and a diagnostic is never reported twice.
+  read once, and an identical diagnostic is reported once.

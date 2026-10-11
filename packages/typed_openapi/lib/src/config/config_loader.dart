@@ -66,13 +66,19 @@ final class ConfigLoader {
       );
       return null;
     }
-    final tooDeep = const NestingScanner().findTooDeep(text);
-    if (tooDeep != null) {
+    final found = const NestingScanner().scan(text);
+    if (found != null) {
       _diagnostics.report(
         .configInvalid,
-        'The config nests deeper than ${NestingScanner.maxDepth} levels.',
+        switch (found.problem) {
+          .tooDeep =>
+            'The config nests deeper than ${NestingScanner.maxDepth} levels.',
+          .aliasKey =>
+            'The config uses a YAML alias in a mapping key; keys are '
+                'strings, and an alias there can expand without bound.',
+        },
         file: path,
-        span: SourceFile.fromString(text).span(tooDeep, tooDeep + 1),
+        span: SourceFile.fromString(text).span(found.offset, found.offset + 1),
       );
       return null;
     }
