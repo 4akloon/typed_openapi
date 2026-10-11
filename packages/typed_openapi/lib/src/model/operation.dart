@@ -36,7 +36,8 @@ final class PathItem extends SpecNode {
   /// `description`.
   final String? description;
 
-  /// Operations by lowercase method from [methods], in document order.
+  /// Operations by lowercase method from [methods], in the canonical order
+  /// of [methods] (not document order).
   final Map<String, Operation> operations;
 
   /// `additionalOperations` (OpenAPI 3.2): operations by method, with the

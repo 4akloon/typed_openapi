@@ -1,11 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:path/path.dart' as p;
 import 'package:source_span/source_span.dart';
 import 'package:yaml/yaml.dart';
 
 import '../diagnostics/diagnostic_bag.dart';
+import '../diagnostics/diagnostic_code.dart';
 import '../diagnostics/json_pointer.dart';
 import 'nesting_scanner.dart';
 import 'spec_document.dart';
@@ -98,9 +100,19 @@ final class SpecLoader {
       );
       return null;
     }
-    final spans = <String, SourceSpan>{};
-    final root = _toPlain(node, .root, spans, file)! as Map<String, Object?>;
-    return SpecDocument(file: file, uri: location, root: root, spans: spans);
+    final converter = _PlainConverter(
+      _diagnostics,
+      file,
+      max(_PlainConverter.minBudget, 20 * text.length),
+    );
+    final root = converter.convert(node, .root, 1);
+    if (converter.failed) return null;
+    return SpecDocument(
+      file: file,
+      uri: location,
+      root: root! as Map<String, Object?>,
+      spans: converter.spans,
+    );
   }
 
   SpecDocument? _parseJsonFallback(
@@ -177,19 +189,67 @@ final class SpecLoader {
     );
     return SpecDocument(file: file, uri: uri, root: root, spans: const {});
   }
+}
 
-  Object? _toPlain(
-    YamlNode node,
-    JsonPointer pointer,
-    Map<String, SourceSpan> spans,
-    String file,
-  ) {
+/// Turns a YAML node tree into plain values and records the span of every
+/// node.
+///
+/// YAML aliases make the tree a graph that shares nodes, so walking it as a
+/// tree can take far more steps, and go far deeper, than the text suggests.
+/// The text-level `NestingScanner` cannot see that, so the conversion
+/// enforces both limits itself: it stops at the first node deeper than
+/// [NestingScanner.maxDepth] (`nesting-too-deep`) and once it has converted
+/// more nodes than its budget (`alias-expansion-too-large`). Either is
+/// reported once, at that node, and sets [failed].
+final class _PlainConverter {
+  _PlainConverter(this._diagnostics, this._file, this._budget);
+
+  /// The smallest node budget: ordinary specs never come near it.
+  static const minBudget = 100000;
+
+  final DiagnosticBag _diagnostics;
+  final String _file;
+  int _budget;
+
+  /// The source range of every converted node, by pointer value.
+  final Map<String, SourceSpan> spans = {};
+
+  /// Whether a limit was hit; the converted value is then incomplete.
+  bool failed = false;
+
+  /// Converts [node], which is at [pointer], [depth] collections deep (the
+  /// root is 1).
+  Object? convert(YamlNode node, JsonPointer pointer, int depth) {
+    if (failed) return null;
+    if (--_budget < 0) {
+      _fail(
+        .aliasExpansionTooLarge,
+        'YAML aliases expand to far more nodes than the text has; the '
+        'document is not read.',
+        node,
+        pointer,
+        fix: 'Remove the nested aliases.',
+      );
+      return null;
+    }
+    final isCollection = node is YamlMap || node is YamlList;
+    if (isCollection && depth > NestingScanner.maxDepth) {
+      _fail(
+        .nestingTooDeep,
+        'The document nests deeper than ${NestingScanner.maxDepth} levels, '
+        'counting what its aliases expand to.',
+        node,
+        pointer,
+      );
+      return null;
+    }
     spans[pointer.value] = node.span;
     switch (node) {
       case YamlMap():
         final map = <String, Object?>{};
         final keys = <String, YamlNode>{};
         for (final MapEntry(:key, :value) in node.nodes.entries) {
+          if (failed) return null;
           final keyNode = key as YamlNode;
           final name = '${keyNode.value}';
           final earlier = keys[name];
@@ -198,23 +258,43 @@ final class SpecLoader {
               .duplicateKey,
               'Keys ${earlier.span.text} and ${keyNode.span.text} are the '
               'same key "$name" in JSON; the last value is used.',
-              file: file,
+              file: _file,
               pointer: pointer.child(name),
               span: keyNode.span,
               fix: 'Remove one of the keys.',
             );
           }
           keys[name] = keyNode;
-          map[name] = _toPlain(value, pointer.child(name), spans, file);
+          map[name] = convert(value, pointer.child(name), depth + 1);
         }
         return map;
       case YamlList():
-        return <Object?>[
-          for (var i = 0; i < node.nodes.length; i++)
-            _toPlain(node.nodes[i], pointer.child(i), spans, file),
-        ];
+        final list = <Object?>[];
+        for (var i = 0; i < node.nodes.length; i++) {
+          if (failed) return null;
+          list.add(convert(node.nodes[i], pointer.child(i), depth + 1));
+        }
+        return list;
       default:
         return node.value;
     }
+  }
+
+  void _fail(
+    DiagnosticCode code,
+    String message,
+    YamlNode node,
+    JsonPointer pointer, {
+    String? fix,
+  }) {
+    failed = true;
+    _diagnostics.report(
+      code,
+      message,
+      file: _file,
+      pointer: pointer,
+      span: node.span,
+      fix: fix,
+    );
   }
 }

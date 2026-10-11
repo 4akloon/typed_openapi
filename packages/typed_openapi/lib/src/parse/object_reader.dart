@@ -50,8 +50,16 @@ final class ObjectReader {
   /// [key] as a boolean.
   bool? boolean(String key) => _typed<bool>(key, 'true or false');
 
-  /// [key] as a number.
-  num? number(String key) => _typed<num>(key, 'a number');
+  /// [key] as a finite number; NaN and infinity are reported and read as
+  /// missing.
+  num? number(String key) {
+    final raw = value(key);
+    if (raw == null) return null;
+    final (number,) = raw;
+    if (number is num && number.isFinite) return number;
+    _invalid(key, 'a finite number', number);
+    return null;
+  }
 
   /// [key] as a non-negative integer; `3.0` reads as `3`.
   int? count(String key) {
@@ -147,16 +155,21 @@ final class ObjectReader {
       map(key, (raw, at) => _item<String>(raw, at, 'a string'));
 
   /// [key] read by [read] when it is an object.
-  T? object<T>(String key, T Function(ObjectReader reader) read) {
+  T? object<T extends SpecNode>(
+    String key,
+    T Function(ObjectReader reader) read,
+  ) {
     final raw = value(key);
     if (raw == null) return null;
-    final reader = _context.reader(raw.$1, pointer.child(key), '"$key"');
-    return reader == null ? null : read(reader);
+    return _context.node(raw.$1, pointer.child(key), '"$key"', read);
   }
 
   /// [key] read by [read]; reports `missing-required-field` when it is
   /// missing.
-  T? requiredObject<T>(String key, T Function(ObjectReader reader) read) {
+  T? requiredObject<T extends SpecNode>(
+    String key,
+    T Function(ObjectReader reader) read,
+  ) {
     if (!has(key)) _missing(key);
     return object(key, read);
   }

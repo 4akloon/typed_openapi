@@ -71,6 +71,49 @@ item:
     ]);
   });
 
+  test('a malformed security requirement value keeps the scheme, empty', () {
+    final (item, fixture) = parse('''
+item:
+  get:
+    responses: {}
+    security:
+      - oauth: [read]
+        broken: write
+        mixed: [a, 1]
+''');
+    final requirement = inline(item).operations['get']!.security!.single;
+    expect(requirement.schemes, {
+      'oauth': ['read'],
+      'broken': <String>[],
+      'mixed': ['a'],
+    });
+    expect(fixture.codes, [
+      DiagnosticCode.invalidValue,
+      DiagnosticCode.invalidValue,
+    ]);
+    expect(fixture.pointers, [
+      '#/item/get/security/0/broken',
+      '#/item/get/security/0/mixed/1',
+    ]);
+  });
+
+  test('a node inside an already read parameter is the same node', () {
+    final (item, fixture) = parse('''
+item:
+  parameters:
+    - {name: id, in: path, schema: {type: string}, bogus: 1}
+''');
+    final parameters = inline(item).parameters;
+    final pointer = JsonPointer.parse('#/item/parameters/0');
+    final again = OperationParser(
+      fixture.context,
+      SchemaParser(fixture.context),
+    ).parameter(fixture.document.valueAt(pointer)!.$1, pointer);
+    expect(inline(again), same(inline(parameters.single)));
+    expect(fixture.codes, [DiagnosticCode.unknownKey]);
+    expect(fixture.index.nodes, hasLength(3));
+  });
+
   test('security stays null when an operation does not set it', () {
     final (item, _) = parse('item: {get: {responses: {}}}\n');
     expect(inline(item).operations['get']!.security, isNull);

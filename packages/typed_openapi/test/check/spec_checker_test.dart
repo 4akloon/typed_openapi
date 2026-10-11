@@ -91,6 +91,28 @@ clients:
     );
   });
 
+  test('a side file shared by two clients is reported once', () {
+    final dir = TempDir();
+    const spec = r'''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+components: {schemas: {E: {$ref: "common.yaml#/Err"}}}
+''';
+    dir.write('a.yaml', spec);
+    dir.write('b.yaml', spec);
+    dir.write('common.yaml', 'Err: {type: object, bogus: 1}\n');
+    final path = dir.write('typed_openapi.yaml', '''
+clients:
+  a: {input: a.yaml, output: lib/a}
+  b: {input: b.yaml, output: lib/b}
+''');
+    final bag = DiagnosticBag();
+    SpecChecker(bag).check(ConfigLoader(bag).load(path)!);
+    expect(bag.all.map((d) => (d.code, d.file, d.pointer?.value)), [
+      (DiagnosticCode.unknownKey, 'common.yaml', '#/Err/bogus'),
+    ]);
+  });
+
   test('reports the dialect of a spec against its declared version', () {
     final dir = TempDir();
     dir.write('api.json', '''

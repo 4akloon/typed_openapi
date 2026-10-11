@@ -16,7 +16,11 @@
 - The dialect is detected by content: 3.1 constructs in a 3.0 document
   (TOA020), `nullable` in 3.1+ (TOA021), 3.2 constructs in older documents
   (TOA022).
-- Loading: nesting deeper than 1000 levels is reported (TOA007) instead of
-  crashing; YAML keys such as `1` and `"1"` that merge into one JSON key are
-  reported (TOA002); a directory given as the spec or the config is reported
-  as such.
+- Loading: nesting deeper than 1000 levels, in the text or once YAML aliases
+  are expanded, is reported (TOA007) instead of crashing; an alias bomb (more
+  than `max(100000, 20 * text length)` expanded nodes) is reported (TOA008)
+  instead of hanging; YAML keys such as `1` and `"1"` that merge into one
+  JSON key are reported (TOA002); a directory given as the spec or the config
+  is reported as such.
+- A region of a spec that several `$ref`s, enclosing nodes or clients reach is
+  read once, and a diagnostic is never reported twice.

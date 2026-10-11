@@ -9,8 +9,15 @@ import 'severity.dart';
 ///
 /// Processing code reports problems here instead of throwing, so a single
 /// run shows every problem it can find.
+///
+/// A diagnostic equal to one already in the bag (same code, severity,
+/// message, file, pointer and start position) is ignored: the same region
+/// of a file read twice, for example through two `$ref`s or two clients,
+/// reports each problem once.
 final class DiagnosticBag {
   final List<Diagnostic> _items = [];
+  final Set<(DiagnosticCode, Severity, String, String?, String?, int?)> _seen =
+      {};
 
   /// All diagnostics in the order they were reported.
   List<Diagnostic> get all => List.unmodifiable(_items);
@@ -26,8 +33,18 @@ final class DiagnosticBag {
   int count(Severity severity) =>
       _items.where((d) => d.severity == severity).length;
 
-  /// Adds an already built [diagnostic].
-  void add(Diagnostic diagnostic) => _items.add(diagnostic);
+  /// Adds an already built [diagnostic], unless an equal one is present.
+  void add(Diagnostic diagnostic) {
+    final key = (
+      diagnostic.code,
+      diagnostic.severity,
+      diagnostic.message,
+      diagnostic.file,
+      diagnostic.pointer?.value,
+      diagnostic.span?.start.offset,
+    );
+    if (_seen.add(key)) _items.add(diagnostic);
+  }
 
   /// Reports [code] with [message].
   ///
@@ -41,7 +58,7 @@ final class DiagnosticBag {
     SourceSpan? span,
     String? fix,
   }) {
-    _items.add(
+    add(
       Diagnostic(
         code: code,
         severity: severity ?? code.defaultSeverity,

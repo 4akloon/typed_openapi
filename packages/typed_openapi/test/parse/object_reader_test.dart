@@ -120,6 +120,20 @@ void main() {
     expect(fixture.pointers, ['#/size', '#/other', '#/none']);
   });
 
+  test('number rejects a non-finite number without throwing', () {
+    final (r, fixture) = read('a: .inf\nb: -.inf\nc: .nan\nd: 2.5\n');
+    expect(r.number('a'), isNull);
+    expect(r.number('b'), isNull);
+    expect(r.number('c'), isNull);
+    expect(r.number('d'), 2.5);
+    expect(fixture.codes, [
+      DiagnosticCode.invalidValue,
+      DiagnosticCode.invalidValue,
+      DiagnosticCode.invalidValue,
+    ]);
+    expect(fixture.pointers, ['#/a', '#/b', '#/c']);
+  });
+
   group('ParseContext', () {
     _Leaf parseLeaf(ObjectReader r) => _Leaf(
       location: r.location,

@@ -53,9 +53,9 @@ enum SchemaType {
   final String wire;
 
   /// The types by [wire] name.
-  static final Map<String, SchemaType> byWire = {
+  static final Map<String, SchemaType> byWire = Map.unmodifiable({
     for (final type in values) type.wire: type,
-  };
+  });
 }
 
 /// A Schema Object.

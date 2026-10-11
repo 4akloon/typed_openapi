@@ -120,11 +120,12 @@ final class OpenApiParser {
     );
   }
 
-  Tag? _tag(Object? raw, JsonPointer pointer) {
-    final r = _context.reader(raw, pointer, 'A tag');
-    if (r == null) return null;
+  Tag? _tag(Object? raw, JsonPointer pointer) =>
+      _context.node(raw, pointer, 'A tag', _tagNode);
+
+  Tag _tagNode(ObjectReader r) {
     for (final key in const ['summary', 'parent', 'kind']) {
-      if (r.has(key)) _context.note(.tagHierarchy, pointer.child(key));
+      if (r.has(key)) _context.note(.tagHierarchy, r.pointer.child(key));
     }
     r.accept(const ['externalDocs']);
     return _context.register(

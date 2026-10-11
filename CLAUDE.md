@@ -40,8 +40,11 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `NestingScanner` rejects text nested deeper than 1000 levels before the
   recursive YAML parser sees it (it is YAML-context aware: quotes and brackets
   are syntax only at a value start, block scalars are skipped, `- `, `? ` and
-  empty-key `: ` markers each nest one level); `OpenApiVersionDetector` reads
-  the version.
+  empty-key `: ` markers each nest one level). YAML aliases bypass the text
+  scan, so `SpecLoader` also limits the conversion to a plain tree: deeper
+  than 1000 levels once aliases are expanded is TOA007, more than
+  `max(100000, 20 * text length)` converted nodes is TOA008 (an alias bomb);
+  both return no document. `OpenApiVersionDetector` reads the version.
 - `model/` - the immutable typed model, a superset of OAS 3.0/3.1/3.2:
   `SpecNode` (every node has a `SpecLocation` = file URI + pointer, `x-`
   `extensions` and reported `unknownKeys`), `RefOr<T>` = `Ref<T>` | `Inline<T>`,
@@ -51,10 +54,14 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   targets), `OperationParser`, `SchemaParser`, all on `ObjectReader` (typed
   field access; wrong types and non-finite numbers -> TOA111, missing required
   -> TOA112, unknown keys -> TOA110). Parsers record nodes, `$ref`s and
-  version-specific constructs (`SpecFeature`) in a shared `SpecIndex`;
+  version-specific constructs (`SpecFeature`) in a shared `SpecIndex`, which
+  also remembers every location a parser has read (`visited`): a location is
+  read once, so a later read (a `$ref` into a region and then one to its
+  parent) gets the first node and reports nothing again;
   `DialectChecker` turns the constructs into TOA020-TOA022.
-- `resolve/` - `RefTarget` reads a `$ref` value (a query or a bad fragment ->
-  TOA100, a host -> TOA102), `SpecDocuments` loads other local files once by
+- `resolve/` - `RefTarget` reads a `$ref` value (a query, a bad fragment or a
+  file name that is not UTF-8 after percent-decoding -> TOA100, a host ->
+  TOA102), `SpecDocuments` loads other local files once by
   URI, `RefResolver` follows every `$ref` (parsing each on-demand target once)
   and reports TOA100-TOA105, `SpecModel` answers `resolve`/`resolveSchema`;
   `SpecReader` runs parse -> resolve -> dialect check.
@@ -65,8 +72,17 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   options `--config/-c` and `--format`, client names as positional
   arguments); `bin/typed_openapi.dart` only calls `TypedOpenApiCli().run(args)`
   and sets `exitCode`.
-- `lib/typed_openapi.dart` exports the public API: the classes above except
-  `CheckCommand`, each with a `show` list.
+- `lib/typed_openapi.dart` exports the public API, each with a `show` list:
+  `SpecChecker`, `TypedOpenApiCli`, `ConfigLoader`, `ClientConfig`, `Preset`,
+  `ProjectConfig`, the diagnostics (`Diagnostic`, `DiagnosticBag`,
+  `DiagnosticCode`, `JsonPointer`, `Severity` and the reporters), the loader
+  (`SpecLoader`, `SpecDocument`, `OpenApiVersion`, `OpenApiVersionDetector`),
+  the whole `model/` (`SpecNode`, `SpecLocation`, `RefOr`, `Ref`, `Inline`,
+  `RefKind`, `OpenApiDocument` and the other OAS objects) and the entry points
+  `SpecReader` and `SpecModel`. Not exported: `CheckCommand`, the internals of
+  `parse/` (`OpenApiParser`, `OperationParser`, `SchemaParser`, `ObjectReader`,
+  `ParseContext`, `SpecIndex`, `DialectChecker`) and `resolve/` (`RefTarget`,
+  `RefResolver`, `SpecDocuments`), and `NestingScanner`.
 
 Data flows loader -> parser -> resolver -> checker, every stage writing
 problems into one `DiagnosticBag`; reporters read the bag at the end.
@@ -76,7 +92,9 @@ Rules of the pipeline:
 - Errors in user input (specs, config) are never thrown; they are reported to
   the `DiagnosticBag` and processing continues where possible.
 - Reports are deterministic: diagnostics sort by file, position, pointer, code,
-  message (`Diagnostic.compareTo`, `DiagnosticBag.sorted`).
+  message (`Diagnostic.compareTo`, `DiagnosticBag.sorted`). `DiagnosticBag`
+  ignores a diagnostic equal to one it has (same code, severity, message, file,
+  pointer and start position), so a region read twice reports once.
 - The CLI never calls `exit()`; commands return the code. Reports go to
   stdout, usage errors to stderr. Codes: `0` ok, `1` errors found, `64` usage,
   `78` the config file could not be loaded (TOA904 and per-client TOA902 exit

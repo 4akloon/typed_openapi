@@ -70,6 +70,26 @@ void main() {
     expect(target('file:///abs/x.yaml#/A'), 'file:///abs/x.yaml#/A');
   });
 
+  test('a file name that is not UTF-8 after percent-decoding is invalid', () {
+    for (final ref in ['%FF.yaml#/A', 'caf%E9.yaml', '../%C0%AF/x.yaml#/A']) {
+      final broken = RefTarget.parse(ref, base) as BrokenRef;
+      expect(broken.code, DiagnosticCode.invalidRef, reason: ref);
+      expect(
+        broken.reason,
+        '"$ref" has a file name that is not valid UTF-8 after '
+        'percent-decoding.',
+      );
+    }
+    expect(
+      target('caf%C3%A9.yaml#/A'),
+      'file:///project/specs/caf%C3%A9.yaml#/A',
+    );
+    expect(
+      target('my%20spec.yaml#/A'),
+      'file:///project/specs/my%20spec.yaml#/A',
+    );
+  });
+
   test('a bad fragment says what is wrong with it', () {
     String reason(String ref) =>
         (RefTarget.parse(ref, base) as BrokenRef).reason;

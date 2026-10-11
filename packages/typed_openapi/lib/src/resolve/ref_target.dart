@@ -1,3 +1,5 @@
+import 'package:path/path.dart' as p;
+
 import '../diagnostics/diagnostic_code.dart';
 import '../diagnostics/json_pointer.dart';
 import '../model/spec_node.dart';
@@ -9,9 +11,9 @@ sealed class RefTarget {
   /// Reads [ref], written in the document at [base].
   ///
   /// The part before `#` is a URI relative to [base]; the fragment is a JSON
-  /// pointer, percent-decoded. Remote URIs, plain-name fragments (`#foo`)
-  /// and pointers that stop at a components section or end with `/` cannot
-  /// be followed.
+  /// pointer, percent-decoded. Remote URIs, file names that do not decode to
+  /// UTF-8, plain-name fragments (`#foo`) and pointers that stop at a
+  /// components section or end with `/` cannot be followed.
   factory RefTarget.parse(String ref, Uri base) {
     if (ref.isEmpty) {
       return const BrokenRef(.invalidRef, r'The "$ref" is empty.');
@@ -52,6 +54,15 @@ sealed class RefTarget {
         return BrokenRef(
           .invalidRef,
           '"$ref" has a query string, which a local file cannot have.',
+        );
+      }
+      try {
+        p.fromUri(document);
+      } on FormatException {
+        return BrokenRef(
+          .invalidRef,
+          '"$ref" has a file name that is not valid UTF-8 after '
+          'percent-decoding.',
         );
       }
     }

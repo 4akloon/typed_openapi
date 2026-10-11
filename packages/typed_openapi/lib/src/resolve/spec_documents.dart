@@ -27,21 +27,38 @@ final class SpecDocuments {
   /// relative to the root document's displayed path.
   SpecDocument? operator [](Uri uri) {
     if (_documents.containsKey(uri)) return _documents[uri];
-    final path = p.fromUri(uri);
-    final document =
-        FileSystemEntity.typeSync(path) == FileSystemEntityType.file
+    final path = _pathOf(uri);
+    final document = path != null && exists(uri)
         ? _loader.load(path, displayPath: displayPath(uri))
         : null;
     return _documents[uri] = document;
   }
 
+  /// Whether a file (not a directory) is at [uri].
+  ///
+  /// False when [uri] does not name a file path, such as one with a
+  /// percent-escape that is not UTF-8.
+  bool exists(Uri uri) {
+    final path = _pathOf(uri);
+    return path != null &&
+        FileSystemEntity.typeSync(path) == FileSystemEntityType.file;
+  }
+
   /// How diagnostics name the file at [uri].
   String displayPath(Uri uri) {
     if (uri == root.uri) return root.file;
-    final relative = p.relative(
-      p.fromUri(uri),
-      from: p.dirname(p.fromUri(root.uri)),
-    );
+    final path = _pathOf(uri);
+    final rootPath = _pathOf(root.uri);
+    if (path == null || rootPath == null) return '$uri';
+    final relative = p.relative(path, from: p.dirname(rootPath));
     return p.normalize(p.join(p.dirname(root.file), relative));
+  }
+
+  static String? _pathOf(Uri uri) {
+    try {
+      return p.fromUri(uri);
+    } on FormatException {
+      return null;
+    }
   }
 }

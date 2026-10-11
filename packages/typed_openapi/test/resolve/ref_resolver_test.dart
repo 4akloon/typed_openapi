@@ -186,6 +186,22 @@ components:
     ]);
   });
 
+  test('a file that exists but cannot be parsed is not "missing"', () {
+    dir.write('api.yaml', '''
+$info
+components:
+  schemas:
+    A: {\$ref: "broken.yaml#/A"}
+''');
+    dir.write('broken.yaml', 'A: [\n');
+    final (_, bag) = resolve('api.yaml');
+    expect(
+      bag.all.last.message,
+      '"broken.yaml#/A" points to broken.yaml, which cannot be read or '
+      'parsed (see the diagnostics for that file).',
+    );
+  });
+
   test('a reference to a node of another kind is reported', () {
     dir.write('api.yaml', '''
 $info
@@ -242,6 +258,93 @@ paths:
     final (_, bag) = resolve('api.yaml');
     final reports = bag.all.where((d) => d.code == DiagnosticCode.invalidValue);
     expect(reports.map((d) => d.pointer?.value), ['#/x-shared/limit']);
+  });
+
+  group('regions read twice', () {
+    test('a ref into a region and then a ref to its parent reads it once', () {
+      dir.write('api.yaml', '''
+$info
+x-r:
+  type: object
+  properties:
+    p:
+      type: object
+      properties:
+        q: {type: string, bogus: 1}
+components:
+  schemas:
+    Inner: {\$ref: "#/x-r/properties/p/properties/q"}
+    Outer: {\$ref: "#/x-r"}
+''');
+      final (model, bag) = resolve('api.yaml');
+      expect(bag.all.map((d) => (d.code, d.pointer?.value)), [
+        (DiagnosticCode.unknownKey, '#/x-r/properties/p/properties/q/bogus'),
+      ]);
+      final schemas = model.document.components!.schemas;
+      final outer = model.resolveSchema(schemas['Outer']!)! as SchemaObject;
+      final p = outer.properties['p']! as SchemaObject;
+      final q = p.properties['q']!;
+      expect(model.resolveSchema(schemas['Inner']!), same(q));
+      expect(model.nodeAt(q.location), same(q));
+    });
+
+    test('nested refs inside the region are followed once', () {
+      dir.write('api.yaml', '''
+$info
+x-shared:
+  B:
+    type: object
+    properties:
+      c: {type: string, bogus: 1, \$ref: "#/nope"}
+components:
+  schemas:
+    A: {\$ref: "#/x-shared/B/properties/c"}
+    D: {\$ref: "#/x-shared/B"}
+''');
+      final (_, bag) = resolve('api.yaml');
+      expect(
+        bag.all.map((d) => (d.code, d.pointer?.value)),
+        unorderedEquals([
+          (DiagnosticCode.unknownKey, '#/x-shared/B/properties/c/bogus'),
+          (DiagnosticCode.unresolvedRef, r'#/x-shared/B/properties/c/$ref'),
+        ]),
+      );
+    });
+
+    test('a component the parser rejected is not reported again', () {
+      dir.write('api.yaml', '''
+$info
+components:
+  schemas:
+    S: 42
+    U: {\$ref: "#/components/schemas/S"}
+''');
+      final (_, bag) = resolve('api.yaml');
+      expect(bag.all.map((d) => (d.code, d.pointer?.value)), [
+        (DiagnosticCode.invalidValue, '#/components/schemas/S'),
+      ]);
+    });
+
+    test('a rejected component of another kind is a kind mismatch', () {
+      dir.write('api.yaml', '''
+$info
+components:
+  parameters:
+    P: oops
+  schemas:
+    V: {\$ref: "#/components/parameters/P"}
+''');
+      final (_, bag) = resolve('api.yaml');
+      expect(bag.all.map((d) => (d.code, d.pointer?.value)), [
+        (DiagnosticCode.invalidValue, '#/components/parameters/P'),
+        (DiagnosticCode.refKindMismatch, r'#/components/schemas/V/$ref'),
+      ]);
+      expect(
+        bag.all.last.message,
+        '"#/components/parameters/P" points to a parameter that could not be '
+        'read, but a schema is expected here.',
+      );
+    });
   });
 
   group('cycles', () {

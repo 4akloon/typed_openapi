@@ -101,6 +101,62 @@ schema:
     expect(fixture.index.features, isEmpty);
   });
 
+  test('a non-finite bound or limit is reported and ignored', () {
+    final (schema, fixture) = parse(
+      'schema: {exclusiveMinimum: .inf, exclusiveMaximum: .nan, '
+      'minimum: -.inf, multipleOf: .nan}\n',
+    );
+    final s = schema! as SchemaObject;
+    expect(s.exclusiveMinimum, isNull);
+    expect(s.exclusiveMaximum, isNull);
+    expect(s.minimum, isNull);
+    expect(s.multipleOf, isNull);
+    expect(fixture.codes, everyElement(DiagnosticCode.invalidValue));
+    expect(fixture.pointers, [
+      '#/schema/minimum',
+      '#/schema/exclusiveMinimum',
+      '#/schema/exclusiveMaximum',
+      '#/schema/multipleOf',
+    ]);
+  });
+
+  test(
+    'a location read twice gives the first node and records nothing new',
+    () {
+      final fixture = SpecFixture(
+        'schema: {type: object, bogus: 1, properties: {a: {\$ref: "#/x"}}}\n',
+      );
+      final pointer = JsonPointer.root.child('schema');
+      final raw = fixture.document.valueAt(pointer)!.$1;
+      final parser = SchemaParser(fixture.context);
+      final first = parser.parse(raw, pointer);
+      final inner = JsonPointer.parse('#/schema/properties/a');
+      final nested = parser.parse(
+        fixture.document.valueAt(inner)!.$1,
+        inner,
+      );
+      final again = parser.parse(raw, pointer);
+      expect(again, same(first));
+      expect(nested, same((first! as SchemaObject).properties['a']));
+      expect(fixture.index.refs, hasLength(1));
+      expect(fixture.index.nodes, hasLength(2));
+      expect(fixture.codes, [DiagnosticCode.unknownKey]);
+    },
+  );
+
+  test('a location that failed to read gives null, without a new report', () {
+    final fixture = SpecFixture('schema: 42\n');
+    final pointer = JsonPointer.root.child('schema');
+    final parser = SchemaParser(fixture.context);
+    expect(parser.parse(42, pointer), isNull);
+    expect(parser.parse(42, pointer), isNull);
+    expect(fixture.context.index.visited, {
+      fixture.context.locate(pointer): RefKind.schema,
+    });
+    expect(fixture.index.nodes, isEmpty);
+    expect(fixture.codes, [DiagnosticCode.invalidValue]);
+  });
+
   test(r'keeps $ref with its siblings and records the reference', () {
     final (schema, fixture) = parse(
       'schema: {\$ref: "#/components/schemas/Pet", description: Owner.}\n',

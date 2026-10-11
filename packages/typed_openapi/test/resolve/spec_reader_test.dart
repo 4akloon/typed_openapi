@@ -29,6 +29,26 @@ components:
     ]);
   });
 
+  test(
+    'a file name that is not UTF-8 after decoding is reported, not thrown',
+    () {
+      final bag = DiagnosticBag();
+      final document = SpecLoader(bag).parse(r'''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+components:
+  schemas:
+    A: {$ref: "%FF.yaml#/A"}
+    B: {$ref: "caf%E9.yaml"}
+''', 'api.yaml')!;
+      SpecReader(bag).read(document, .v31);
+      expect(bag.all.map((d) => (d.code, d.pointer?.value)), [
+        (DiagnosticCode.invalidRef, r'#/components/schemas/A/$ref'),
+        (DiagnosticCode.invalidRef, r'#/components/schemas/B/$ref'),
+      ]);
+    },
+  );
+
   test('a schema nested as deep as the loader allows is read', () {
     final bag = DiagnosticBag();
     const depth = NestingScanner.maxDepth - 4;

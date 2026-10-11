@@ -52,6 +52,9 @@ final class SchemaParser {
     JsonPointer pointer, {
     bool booleanIsClassic = false,
   }) {
+    if (_context.seen(pointer, kind: .schema)) {
+      return _context.earlier<Schema>(pointer);
+    }
     if (raw is bool) {
       if (!booleanIsClassic) _context.note(.booleanSchema, pointer);
       return _context.register(
@@ -222,7 +225,7 @@ final class SchemaParser {
 
   num? _bound(ObjectReader r, String key) {
     final raw = r.value(key);
-    if (raw case (final num bound,)) {
+    if (raw case (final num bound,) when bound.isFinite) {
       _context.note(.numericExclusiveBound, r.pointer.child(key));
       return bound;
     }
@@ -230,7 +233,7 @@ final class SchemaParser {
     if (raw != null) {
       _context.report(
         .invalidValue,
-        '"$key" must be a number or a boolean, not '
+        '"$key" must be a finite number or a boolean, not '
         '${ObjectReader.describe(raw.$1)}; it is ignored.',
         r.pointer.child(key),
       );

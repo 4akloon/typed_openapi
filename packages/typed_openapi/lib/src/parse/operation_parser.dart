@@ -46,10 +46,15 @@ final class OperationParser {
       _context.refOr(raw, pointer, .example, _example);
 
   /// Reads the server [raw] at [pointer].
-  Server? server(Object? raw, JsonPointer pointer) {
-    final r = _context.reader(raw, pointer, 'A server');
-    if (r == null) return null;
-    if (r.has('name')) _context.note(.serverName, pointer.child('name'));
+  Server? server(Object? raw, JsonPointer pointer) =>
+      _context.node(raw, pointer, 'A server', _server);
+
+  /// Reads the security requirement [raw] at [pointer].
+  SecurityRequirement? securityRequirement(Object? raw, JsonPointer pointer) =>
+      _context.node(raw, pointer, 'A security requirement', _requirement);
+
+  Server _server(ObjectReader r) {
+    if (r.has('name')) _context.note(.serverName, r.pointer.child('name'));
     return _context.register(
       Server(
         location: r.location,
@@ -63,19 +68,14 @@ final class OperationParser {
     );
   }
 
-  /// Reads the security requirement [raw] at [pointer].
-  SecurityRequirement? securityRequirement(Object? raw, JsonPointer pointer) {
-    final r = _context.reader(raw, pointer, 'A security requirement');
-    if (r == null) return null;
-    return _context.register(
-      SecurityRequirement(
-        location: r.location,
-        schemes: Map.unmodifiable({
-          for (final name in r.keys.toList()) name: ?r.strings(name),
-        }),
-      ),
-    );
-  }
+  SecurityRequirement _requirement(ObjectReader r) => _context.register(
+    SecurityRequirement(
+      location: r.location,
+      schemes: Map.unmodifiable({
+        for (final name in r.keys.toList()) name: r.strings(name) ?? const [],
+      }),
+    ),
+  );
 
   PathItem _pathItem(ObjectReader r) {
     final operations = <String, Operation>{};
@@ -109,10 +109,8 @@ final class OperationParser {
     );
   }
 
-  Operation? _operationAt(Object? raw, JsonPointer pointer) {
-    final r = _context.reader(raw, pointer, 'An operation');
-    return r == null ? null : _operation(r);
-  }
+  Operation? _operationAt(Object? raw, JsonPointer pointer) =>
+      _context.node(raw, pointer, 'An operation', _operation);
 
   Operation _operation(ObjectReader r) {
     r.accept(const ['externalDocs', 'callbacks']);
@@ -250,10 +248,8 @@ final class OperationParser {
     );
   }
 
-  Encoding? _encodingAt(Object? raw, JsonPointer pointer) {
-    final r = _context.reader(raw, pointer, 'An encoding');
-    return r == null ? null : _encoding(r);
-  }
+  Encoding? _encodingAt(Object? raw, JsonPointer pointer) =>
+      _context.node(raw, pointer, 'An encoding', _encoding);
 
   Encoding _encoding(ObjectReader r) {
     r.accept(const ['encoding', 'prefixEncoding', 'itemEncoding']);
@@ -290,20 +286,19 @@ final class OperationParser {
     );
   }
 
-  ServerVariable? _serverVariable(Object? raw, JsonPointer pointer) {
-    final r = _context.reader(raw, pointer, 'A server variable');
-    if (r == null) return null;
-    return _context.register(
-      ServerVariable(
-        location: r.location,
-        enumValues: r.strings('enum'),
-        defaultValue: r.requiredString('default'),
-        description: r.string('description'),
-        extensions: r.extensions,
-        unknownKeys: r.unknownKeys(),
-      ),
-    );
-  }
+  ServerVariable? _serverVariable(Object? raw, JsonPointer pointer) =>
+      _context.node(raw, pointer, 'A server variable', _serverVariableNode);
+
+  ServerVariable _serverVariableNode(ObjectReader r) => _context.register(
+    ServerVariable(
+      location: r.location,
+      enumValues: r.strings('enum'),
+      defaultValue: r.requiredString('default'),
+      description: r.string('description'),
+      extensions: r.extensions,
+      unknownKeys: r.unknownKeys(),
+    ),
+  );
 
   ParameterStyle? _style(ObjectReader r) {
     final style = r.choice('style', ParameterStyle.values.asNameMap());

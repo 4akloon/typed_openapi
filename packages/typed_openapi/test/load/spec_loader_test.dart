@@ -99,6 +99,77 @@ void main() {
       expect(bag.all.single.code, DiagnosticCode.nestingTooDeep);
     });
 
+    group('aliases', () {
+      const limit = Timeout(Duration(seconds: 5));
+
+      String chain(int anchors, {int levelsEach = 1}) {
+        final text = StringBuffer(
+          'openapi: 3.1.0\ncomponents:\n  schemas:\n'
+          '    a0: &a0 {type: string}\n',
+        );
+        for (var i = 1; i <= anchors; i++) {
+          text.writeln(
+            '    a$i: &a$i ${'{items: ' * levelsEach}*a${i - 1}'
+            '${'}' * levelsEach}',
+          );
+        }
+        return '$text';
+      }
+
+      test('a chain of aliases that nests too deep is reported', () {
+        final bag = DiagnosticBag();
+        expect(SpecLoader(bag).parse(chain(1500), 'api.yaml'), isNull);
+        final d = bag.all.single;
+        expect(d.code, DiagnosticCode.nestingTooDeep);
+        expect(d.pointer!.tokens, hasLength(NestingScanner.maxDepth));
+        expect(d.pointer!.tokens.take(3), ['components', 'schemas', 'a997']);
+        expect(d.span, isNotNull);
+      }, timeout: limit);
+
+      test('aliases whose text is shallow but expand deep are reported, '
+          'not a stack overflow', () {
+        final bag = DiagnosticBag();
+        final text = chain(80, levelsEach: 60);
+        expect(const NestingScanner().findTooDeep(text), isNull);
+        expect(SpecLoader(bag).parse(text, 'api.yaml'), isNull);
+        expect(bag.all.single.code, DiagnosticCode.nestingTooDeep);
+      }, timeout: limit);
+
+      test('an alias bomb is reported once and not expanded', () {
+        final text = StringBuffer(
+          'openapi: 3.1.0\nx-bomb:\n  l0: &l0 [x, x, x, x, x, x, x, x, x]\n',
+        );
+        for (var i = 1; i <= 9; i++) {
+          text.writeln(
+            '  l$i: &l$i [${List.filled(9, '*l${i - 1}').join(', ')}]',
+          );
+        }
+        final bag = DiagnosticBag();
+        expect(SpecLoader(bag).parse('$text', 'api.yaml'), isNull);
+        final d = bag.all.single;
+        expect(d.code, DiagnosticCode.aliasExpansionTooLarge);
+        expect(d.severity, Severity.error);
+        expect(d.pointer!.value, startsWith('#/x-bomb/l'));
+        expect(d.span, isNotNull);
+      }, timeout: limit);
+
+      test('aliases that stay small are expanded as written', () {
+        final bag = DiagnosticBag();
+        final doc = SpecLoader(bag).parse('''
+openapi: 3.1.0
+x-base: &base {a: 1, b: [x, y]}
+x-one: *base
+x-two: *base
+''', 'api.yaml')!;
+        expect(doc.root['x-two'], {
+          'a': 1,
+          'b': ['x', 'y'],
+        });
+        expect(doc.spanOf(JsonPointer.parse('#/x-two/b/1')), isNotNull);
+        expect(bag.all, isEmpty);
+      }, timeout: limit);
+    });
+
     test('YAML keys 1 and "1" are one JSON key: a warning, last wins', () {
       final bag = DiagnosticBag();
       final doc = SpecLoader(bag).parse(

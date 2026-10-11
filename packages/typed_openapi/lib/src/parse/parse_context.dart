@@ -47,6 +47,13 @@ final class SpecIndex {
   /// Every parsed node, references included, by location.
   final Map<SpecLocation, SpecNode> nodes = {};
 
+  /// Every location a parser has read, whether or not it produced a node,
+  /// with the kind it was read as (null for a node no `$ref` may point to).
+  ///
+  /// A location is read once: a later read, for example of an enclosing
+  /// node, gets the node of the first one and reports nothing again.
+  final Map<SpecLocation, RefKind?> visited = {};
+
   /// Every `$ref` found.
   final List<RefUse> refs = [];
 
@@ -103,6 +110,42 @@ final class ParseContext {
     return node;
   }
 
+  /// Whether the node at [pointer] was read before; when it was not, marks
+  /// it as read, as a node [kind] (what a `$ref` to it expects; null when
+  /// none may point there).
+  ///
+  /// Every parser calls this before it reads a node, so a location is read
+  /// once however many `$ref`s and enclosing nodes reach it. On true, the
+  /// parser returns [earlier] instead of reading again.
+  bool seen(JsonPointer pointer, {RefKind? kind}) {
+    final location = locate(pointer);
+    if (index.visited.containsKey(location)) return true;
+    index.visited[location] = kind;
+    return false;
+  }
+
+  /// The node an earlier read produced at [pointer]; null when that read
+  /// produced none (it reported why) or produced a node that is not a [T].
+  T? earlier<T extends SpecNode>(JsonPointer pointer) =>
+      switch (index.nodes[locate(pointer)]) {
+        final T node => node,
+        _ => null,
+      };
+
+  /// Reads [raw] at [pointer] as an object with [build], once (see
+  /// [seen]); null after reporting that [raw] is not an object, and [what]
+  /// names the node in the report.
+  T? node<T extends SpecNode>(
+    Object? raw,
+    JsonPointer pointer,
+    String what,
+    T Function(ObjectReader reader) build,
+  ) {
+    if (seen(pointer)) return earlier<T>(pointer);
+    final reader = this.reader(raw, pointer, what);
+    return reader == null ? null : build(reader);
+  }
+
   /// A reader for [raw] at [pointer], or null after reporting that [raw] is
   /// not an object; [what] names the node in the report.
   ObjectReader? reader(Object? raw, JsonPointer pointer, String what) {
@@ -123,6 +166,13 @@ final class ParseContext {
     RefKind kind,
     T Function(ObjectReader reader) parse,
   ) {
+    if (seen(pointer, kind: kind)) {
+      return switch (index.nodes[locate(pointer)]) {
+        final Ref<T> ref => ref,
+        final T node => Inline(node),
+        _ => null,
+      };
+    }
     final reader = this.reader(raw, pointer, 'This ${kind.noun}');
     if (reader == null) return null;
     if (!reader.has(r'$ref')) return Inline(parse(reader));

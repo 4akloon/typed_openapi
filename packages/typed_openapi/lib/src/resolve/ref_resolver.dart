@@ -15,7 +15,8 @@ import 'spec_model.dart';
 ///
 /// A target is identified by the absolute URI of its file plus its JSON
 /// pointer. Targets in other local files are loaded once and parsed as the
-/// kind of node the `$ref` expects; their own `$ref`s are followed in turn.
+/// kind of node the `$ref` expects, each location read once; their own
+/// `$ref`s are followed in turn.
 /// Problems go to the [DiagnosticBag] given to the constructor.
 final class RefResolver {
   /// Creates a resolver that reports to [_diagnostics].
@@ -32,7 +33,6 @@ final class RefResolver {
   ) {
     final parsers = <Uri, OpenApiParser>{};
     final targets = <SpecLocation, SpecLocation>{};
-    final attempted = <SpecLocation>{};
     for (var i = 0; i < index.refs.length; i++) {
       final use = index.refs[i];
       switch (RefTarget.parse(use.ref, use.site.document)) {
@@ -41,13 +41,16 @@ final class RefResolver {
         case ResolvableRef(:final location):
           final file = documents[location.document];
           if (file == null) {
+            final name = documents.displayPath(location.document);
             _report(
               documents,
               use,
               .unresolvedRef,
-              '"${use.ref}" points to '
-              '${documents.displayPath(location.document)}, which does not '
-              'exist or cannot be read.',
+              documents.exists(location.document)
+                  ? '"${use.ref}" points to $name, which cannot be read or '
+                        'parsed (see the diagnostics for that file).'
+                  : '"${use.ref}" points to $name, which does not exist or '
+                        'cannot be read.',
             );
             continue;
           }
@@ -65,9 +68,24 @@ final class RefResolver {
               );
               continue;
             }
-            // A target that failed to parse was reported once; later refs
-            // to it are not parsed, and so not reported, again.
-            if (!attempted.add(location)) continue;
+            // A location is read once. One that was read before and gave no
+            // node was reported then; it only matters when this `$ref`
+            // expects another kind than the read that rejected it.
+            if (index.visited.containsKey(location)) {
+              final read = index.visited[location];
+              if (read != use.kind) {
+                _report(
+                  documents,
+                  use,
+                  .refKindMismatch,
+                  '"${use.ref}" points to '
+                  '${read?.withArticle ?? 'a node that is not referable'} '
+                  'that could not be read, but ${use.kind.withArticle} is '
+                  'expected here.',
+                );
+              }
+              continue;
+            }
             final parser = parsers[location.document] ??= OpenApiParser(
               _diagnostics,
               file,
