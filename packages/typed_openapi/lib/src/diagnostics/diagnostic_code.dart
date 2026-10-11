@@ -95,6 +95,9 @@ enum DiagnosticCode {
   /// resolves them against the file location instead.
   refBaseIgnored('TOA105', 'ref-base-ignored', .warning),
 
+  /// A key in `components` has characters OpenAPI does not allow there.
+  invalidComponentKey('TOA106', 'invalid-component-key', .warning),
+
   /// A `$ref` where OpenAPI does not accept a Reference Object, as bundlers
   /// such as Redocly allow; it is ignored.
   refNotAllowed('TOA107', 'ref-not-allowed', .warning),
@@ -164,6 +167,17 @@ enum DiagnosticCode {
   /// `$ref`.
   nullableEnumOneOf('TOA303', 'nullable-enum-one-of', .warning),
 
+  /// The discriminator property is not required in a variant.
+  discriminatorNotRequired('TOA401', 'discriminator-not-required', .info),
+
+  /// A `discriminator.mapping` value points to a schema that does not
+  /// exist.
+  discriminatorMappingUnresolved(
+    'TOA402',
+    'discriminator-mapping-unresolved',
+    .error,
+  ),
+
   /// A variable of the path template has no path parameter; one is added.
   missingPathParameter('TOA501', 'missing-path-parameter', .warning),
 
@@ -180,6 +194,9 @@ enum DiagnosticCode {
 
   /// Two operations share an `operationId`.
   duplicateOperationId('TOA504', 'duplicate-operation-id', .error),
+
+  /// `*/*` is used as a media type.
+  wildcardMediaType('TOA601', 'wildcard-media-type', .warning),
 
   /// A normalizer fix was not applied: it overlaps an earlier rule's fix,
   /// its target is gone, or the spec kept changing.

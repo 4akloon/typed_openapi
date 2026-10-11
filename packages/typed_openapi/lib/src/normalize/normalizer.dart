@@ -13,6 +13,7 @@ import 'rules/drop_invalid_default.dart';
 import 'rules/enum_rules.dart';
 import 'rules/operation_id_rules.dart';
 import 'rules/path_param_rules.dart';
+import 'rules/reference_shape_rules.dart';
 import 'rules/schema_shape_rules.dart';
 import 'spec_edit.dart';
 
@@ -72,6 +73,10 @@ final class Normalizer {
       const PathParamNotInTemplate(),
       const MissingOperationId(),
       const DuplicateOperationId(),
+      const DiscriminatorPropertyRequired(),
+      const DiscriminatorMappingTarget(),
+      const WildcardMediaType(),
+      const ComponentKeyCharacters(),
     ],
   );
 
