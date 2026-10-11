@@ -128,4 +128,70 @@ components:
     ]);
     expect(d.first.fix, contains('CustomSchemaIds'));
   });
+
+  test('discriminator-property-required: the holder requires the property', () {
+    final d = NormalizerFixture(r'''
+openapi: 3.1.0
+info: {title: Pets, version: "1"}
+components:
+  schemas:
+    Pet:
+      discriminator: {propertyName: kind}
+      required: [kind]
+      oneOf:
+        - {$ref: '#/components/schemas/Cat'}
+        - {$ref: '#/components/schemas/Dog'}
+    Cat: {type: object}
+    Dog: {type: object}
+''').of(DiagnosticCode.discriminatorNotRequired);
+    expect(d, isEmpty);
+  });
+
+  test('discriminator-mapping-target: a dotted name that is a schema', () {
+    final d = NormalizerFixture(r'''
+openapi: 3.1.0
+info: {title: Pets, version: "1"}
+components:
+  schemas:
+    Pet:
+      discriminator:
+        propertyName: kind
+        mapping:
+          cat: Ns.Cat
+          dog: Ns.Missing
+      oneOf:
+        - {$ref: '#/components/schemas/Ns.Cat'}
+    Ns.Cat: {type: object, required: [kind]}
+''').of(DiagnosticCode.discriminatorMappingUnresolved);
+    expect(d.map((d) => d.pointer?.value), [
+      '#/components/schemas/Pet/discriminator/mapping/dog',
+    ]);
+    expect(
+      d.single.message,
+      'discriminator.mapping "dog" points to "Ns.Missing", which does not '
+      'exist.',
+    );
+  });
+
+  test('discriminator-mapping-target: a remote reference is not read', () {
+    final d = NormalizerFixture('''
+openapi: 3.1.0
+info: {title: Pets, version: "1"}
+components:
+  schemas:
+    Pet:
+      discriminator:
+        propertyName: kind
+        mapping:
+          cat: 'https://example.com/pets.yaml#/Cat'
+      oneOf:
+        - {type: object, required: [kind]}
+''').of(DiagnosticCode.discriminatorMappingUnresolved);
+    expect(
+      d.single.message,
+      'discriminator.mapping "cat" points to '
+      '"https://example.com/pets.yaml#/Cat", a remote document; remote '
+      'references are not read.',
+    );
+  });
 }

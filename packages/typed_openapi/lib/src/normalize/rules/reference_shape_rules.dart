@@ -27,6 +27,7 @@ final class DiscriminatorPropertyRequired extends NormalizerRule {
       final discriminator = schema.discriminator;
       final property = discriminator?.propertyName;
       if (discriminator == null || property == null) continue;
+      if (_required(context, schema, {}).contains(property)) continue;
       final names = <String>{
         for (final branch in [...schema.oneOf, ...schema.anyOf])
           if (context.model.resolveSchema(branch) case final SchemaObject v
@@ -98,21 +99,24 @@ final class DiscriminatorMappingTarget extends NormalizerRule {
     for (final discriminator in context.nodes<Discriminator>()) {
       for (final MapEntry(key: value, value: target)
           in discriminator.mapping.entries) {
-        final exists = _isName(target)
-            ? schemas.containsKey(target)
-            : switch (RefTarget.parse(
-                target,
-                discriminator.location.document,
-              )) {
-                ResolvableRef(:final location) =>
-                  context.rawAt(location) != null,
-                BrokenRef() => false,
-              };
+        final isName = _isName(target, schemas);
+        final reference = isName
+            ? null
+            : RefTarget.parse(target, discriminator.location.document);
+        final exists = switch (reference) {
+          null => schemas.containsKey(target),
+          ResolvableRef(:final location) => context.rawAt(location) != null,
+          BrokenRef() => false,
+        };
         if (exists) continue;
+        final remote = reference is BrokenRef && reference.code == .remoteRef;
         yield context.finding(
           .discriminatorMappingUnresolved,
-          'discriminator.mapping "$value" points to "$target", which does '
-          'not exist.',
+          remote
+              ? 'discriminator.mapping "$value" points to "$target", a '
+                    'remote document; remote references are not read.'
+              : 'discriminator.mapping "$value" points to "$target", which '
+                    'does not exist.',
           discriminator.location.child('mapping').child(value),
           fix:
               'Point it at an existing schema at the source; until then, '
@@ -124,8 +128,11 @@ final class DiscriminatorMappingTarget extends NormalizerRule {
 
   /// Whether [target] is a schema name rather than a reference: OpenAPI
   /// reads a value without `#`, `/` or `.` as a name in
-  /// `components.schemas`.
-  static bool _isName(String target) => !target.contains(RegExp('[#/.]'));
+  /// `components.schemas`. A value without `#` and `/` that is a key of
+  /// [schemas] is that component too, dots included (`Ns.Cat`).
+  static bool _isName(String target, Map<String, Object?> schemas) =>
+      !target.contains(RegExp('[#/]')) &&
+      (!target.contains('.') || schemas.containsKey(target));
 
   @override
   String? hint(DiagnosticCode code, Preset preset) => switch (preset) {
