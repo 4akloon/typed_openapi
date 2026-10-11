@@ -175,6 +175,12 @@ enum DiagnosticCode {
     .error,
   ),
 
+  /// An operation has no `operationId`.
+  missingOperationId('TOA503', 'missing-operation-id', .info),
+
+  /// Two operations share an `operationId`.
+  duplicateOperationId('TOA504', 'duplicate-operation-id', .error),
+
   /// A normalizer fix was not applied: it overlaps an earlier rule's fix,
   /// its target is gone, or the spec kept changing.
   fixNotApplied('TOA800', 'fix-not-applied', .warning),
