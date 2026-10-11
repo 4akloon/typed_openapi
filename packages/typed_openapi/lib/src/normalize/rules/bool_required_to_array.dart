@@ -44,13 +44,16 @@ final class BoolRequiredToArray extends NormalizerRule {
       // A parent whose "required" is something else than a list cannot take
       // the name; its own TOA111 stays and has to be fixed first.
       final blocked = flag && _cannotTake(context, schema, flagged);
+      final destination = blocked
+          ? 'which has to become a list before the name can be put there'
+          : 'so the name is moved there';
       findings.add(
         context.finding(
           .boolRequired,
           flag
               ? 'Property "$name" says "required: true", the OpenAPI 2 way; '
                     'OpenAPI 3 lists required properties in the "required" '
-                    'array of the object, so the name is moved there.'
+                    'array of the object, $destination.'
               : 'Property "$name" says "required: false", the OpenAPI 2 way; '
                     'a property missing from "required" is optional, so the '
                     'flag is removed.',

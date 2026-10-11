@@ -144,9 +144,15 @@ void main() {
           ),
         ]),
       );
+      final flag = bag.all.singleWhere(
+        (d) => d.code == DiagnosticCode.boolRequired,
+      );
+      expect(flag.fix, contains('a list'));
       expect(
-        bag.all.singleWhere((d) => d.code == DiagnosticCode.boolRequired).fix,
-        contains('a list'),
+        flag.message,
+        'Property "name" says "required: true", the OpenAPI 2 way; OpenAPI 3 '
+        'lists required properties in the "required" array of the object, '
+        'which has to become a list before the name can be put there.',
       );
       expect(
         bag.all.where((d) => d.code == DiagnosticCode.fixNotApplied),
