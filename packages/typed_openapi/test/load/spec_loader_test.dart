@@ -82,6 +82,46 @@ void main() {
       expect(SpecLoader(bag).parse('- a\n- b\n', 'a.yaml'), isNull);
       expect(bag.all.single.code, DiagnosticCode.rootNotObject);
     });
+    test('YAML keys 1 and "1" are one JSON key: a warning, last wins', () {
+      final bag = DiagnosticBag();
+      final doc = SpecLoader(bag).parse(
+        'openapi: 3.0.3\nresponses:\n  200: {description: a}\n'
+            '  "200": {description: b}\n',
+        'api.yaml',
+      )!;
+      expect(doc.root['responses'], {
+        '200': {'description': 'b'},
+      });
+      final d = bag.all.single;
+      expect(d.code, DiagnosticCode.duplicateKey);
+      expect(d.severity, Severity.warning);
+      expect(d.pointer?.value, '#/responses/200');
+      expect(d.line, 4);
+    });
+
+    test('JSON with a duplicate key and a syntax error reports both', () {
+      final bag = DiagnosticBag();
+      final doc = SpecLoader(bag).parse(
+        '{"openapi": "3.0.3", "a": 1, "a": 2,\n',
+        'api.json',
+      );
+      expect(doc, isNull);
+      expect(bag.all.map((d) => d.code), [
+        DiagnosticCode.duplicateKey,
+        DiagnosticCode.parseError,
+      ]);
+      expect(bag.all.last.severity, Severity.error);
+      expect(bag.all.last.line, 2);
+    });
+
+    test('a JSON root that is not an object is reported before positions', () {
+      final bag = DiagnosticBag();
+      expect(SpecLoader(bag).parse('[{"a": 1, "a": 2}]', 'api.json'), isNull);
+      expect(bag.all.map((d) => d.code), [
+        DiagnosticCode.duplicateKey,
+        DiagnosticCode.rootNotObject,
+      ]);
+    });
   });
 
   group('SpecLoader.load', () {
@@ -102,6 +142,13 @@ void main() {
       final bag = DiagnosticBag();
       expect(SpecLoader(bag).load(path), isNull);
       expect(bag.all.single.code, DiagnosticCode.inputUnreadable);
+    });
+    test('reports a directory given as the spec', () {
+      final dir = TempDir();
+      final bag = DiagnosticBag();
+      expect(SpecLoader(bag).load(dir.path, displayPath: 'specs'), isNull);
+      expect(bag.all.single.code, DiagnosticCode.inputUnreadable);
+      expect(bag.all.single.message, contains('is a directory'));
     });
 
     test('reads a file from disk', () {

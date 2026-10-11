@@ -25,8 +25,8 @@ final class SpecLoader {
   /// when the file cannot be used at all.
   SpecDocument? load(String path, {String? displayPath}) {
     final file = displayPath ?? path;
-    final source = File(path);
-    if (!source.existsSync()) {
+    final type = FileSystemEntity.typeSync(path);
+    if (type == FileSystemEntityType.notFound) {
       _diagnostics.report(
         .inputNotFound,
         'Spec file $file does not exist.',
@@ -35,9 +35,18 @@ final class SpecLoader {
       );
       return null;
     }
+    if (type == FileSystemEntityType.directory) {
+      _diagnostics.report(
+        .inputUnreadable,
+        'Spec path $file is a directory, not a file.',
+        file: file,
+        fix: 'Point "input" at the spec file itself.',
+      );
+      return null;
+    }
     final String text;
     try {
-      text = source.readAsStringSync();
+      text = File(path).readAsStringSync();
     } on FileSystemException catch (e) {
       _diagnostics.report(
         .inputUnreadable,
@@ -47,20 +56,23 @@ final class SpecLoader {
       );
       return null;
     }
-    return parse(text, file);
+    return parse(text, file, uri: p.toUri(p.normalize(p.absolute(path))));
   }
 
   /// Parses spec [text]; [file] names it in diagnostics.
   ///
+  /// [uri] is the absolute location of the text, the base for relative
+  /// `$ref`s; it defaults to [file] resolved against the current directory.
   /// JSON and YAML go through the same YAML parser, so both get positions.
   /// A JSON file the YAML parser rejects (for example, because of a
   /// duplicate key) is read again with `jsonDecode`, without positions.
-  SpecDocument? parse(String text, String file) {
+  SpecDocument? parse(String text, String file, {Uri? uri}) {
+    final location = uri ?? p.toUri(p.normalize(p.absolute(file)));
     final YamlNode node;
     try {
       node = loadYamlNode(text, sourceUrl: Uri.file(file));
     } on YamlException catch (e) {
-      return _parseJsonFallback(text, file, e);
+      return _parseJsonFallback(text, file, location, e);
     }
     if (node is! YamlMap) {
       _diagnostics.report(
@@ -73,26 +85,55 @@ final class SpecLoader {
       return null;
     }
     final spans = <String, SourceSpan>{};
-    final root = _toPlain(node, .root, spans)! as Map<String, Object?>;
-    return SpecDocument(file: file, root: root, spans: spans);
+    final root = _toPlain(node, .root, spans, file)! as Map<String, Object?>;
+    return SpecDocument(file: file, uri: location, root: root, spans: spans);
   }
 
   SpecDocument? _parseJsonFallback(
     String text,
     String file,
+    Uri uri,
     YamlException error,
   ) {
     final duplicate = error.message.startsWith('Duplicate mapping key');
-    final decoded = p.extension(file).toLowerCase() == '.json'
-        ? _tryDecodeJson(text)
-        : null;
-    if (decoded == null) {
+    if (p.extension(file).toLowerCase() != '.json') {
       _diagnostics.report(
         duplicate ? .duplicateKey : .parseError,
         error.message,
         severity: .error,
         file: file,
         span: error.span,
+      );
+      return null;
+    }
+    final Object? root;
+    try {
+      root = jsonDecode(text);
+    } on FormatException catch (e) {
+      if (!duplicate) {
+        _diagnostics.report(
+          .parseError,
+          error.message,
+          file: file,
+          span: error.span,
+        );
+        return null;
+      }
+      _diagnostics.report(
+        .duplicateKey,
+        error.message,
+        file: file,
+        span: error.span,
+        fix: 'Remove the duplicate key from the spec.',
+      );
+      final offset = e.offset;
+      _diagnostics.report(
+        .parseError,
+        e.message,
+        file: file,
+        span: offset == null
+            ? null
+            : SourceFile.fromString(text, url: uri).span(offset, offset),
       );
       return null;
     }
@@ -105,13 +146,6 @@ final class SpecLoader {
         fix: 'Remove the duplicate key from the spec.',
       );
     }
-    _diagnostics.report(
-      .positionsUnavailable,
-      'Read $file without source positions; '
-      'diagnostics for it show JSON pointers only.',
-      file: file,
-    );
-    final (root,) = decoded;
     if (root is! Map<String, Object?>) {
       _diagnostics.report(
         .rootNotObject,
@@ -121,37 +155,52 @@ final class SpecLoader {
       );
       return null;
     }
-    return SpecDocument(file: file, root: root, spans: const {});
+    _diagnostics.report(
+      .positionsUnavailable,
+      'Read $file without source positions; '
+      'diagnostics for it show JSON pointers only.',
+      file: file,
+    );
+    return SpecDocument(file: file, uri: uri, root: root, spans: const {});
   }
 
-  static (Object?,)? _tryDecodeJson(String text) {
-    try {
-      return (jsonDecode(text),);
-    } on FormatException {
-      return null;
-    }
-  }
-
-  static Object? _toPlain(
+  Object? _toPlain(
     YamlNode node,
     JsonPointer pointer,
     Map<String, SourceSpan> spans,
+    String file,
   ) {
     spans[pointer.value] = node.span;
-    return switch (node) {
-      YamlMap() => <String, Object?>{
-        for (final MapEntry(:key, :value) in node.nodes.entries)
-          '${(key as YamlNode).value}': _toPlain(
-            value,
-            pointer.child('${key.value}'),
-            spans,
-          ),
-      },
-      YamlList() => <Object?>[
-        for (var i = 0; i < node.nodes.length; i++)
-          _toPlain(node.nodes[i], pointer.child(i), spans),
-      ],
-      _ => node.value,
-    };
+    switch (node) {
+      case YamlMap():
+        final map = <String, Object?>{};
+        final keys = <String, YamlNode>{};
+        for (final MapEntry(:key, :value) in node.nodes.entries) {
+          final keyNode = key as YamlNode;
+          final name = '${keyNode.value}';
+          final earlier = keys[name];
+          if (earlier != null) {
+            _diagnostics.report(
+              .duplicateKey,
+              'Keys ${earlier.span.text} and ${keyNode.span.text} are the '
+              'same key "$name" in JSON; the last value is used.',
+              file: file,
+              pointer: pointer.child(name),
+              span: keyNode.span,
+              fix: 'Remove one of the keys.',
+            );
+          }
+          keys[name] = keyNode;
+          map[name] = _toPlain(value, pointer.child(name), spans, file);
+        }
+        return map;
+      case YamlList():
+        return <Object?>[
+          for (var i = 0; i < node.nodes.length; i++)
+            _toPlain(node.nodes[i], pointer.child(i), spans, file),
+        ];
+      default:
+        return node.value;
+    }
   }
 }

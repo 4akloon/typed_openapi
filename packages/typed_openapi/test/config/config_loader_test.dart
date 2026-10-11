@@ -69,6 +69,14 @@ clients:
     expect(bag.all.single.code, DiagnosticCode.configInvalid);
   });
 
+  test('reports a directory given as the config', () {
+    final dir = TempDir();
+    final bag = DiagnosticBag();
+    expect(ConfigLoader(bag).load(dir.path), isNull);
+    expect(bag.all.single.code, DiagnosticCode.configInvalid);
+    expect(bag.all.single.message, contains('is a directory'));
+  });
+
   test('reports unknown keys as warnings and keeps going', () {
     final dir = TempDir();
     final path = dir.write('c.yaml', '''

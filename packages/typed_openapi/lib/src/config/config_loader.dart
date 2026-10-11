@@ -35,8 +35,8 @@ final class ConfigLoader {
   /// null when the file is missing or unusable; otherwise returns every
   /// client that is valid.
   ProjectConfig? load(String path) {
-    final source = File(path);
-    if (!source.existsSync()) {
+    final type = FileSystemEntity.typeSync(path);
+    if (type == FileSystemEntityType.notFound) {
       _diagnostics.report(
         .configNotFound,
         'Config file $path does not exist.',
@@ -45,9 +45,18 @@ final class ConfigLoader {
       );
       return null;
     }
+    if (type == FileSystemEntityType.directory) {
+      _diagnostics.report(
+        .configInvalid,
+        'Config path $path is a directory, not a file.',
+        file: path,
+        fix: 'Pass the path of typed_openapi.yaml itself with --config.',
+      );
+      return null;
+    }
     final String text;
     try {
-      text = source.readAsStringSync();
+      text = File(path).readAsStringSync();
     } on FileSystemException catch (e) {
       _diagnostics.report(
         .configInvalid,
