@@ -1,0 +1,13 @@
+# The scanner and parser of package:yaml 3.1.4 (MIT, see LICENSE), copied
+# so that typed_openapi can read their events without an implementation
+# import. Local changes, each marked "typed_openapi:" in the code:
+# - the scanner's cost on long flow lines is linear
+#   (https://github.com/dart-lang/tools/issues/2657, two edits);
+# - the assert in Scanner._saveSimpleKey, which invalid documents can break,
+#   is a syntax error;
+# - warnings go to a YamlWarningHandler instead of being printed;
+# - yaml_document.dart keeps only the directives, style.dart does not import
+#   yaml_node.dart.
+# The code keeps package:yaml's style, so it is checked with the recommended
+# lints only.
+include: package:lints/recommended.yaml

@@ -7,7 +7,7 @@ import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
 import 'package:typed_openapi/src/diagnostics/json_pointer.dart';
 import 'package:typed_openapi/src/diagnostics/severity.dart';
 import 'package:typed_openapi/src/load/spec_loader.dart';
-import 'package:typed_openapi/src/load/yaml_event_guard.dart';
+import 'package:typed_openapi/src/load/yaml_composer.dart';
 
 import '../helpers/temp_dir.dart';
 
@@ -59,23 +59,73 @@ void main() {
         'api.json',
       )!;
       expect(doc.root['info'], {'title': 'b'});
-      expect(doc.hasPositions, isFalse);
-      expect(bag.all.map((d) => d.code), [
-        DiagnosticCode.duplicateKey,
-        DiagnosticCode.positionsUnavailable,
-      ]);
+      expect(doc.hasPositions, isTrue);
+      final d = bag.all.single;
+      expect(d.code, DiagnosticCode.duplicateKey);
+      expect(d.pointer?.value, '#/info');
       expect(bag.hasErrors, isFalse);
     });
 
-    test('a duplicate key in YAML is an error', () {
+    test('a YAML tag outside the JSON Schema ruleset is an error, and the '
+        'rest of the document is read', () {
       final bag = DiagnosticBag();
       final doc = SpecLoader(bag).parse(
-        'openapi: 3.0.3\npaths: {}\npaths: {}\n',
+        'openapi: 3.0.3\nx-when: !!timestamp 2025-07-27T07:17:05Z\n',
+        'api.yaml',
+      )!;
+      expect(doc.root['x-when'], '2025-07-27T07:17:05Z');
+      expect(bag.all.single.code, DiagnosticCode.yamlTagUnsupported);
+    });
+
+    test('a duplicate key in YAML is an error; the last value is used', () {
+      final bag = DiagnosticBag();
+      final doc = SpecLoader(bag).parse(
+        'openapi: 3.0.3\npaths: {/a: {}}\npaths: {}\n',
         'a.yaml',
-      );
-      expect(doc, isNull);
+      )!;
+      expect(doc.root['paths'], <String, Object?>{});
       expect(bag.all.single.code, DiagnosticCode.duplicateKey);
       expect(bag.all.single.severity, Severity.error);
+    });
+
+    test('a second YAML document is a parse error, as in package:yaml', () {
+      final bag = DiagnosticBag();
+      expect(
+        SpecLoader(
+          bag,
+        ).parse('openapi: 3.1.0\n---\nopenapi: 3.0.0\n', 'a.yaml'),
+        isNull,
+      );
+      final d = bag.all.single;
+      expect(d.code, DiagnosticCode.parseError);
+      expect(d.span, isNotNull);
+    });
+
+    group('long flow lines', () {
+      const limit = Timeout(Duration(seconds: 30));
+
+      for (final (name, text) in [
+        ('quoted closers', 'openapi: 3.1.0\nx-a: ${'["]",' * 199000}'),
+        ('quoted closers in a JSON-style object', '{"a": ${'["]",' * 199000}'),
+      ]) {
+        test('$name are TOA007 at a position', () {
+          final bag = DiagnosticBag();
+          expect(SpecLoader(bag).parse(text, 'api.yaml'), isNull);
+          final d = bag.all.single;
+          expect(d.code, DiagnosticCode.nestingTooDeep);
+          expect(d.span, isNotNull);
+        }, timeout: limit);
+      }
+
+      test('a spec with many short flow collections is read', () {
+        final bag = DiagnosticBag();
+        final doc = SpecLoader(bag).parse(
+          'openapi: 3.1.0\nx-pairs: [${'[1, 2], ' * 40000}0]\n',
+          'api.yaml',
+        )!;
+        expect(bag.all, isEmpty);
+        expect((doc.root['x-pairs']! as List<Object?>).length, 40001);
+      }, timeout: limit);
     });
 
     test('a root that is not an object is an error', () {
@@ -90,7 +140,7 @@ void main() {
       expect(SpecLoader(bag).parse(text, 'api.json'), isNull);
       final d = bag.all.single;
       expect(d.code, DiagnosticCode.nestingTooDeep);
-      expect(d.column, 7 + YamlEventGuard.maxDepth);
+      expect(d.column, 7 + YamlComposer.maxDepth);
     });
 
     test('YAML nested deeper than the limit is an error too', () {
@@ -127,12 +177,11 @@ void main() {
           'not a stack overflow', () {
         final bag = DiagnosticBag();
         final text = deepAlias();
-        expect(const YamlEventGuard().check(text), isNull);
         expect(SpecLoader(bag).parse(text, 'api.yaml'), isNull);
         final d = bag.all.single;
         expect(d.code, DiagnosticCode.nestingTooDeep);
         expect(d.message, contains('alias'));
-        expect(d.pointer!.tokens, hasLength(YamlEventGuard.maxDepth + 1));
+        expect(d.pointer!.tokens, hasLength(YamlComposer.maxDepth + 1));
         expect(d.pointer!.tokens.take(2), ['x-use', '0']);
         expect(d.span, isNotNull);
       }, timeout: limit);
@@ -181,7 +230,7 @@ void main() {
         final bag = DiagnosticBag();
         final doc = SpecLoader(bag).parse(
           'openapi: 3.1.0\nx-deep: '
-              '${'[' * YamlEventGuard.maxDepth}${']' * YamlEventGuard.maxDepth}\n',
+              '${'[' * YamlComposer.maxDepth}${']' * YamlComposer.maxDepth}\n',
           'api.yaml',
         );
         expect(doc, isNotNull);
@@ -192,8 +241,8 @@ void main() {
         final bag = DiagnosticBag();
         final doc = SpecLoader(bag).parse(
           'openapi: 3.1.0\nx-deep: '
-              '${'[' * (YamlEventGuard.maxDepth + 1)}'
-              '${']' * (YamlEventGuard.maxDepth + 1)}\n',
+              '${'[' * (YamlComposer.maxDepth + 1)}'
+              '${']' * (YamlComposer.maxDepth + 1)}\n',
           'api.yaml',
         );
         expect(doc, isNull);
@@ -209,14 +258,14 @@ void main() {
               '{"openapi": "3.1.0", "x": ${'[' * levels}${']' * levels}}';
           final bag = DiagnosticBag();
           expect(
-            SpecLoader(bag).parse(doc(YamlEventGuard.maxDepth), 'a.$extension'),
+            SpecLoader(bag).parse(doc(YamlComposer.maxDepth), 'a.$extension'),
             isNotNull,
           );
           expect(bag.all, isEmpty);
           expect(
             SpecLoader(
               bag,
-            ).parse(doc(YamlEventGuard.maxDepth + 1), 'a.$extension'),
+            ).parse(doc(YamlComposer.maxDepth + 1), 'a.$extension'),
             isNull,
           );
           expect(bag.all.single.code, DiagnosticCode.nestingTooDeep);
@@ -301,65 +350,22 @@ x-two: *base
         return '$text';
       }
 
-      test('the bomb itself passes the guard and is bounded by the budget', () {
+      test('the bomb itself is bounded by the budget', () {
         final bag = DiagnosticBag();
-        expect(const YamlEventGuard().check(bomb('x-k: 1')), isNull);
         expect(SpecLoader(bag).parse(bomb('x-k: 1'), 'api.yaml'), isNull);
-        expect(bag.all.single.message, isNot(contains('mapping key')));
+        expect(bag.all.single.code, DiagnosticCode.aliasExpansionTooLarge);
       }, timeout: limit);
 
-      // Every key syntax of the re-reviews: package:yaml parses each as a key
-      // that contains an alias, and the guard must see it before loading.
-      for (final (name, tail) in [
-        ('after a ? marker', '? *l7\n: v'),
-        ('inside a ? key sequence', '? [*l7]\n: v'),
-        ('inside a ? key block sequence', '? - *l7\n: v'),
-        ('inside a ? key block sequence at the same column', '?\n- *l7\n: v'),
-        ('inside a nested ? key', 'x-k:\n  ?\n  - *l7\n  : v'),
-        ('before a colon', '*l7 : v'),
-        ('in a flow mapping', 'x-k: {*l7 : v}'),
-        ('as an entry of a flow mapping', 'x-k: {a: 1, *l7 : v}'),
-        ('as a bare entry of a flow mapping', 'x-k: {*l7, a: 1}'),
-        ('after a ? inside a flow mapping', 'x-k: {? *l7 : v}'),
-        ('after a ? inside a flow sequence', 'x-k: [? *l7 : v]'),
-        ('inside a flow sequence key', '[*l7]: v'),
-        ('inside a flow mapping key', '{a: *l7}: v'),
-        ('inside a flow key of a flow mapping', 'x-k: {[*l7]: v}'),
-        ('inside a tagged flow sequence key', '!!seq [*l7]: v'),
-        ('inside an anchored flow sequence key', '&z [*l7]: v'),
-        ('inside a flow key in a block sequence', 'x-k:\n  - [*l7]: v'),
-        ('inside a flow key without a colon', 'x-k: {[*l7]}'),
-        ('inside a flow key on its own line', 'x-k:\n  {\n   [*l7]\n  }'),
-        ('inside a flow key before a comma', 'x-k: {[*l7], a: 1}'),
-        ('inside a flow mapping in a flow mapping', 'x-k: {{a: *l7}}'),
-        ('inside a flow key, colon on the next line', 'x-k: [ [*l7]\n  : v]'),
-        ('after a bare dash line', 'x-k:\n  - a\n  -\n    *l7 : v'),
-        (
-          'in a flow mapping after a bare dash line',
-          'x-k:\n  - a\n  -\n    {*l7 : v}',
-        ),
-        ('after a : and a # without a blank', 'x-k:\n  {a:# x, b: *l7}: v'),
-        ('in a flow key after a : and a #', 'x-k:\n  [{a:# x, b: *l7}]: v'),
-        ('in a flow sequence after a : and a #', 'x-k:\n  [a:#, *l7]: v'),
-        (
-          'after a : and a quote without a blank',
-          "x-k:\n  {true:'x, c: *l7}: v",
-        ),
-        ('after a ? and a quote without a blank', 'x-k:\n  {?"a : *l7}: v'),
-        ('after a nested ? and a quote', 'x-k:\n  {x: {?"a : *l7}}: v'),
-        ('after a ? and a # without a blank', 'x-k:\n  {?#a : {v: *l7}}: 1'),
-        ('after a " in a flow mapping', 'x-k:\n  [{a:"b, c: *l7}]: 1'),
-        ('after an indented ---', 'x-k:\n --- "q:\n    j: 1\n    ? *l7'),
-      ]) {
-        test('an alias $name is reported before it is expanded', () {
-          final bag = DiagnosticBag();
-          expect(SpecLoader(bag).parse(bomb(tail), 'api.yaml'), isNull);
-          final d = bag.all.single;
-          expect(d.code, DiagnosticCode.aliasExpansionTooLarge);
-          expect(d.message, contains('mapping key'));
-          expect(d.span, isNotNull);
-        }, timeout: limit);
-      }
+      test('an alias of a collection as a key is an error, and the rest '
+          'of the document is read', () {
+        final bag = DiagnosticBag();
+        final doc = SpecLoader(bag).parse(
+          'openapi: 3.1.0\nx-a: &a [1, 2]\n? *a\n: v\nx-b: 1\n',
+          'api.yaml',
+        )!;
+        expect(doc.root.keys, ['openapi', 'x-a', 'x-b']);
+        expect(bag.all.single.code, DiagnosticCode.nonStringKey);
+      }, timeout: limit);
 
       test('aliases everywhere except in keys are accepted', () {
         final bag = DiagnosticBag();

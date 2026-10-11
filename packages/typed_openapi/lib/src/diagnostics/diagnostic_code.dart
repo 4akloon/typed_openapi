@@ -26,9 +26,13 @@ enum DiagnosticCode {
   /// once YAML aliases are expanded.
   nestingTooDeep('TOA007', 'nesting-too-deep', .error),
 
-  /// YAML aliases expand to far more nodes than the text has, or an alias
-  /// is used in a mapping key.
+  /// YAML aliases expand to far more nodes than the text has, or the JSON
+  /// pointers of the document's nodes add up to more than the budget.
   aliasExpansionTooLarge('TOA008', 'alias-expansion-too-large', .error),
+
+  /// A YAML tag outside the JSON Schema ruleset OpenAPI requires, such as
+  /// `!!timestamp` or `!custom`; the value is read as its text.
+  yamlTagUnsupported('TOA009', 'yaml-tag-unsupported', .error),
 
   /// The document has no `openapi` field.
   missingOpenApiVersion('TOA010', 'missing-openapi-version', .error),
@@ -54,6 +58,10 @@ enum DiagnosticCode {
     'openapi-version-not-string',
     .warning,
   ),
+
+  /// The YAML parser warns about the text, for example about an unknown
+  /// directive; reading goes on.
+  yamlWarning('TOA015', 'yaml-warning', .warning),
 
   /// A 3.0 document uses an OpenAPI 3.1 or JSON Schema 2020-12 construct;
   /// it is read as 3.1.
@@ -96,6 +104,14 @@ enum DiagnosticCode {
 
   /// A field the spec requires is missing.
   missingRequiredField('TOA112', 'missing-required-field', .warning),
+
+  /// A mapping key is a collection, or an alias of one, instead of a
+  /// string; the entry is ignored.
+  nonStringKey('TOA113', 'non-string-key', .error),
+
+  /// A mapping key is a YAML null (`~`, `null` or empty); it is read as its
+  /// text.
+  nullKey('TOA114', 'null-key', .warning),
 
   /// The configuration file does not exist.
   configNotFound('TOA901', 'config-not-found', .error),
