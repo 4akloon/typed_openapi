@@ -2,11 +2,10 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:source_span/source_span.dart';
-import 'package:yaml/yaml.dart';
 
 import '../diagnostics/diagnostic_bag.dart';
 import '../diagnostics/json_pointer.dart';
-import '../load/yaml_event_guard.dart';
+import '../load/yaml_composer.dart';
 import 'project_config.dart';
 
 /// Reads `typed_openapi.yaml` into a [ProjectConfig].
@@ -66,32 +65,12 @@ final class ConfigLoader {
       );
       return null;
     }
-    final found = const YamlEventGuard().check(text);
-    if (found != null) {
-      _diagnostics.report(
-        .configInvalid,
-        switch (found.problem) {
-          .tooDeep =>
-            'The config nests deeper than ${YamlEventGuard.maxDepth} levels.',
-          .aliasInKey =>
-            'The config uses a YAML alias in a mapping key. Keys are '
-                'strings, and an alias there can expand without bound.',
-        },
-        file: path,
-        span: SourceFile.fromString(text).span(found.offset, found.offset + 1),
-      );
-      return null;
-    }
-    final YamlNode root;
-    try {
-      root = loadYamlNode(text, sourceUrl: Uri.file(path));
-    } on YamlException catch (e) {
-      _diagnostics.report(.configInvalid, e.message, file: path, span: e.span);
-      return null;
-    }
-    final reader = _ConfigReader(path, _diagnostics);
-    if (root is! YamlMap) {
-      reader.invalid('The config must be a mapping.', root, .root);
+    final composed = _compose(text, path);
+    if (composed == null) return null;
+    final reader = _ConfigReader(path, _diagnostics, composed.spans);
+    final root = composed.root;
+    if (root is! Map<String, Object?>) {
+      reader.invalid('The config must be a mapping.', .root);
       return null;
     }
     reader.checkKeys(root, _topLevelKeys, .root);
@@ -110,7 +89,7 @@ final class ConfigLoader {
     final clientNodes = reader.mapAt(root, 'clients', .root, required: true);
     if (clientNodes == null) return null;
     if (clientNodes.isEmpty) {
-      reader.invalid('"clients" is empty.', clientNodes, clientsPointer);
+      reader.invalid('"clients" is empty.', clientsPointer);
       return null;
     }
 
@@ -119,13 +98,12 @@ final class ConfigLoader {
 
     final clients = <ClientConfig>[];
     final declared = <String>{};
-    final outputSpans = <String, SourceSpan>{};
-    for (final MapEntry(:key, :value) in clientNodes.nodes.entries) {
-      final name = '${(key as YamlNode).value}';
+    final outputSpans = <String, SourceSpan?>{};
+    for (final MapEntry(key: name, :value) in clientNodes.entries) {
       declared.add(name);
       final pointer = clientsPointer.child(name);
-      if (value is! YamlMap) {
-        reader.invalid('Client "$name" must be a mapping.', value, pointer);
+      if (value is! Map<String, Object?>) {
+        reader.invalid('Client "$name" must be a mapping.', pointer);
         continue;
       }
       reader.checkKeys(value, _clientKeys, pointer);
@@ -139,7 +117,7 @@ final class ConfigLoader {
       final overrides = reader.stringAt(value, 'overrides', pointer);
       final baseline = reader.stringAt(value, 'baseline', pointer);
       if (input == null || output == null) continue;
-      outputSpans[name] = value.nodes['output']!.span;
+      outputSpans[name] = reader.spanAt(pointer.child('output'));
       clients.add(
         ClientConfig(
           name: name,
@@ -161,9 +139,39 @@ final class ConfigLoader {
     );
   }
 
+  /// Reads [text] into plain values; null after reporting why it cannot be
+  /// used. Every problem of the YAML itself is a config error.
+  ComposedYaml? _compose(String text, String path) {
+    final yaml = DiagnosticBag();
+    final composed = YamlComposer(
+      yaml,
+    ).compose(text, file: path, uri: p.toUri(p.absolute(path)));
+    for (final d in yaml.all) {
+      _diagnostics.report(
+        .configInvalid,
+        d.message,
+        severity: d.severity,
+        file: path,
+        pointer: d.pointer,
+        span: d.span,
+        fix: d.fix,
+      );
+    }
+    if (composed?.syntaxError case final error?) {
+      _diagnostics.report(
+        .configInvalid,
+        error.message,
+        file: path,
+        span: error.span,
+      );
+      return null;
+    }
+    return composed;
+  }
+
   void _checkOutputOverlap(
     List<ClientConfig> clients,
-    Map<String, SourceSpan> outputSpans,
+    Map<String, SourceSpan?> outputSpans,
     String file,
   ) {
     for (var i = 0; i < clients.length; i++) {
@@ -192,71 +200,75 @@ final class ConfigLoader {
   }
 }
 
-/// Typed access to the nodes of a config document that reports bad values.
+/// Typed access to the values of a config document that reports bad ones.
 class _ConfigReader {
-  _ConfigReader(this.file, this.diagnostics);
+  _ConfigReader(this.file, this.diagnostics, this.spans);
 
   final String file;
   final DiagnosticBag diagnostics;
+  final Map<String, SourceSpan> spans;
 
-  void checkKeys(YamlMap map, Set<String> allowed, JsonPointer at) {
-    for (final key in map.nodes.keys.cast<YamlNode>()) {
-      final name = '${key.value}';
+  SourceSpan? spanAt(JsonPointer at) => spans[at.value];
+
+  void checkKeys(
+    Map<String, Object?> map,
+    Set<String> allowed,
+    JsonPointer at,
+  ) {
+    for (final name in map.keys) {
       if (allowed.contains(name)) continue;
       diagnostics.report(
         .configUnknownKey,
         'Unknown key "$name".',
         file: file,
         pointer: at.child(name),
-        span: key.span,
+        span: spanAt(at.child(name)),
         fix: 'Allowed keys here: ${(allowed.toList()..sort()).join(', ')}.',
       );
     }
   }
 
-  YamlMap? mapAt(
-    YamlMap parent,
+  Map<String, Object?>? mapAt(
+    Map<String, Object?> parent,
     String key,
     JsonPointer at, {
     bool required = false,
   }) {
-    final node = parent.nodes[key];
-    if (node == null) {
-      if (required) invalid('Missing required key "$key".', parent, at);
+    if (!parent.containsKey(key)) {
+      if (required) invalid('Missing required key "$key".', at);
       return null;
     }
-    if (node is YamlMap) return node;
-    invalid('"$key" must be a mapping.', node, at.child(key));
+    final value = parent[key];
+    if (value is Map<String, Object?>) return value;
+    invalid('"$key" must be a mapping.', at.child(key));
     return null;
   }
 
   String? stringAt(
-    YamlMap parent,
+    Map<String, Object?> parent,
     String key,
     JsonPointer at, {
     bool required = false,
   }) {
-    final node = parent.nodes[key];
-    if (node == null) {
-      if (required) invalid('Missing required key "$key".', parent, at);
+    if (!parent.containsKey(key)) {
+      if (required) invalid('Missing required key "$key".', at);
       return null;
     }
-    final value = node.value;
+    final value = parent[key];
     if (value is String && value.isNotEmpty) return value;
-    invalid('"$key" must be a non-empty string.', node, at.child(key));
+    invalid('"$key" must be a non-empty string.', at.child(key));
     return null;
   }
 
-  int? intAt(YamlMap parent, String key, JsonPointer at) {
-    final node = parent.nodes[key];
-    if (node == null) return null;
-    final value = node.value;
+  int? intAt(Map<String, Object?> parent, String key, JsonPointer at) {
+    if (!parent.containsKey(key)) return null;
+    final value = parent[key];
     if (value is int && value > 0) return value;
-    invalid('"$key" must be a positive integer.', node, at.child(key));
+    invalid('"$key" must be a positive integer.', at.child(key));
     return null;
   }
 
-  Preset? presetAt(YamlMap parent, JsonPointer at) {
+  Preset? presetAt(Map<String, Object?> parent, JsonPointer at) {
     final name = stringAt(parent, 'preset', at);
     if (name == null) return null;
     final preset = Preset.values.asNameMap()[name];
@@ -264,19 +276,18 @@ class _ConfigReader {
     final known = Preset.values.map((v) => v.name).toList()..sort();
     invalid(
       'Unknown preset "$name". Known presets: ${known.join(', ')}.',
-      parent.nodes['preset']!,
       at.child('preset'),
     );
     return null;
   }
 
-  void invalid(String message, YamlNode node, JsonPointer at) {
+  void invalid(String message, JsonPointer at) {
     diagnostics.report(
       .configInvalid,
       message,
       file: file,
       pointer: at,
-      span: node.span,
+      span: spanAt(at),
     );
   }
 }

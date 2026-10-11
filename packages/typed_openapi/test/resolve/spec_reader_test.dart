@@ -3,7 +3,7 @@ import 'package:typed_openapi/src/diagnostics/diagnostic_bag.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
 import 'package:typed_openapi/src/load/openapi_version.dart';
 import 'package:typed_openapi/src/load/spec_loader.dart';
-import 'package:typed_openapi/src/load/yaml_event_guard.dart';
+import 'package:typed_openapi/src/load/yaml_composer.dart';
 import 'package:typed_openapi/src/model/schema.dart';
 import 'package:typed_openapi/src/resolve/spec_reader.dart';
 
@@ -51,7 +51,7 @@ components:
 
   test('a schema nested as deep as the loader allows is read', () {
     final bag = DiagnosticBag();
-    const depth = YamlEventGuard.maxDepth - 4;
+    const depth = YamlComposer.maxDepth - 4;
     final schema = '${'{"items": ' * depth}{"type": "string"}${'}' * depth}';
     final document = SpecLoader(bag).parse(
       '{"openapi": "3.1.0", "info": {"title": "t", "version": "1"}, '

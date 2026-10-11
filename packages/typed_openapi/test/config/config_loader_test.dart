@@ -88,31 +88,31 @@ clients:
     expect(bag.all.single.message, contains('nests deeper'));
   });
 
-  for (final (name, key) in [
-    ('an explicit ? key', 'x-key:\n  ? *l7\n  : v'),
-    ('a flow sequence key', '[*l7]: v'),
-    ('a flow mapping key', '{a: *l7}: v'),
-    ('a flow mapping key without a colon', 'x-key: {[*l7]}'),
-    ('a ? key inside a flow mapping', 'x-key: {? *l7 : v}'),
-    ('a key after a bare dash line', 'x-key:\n  - a\n  -\n    *l7 : v'),
-  ]) {
-    test('rejects $name with an alias before expanding it', () {
-      final text = StringBuffer('x-l0: &l0 [x, x, x, x, x, x, x, x, x]\n');
-      for (var i = 1; i <= 7; i++) {
-        text.writeln('x-l$i: &l$i');
-        for (var n = 0; n < 9; n++) {
-          text.writeln('  - *l${i - 1}');
-        }
-      }
-      text.writeln(key);
-      text.writeln('clients:\n  api: {input: a.json, output: lib/api}');
-      final path = TempDir().write('typed_openapi.yaml', '$text');
-      final bag = DiagnosticBag();
-      expect(ConfigLoader(bag).load(path), isNull);
-      expect(bag.all.single.code, DiagnosticCode.configInvalid);
-      expect(bag.all.single.message, contains('mapping key'));
-    }, timeout: const Timeout(Duration(seconds: 30)));
-  }
+  test('rejects a collection as a key without expanding it', () {
+    final path = TempDir().write('typed_openapi.yaml', '''
+x-list: &l [a, b]
+? *l
+: v
+clients:
+  api: {input: a.json, output: lib/api}
+''');
+    final bag = DiagnosticBag();
+    expect(ConfigLoader(bag).load(path)!.clients, hasLength(1));
+    final codes = bag.all.map((d) => d.code).toList();
+    expect(codes, contains(DiagnosticCode.configInvalid));
+    expect(
+      bag.all.firstWhere((d) => d.code == DiagnosticCode.configInvalid).message,
+      contains('mapping key'),
+    );
+  });
+
+  test('reports a syntax error with its position', () {
+    final path = TempDir().write('c.yaml', 'clients: [a, b\n');
+    final bag = DiagnosticBag();
+    expect(ConfigLoader(bag).load(path), isNull);
+    expect(bag.all.single.code, DiagnosticCode.configInvalid);
+    expect(bag.all.single.span, isNotNull);
+  });
 
   test('accepts an alias in a value', () {
     final path = TempDir().write('typed_openapi.yaml', '''

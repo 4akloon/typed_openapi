@@ -22,11 +22,10 @@ dependencies:
   path: ^1.9.1
   source_span: ^1.10.2
   string_scanner: ^1.2.0
-  # Pinned to one minor version: YamlEventGuard reads package:yaml's own parser
-  # events (package:yaml/src/parser.dart), which are not public API.
-  yaml: ">=3.1.4 <3.2.0"
 
 dev_dependencies:
   test: ^1.24.0
+  # Tests compare the composer with package:yaml's loader.
+  yaml: ^3.1.4
 
 resolution: workspace
