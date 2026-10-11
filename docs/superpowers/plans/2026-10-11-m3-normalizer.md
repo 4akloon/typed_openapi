@@ -29,23 +29,26 @@
 
 ## Ухвалені рішення
 
-Рішення специфікації M3 — обов'язкові; тут лише те, що специфікація лишає планові, і рішення контролера щодо відкритих питань першої версії плану.
+Рішення специфікації M3 — обов'язкові; тут лише те, що специфікація лишає планові, і рішення контролера щодо відкритих питань попередніх версій плану.
 
 1. **Скалярні ключі — текст (YAML Failsafe, як вимагає OAS для ключів).** `200:`, `true:`, `0x1F:` — ключі `"200"`, `"true"`, `"0x1F"` без діагностики (`200:` повсюдний). Null-ключ (`~:`, `null:`, порожній) — `TOA114 null-key` warning «візьми в лапки», читається як текст. Ключ-колекція або аліас колекції — `TOA113 non-string-key` error (діапазон структури поряд із TOA110–TOA112); запис пропускається, нічого в ньому не будується, тож «бомба в ключі» неможлива.
 2. **Asserts сканера.** Fuzz M2 (300 000 входів, seed 11) ловить `assert(_simpleKeyAllowed || !required)` у `Scanner._saveSimpleKey` на 86 документах; без асертів усі 86 закінчуються `YamlException`. Копія сканера замість assert звітує синтаксичну помилку `Expected a key at this indentation.` у тому місці; інші asserts на шляху (`Parser` — аргументи конструктора і `streamStart`) вхід зламати не може. Тест проганяє ті самі 300 000 документів через компоновщик: жоден `AssertionError` не вилітає. Порівняльний fuzz із `loadYamlNode` (upstream) пропускає документи, на яких падає assert самого `package:yaml` — це єдиний `catch (AssertionError)`, і він у тесті.
 3. **Квадратичний сканер виправлено в копії** (https://github.com/dart-lang/tools/issues/2657): `_staleSimpleKeys` одразу виходить поза блочним контекстом, а `_fetchMoreTokens` перевіряє лише перший живий простий ключ. Файл ~1 MB із «захованими» дужками — з 57 с до часток секунди; обхід «підрахунок дужок перед парсером» з M2 не потрібен. Тести з гілки `fix/yaml-quadratic-scan` (коміт 719bd46, не зливається) перенацілено на компоновщик.
 4. **Попередження парсера — `TOA015 yaml-warning`.** `warn()` `package:yaml` друкував у stdout (псуючи `--format json`); копія передає попередження в `YamlWarningHandler`, компоновщик звітує їх із позицією.
 5. **Дублікати ключів.** Ключі, рівні для самого YAML (`a` і `"a"`), поза `.json` — TOA002 з рівнем **error** (`DiagnosticBag.report(severity:)`), але читання триває і перемагає останнє значення (як `JSON.parse` і `jsonDecode`), повідомлення каже про це. Типовий рівень TOA002 у каталозі лишається warning: ним звітуються ключі, рівні лише як JSON-ключі (`1`/`"1"`), і будь-які дублікати в `.json`.
-6. **Merge key `<<` — `TOA109 yaml-merge-key` warning** (задача 3): YAML OpenAPI — JSON Schema ruleset, merge keys там немає; ключ лишається звичайним ключем `<<`, злиття немає.
+6. **Merge key `<<` — `TOA109 yaml-merge-key` warning** (задача 3): YAML OpenAPI — JSON Schema ruleset, merge keys там немає, злиття немає. В об'єкті ключ лишається звичайним (невідомим) ключем; у мапі іменованих записів (`components.*`, `paths`, `responses`, `properties` …) запис `<<` після TOA109 пропускається, щоб не стати схемою чи шляхом з ім'ям `<<` і не дати каскад TOA110.
 7. **Запасний `jsonDecode` для `.json` лишається**, хоча прикладу валідного JSON, який відкидає парсер, не знайдено (сурогатні пари, `\/`, таби, ключі > 1024 символів читаються).
 8. **TOA107 замість TOA110/TOA111.** `$ref` як невідомий ключ об'єкта (операція `get: {$ref: ...}`) і об'єкт-`$ref` там, де очікується рядок або інше значення (`description: {$ref: ...}`, `tags: [{$ref: ...}]`), — `TOA107 ref-not-allowed` з підказкою про `redocly bundle`. Підстановки «`$ref` будь-де» немає. Правила, що читають операції (TOA501, TOA503), пропускають операцію, записану як `$ref`.
 9. **TOA108 визначається з тексту біля порожнього значення.** `package:yaml` ставить порожнє блочне значення на `:` ключа, а порожнє flow-значення — на наступний токен (на наступному рядку, коли коментар закрив рядок). `ObjectReader` перевіряє обидва місця.
 10. **Проходи нормалізатора.** Прохід = read → усі правила. Якщо є правки і прохід не третій — у звіт ідуть усі знахідки правил, що мають правки в цьому проході (правило може покласти одну правку на першу з кількох знахідок), правки застосовуються, документ перечитується. Інакше прохід останній: у звіт ідуть діагностика парсера цього проходу і всі знахідки; правки третього проходу не застосовуються і дають `TOA800 fix-not-applied`.
 11. **Конфлікт правок — `TOA800`.** Правка, що торкається того самого вузла, що й раніше прийнята (той самий pointer або один — нащадок іншого), пропускається з `TOA800`; виграє правило, що раніше в `Normalizer.rules`. Той самий код — для правки, чия ціль зникла, і для файлу, який не читається.
 12. **Файли читаються один раз на всі проходи.** Діагностика завантаження інших файлів іде прямо в звіт; документи, завантажені в проході, передаються в наступний (`SpecDocuments(others:)`), відредаговані — з новим деревом (`SpecDocument.withRoot`). Позиції лишаються за pointer.
-13. **Конфіг `rules`.** `rules: {<ім'я>: false}` у `defaults` і в клієнті; клієнт перекриває `defaults` поіменно. Невідоме ім'я — `TOA903` (warning, з переліком правил), не-булеве значення — `TOA902`. Файл, спільний для кількох клієнтів, перевіряється один раз — з правилами першого клієнта за іменем.
+13. **Конфіг `rules`.** `rules: {<ім'я>: false}` у `defaults` і в клієнті; клієнт перекриває `defaults` поіменно. Невідоме ім'я — `TOA903` (warning, з переліком правил), не-булеве значення — `TOA902`. Файл, спільний для кількох клієнтів, перевіряється один раз на кожну різну пару (пресет, вимкнені правила); клієнти з однаковими налаштуваннями ділять прогін, однакова діагностика звітується один раз (`DiagnosticBag`).
 14. **Перевірки «лише діагностика» — теж іменовані правила**, щоб кожну можна було вимкнути (R2.1): `array-without-items`, `double-array`, `format-on-array`, `binary-object`, `contradictory-object-type`, `example-type-mismatch`, `nullable-enum-one-of`, `path-param-not-in-template`, `missing-operation-id`, `duplicate-operation-id`, `discriminator-property-required`, `discriminator-mapping-target`, `wildcard-media-type`, `component-key-characters`. Діагностики рівня читання (TOA009, TOA015, TOA107–TOA109, TOA113, TOA114) — не правила: вони про те, чи прочитано документ.
 15. **TOA402 потрібен:** M2 значень `discriminator.mapping` не резолвить (`Discriminator.mapping` лише читається). Значення без `#`, `/` і `.` — ім'я в `components.schemas`, решта — як `$ref`.
+16. **TOA207 / TOA208.** Розбіжність структур між `example` і схемою (об'єкт проти масиву, структура проти скаляра) — `TOA207` warning: клієнт впаде на декодуванні. Скаляр іншого скалярного типу (`example: "1.5"` для `number`) — `TOA208 example-scalar-type` info: декодер не зачеплено, неправильна лише документація.
+17. **TOA401 — один звіт на дискримінатор**, у місці `discriminator`, з переліком варіантів, де властивість не `required` (відсортовано, до 10 імен, далі «and N more»).
+18. **TOA503 лишається info**; перевизначення рівнів — M5.
 
 ## Нові коди діагностики
 
@@ -65,11 +68,12 @@
 | TOA204 | `format-on-array` | warning | `format` на масиві без `items` | 7 | C-50 |
 | TOA205 | `binary-object` | warning | `type: object` + `format: binary` | 7 | C-51 |
 | TOA206 | `contradictory-object-type` | warning | `type: object` проти не-об'єктних гілок | 7 | C-22 |
-| TOA207 | `example-type-mismatch` | warning | `example` не того JSON-типу | 7 | C-60 |
+| TOA207 | `example-type-mismatch` | warning | `example` іншої структури (об'єкт ↔ масив, структура ↔ скаляр) | 7 | C-60 |
+| TOA208 | `example-scalar-type` | info | `example` — скаляр іншого типу | 7 | рішення 16 |
 | TOA211 | `invalid-default` | warning | `default` не того типу (ігнорується) | 5 | C-28 |
 | TOA301 | `duplicate-enum-value` | warning | Повтори в `enum` (виправляється) | 8 | C-9, C-52 |
 | TOA303 | `nullable-enum-one-of` | warning | Nullable enum через `oneOf` | 8 | C-54 |
-| TOA401 | `discriminator-not-required` | info | Дискримінатор не `required` у варіанті | 11 | C-42 |
+| TOA401 | `discriminator-not-required` | info | Дискримінатор не `required` у варіантах (один звіт на дискримінатор) | 11 | C-42 |
 | TOA402 | `discriminator-mapping-unresolved` | error | `mapping` веде в нікуди | 11 | C-4 |
 | TOA501 | `missing-path-parameter` | warning | Змінна шаблону без параметра (виправляється) | 9 | C-6 |
 | TOA502 | `path-parameter-not-in-template` | error | Параметр поза шаблоном / інший регістр | 9 | C-7 |
@@ -97,7 +101,7 @@
 | `lib/src/model/schema.dart` | `SchemaType.accepts` | 5 |
 | `lib/src/normalize/rules/bool_required_to_array.dart`, `drop_invalid_default.dart` | Виправлення схем | 5 |
 | `lib/src/config/project_config.dart`, `lib/src/check/spec_checker.dart` | `disabledRules`; `check` через `Normalizer` | 6 |
-| `lib/src/normalize/rules/schema_shape_rules.dart` | TOA202–TOA207 | 7 |
+| `lib/src/normalize/rules/schema_shape_rules.dart` | TOA202–TOA208 | 7 |
 | `lib/src/normalize/rules/enum_rules.dart` | TOA301, TOA303 | 8 |
 | `lib/src/normalize/rules/path_param_rules.dart` | TOA501, TOA502 | 9 |
 | `lib/src/normalize/rules/operation_id_rules.dart` | TOA503, TOA504 | 10 |
@@ -2985,7 +2989,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Consumes: `ObjectReader`, `ParseContext.document.spanOf` (M2), позиції компоновщика (задача 1).
 - Produces: коди `refNotAllowed` (TOA107), `refCommentedOut` (TOA108), `yamlMergeKey` (TOA109).
 
-Поведінка: `$ref` як невідомий ключ і об'єкт-`$ref` замість рядка/значення — TOA107 (підказка `redocly bundle`), а не TOA110/TOA111. Порожній `$ref`, після якого в тексті стоїть `#` (блочний і flow-запис), — TOA108 (підказка взяти в лапки). Ключ `<<` — TOA109 (як невідомий ключ об'єкта і як запис іменованої мапи на кшталт `components.schemas`); ключ лишається звичайним ключем, злиття немає.
+Поведінка: `$ref` як невідомий ключ і об'єкт-`$ref` замість рядка/значення — TOA107 (підказка `redocly bundle`), а не TOA110/TOA111. Порожній `$ref`, після якого в тексті стоїть `#` (блочний і flow-запис), — TOA108 (підказка взяти в лапки). Ключ `<<` — TOA109: в об'єкті він лишається звичайним (невідомим) ключем, а в мапі іменованих записів (`components.*`, `paths`, `responses`, `properties` …) після TOA109 пропускається, щоб не стати схемою чи шляхом з ім'ям `<<` і не дати каскад TOA110. Злиття немає.
 
 - [ ] **Step 1: Коди**
 
@@ -3158,7 +3162,7 @@ paths:
       expect(d.fix, 'Write the keys out.');
     });
 
-    test('in a map of named entries stays a plain key and is reported', () {
+    test('in a map of named entries is reported and left out', () {
       final found = read('''
 openapi: 3.1.0
 info: {title: Shop, version: "1"}
@@ -3167,17 +3171,9 @@ components:
     <<: {Base: {type: object}}
     Order: {type: object}
 ''');
-      expect(
-        found.map((d) => d.code),
-        contains(DiagnosticCode.yamlMergeKey),
-      );
-      expect(
-        found
-            .firstWhere((d) => d.code == DiagnosticCode.yamlMergeKey)
-            .pointer
-            ?.value,
-        '#/components/schemas/<<',
-      );
+      final d = found.single;
+      expect(d.code, DiagnosticCode.yamlMergeKey);
+      expect(d.pointer?.value, '#/components/schemas/<<');
     });
   });
 }
@@ -3197,15 +3193,21 @@ diff --git a/packages/typed_openapi/lib/src/parse/object_reader.dart b/packages/
  import '../diagnostics/json_pointer.dart';
  import '../model/spec_node.dart';
  import 'parse_context.dart';
-@@ -143,6 +145,7 @@ final class ObjectReader {
+@@ -143,9 +145,12 @@ final class ObjectReader {
        return null;
      }
      final at = pointer.child(key);
++    // In a map of named entries, a merge key is not an entry: it is reported
++    // and left out, so it does not become a schema or a path named "<<".
 +    if (entries.containsKey(_mergeKey)) _merge(at.child(_mergeKey));
      return Map.unmodifiable({
        for (final MapEntry(key: name, :value) in entries.entries)
-         if (!skipExtensions || !name.startsWith('x-'))
-@@ -191,6 +194,20 @@ final class ObjectReader {
+-        if (!skipExtensions || !name.startsWith('x-'))
++        if ((!skipExtensions || !name.startsWith('x-')) && name != _mergeKey)
+           name: ?read(value, at.child(name)),
+     });
+   }
+@@ -191,6 +196,20 @@ final class ObjectReader {
        if (_read.contains(key)) continue;
        if (!reportExtensions && key.startsWith('x-')) continue;
        unknown[key] = value;
@@ -3226,7 +3228,7 @@ diff --git a/packages/typed_openapi/lib/src/parse/object_reader.dart b/packages/
        _context.report(
          .unknownKey,
          'Unknown key "$key"; it is ignored.',
-@@ -221,6 +238,10 @@ final class ObjectReader {
+@@ -221,6 +240,10 @@ final class ObjectReader {
  
    T? _item<T>(Object? raw, JsonPointer at, String expected) {
      if (raw is T) return raw;
@@ -3237,7 +3239,7 @@ diff --git a/packages/typed_openapi/lib/src/parse/object_reader.dart b/packages/
      _context.report(
        .invalidValue,
        'Each item must be $expected, not ${describe(raw)}.',
-@@ -230,6 +251,21 @@ final class ObjectReader {
+@@ -230,6 +253,21 @@ final class ObjectReader {
    }
  
    void _invalid(String key, String expected, Object? raw) {
@@ -3259,7 +3261,7 @@ diff --git a/packages/typed_openapi/lib/src/parse/object_reader.dart b/packages/
      _context.report(
        .invalidValue,
        '"$key" must be $expected, not ${describe(raw)}; it is ignored.',
-@@ -237,6 +273,62 @@ final class ObjectReader {
+@@ -237,6 +275,62 @@ final class ObjectReader {
      );
    }
  
@@ -3274,7 +3276,7 @@ diff --git a/packages/typed_openapi/lib/src/parse/object_reader.dart b/packages/
 +    _context.report(
 +      .yamlMergeKey,
 +      '"<<" is a YAML 1.1 merge key; OpenAPI tools read it as a plain key '
-+      'named "<<", and so does this one.',
++      'named "<<", so its keys are not merged here.',
 +      at,
 +      fix: 'Write the keys out.',
 +    );
@@ -4778,7 +4780,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: `Normalizer`, `Normalizer.ruleNames` (задачі 4–5).
-- Produces: `ClientConfig.disabledRules`; ключ `rules` у `defaults` і клієнті (клієнт перекриває `defaults` поіменно; невідоме ім'я — TOA903, не-булеве значення — TOA902); `SpecChecker.check` нормалізує кожну специфікацію з правилами й пресетом клієнта.
+- Produces: `ClientConfig.disabledRules`; ключ `rules` у `defaults` і клієнті (клієнт перекриває `defaults` поіменно; невідоме ім'я — TOA903, не-булеве значення — TOA902); `SpecChecker.check` нормалізує кожну специфікацію з правилами й пресетом клієнта — один прогін на кожну різну пару (пресет, вимкнені правила) для спільного файлу; однакова діагностика прогонів звітується один раз.
 
 - [ ] **Step 1: Тести** — застосуй спершу тестові частини diff-ів кроків 2–3; `dart test test/config test/check` — Expected: FAIL (`rules` — невідомий ключ, `check` не дає TOA201).
 
@@ -4950,7 +4952,7 @@ diff --git a/packages/typed_openapi/lib/src/check/spec_checker.dart b/packages/t
  
  /// Loads every client's spec and reports what is wrong with it.
  ///
-@@ -19,14 +19,14 @@ final class SpecChecker {
+@@ -19,19 +19,24 @@ final class SpecChecker {
    /// Checks the spec of every client in [config].
    ///
    /// Each spec is loaded, its OpenAPI version detected, and then it is read
@@ -4958,16 +4960,30 @@ diff --git a/packages/typed_openapi/lib/src/check/spec_checker.dart b/packages/t
 +  /// into the model with its `$ref`s resolved and normalized with the
 +  /// client's rules and preset. [only] limits the run to
    /// clients with these names; empty means all. A file shared by several
-   /// clients is checked once. Spec paths in diagnostics are relative to the
-   /// config file's directory.
+-  /// clients is checked once. Spec paths in diagnostics are relative to the
+-  /// config file's directory.
++  /// clients is checked once per distinct preset and set of disabled rules;
++  /// the bag reports a diagnostic the runs share once. Spec paths in
++  /// diagnostics are relative to the config file's directory.
    void check(ProjectConfig config, {Set<String> only = const {}}) {
      final loader = SpecLoader(_diagnostics);
      final detector = OpenApiVersionDetector(_diagnostics);
 -    final reader = SpecReader(_diagnostics);
      final configDir = p.dirname(p.absolute(config.file));
-     final checked = <String>{};
+-    final checked = <String>{};
++    // A run is a file with a preset and a set of disabled rules.
++    final checked = <(String, Preset?, String)>{};
      for (final client in config.clients) {
-@@ -39,7 +39,11 @@ final class SpecChecker {
+       if (only.isNotEmpty && !only.contains(client.name)) continue;
+-      if (!checked.add(p.absolute(client.input))) continue;
++      final rules = (client.disabledRules.toList()..sort()).join(',');
++      if (!checked.add((p.absolute(client.input), client.preset, rules))) {
++        continue;
++      }
+       final document = loader.load(
+         client.input,
+         displayPath: p.relative(client.input, from: configDir),
+@@ -39,7 +44,11 @@ final class SpecChecker {
        if (document == null) continue;
        final version = detector.detect(document);
        if (version == null) continue;
@@ -5041,7 +5057,44 @@ diff --git a/packages/typed_openapi/test/check/spec_checker_test.dart b/packages
    test('only checks the named clients', () {
      final dir = TempDir();
      final path = dir.write('typed_openapi.yaml', '''
-@@ -67,6 +97,7 @@ info: {title: api}
+@@ -59,6 +89,36 @@ clients:
+     expect(bag.all.single.code, DiagnosticCode.unsupportedOpenApiVersion);
+   });
+ 
++  test('a shared spec is checked once per preset and rule set', () {
++    final dir = TempDir();
++    dir.write('shared.yaml', '''
++openapi: 3.0.3
++info: {title: t, version: "1"}
++components:
++  schemas:
++    Tag:
++      type: object
++      properties:
++        name: {type: string, required: true}
++''');
++    final path = dir.write('typed_openapi.yaml', '''
++clients:
++  a: {input: shared.yaml, output: lib/a}
++  b:
++    input: shared.yaml
++    output: lib/b
++    rules: {bool-required-to-array: false}
++  c: {input: shared.yaml, output: lib/c}
++''');
++    final bag = DiagnosticBag();
++    SpecChecker(bag).check(ConfigLoader(bag).load(path)!);
++    // a and c share one run (TOA201); b runs without the fix (TOA111).
++    expect(bag.all.map((d) => d.code), [
++      DiagnosticCode.boolRequired,
++      DiagnosticCode.invalidValue,
++    ]);
++  });
++
+   test('reads each spec into the model and follows its references', () {
+     final dir = TempDir();
+     dir.write('specs/api.yaml', r'''
+@@ -67,6 +127,7 @@ info: {title: api}
  paths:
    /pets:
      get:
@@ -5061,7 +5114,7 @@ dart test                                              # з packages/typed_opena
 dart format lib test bin && dart format lib test bin   # другий запуск: 0 changed
 ```
 
-Expected: 288 тестів.
+Expected: 289 тестів.
 
 - [ ] **Step 5: Коміт**
 
@@ -5074,7 +5127,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
-### Task 7: Форма схем: масиви, файли, комбінатори, приклади (TOA202–TOA207, лише діагностика)
+### Task 7: Форма схем: масиви, файли, комбінатори, приклади (TOA202–TOA208, лише діагностика)
 
 **Files:**
 - Create: `packages/typed_openapi/lib/src/normalize/rules/schema_shape_rules.dart`, `packages/typed_openapi/test/helpers/normalizer_fixture.dart`, `packages/typed_openapi/test/normalize/schema_shape_rules_test.dart`
@@ -5084,7 +5137,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Consumes: `NormalizerRule`, `RuleContext.rawObject`, `SchemaType.accepts`, `SpecModel.resolveSchema`.
 - Produces: `ArrayWithoutItems`, `DoubleArray`, `FormatOnArray`, `BinaryObject`, `ContradictoryObjectType`, `ExampleTypeMismatch`; тестовий помічник `NormalizerFixture` (`of(code)`, `pointersOf(code)`), який використовують задачі 7–11.
 
-Поведінка: масив без `items` у 3.0 — TOA202 (у 3.1 ні; масив із `format` — лише TOA204); `items`-масив із булевим `required` — TOA203 (C-49); `format` на масиві без `items` — TOA204 з пропозицією override `items: {type: string, format: …}`; `type: object` + `format: binary` — TOA205; `type: object` поряд з `oneOf`/`anyOf`, усі гілки яких відомого не-об'єктного типу, — TOA206 (гілка без типу — «може бути об'єктом», не звітується); `example` не того JSON-типу — TOA207 (тип береться зі схеми, з `$ref` або з `allOf` з одного члена; цикл `allOf` не зациклює правило). Підказки `nestjs` для TOA202/TOA203 — оголошення типу елемента `@ApiProperty({ type: [Item] })` (research/06 §D.1, п. 6).
+Поведінка: масив без `items` у 3.0 — TOA202 (у 3.1 ні; масив із `format` — лише TOA204); `items`-масив із булевим `required` — TOA203 (C-49); `format` на масиві без `items` — TOA204 з пропозицією override `items: {type: string, format: …}`; `type: object` + `format: binary` — TOA205; `type: object` поряд з `oneOf`/`anyOf`, усі гілки яких відомого не-об'єктного типу, — TOA206 (гілка без типу — «може бути об'єктом», не звітується); `example` не того JSON-типу: розбіжність структур (об'єкт проти масиву, структура проти скаляра) — TOA207 warning, скаляр іншого скалярного типу (`example: "1.5"` для `number`) — TOA208 info (тип береться зі схеми, з `$ref` або з `allOf` з одного члена; цикл `allOf` не зациклює правило). Підказки `nestjs` для TOA202/TOA203 — оголошення типу елемента `@ApiProperty({ type: [Item] })` (research/06 §D.1, п. 6).
 
 - [ ] **Step 1: Коди**
 
@@ -5108,8 +5161,13 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   /// types.
   contradictoryObjectType('TOA206', 'contradictory-object-type', .warning),
 
-  /// An `example` of a JSON type the schema does not allow.
+  /// An `example` whose structure the schema does not allow: an object for
+  /// an array, or a structure for a scalar and back.
   exampleTypeMismatch('TOA207', 'example-type-mismatch', .warning),
+
+  /// An `example` that is a scalar of another type than the scalar schema,
+  /// such as a string for a number; only the documentation is off.
+  exampleScalarType('TOA208', 'example-scalar-type', .info),
 ```
 
 - [ ] **Step 1a: Помічник тестів**
@@ -5291,8 +5349,10 @@ void main() {
       );
       expect(run.pointersOf(DiagnosticCode.exampleTypeMismatch), [
         '$base/Session/properties/tokens/example',
-        '$base/Session/properties/ratio/example',
       ]);
+      final scalar = run.of(DiagnosticCode.exampleScalarType).single;
+      expect(scalar.pointer?.value, '$base/Session/properties/ratio/example');
+      expect(scalar.severity, Severity.info);
       expect(
         run.of(DiagnosticCode.exampleTypeMismatch).first.message,
         'The example is a list, but the schema is object; clients built from '
@@ -5540,9 +5600,11 @@ final class ContradictoryObjectType extends NormalizerRule {
   }
 }
 
-/// An `example` whose JSON type the schema does not allow (C-60), such as
-/// a list for an object schema: clients built from the schema fail on such
-/// values.
+/// An `example` whose JSON type the schema does not allow (C-60). A list for
+/// an object schema, or a structure against a scalar, is a warning: clients
+/// built from the schema fail on such values. A scalar of another type
+/// (`example: "1.5"` for a number) is info: the decoder is unaffected and
+/// only the documentation is off.
 final class ExampleTypeMismatch extends NormalizerRule {
   /// Creates the rule.
   const ExampleTypeMismatch();
@@ -5551,7 +5613,10 @@ final class ExampleTypeMismatch extends NormalizerRule {
   String get name => 'example-type-mismatch';
 
   @override
-  List<DiagnosticCode> get codes => const [.exampleTypeMismatch];
+  List<DiagnosticCode> get codes => const [
+    .exampleTypeMismatch,
+    .exampleScalarType,
+  ];
 
   @override
   Iterable<Finding> check(RuleContext context) sync* {
@@ -5563,15 +5628,27 @@ final class ExampleTypeMismatch extends NormalizerRule {
       final types = _effectiveTypes(context, schema, {});
       if (types.isEmpty || types.any((t) => t.accepts(value))) continue;
       final names = types.map((t) => t.wire).join(' or ');
-      yield context.finding(
-        .exampleTypeMismatch,
-        'The example is ${ObjectReader.describe(value)}, but the schema is '
-        '$names; clients built from the schema fail on such values.',
-        schema.location.child('example'),
-        fix:
-            'Fix the schema or the example at the source; if the example is '
-            'right, override "type" of this schema.',
-      );
+      final structural =
+          value is List<Object?> ||
+          value is Map<String, Object?> ||
+          types.any((t) => t == .array || t == .object);
+      yield structural
+          ? context.finding(
+              .exampleTypeMismatch,
+              'The example is ${ObjectReader.describe(value)}, but the schema '
+              'is $names; clients built from the schema fail on such values.',
+              schema.location.child('example'),
+              fix:
+                  'Fix the schema or the example at the source; if the '
+                  'example is right, override "type" of this schema.',
+            )
+          : context.finding(
+              .exampleScalarType,
+              'The example is ${ObjectReader.describe(value)}, but the schema '
+              'is $names; the documentation shows a value of another type.',
+              schema.location.child('example'),
+              fix: 'Write the example as a $names at the source.',
+            );
     }
   }
 
@@ -5632,7 +5709,7 @@ dart test                                              # з packages/typed_opena
 dart format lib test bin && dart format lib test bin   # другий запуск: 0 changed
 ```
 
-Expected: 298 тестів.
+Expected: 299 тестів.
 
 - [ ] **Step 6: Коміт**
 
@@ -5930,7 +6007,7 @@ dart test                                              # з packages/typed_opena
 dart format lib test bin && dart format lib test bin   # другий запуск: 0 changed
 ```
 
-Expected: 302 тестів.
+Expected: 303 тестів.
 
 - [ ] **Step 6: Коміт**
 
@@ -6294,7 +6371,7 @@ dart test                                              # з packages/typed_opena
 dart format lib test bin && dart format lib test bin   # другий запуск: 0 changed
 ```
 
-Expected: 305 тестів.
+Expected: 306 тестів.
 
 - [ ] **Step 6: Коміт**
 
@@ -6566,7 +6643,7 @@ dart test                                              # з packages/typed_opena
 dart format lib test bin && dart format lib test bin   # другий запуск: 0 changed
 ```
 
-Expected: 309 тестів.
+Expected: 310 тестів.
 
 - [ ] **Step 6: Коміт**
 
@@ -6589,7 +6666,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Consumes: `NormalizerRule`, `RefTarget.parse` (M2), `SpecModel.resolveSchema`, `Components` (M2), `NormalizerFixture`.
 - Produces: `DiscriminatorPropertyRequired`, `DiscriminatorMappingTarget`, `WildcardMediaType`, `ComponentKeyCharacters`; коди `invalidComponentKey` (TOA106), `discriminatorNotRequired` (TOA401, info), `discriminatorMappingUnresolved` (TOA402, error), `wildcardMediaType` (TOA601).
 
-Поведінка: властивість-дискримінатор не `required` у варіанті `oneOf`/`anyOf` (з урахуванням `allOf`) — TOA401 у місці варіанта; значення `discriminator.mapping`, що веде в нікуди (ім'я без `#`, `/`, `.` шукається в `components.schemas`, решта — як `$ref`), — TOA402 (M2 mapping не резолвить); `*/*` — TOA601; ключ `components.*` поза `^[a-zA-Z0-9\.\-_]+$` — TOA106. Підказки: `aspnet` — `[JsonPolymorphic]`/`[JsonDerivedType]` (§D.4, п. 4) і `CustomSchemaIds` (§D.4); `fastapi` — унікальні імена моделей (§D.2, п. 5); `springdoc` — `discriminatorMapping` (§D.3, п. 6), `default-produces-media-type` (§D.3, п. 1), `@Schema(name)` (§D.3, п. 1).
+Поведінка: властивість-дискримінатор не `required` у варіантах `oneOf`/`anyOf` (з урахуванням `allOf`) — одна TOA401 на дискримінатор, у його місці, з переліком варіантів (відсортовано, до 10 імен, далі «and N more»); значення `discriminator.mapping`, що веде в нікуди (ім'я без `#`, `/`, `.` шукається в `components.schemas`, решта — як `$ref`), — TOA402 (M2 mapping не резолвить); `*/*` — TOA601; ключ `components.*` поза `^[a-zA-Z0-9\.\-_]+$` — TOA106. Підказки: `aspnet` — `[JsonPolymorphic]`/`[JsonDerivedType]` (§D.4, п. 4) і `CustomSchemaIds` (§D.4); `fastapi` — унікальні імена моделей (§D.2, п. 5); `springdoc` — `discriminatorMapping` (§D.3, п. 6), `default-produces-media-type` (§D.3, п. 1), `@Schema(name)` (§D.3, п. 1).
 
 - [ ] **Step 1: Коди**
 
@@ -6662,12 +6739,43 @@ components:
       properties: {kind: {type: string}}
 ''';
 
-  test('discriminator-property-required: through allOf counts', () {
+  test('discriminator-property-required: once per discriminator, through '
+      'allOf', () {
     final d = NormalizerFixture(pets).of(
       DiagnosticCode.discriminatorNotRequired,
     );
-    expect(d.single.pointer?.value, '#/components/schemas/Dog');
+    expect(d.single.pointer?.value, '#/components/schemas/Pet/discriminator');
     expect(d.single.severity, Severity.info);
+    expect(
+      d.single.message,
+      'Discriminator property "kind" is not required in Dog; a payload '
+      'without it cannot be told apart.',
+    );
+  });
+
+  test('discriminator-property-required lists at most ten variants', () {
+    final schemas = StringBuffer();
+    final refs = StringBuffer();
+    for (var i = 0; i < 12; i++) {
+      final name = 'V${i.toString().padLeft(2, '0')}';
+      schemas.writeln('    $name: {type: object}');
+      refs.writeln("        - {\$ref: '#/components/schemas/$name'}");
+    }
+    final d = NormalizerFixture('''
+openapi: 3.1.0
+info: {title: Pets, version: "1"}
+components:
+  schemas:
+    Pet:
+      discriminator: {propertyName: kind}
+      oneOf:
+$refs$schemas''').of(DiagnosticCode.discriminatorNotRequired);
+    expect(
+      d.single.message,
+      'Discriminator property "kind" is not required in V00, V01, V02, V03, '
+      'V04, V05, V06, V07, V08, V09 and 2 more; a payload without it cannot '
+      'be told apart.',
+    );
   });
 
   test('discriminator-mapping-target: names and references', () {
@@ -6743,8 +6851,9 @@ import '../../model/schema.dart';
 import '../../resolve/ref_target.dart';
 import '../normalizer_rule.dart';
 
-/// The discriminator property is not `required` in a variant (C-42): a
-/// payload without it cannot be told apart.
+/// The discriminator property is not `required` in some variants (C-42): a
+/// payload without it cannot be told apart. Reported once per
+/// discriminator, with the variants.
 final class DiscriminatorPropertyRequired extends NormalizerRule {
   /// Creates the rule.
   const DiscriminatorPropertyRequired();
@@ -6755,24 +6864,42 @@ final class DiscriminatorPropertyRequired extends NormalizerRule {
   @override
   List<DiagnosticCode> get codes => const [.discriminatorNotRequired];
 
+  /// How many variant names a message lists.
+  static const _shown = 10;
+
   @override
   Iterable<Finding> check(RuleContext context) sync* {
     for (final schema in context.nodes<SchemaObject>()) {
-      final property = schema.discriminator?.propertyName;
-      if (property == null) continue;
-      for (final branch in [...schema.oneOf, ...schema.anyOf]) {
-        final variant = context.model.resolveSchema(branch);
-        if (variant is! SchemaObject) continue;
-        if (_required(context, variant, {}).contains(property)) continue;
-        yield context.finding(
-          .discriminatorNotRequired,
-          'Discriminator property "$property" is not required in this '
-          'variant; a payload without it cannot be told apart.',
-          variant.location,
-          fix: 'Add "$property" to "required" of this schema at the source.',
-        );
-      }
+      final discriminator = schema.discriminator;
+      final property = discriminator?.propertyName;
+      if (discriminator == null || property == null) continue;
+      final names = <String>{
+        for (final branch in [...schema.oneOf, ...schema.anyOf])
+          if (context.model.resolveSchema(branch) case final SchemaObject v
+              when !_required(context, v, {}).contains(property))
+            _nameOf(v),
+      }.toList()..sort();
+      if (names.isEmpty) continue;
+      final listed = names.take(_shown).join(', ');
+      final more = names.length > _shown
+          ? ' and ${names.length - _shown} more'
+          : '';
+      yield context.finding(
+        .discriminatorNotRequired,
+        'Discriminator property "$property" is not required in $listed'
+        '$more; a payload without it cannot be told apart.',
+        discriminator.location,
+        fix: 'Add "$property" to "required" of each variant at the source.',
+      );
     }
+  }
+
+  /// A variant's component name, or its pointer when it is inline.
+  static String _nameOf(SchemaObject variant) {
+    final tokens = variant.pointer.tokens;
+    return tokens.length == 3 && tokens[1] == 'schemas'
+        ? tokens.last
+        : variant.pointer.value;
   }
 
   /// The names [schema] requires, its `allOf` members included.
@@ -6997,7 +7124,7 @@ dart test                                              # з packages/typed_opena
 dart format lib test bin && dart format lib test bin   # другий запуск: 0 changed
 ```
 
-Expected: 313 тестів.
+Expected: 315 тестів.
 
 - [ ] **Step 6: Коміт**
 
@@ -7055,6 +7182,7 @@ void main() {
       'TOA205',
       'TOA206',
       'TOA207',
+      'TOA208',
       'TOA211',
       'TOA301',
       'TOA303',
@@ -7351,7 +7479,7 @@ dart format lib test bin && dart format lib test bin   # другий запус
 cd packages/typed_openapi && dart pub publish --dry-run   # Package has 0 warnings (after the commit)
 ```
 
-Expected: 317 тестів.
+Expected: 319 тестів.
 
 - [ ] **Step 4: Прогін корпусу (smoke)**
 
@@ -7364,14 +7492,14 @@ Expected: exit 1. Підсумок за специфікацією і кодом
 
 | Специфікація | Діагностика |
 |---|---|
-| Artemis | TOA009 ×2, TOA110 ×1, TOA401 ×2 — тепер читається (у M2 — TOA001) |
+| Artemis | TOA009 ×2, TOA110 ×1, TOA401 ×1 — тепер читається (у M2 — TOA001) |
 | DigitalOcean | TOA107 ×793 (у M2 — TOA110 ×791, TOA111 ×2) |
 | Ditto | TOA202 ×2, TOA207 ×7, TOA503 ×131 |
-| Google Maps | TOA207 ×1 |
+| Google Maps | TOA208 ×1 |
 | Grace (джерело і бандл) | TOA108 ×13, TOA111 ×19, TOA110 ×4, TOA021 ×2 |
-| Jellyfin | TOA401 ×44 |
-| Medusa | TOA207 ×2 |
-| OpenAI | TOA021 ×1, TOA110 ×1, TOA207 ×7, TOA401 ×11, TOA503 ×30, TOA601 ×1 |
+| Jellyfin | TOA401 ×3 |
+| Medusa | TOA208 ×2 |
+| OpenAI | TOA021 ×1, TOA110 ×1, TOA207 ×7, TOA401 ×7, TOA503 ×30, TOA601 ×1 |
 | Tambo | TOA207 ×2 |
 | Stripe, Discord, Airflow, EFGS | — |
 
@@ -7390,15 +7518,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ## Самоперевірка
 
-- **Покриття специфікації.** Рішення 2 (теги — задача 1; `$ref` поза OAS — задача 3), 3 (правила над моделлю, `SpecEdit`, ≤ 3 проходи — задача 4), 4 (діагностика парсера з останнього проходу — задача 4), 5 (інтерпретація для Dart — поза M3; правила лише виправляють дефекти й діагностують), 6 (свій компоновщик: глибина, бюджет, дублікати, теги, нерядкові ключі; перевірка за подіями й конвертер зникають — задачі 1–2), 7 (пресети лише уточнюють підказки — `NormalizerRule.hint`; вимикання правил і TOA903 — задача 6). Таблиця «Виправлення»: `bool-required-to-array`, `drop-invalid-default` — задача 5; `dedupe-enum-values` — 8; `declare-missing-path-params` — 9. Таблиця «Лише діагностика»: TOA502 — 9; TOA503, TOA504 — 10; TOA202–TOA207 — 7; TOA303 — 8; TOA401, TOA402, TOA601, TOA106 — 11; TOA107, TOA108 — 3; TOA009 і нерядковий ключ (TOA113) — 1. «Перенесено з M2»: теги, `$ref` поза OAS, `$ref` без лапок, merge key `<<`, asserts і одна глибина компоновщика — задачі 1–3.
+- **Покриття специфікації.** Рішення 2 (теги — задача 1; `$ref` поза OAS — задача 3), 3 (правила над моделлю, `SpecEdit`, ≤ 3 проходи — задача 4), 4 (діагностика парсера з останнього проходу — задача 4), 5 (інтерпретація для Dart — поза M3; правила лише виправляють дефекти й діагностують), 6 (свій компоновщик: глибина, бюджет, дублікати, теги, нерядкові ключі; перевірка за подіями й конвертер зникають — задачі 1–2), 7 (пресети лише уточнюють підказки — `NormalizerRule.hint`; вимикання правил і TOA903 — задача 6). Таблиця «Виправлення»: `bool-required-to-array`, `drop-invalid-default` — задача 5; `dedupe-enum-values` — 8; `declare-missing-path-params` — 9. Таблиця «Лише діагностика»: TOA502 — 9; TOA503, TOA504 — 10; TOA202–TOA207 (і TOA208) — 7; TOA303 — 8; TOA401, TOA402, TOA601, TOA106 — 11; TOA107, TOA108 — 3; TOA009 і нерядковий ключ (TOA113) — 1. «Перенесено з M2»: теги, `$ref` поза OAS, `$ref` без лапок, merge key `<<`, asserts і одна глибина компоновщика — задачі 1–3.
 - **Заглушки.** Кожна задача містить увесь код (нові файли — повністю, зміни — diff-ами для `git apply` або блоками з точним місцем вставки); шлях до корпусу research/08 — єдине, що виконавець підставляє сам (корпусу немає в репозиторії).
 - **Узгодженість типів.** `SpecLocation.child`, `RuleContext.finding/rawObject`, `SpecEdit.add/replace/remove`, `Normalizer(bag, rules:, disabled:, preset:)`, `ClientConfig.disabledRules`, `NormalizerFixture.of/pointersOf` — однакові в задачах і тестах; відтворення з `main` це підтверджує.
-
-## Відкриті питання до користувача
-
-1. **TOA207 на корпусі шумить помірно** (Ditto ×7, OpenAI ×7, Medusa ×2, Tambo ×2, Google Maps ×1): частина — справжні суперечності, частина — приклади-рядки для чисел (`example: "1.5"` при `type: number`). Лишити warning чи знизити до info для скалярних розбіжностей і лишити warning лише для об'єкт↔масив (C-60)?
-2. **TOA401 на Jellyfin ×44, OpenAI ×11**: дискримінатор не `required` у варіантах — це info, але таких місць багато. Достатньо одного звіту на дискримінатор (з переліком варіантів) замість одного на варіант?
-3. **TOA503 (info) на Ditto ×131, OpenAI ×30** — очікуваний шум для специфікацій без `operationId`. Лишити info за замовчуванням (рівні перевизначаються в M5)?
-4. **Merge key `<<` у мапі з іменованими записами** (`components.schemas: {<<: *base}`) звітується TOA109, але запис `<<` далі читається як схема з ім'ям `<<` — її вміст дає ще й TOA110. Прибрати такий запис із моделі після TOA109, чи лишити як є (рішення 6 каже «звичайний ключ»)?
-5. **Спільний файл кількох клієнтів** перевіряється один раз — з `rules`/`preset` першого клієнта за іменем. Перевіряти його окремо для кожного набору правил?
 
