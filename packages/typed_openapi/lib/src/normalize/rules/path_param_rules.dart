@@ -37,6 +37,11 @@ final class _PathTemplates {
         (resolved, _siteOf(parameter, resolved)),
   ];
 
+  /// Whether one of [parameters] is a `$ref` that does not resolve: which
+  /// path parameters there are is not known then (TOA101 reports it).
+  bool hasUnresolved(List<RefOr<Parameter>> parameters) =>
+      parameters.any((p) => context.model.resolve(p) == null);
+
   static SpecLocation _siteOf(RefOr<Parameter> written, Parameter resolved) =>
       switch (written) {
         Ref() => written.location,
@@ -62,13 +67,18 @@ final class DeclareMissingPathParams extends NormalizerRule {
     final templates = _PathTemplates(context);
     for (final (template, item) in templates.paths) {
       final variables = _PathTemplates.variablesOf(template);
-      if (variables.isEmpty) continue;
+      if (variables.isEmpty || templates.hasUnresolved(item.parameters)) {
+        continue;
+      }
       final shared = {
         for (final (p, _) in templates.pathParameters(item.parameters)) p.name,
       };
       for (final operation in item.operations.values) {
         // An operation written as a `$ref` is TOA107 already; it is empty.
         if (operation.unknownKeys.containsKey(r'$ref')) continue;
+        // With a parameter that cannot be read, a name may be declared that
+        // looks missing; nothing is added to guess.
+        if (templates.hasUnresolved(operation.parameters)) continue;
         final declared = {
           ...shared,
           for (final (p, _) in templates.pathParameters(operation.parameters))

@@ -69,6 +69,40 @@ components:
     });
   });
 
+  group(r'a parameter $ref that does not resolve', () {
+    test('keeps the operation from getting a guessed parameter', () {
+      final run = NormalizerFixture(
+        spec(r'''
+  /e/{q}:
+    get:
+      parameters:
+        - {$ref: '#/components/parameters/Missing'}
+      responses: {}
+    delete:
+      responses: {}
+  /f/{q}:
+    parameters:
+      - {$ref: '#/components/parameters/Gone'}
+    get:
+      responses: {}
+'''),
+      );
+      expect(run.of(DiagnosticCode.unresolvedRef), hasLength(2));
+      final paths = run.result.documents.root.root['paths']! as Map;
+      final e = paths['/e/{q}']! as Map;
+      expect((e['get'] as Map)['parameters'], hasLength(1));
+      // The other operation of the path has no broken reference.
+      expect((e['delete'] as Map)['parameters'], hasLength(1));
+      expect(run.pointersOf(DiagnosticCode.missingPathParameter), [
+        '#/paths/~1e~1{q}/delete',
+      ]);
+      expect(
+        ((paths['/f/{q}']! as Map)['get'] as Map),
+        isNot(contains('parameters')),
+      );
+    });
+  });
+
   group(r'an operation written as a $ref', () {
     test('is skipped by both rules and left to TOA107', () {
       final run = NormalizerFixture(
