@@ -34,6 +34,16 @@ dart run typed_openapi check --format json
 `check` reads the whole spec, follows its `$ref`s (also into other local
 files) and reports unknown keys, wrong value types, broken or looping
 references and constructs that the declared OpenAPI version does not have.
+Then it runs the normalizer: named rules fix the defects whose fix follows
+from the spec or from HTTP (`required: true` on a property, repeated enum
+values, undeclared path parameters, defaults of the wrong type) and report
+the rest with what to change at the source. A `preset` adds the recipe for
+your framework to those hints. Turn a rule off per client or in `defaults`:
+
+```yaml
+defaults:
+  rules: {dedupe-enum-values: false}
+```
 
 Every finding has a stable code (`TOA011`), a JSON pointer into the spec and,
 for files the parser could position, a line and column. Exit code `1` means

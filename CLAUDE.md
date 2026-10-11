@@ -36,29 +36,26 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `Severity`, `JsonPointer`, `DiagnosticBag`, and the reporters
   (`DiagnosticReporter`, `TextReporter`, `JsonReporter`, `ReportFormat`).
 - `load/` - `SpecLoader` reads JSON/YAML into a `SpecDocument` (plain tree,
-  absolute file URI, source spans by JSON pointer, `valueAt(pointer)`);
-  `YamlEventGuard` runs package:yaml's own `Parser` over the text before
-  `loadYamlNode` (an iterative state machine: it builds no tree, hashes
-  nothing and cannot overflow the stack) and reads its events. It reports
-  collections nested deeper than 1000 levels (TOA007; the root collection is
-  level 0, keys and the one-pair mappings of `[k: v]` count) and an alias
-  inside a mapping key, directly or inside a collection used as the key
-  (TOA008): `loadYamlNode` hashes keys as trees, which is exponential for an
-  alias bomb. Aliases anywhere else (values, flow collections, `<<: *a`) and
-  `?` keys without aliases are fine. A syntax error stops the guard silently
-  and `loadYamlNode` reports it (TOA001). The scanner of package:yaml is
-  quadratic in the flow depth of a long line, so the guard first parses the
-  text up to where a crude bracket count passes the limit (quotes are not
-  considered: it only picks where to look first, the parser decides); text
-  that hides closing brackets in quotes is read in full at that cost.
-  Aliases in values still expand in
-  the conversion to a plain tree, so `SpecLoader` also limits that:
-  deeper than 1000 levels once aliases are expanded is TOA007; a budget of
-  `max(16000000, 20 * text length)` characters, where each converted node
-  (first visit or repeat) costs the length of its JSON pointer + 1 (the
-  pointer is what it keeps in `spans`), is TOA008 when spent (an alias bomb,
-  or very long keys); both return no document. `OpenApiVersionDetector`
-  reads the version.
+  absolute file URI, source spans by JSON pointer, `valueAt(pointer)`,
+  `withRoot`) through `YamlComposer`, which `ConfigLoader` uses too.
+  `load/yaml/` is a copy of package:yaml 3.1.4's scanner and parser (MIT,
+  see its `LICENSE` and `analysis_options.yaml` for the local changes: linear
+  cost on long flow lines, dart-lang/tools#2657; the scanner assert is a
+  syntax error; warnings go to a handler, never `print`). `YamlComposer`
+  builds the plain tree from the parser's events with an explicit stack, in
+  one pass: nesting deeper than 1000 levels (every collection the parser
+  opens, keys included, and every collection an alias expands to; the root
+  is level 0) is TOA007; a budget of `max(16000000, 20 * text length)`
+  characters, each built node (first visit or through an alias) costing its
+  JSON pointer length + 1, is TOA008 when spent; both return no document.
+  Scalar keys are their text (YAML Failsafe: `200:` is `"200"`); a null key
+  is TOA114 (warning), a collection key or an alias of one TOA113 (the entry
+  is dropped and never built). Duplicate keys are TOA002, last value wins
+  (error when YAML itself sees equal keys outside `.json`). Tags outside the
+  JSON Schema ruleset are TOA009 (the value is read as its text); parser
+  warnings are TOA015. A syntax error is returned to the caller, which
+  reports TOA001 (`.json` falls back to `jsonDecode` without positions).
+  `OpenApiVersionDetector` reads the version.
 - `model/` - the immutable typed model, a superset of OAS 3.0/3.1/3.2:
   `SpecNode` (every node has a `SpecLocation` = file URI + pointer, `x-`
   `extensions` and reported `unknownKeys`), `RefOr<T>` = `Ref<T>` | `Inline<T>`,
@@ -67,7 +64,9 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
 - `parse/` - `OpenApiParser` (document, components, fragments for `$ref`
   targets), `OperationParser`, `SchemaParser`, all on `ObjectReader` (typed
   field access; wrong types and non-finite numbers -> TOA111, missing required
-  -> TOA112, unknown keys -> TOA110). Parsers record nodes, `$ref`s and
+  -> TOA112, unknown keys -> TOA110; a `$ref` where OAS accepts no Reference
+  Object -> TOA107, `$ref: #/...` emptied by a YAML comment -> TOA108, the
+  YAML merge key `<<` -> TOA109). Parsers record nodes, `$ref`s and
   version-specific constructs (`SpecFeature`) in a shared `SpecIndex`, which
   also remembers every location a parser has read (`visited`): a location is
   read once, so a later read (a `$ref` into a region and then one to its
@@ -77,10 +76,33 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   file name that is not UTF-8 after percent-decoding -> TOA100, a host ->
   TOA102), `SpecDocuments` loads other local files once by
   URI, `RefResolver` follows every `$ref` (parsing each on-demand target once)
-  and reports TOA100-TOA105, `SpecModel` answers `resolve`/`resolveSchema`;
-  `SpecReader` runs parse -> resolve -> dialect check.
+  and reports TOA100-TOA105, `SpecModel` answers `resolve`/`resolveSchema`
+  and lists `nodes` by location; `SpecReader` runs parse -> resolve ->
+  dialect check.
+- `normalize/` - `Normalizer` runs up to 3 passes of read (`SpecReader`) ->
+  rules -> edits: a `NormalizerRule` reads the model through a
+  `RuleContext` and returns `Finding`s (a diagnostic and, for a fix,
+  `SpecEdit`s: document URI + pointer + add/replace/remove); `TreeEditor`
+  applies edits copy-on-write to the plain trees and the model is read
+  again. Parser diagnostics of intermediate passes go to a scratch bag; the
+  report has the last pass's, every finding of a rule that fixed something,
+  and the last pass's findings. An edit overlapping an earlier rule's edit,
+  or left after 3 passes, is TOA800. Edits overlap when they touch the same
+  node or one lies inside the other, and also when one adds or removes a list
+  element and the other's pointer passes through that list (indexes shift;
+  the later edit waits for the next pass). Rules (`normalize/rules/`, in
+  `Normalizer.rules` order) never change the model and never read text;
+  presets only add framework recipes (`NormalizerRule.hint`). Config
+  `rules: {<name>: false}` in `defaults` or a client turns a rule off
+  (unknown names are TOA903). Rule behaviour worth knowing:
+  `bool-required-to-array` leaves a parent whose `required` is not a list
+  alone (TOA201 without an edit); TOA401 is not reported when the
+  discriminator holder itself requires the property; a TOA402 mapping value
+  without `#` or `/` is a component name, also with a dot, when it is a key
+  of `components.schemas`, and a remote value says remote refs are not read;
+  `SchemaType.integer.accepts` takes whole-number doubles beyond int64.
 - `config/` - `ConfigLoader`, `ProjectConfig`, `ClientConfig`, `Preset`.
-- `check/` - `SpecChecker`: config -> load -> version -> `SpecReader`.
+- `check/` - `SpecChecker`: config -> load -> version -> `Normalizer`.
 - `cli/` - `TypedOpenApiCli` (`cli.dart`, owns the `CommandRunner` and maps
   usage errors to exit code 64) and `CheckCommand` (`check_command.dart`,
   options `--config/-c` and `--format`, client names as positional
@@ -92,14 +114,17 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `DiagnosticCode`, `JsonPointer`, `Severity` and the reporters), the loader
   (`SpecLoader`, `SpecDocument`, `OpenApiVersion`, `OpenApiVersionDetector`),
   the whole `model/` (`SpecNode`, `SpecLocation`, `RefOr`, `Ref`, `Inline`,
-  `RefKind`, `OpenApiDocument` and the other OAS objects) and the entry points
-  `SpecReader` and `SpecModel`. Not exported: `CheckCommand`, the internals of
-  `parse/` (`OpenApiParser`, `OperationParser`, `SchemaParser`, `ObjectReader`,
-  `ParseContext`, `SpecIndex`, `DialectChecker`) and `resolve/` (`RefTarget`,
-  `RefResolver`, `SpecDocuments`), and `YamlEventGuard`.
+  `RefKind`, `OpenApiDocument` and the other OAS objects), the entry points
+  `SpecReader`, `SpecModel` and `SpecDocuments`, and the normalizer
+  (`Normalizer`, `NormalizedSpec`, `NormalizerRule`, `RuleContext`,
+  `Finding`, `SpecEdit`, `EditOperation`). Not exported: `CheckCommand`, the
+  internals of `parse/` (`OpenApiParser`, `OperationParser`, `SchemaParser`,
+  `ObjectReader`, `ParseContext`, `SpecIndex`, `DialectChecker`), `resolve/`
+  (`RefTarget`, `RefResolver`), `normalize/` (`TreeEditor`, the rule
+  classes), `YamlComposer` and `load/yaml/`.
 
-Data flows loader -> parser -> resolver -> checker, every stage writing
-problems into one `DiagnosticBag`; reporters read the bag at the end.
+Data flows loader -> parser -> resolver -> normalizer -> checker, every stage
+writing problems into one `DiagnosticBag`; reporters read the bag at the end.
 
 Rules of the pipeline:
 
@@ -147,11 +172,11 @@ Rules of the pipeline:
 - No `analyzer` dependency in the generator core; tests run `dart analyze` on
   generated fixtures as a subprocess.
 - Escape every string taken from the spec at every interpolation site.
-- One implementation import is allowed: `YamlEventGuard` reads
-  `package:yaml/src/parser.dart` and `src/event.dart` (the parser's events are
-  the only exact view of what `loadYamlNode` will do). The yaml dependency is
-  therefore pinned to `>=3.1.4 <3.2.0`; widening it means re-running the guard's
-  tests and fuzz test.
+- No `package:yaml` import in `lib/`: the scanner and parser are vendored in
+  `lib/src/load/yaml/` (MIT, local edits referencing dart-lang/tools#2657).
+  `yaml` is a dev dependency only, for tests that compare `YamlComposer`
+  with package:yaml's loader; keep every local edit documented in
+  `lib/src/load/yaml/analysis_options.yaml`.
 
 ## Where things are
 

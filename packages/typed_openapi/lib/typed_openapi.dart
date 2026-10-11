@@ -2,7 +2,8 @@
 ///
 /// The programmatic API mirrors the CLI: load a config, check specs, report
 /// diagnostics. [SpecReader] reads a loaded spec into the typed model
-/// ([SpecModel]) with its `$ref`s resolved.
+/// ([SpecModel]) with its `$ref`s resolved; [Normalizer] runs the named
+/// rules over it and applies their fixes.
 library;
 
 export 'src/check/spec_checker.dart' show SpecChecker;
@@ -49,5 +50,10 @@ export 'src/model/security.dart'
         SecuritySchemeType;
 export 'src/model/spec_node.dart'
     show Inline, Ref, RefKind, RefOr, SpecLocation, SpecNode;
+export 'src/normalize/normalizer.dart' show NormalizedSpec, Normalizer;
+export 'src/normalize/normalizer_rule.dart'
+    show Finding, NormalizerRule, RuleContext;
+export 'src/normalize/spec_edit.dart' show EditOperation, SpecEdit;
+export 'src/resolve/spec_documents.dart' show SpecDocuments;
 export 'src/resolve/spec_model.dart' show SpecModel;
 export 'src/resolve/spec_reader.dart' show SpecReader;
