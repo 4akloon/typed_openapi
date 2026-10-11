@@ -11,6 +11,31 @@
   потрапляють у звіт як діагностика зі стабільними кодами. Усе неоднозначне
   супроводжується пропозицією override-у.
 
+## Використання
+
+Опиши кожен клієнт у `typed_openapi.yaml` поряд із `pubspec.yaml`:
+
+```yaml
+defaults:
+  preset: nestjs          # пресет нормалізатора; також: generic, fastapi, springdoc, aspnet
+clients:
+  core_api:
+    input: specs/core_api.json      # локальний знімок, JSON або YAML
+    output: lib/src/api/core_api    # у кожного клієнта свій каталог
+```
+
+Перевір специфікації без генерації:
+
+```sh
+dart run typed_openapi check            # усі клієнти
+dart run typed_openapi check core_api   # один клієнт
+dart run typed_openapi check --format json
+```
+
+У кожної знахідки є стабільний код (`TOA011`), JSON-pointer на місце в
+специфікації і, якщо парсер зміг визначити позицію, рядок і колонка. Код
+виходу `1` означає хоча б одну помилку, `78` — конфіг не вдалося прочитати.
+
 Згенеровані клієнти залежать від
 [`typed_openapi_runtime`](../typed_openapi_runtime/README.ua.md).
 

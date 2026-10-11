@@ -39,8 +39,13 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   source spans by JSON pointer).
 - `config/` - `ConfigLoader`, `ProjectConfig`, `ClientConfig`, `Preset`.
 - `check/` - `OpenApiVersionDetector`, `SpecChecker`.
-- `cli/` - `TypedOpenApiCli`, `CheckCommand`; `bin/typed_openapi.dart` only
-  calls `TypedOpenApiCli().run(args)` and sets `exitCode`.
+- `cli/` - `TypedOpenApiCli` (`cli.dart`, owns the `CommandRunner` and maps
+  usage errors to exit code 64) and `CheckCommand` (`check_command.dart`,
+  options `--config/-c` and `--format`, client names as positional
+  arguments); `bin/typed_openapi.dart` only calls `TypedOpenApiCli().run(args)`
+  and sets `exitCode`.
+- `lib/typed_openapi.dart` exports the public API: the classes above, each with
+  a `show` list.
 
 Data flows loader -> checker, every stage writing problems into one
 `DiagnosticBag`; reporters read the bag at the end.

@@ -1,0 +1,66 @@
+import 'package:args/command_runner.dart';
+import 'package:io/io.dart' show ExitCode;
+
+import '../check/spec_checker.dart';
+import '../config/config_loader.dart';
+import '../diagnostics/diagnostic_bag.dart';
+import '../diagnostics/reporters.dart';
+
+/// `typed_openapi check`: analyzes specs without generating code.
+final class CheckCommand extends Command<int> {
+  /// Creates the command; reports are written to [_out].
+  CheckCommand(this._out) {
+    argParser
+      ..addOption(
+        'config',
+        abbr: 'c',
+        defaultsTo: 'typed_openapi.yaml',
+        help: 'Path to the config file.',
+      )
+      ..addOption(
+        'format',
+        allowed: [for (final format in ReportFormat.values) format.name],
+        defaultsTo: ReportFormat.text.name,
+        help: 'Report format.',
+      );
+  }
+
+  /// Exit code when the check found at least one error.
+  static const exitHasErrors = 1;
+
+  final StringSink _out;
+
+  @override
+  String get name => 'check';
+
+  @override
+  String get description =>
+      'Check specs and report diagnostics without generating code.';
+
+  @override
+  String get invocation =>
+      '${runner!.executableName} check [options] [client...]';
+
+  @override
+  Future<int> run() async {
+    final results = argResults!;
+    final diagnostics = DiagnosticBag();
+    final config = ConfigLoader(diagnostics).load(results.option('config')!);
+    if (config != null) {
+      final only = results.rest.toSet();
+      final unknown = only.difference({
+        for (final client in config.clients) client.name,
+      });
+      if (unknown.isNotEmpty) {
+        usageException(
+          'Unknown client: ${(unknown.toList()..sort()).join(', ')}.',
+        );
+      }
+      SpecChecker(diagnostics).check(config, only: only);
+    }
+    final format = ReportFormat.values.byName(results.option('format')!);
+    _out.writeln(format.reporter.format(diagnostics));
+    if (config == null) return ExitCode.config.code;
+    return diagnostics.hasErrors ? exitHasErrors : ExitCode.success.code;
+  }
+}
