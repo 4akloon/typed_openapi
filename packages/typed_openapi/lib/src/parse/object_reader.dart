@@ -58,7 +58,10 @@ final class ObjectReader {
     final raw = value(key);
     if (raw == null) return null;
     final (number,) = raw;
-    if (number is num && number >= 0 && number == number.truncate()) {
+    if (number is num &&
+        number.isFinite &&
+        number >= 0 &&
+        number == number.truncate()) {
       return number.toInt();
     }
     _invalid(key, 'a non-negative integer', number);
