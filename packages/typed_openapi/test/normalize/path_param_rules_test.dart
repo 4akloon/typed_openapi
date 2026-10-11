@@ -49,6 +49,20 @@ void main() {
       );
     });
 
+    test('one missing variable says "a required string path parameter"', () {
+      final run = NormalizerFixture(
+        spec('''
+  /users/{id}:
+    get: {responses: {}}
+'''),
+      );
+      expect(
+        run.of(DiagnosticCode.missingPathParameter).single.message,
+        'The path /users/{id} has {id}, but this operation declares no path '
+        'parameter "id"; it is added as a required string path parameter.',
+      );
+    });
+
     test('parameters of the path item and references count as declared', () {
       final run = NormalizerFixture(
         spec(r'''

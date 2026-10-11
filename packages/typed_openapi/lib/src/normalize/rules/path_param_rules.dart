@@ -94,12 +94,14 @@ final class DeclareMissingPathParams extends NormalizerRule {
         if (missing.isEmpty) continue;
         // One finding per operation: a fix is one edit of its parameters.
         final names = missing.map((m) => '"$m"').join(', ');
+        final added = missing.length == 1
+            ? 'it is added as a required string path parameter'
+            : 'they are added as required string path parameters';
         yield context.finding(
           .missingPathParameter,
           'The path $template has ${missing.map((m) => '{$m}').join(', ')}, '
           'but this operation declares no path parameter $names; '
-          '${missing.length == 1 ? 'it is' : 'they are'} added as required '
-          'string path parameters.',
+          '$added.',
           operation.location,
           fix:
               'Declare each at the source as {name: <name>, in: path, '
