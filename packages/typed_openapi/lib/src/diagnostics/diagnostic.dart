@@ -42,10 +42,16 @@ final class Diagnostic implements Comparable<Diagnostic> {
   final String? fix;
 
   /// The 1-based line of the finding, or null when the position is unknown.
-  int? get line => span == null ? null : span!.start.line + 1;
+  int? get line {
+    final start = span?.start;
+    return start == null ? null : start.line + 1;
+  }
 
   /// The 1-based column of the finding, or null when the position is unknown.
-  int? get column => span == null ? null : span!.start.column + 1;
+  int? get column {
+    final start = span?.start;
+    return start == null ? null : start.column + 1;
+  }
 
   /// `file:line:column`, `file` when only the file is known, or null.
   String? get location {

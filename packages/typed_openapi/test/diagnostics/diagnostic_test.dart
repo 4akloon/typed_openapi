@@ -3,7 +3,6 @@ import 'package:test/test.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
 import 'package:typed_openapi/src/diagnostics/json_pointer.dart';
-import 'package:typed_openapi/src/diagnostics/severity.dart';
 
 void main() {
   final source = SourceFile.fromString(
@@ -12,7 +11,7 @@ void main() {
   );
 
   Diagnostic make({
-    DiagnosticCode code = DiagnosticCode.parseError,
+    DiagnosticCode code = .parseError,
     String message = 'm',
     String? file = 'api.json',
     int? offset,
@@ -20,7 +19,7 @@ void main() {
   }) {
     return Diagnostic(
       code: code,
-      severity: Severity.error,
+      severity: .error,
       message: message,
       file: file,
       pointer: pointer == null ? null : JsonPointer.parse(pointer),
@@ -36,14 +35,14 @@ void main() {
 
     test('in the same file orders by offset, then pointer, code, message', () {
       final ordered = [
-        make(offset: 2, pointer: '#/z', code: DiagnosticCode.rootNotObject),
-        make(offset: 5, pointer: '#/a', code: DiagnosticCode.duplicateKey),
-        make(offset: 5, pointer: '#/b', code: DiagnosticCode.parseError),
-        make(offset: 5, pointer: '#/b', code: DiagnosticCode.duplicateKey),
+        make(offset: 2, pointer: '#/z', code: .rootNotObject),
+        make(offset: 5, pointer: '#/a', code: .duplicateKey),
+        make(offset: 5, pointer: '#/b', code: .parseError),
+        make(offset: 5, pointer: '#/b', code: .duplicateKey),
         make(
           offset: 5,
           pointer: '#/b',
-          code: DiagnosticCode.duplicateKey,
+          code: .duplicateKey,
           message: 'z',
         ),
       ];

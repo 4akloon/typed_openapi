@@ -5,51 +5,51 @@ import 'severity.dart';
 /// An [id] is stable: once released it never changes meaning.
 enum DiagnosticCode {
   /// The document is not valid JSON or YAML.
-  parseError('TOA001', 'parse-error', Severity.error),
+  parseError('TOA001', 'parse-error', .error),
 
   /// A mapping repeats a key.
-  duplicateKey('TOA002', 'duplicate-key', Severity.warning),
+  duplicateKey('TOA002', 'duplicate-key', .warning),
 
   /// The document root is not an object.
-  rootNotObject('TOA003', 'root-not-object', Severity.error),
+  rootNotObject('TOA003', 'root-not-object', .error),
 
   /// The input file does not exist.
-  inputNotFound('TOA004', 'input-not-found', Severity.error),
+  inputNotFound('TOA004', 'input-not-found', .error),
 
   /// Source positions could not be recorded for a document.
-  positionsUnavailable('TOA005', 'positions-unavailable', Severity.info),
+  positionsUnavailable('TOA005', 'positions-unavailable', .info),
 
   /// The input file exists but cannot be read as UTF-8 text.
-  inputUnreadable('TOA006', 'input-unreadable', Severity.error),
+  inputUnreadable('TOA006', 'input-unreadable', .error),
 
   /// The document has no `openapi` field.
-  missingOpenApiVersion('TOA010', 'missing-openapi-version', Severity.error),
+  missingOpenApiVersion('TOA010', 'missing-openapi-version', .error),
 
   /// The document declares a version this tool does not read.
   unsupportedOpenApiVersion(
     'TOA011',
     'unsupported-openapi-version',
-    Severity.error,
+    .error,
   ),
 
   /// The document declares a 3.x minor version newer than 3.2.
   unknownOpenApiMinorVersion(
     'TOA012',
     'unknown-openapi-minor-version',
-    Severity.warning,
+    .warning,
   ),
 
   /// The configuration file does not exist.
-  configNotFound('TOA901', 'config-not-found', Severity.error),
+  configNotFound('TOA901', 'config-not-found', .error),
 
   /// The configuration file is malformed or has an invalid value.
-  configInvalid('TOA902', 'config-invalid', Severity.error),
+  configInvalid('TOA902', 'config-invalid', .error),
 
   /// The configuration file has a key this tool does not know.
-  configUnknownKey('TOA903', 'config-unknown-key', Severity.warning),
+  configUnknownKey('TOA903', 'config-unknown-key', .warning),
 
   /// Two clients write to the same or nested output directories.
-  outputOverlap('TOA904', 'output-overlap', Severity.error);
+  outputOverlap('TOA904', 'output-overlap', .error);
 
   const DiagnosticCode(this.id, this.slug, this.defaultSeverity);
 

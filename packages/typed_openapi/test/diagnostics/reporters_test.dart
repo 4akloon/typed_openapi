@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:source_span/source_span.dart';
 import 'package:test/test.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_bag.dart';
-import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
 import 'package:typed_openapi/src/diagnostics/json_pointer.dart';
 import 'package:typed_openapi/src/diagnostics/reporters.dart';
 
@@ -16,7 +15,7 @@ void main() {
   DiagnosticBag sample() {
     return DiagnosticBag()
       ..report(
-        DiagnosticCode.unsupportedOpenApiVersion,
+        .unsupportedOpenApiVersion,
         'OpenAPI "2.0" is not supported.',
         file: 'api.json',
         pointer: JsonPointer.root.child('openapi'),
@@ -24,7 +23,7 @@ void main() {
         fix: 'Emit OpenAPI 3.',
       )
       ..report(
-        DiagnosticCode.positionsUnavailable,
+        .positionsUnavailable,
         'No positions.',
         file: 'a.json',
       );
