@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** `typed_openapi check` читає YAML власним компоновщиком (теги поза JSON Schema ruleset, нерядкові ключі, глибина й аліаси — за один ітеративний прохід, без квадратичного сканера), каже, де `$ref` стоїть там, де OAS його не дозволяє, і проганяє специфікацію через рушій іменованих правил: однозначні дефекти виправляються правками сирого дерева з перечитуванням моделі, решта — діагностика з порадою, що виправити в джерелі.
+**Goal:** `typed_openapi check` читає YAML власним компоновщиком (теги поза JSON Schema ruleset, нерядкові й null-ключі, глибина й аліаси — за один ітеративний прохід, без квадратичного сканера й без `print`), каже, де `$ref` чи merge key `<<` стоять поза OpenAPI, і проганяє специфікацію через рушій іменованих правил: однозначні дефекти виправляються правками сирого дерева з перечитуванням моделі, решта — діагностика з порадою, що виправити в джерелі, і рецептом фреймворку з пресету.
 
-**Architecture:** `load/yaml/` — сканер і парсер `package:yaml` 3.1.4 (MIT), скопійовані з двома правками сканера, що прибирають квадратичну вартість довгих flow-рядків. `load/yaml_composer.dart` — `YamlComposer` будує з подій парсера звичайне дерево і позиції за JSON pointer; його використовують `SpecLoader` і `ConfigLoader`, а `YamlEventGuard`, `loadYamlNode` і `_PlainConverter` зникають. Новий шар `normalize/`: `SpecEdit` + `TreeEditor` (правки копіюванням при записі), `NormalizerRule` + `RuleContext` + `Finding`, `Normalizer` (до 3 проходів read → rules → edits; діагностика парсера — лише з останнього проходу). Правила читають типізовану модель M2 і нічого не знають про текст. `SpecChecker` викликає `Normalizer` замість `SpecReader`.
+**Architecture:** `load/yaml/` — сканер і парсер `package:yaml` 3.1.4 (MIT) з локальними правками (лінійна вартість flow-рядків, assert → синтаксична помилка, попередження — в обробник). `load/yaml_composer.dart` — `YamlComposer` будує з подій парсера звичайне дерево і позиції за JSON pointer; його використовують `SpecLoader` і `ConfigLoader`; `YamlEventGuard`, `loadYamlNode` і `_PlainConverter` зникають. Новий шар `normalize/`: `SpecEdit` + `TreeEditor` (правки копіюванням при записі), `NormalizerRule` + `RuleContext` + `Finding`, `Normalizer` (до 3 проходів read → rules → edits; діагностика парсера — лише з останнього проходу) і 18 правил у `normalize/rules/`. `SpecChecker` викликає `Normalizer` замість `SpecReader`.
 
-**Tech Stack:** Dart `>=3.10.0 <4.0.0`, чистий Dart; залежності `args`, `io`, `path`, `source_span`, нові прямі `collection` і `string_scanner` (їх уже тягнув `package:yaml`, тепер їх використовує скопійований сканер); `yaml` переходить у `dev_dependencies` (лише для тестів-порівнянь); тести на `package:test`.
+**Tech Stack:** Dart `>=3.10.0 <4.0.0`, чистий Dart; залежності `args`, `io`, `path`, `source_span`, нові прямі `collection` і `string_scanner` (їх уже тягнув `package:yaml`, тепер — скопійований сканер); `yaml` переходить у `dev_dependencies` (лише для тестів-порівнянь); тести на `package:test`.
 
 **Spec:** [docs/superpowers/specs/2026-10-11-m3-normalizer-design.md](../specs/2026-10-11-m3-normalizer-design.md) — рішення 1–7 і дві таблиці правил. Вимоги: R2.1, R2.5, R0.2 ([requirements.md](../../requirements.md)). Дефекти й рецепти: [research/06 §C, §D](../../research/06-spec-versions-and-defects.md). Корпус і перший прогін: [research/08](../../research/08-test-corpus.md). Місце етапу — [roadmap.md](../../roadmap.md), M3 і «Перенесено з M2». Правила коду — [CLAUDE.md](../../../CLAUDE.md).
 
@@ -15,48 +15,70 @@
 - SDK `>=3.10.0 <4.0.0`; обидва пакети — чистий Dart. Primary constructors (Dart 3.13) не використовуються.
 - Dart 3.10 активно: dot shorthands скрізь, де відомий тип контексту (`.nestingTooDeep`, `severity: .error`, `case .key`), null-aware елементи колекцій, switch-вирази і patterns, records, модифікатори класів (`final`, `sealed`, `base`). У тестах аргументи `expect(...)` — повні імена (`DiagnosticCode.boolRequired`).
 - ООП: жодних функцій верхнього рівня, крім `main` у `bin/` і тестах. Компоненти, що звітують, отримують `DiagnosticBag` через конструктор (`YamlComposer(bag)`, `Normalizer(bag)`). Виняток — скопійований код `load/yaml/`: він лишається в стилі `package:yaml` і перевіряється лише `package:lints/recommended.yaml` (свій `analysis_options.yaml` у теці).
-- Помилки вхідних даних не кидаються: вони йдуть у `DiagnosticBag`, решта документа читається. Ловиться лише `YamlException` — і, в одному місці (`_Composition._next`), `AssertionError` сканера `package:yaml` (див. «Ухвалені рішення», п. 3).
+- Помилки вхідних даних не кидаються: вони йдуть у `DiagnosticBag`, решта документа читається. Ловиться лише `YamlException`; `AssertionError` у `lib/` не ловиться (лінт `avoid_catching_errors`): assert сканера, який ламають невалідні документи, у копії замінено на синтаксичну помилку.
 - Кожен новий код — у `DiagnosticCode` з doc-коментарем, slug у kebab-case, рівень за замовчуванням, файл, JSON pointer і, коли відомо, позиція; повідомлення каже, що виправити в джерелі (R2.2, R2.5).
 - Детермінізм (R13.1): правила обходять вузли в порядку `SpecLocation` (`SpecModel.nodes`), правила йдуть у порядку `Normalizer.rules`, звіт сортує `DiagnosticBag.sorted`.
 - Правила не змінюють модель і не читають текст: вони повертають `Finding` з `SpecEdit`-ами; застосовує й перечитує лише `Normalizer`. Знання структури OAS — лише в парсері.
 - Override-и (M4) у M3 не застосовуються: діагностика лише називає поле і значення, яке варто перевизначити, без синтаксису файлу override-ів.
-- Пресет не вмикає й не вимикає правил (рішення 7): він лише додає до `fix` рецепт фреймворку (`NormalizerRule.hint`).
+- Пресет не вмикає й не вимикає правил (рішення 7): він лише додає до `fix` рецепт фреймворку (`NormalizerRule.hint`), і лише там, де він є в research/06 §D.
 - Фікстури — вигадані й маленькі. Приватна специфікація компанії не використовується ні як фікстура, ні як джерело фікстур. Публічний корпус (research/08) — лише для прогону `check`.
 - Лінти з кореневого `analysis_options.yaml`; `dart analyze packages` з кореня — `No issues found!`; `dart format lib test bin` (з `packages/typed_openapi`) — другий запуск змінює 0 файлів.
 - Тести не ходять у мережу; тимчасові файли — лише через `test/helpers/temp_dir.dart`. Ворожі входи перевіряються лише щедрим `timeout:`, без вимірювань часу в тестах.
-- Команди `dart test`, `dart format` — з `packages/typed_openapi`; `dart pub get`, `dart analyze packages`, `git apply` і `git` — з кореня репозиторію.
+- Команди `dart test`, `dart format` — з `packages/typed_openapi`; `dart pub get`, `dart analyze packages`, `git apply` і `git` — з кореня репозиторію. Diff-и в плані застосовуються `git apply` (з кореня).
 - Кожен коміт — Conventional Commits і закінчується рядком `Co-Authored-By` моделі, що виконує задачу (у прикладах — `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`).
 
 ## Ухвалені рішення
 
-Рішення специфікації M3 — обов'язкові; тут лише те, що специфікація лишає планові.
+Рішення специфікації M3 — обов'язкові; тут лише те, що специфікація лишає планові, і рішення контролера щодо відкритих питань першої версії плану.
 
-1. **Код нерядкового ключа — `TOA014 non-string-key`.** Специфікація пише «TOA00x», але `TOA001`–`TOA009` зайняті (TOA009 — теги), а `TOA010`–`TOA013` — версія документа; TOA014 — перший вільний у діапазоні 0xx.
-2. **Скалярні ключі читаються як текст (YAML Failsafe), як вимагає OAS для ключів.** `200:` — це ключ `"200"`, `~:` — `"~"`, `0x1F:` — `"0x1F"`. Нерядковим (TOA014) вважається лише ключ-колекція або аліас колекції; такий запис пропускається, нічого в ньому не будується, тож «бомба в ключі» неможлива. Наявний тест M2 «`200:` читається як `"200"`» і TOA002 для `1`/`"1"` лишаються без змін. Відкрите питання — чи робити ключі-числа і ключі-`null` помилкою, як каже таблиця специфікації (див. кінець плану).
-3. **Assert сканера.** Скопійований сканер має `assert(_simpleKeyAllowed || !required)` у `_saveSimpleKey`. Fuzz M2 (300 000 входів, seed 11) ловить його на 86 документах; усі 86 без асертів закінчуються `YamlException`, тобто це невалідний YAML. У зібраному CLI асерти вимкнені; у `dart test` і з `--enable-asserts` компоновщик ловить `AssertionError` рівно навколо `parser.parse()` і повертає його як синтаксичну помилку (TOA001). Інших асертів на шляху немає: `Loader` більше не використовується.
-4. **Квадратичний сканер виправлено в копії.** Сканер `package:yaml` витрачає на кожен токен час, пропорційний глибині flow-вкладеності (`_staleSimpleKeys` і `.any` у `_fetchMoreTokens`). Дві правки (upstream: https://github.com/dart-lang/tools/issues/2657) роблять кожен токен O(1) у flow-контексті: файл ~1 MB з «захованими» дужками — з 57 с до часток секунди; обхід «підрахунок дужок перед парсером» з M2 не потрібен. Тести з гілки `fix/yaml-quadratic-scan` (коміт 719bd46, не зливається) перенацілено на компоновщик.
-5. **Дублікати ключів — як у M2.** Два ключі, рівні для YAML (`a` і `"a"`), поза `.json` — TOA002 **error**, документ не читається (як `package:yaml`). У `.json` будь-який дублікат і в будь-якому файлі ключі, рівні лише як JSON-ключі (`1` і `"1"`), — TOA002 warning, перемагає останнє значення. Нове: `.json` з дублікатом тепер має позиції (без TOA005).
-6. **Запасний `jsonDecode` для `.json` лишається**, хоча прикладу валідного JSON, який відкидає парсер, не знайдено (сурогатні пари, `\/`, таби, ключі > 1024 символів — усе читається).
-7. **TOA107 замість TOA110/TOA111.** `$ref` як невідомий ключ об'єкта (операція `get: {$ref: ...}`) і об'єкт-`$ref` там, де очікується рядок або інше значення (`description: {$ref: ...}`, `tags: [{$ref: ...}]`), дають `TOA107 ref-not-allowed` з підказкою про `redocly bundle`. Підстановки «`$ref` будь-де» немає.
-8. **TOA108 визначається з тексту біля порожнього значення.** `package:yaml` ставить порожнє блочне значення на `:` ключа, а порожнє flow-значення — на наступний токен (на наступному рядку, коли коментар закрив рядок). `ObjectReader` перевіряє обидва місця; позиції ключів компоновщик не зберігає.
-9. **Проходи нормалізатора.** Прохід = read → усі правила. Якщо є правки і прохід не третій — знахідки-виправлення йдуть у звіт, правки застосовуються, документ перечитується. Інакше прохід останній: у звіт ідуть діагностика парсера цього проходу і всі знахідки; правки третього проходу не застосовуються і дають `TOA800 fix-not-applied`. Знахідки лише-діагностики з проміжних проходів не звітуються (вони повторяться в останньому).
-10. **Конфлікт правок — `TOA800`.** Правка, що торкається того самого вузла, що й раніше прийнята (той самий pointer або один — нащадок іншого), пропускається з `TOA800`; виграє правило, що раніше в `Normalizer.rules`. Той самий код — для правки, чия ціль зникла, і для файлу, який не читається.
-11. **Файли читаються один раз на всі проходи.** Діагностика завантаження (TOA001, TOA002, TOA009 …) інших файлів іде прямо в звіт; документи, завантажені в проході, передаються в наступний (`SpecDocuments(others:)`), відредаговані — з новим деревом (`SpecDocument.withRoot`). Позиції лишаються за pointer.
-12. **Конфіг `rules`.** `rules: {<ім'я>: false}` у `defaults` і в клієнті; значення клієнта перекриває `defaults` поіменно. Невідоме ім'я — `TOA903` (warning, з переліком відомих правил), не-булеве значення — `TOA902`. Файл, спільний для кількох клієнтів, перевіряється один раз — з правилами першого клієнта за іменем (як і раніше: один прохід на файл).
+1. **Скалярні ключі — текст (YAML Failsafe, як вимагає OAS для ключів).** `200:`, `true:`, `0x1F:` — ключі `"200"`, `"true"`, `"0x1F"` без діагностики (`200:` повсюдний). Null-ключ (`~:`, `null:`, порожній) — `TOA114 null-key` warning «візьми в лапки», читається як текст. Ключ-колекція або аліас колекції — `TOA113 non-string-key` error (діапазон структури поряд із TOA110–TOA112); запис пропускається, нічого в ньому не будується, тож «бомба в ключі» неможлива.
+2. **Asserts сканера.** Fuzz M2 (300 000 входів, seed 11) ловить `assert(_simpleKeyAllowed || !required)` у `Scanner._saveSimpleKey` на 86 документах; без асертів усі 86 закінчуються `YamlException`. Копія сканера замість assert звітує синтаксичну помилку `Expected a key at this indentation.` у тому місці; інші asserts на шляху (`Parser` — аргументи конструктора і `streamStart`) вхід зламати не може. Тест проганяє ті самі 300 000 документів через компоновщик: жоден `AssertionError` не вилітає. Порівняльний fuzz із `loadYamlNode` (upstream) пропускає документи, на яких падає assert самого `package:yaml` — це єдиний `catch (AssertionError)`, і він у тесті.
+3. **Квадратичний сканер виправлено в копії** (https://github.com/dart-lang/tools/issues/2657): `_staleSimpleKeys` одразу виходить поза блочним контекстом, а `_fetchMoreTokens` перевіряє лише перший живий простий ключ. Файл ~1 MB із «захованими» дужками — з 57 с до часток секунди; обхід «підрахунок дужок перед парсером» з M2 не потрібен. Тести з гілки `fix/yaml-quadratic-scan` (коміт 719bd46, не зливається) перенацілено на компоновщик.
+4. **Попередження парсера — `TOA015 yaml-warning`.** `warn()` `package:yaml` друкував у stdout (псуючи `--format json`); копія передає попередження в `YamlWarningHandler`, компоновщик звітує їх із позицією.
+5. **Дублікати ключів.** Ключі, рівні для самого YAML (`a` і `"a"`), поза `.json` — TOA002 з рівнем **error** (`DiagnosticBag.report(severity:)`), але читання триває і перемагає останнє значення (як `JSON.parse` і `jsonDecode`), повідомлення каже про це. Типовий рівень TOA002 у каталозі лишається warning: ним звітуються ключі, рівні лише як JSON-ключі (`1`/`"1"`), і будь-які дублікати в `.json`.
+6. **Merge key `<<` — `TOA109 yaml-merge-key` warning** (задача 3): YAML OpenAPI — JSON Schema ruleset, merge keys там немає; ключ лишається звичайним ключем `<<`, злиття немає.
+7. **Запасний `jsonDecode` для `.json` лишається**, хоча прикладу валідного JSON, який відкидає парсер, не знайдено (сурогатні пари, `\/`, таби, ключі > 1024 символів читаються).
+8. **TOA107 замість TOA110/TOA111.** `$ref` як невідомий ключ об'єкта (операція `get: {$ref: ...}`) і об'єкт-`$ref` там, де очікується рядок або інше значення (`description: {$ref: ...}`, `tags: [{$ref: ...}]`), — `TOA107 ref-not-allowed` з підказкою про `redocly bundle`. Підстановки «`$ref` будь-де» немає. Правила, що читають операції (TOA501, TOA503), пропускають операцію, записану як `$ref`.
+9. **TOA108 визначається з тексту біля порожнього значення.** `package:yaml` ставить порожнє блочне значення на `:` ключа, а порожнє flow-значення — на наступний токен (на наступному рядку, коли коментар закрив рядок). `ObjectReader` перевіряє обидва місця.
+10. **Проходи нормалізатора.** Прохід = read → усі правила. Якщо є правки і прохід не третій — у звіт ідуть усі знахідки правил, що мають правки в цьому проході (правило може покласти одну правку на першу з кількох знахідок), правки застосовуються, документ перечитується. Інакше прохід останній: у звіт ідуть діагностика парсера цього проходу і всі знахідки; правки третього проходу не застосовуються і дають `TOA800 fix-not-applied`.
+11. **Конфлікт правок — `TOA800`.** Правка, що торкається того самого вузла, що й раніше прийнята (той самий pointer або один — нащадок іншого), пропускається з `TOA800`; виграє правило, що раніше в `Normalizer.rules`. Той самий код — для правки, чия ціль зникла, і для файлу, який не читається.
+12. **Файли читаються один раз на всі проходи.** Діагностика завантаження інших файлів іде прямо в звіт; документи, завантажені в проході, передаються в наступний (`SpecDocuments(others:)`), відредаговані — з новим деревом (`SpecDocument.withRoot`). Позиції лишаються за pointer.
+13. **Конфіг `rules`.** `rules: {<ім'я>: false}` у `defaults` і в клієнті; клієнт перекриває `defaults` поіменно. Невідоме ім'я — `TOA903` (warning, з переліком правил), не-булеве значення — `TOA902`. Файл, спільний для кількох клієнтів, перевіряється один раз — з правилами першого клієнта за іменем.
+14. **Перевірки «лише діагностика» — теж іменовані правила**, щоб кожну можна було вимкнути (R2.1): `array-without-items`, `double-array`, `format-on-array`, `binary-object`, `contradictory-object-type`, `example-type-mismatch`, `nullable-enum-one-of`, `path-param-not-in-template`, `missing-operation-id`, `duplicate-operation-id`, `discriminator-property-required`, `discriminator-mapping-target`, `wildcard-media-type`, `component-key-characters`. Діагностики рівня читання (TOA009, TOA015, TOA107–TOA109, TOA113, TOA114) — не правила: вони про те, чи прочитано документ.
+15. **TOA402 потрібен:** M2 значень `discriminator.mapping` не резолвить (`Discriminator.mapping` лише читається). Значення без `#`, `/` і `.` — ім'я в `components.schemas`, решта — як `$ref`.
 
-## Нові коди діагностики (у задачах 1–6)
+## Нові коди діагностики
 
-| Код | Slug | Рівень | Коли | Research / spec |
-|---|---|---|---|---|
-| TOA009 | `yaml-tag-unsupported` | error | Тег поза JSON Schema ruleset (`!!timestamp`, `!!binary`, `!!set`, `!custom`) або значення, неможливе для тегу (`!!int abc`) | spec п. 2; research/08 (Artemis) |
-| TOA014 | `non-string-key` | error | Ключ — колекція або аліас колекції; запис пропускається | spec п. 6 |
-| TOA107 | `ref-not-allowed` | warning | `$ref` там, де OAS не приймає Reference Object | spec; research/08 (DigitalOcean) |
-| TOA108 | `ref-commented-out` | warning | `$ref: #/...` без лапок: `#` почав коментар | spec; research/08 (Grace) |
-| TOA201 | `bool-required` | warning | `required: true/false` на властивості (виправляється) | C-1, C-49 |
-| TOA211 | `invalid-default` | warning | `default` не того типу (ігнорується) | C-28 |
-| TOA800 | `fix-not-applied` | warning | Правка правила не застосована: конфлікт, ціль зникла, три проходи | рішення 9–10 |
+| Код | Slug | Рівень | Коли | Задача | Research / spec |
+|---|---|---|---|---|---|
+| TOA009 | `yaml-tag-unsupported` | error | Тег поза JSON Schema ruleset або значення, неможливе для тегу | 1 | spec п. 2; Artemis |
+| TOA015 | `yaml-warning` | warning | Попередження парсера YAML (невідома директива, YAML > 1.2) | 1 | рішення 4 |
+| TOA113 | `non-string-key` | error | Ключ — колекція або аліас колекції | 1 | spec п. 6 |
+| TOA114 | `null-key` | warning | Ключ `~`, `null` або порожній | 1 | рішення 1 |
+| TOA106 | `invalid-component-key` | warning | Ключ components поза `^[a-zA-Z0-9\.\-_]+$` | 11 | C-32 |
+| TOA107 | `ref-not-allowed` | warning | `$ref` там, де OAS не приймає Reference Object | 3 | DigitalOcean |
+| TOA108 | `ref-commented-out` | warning | `$ref: #/...` без лапок | 3 | Grace |
+| TOA109 | `yaml-merge-key` | warning | YAML merge key `<<` | 3 | рішення 6 |
+| TOA201 | `bool-required` | warning | `required: true/false` на властивості (виправляється) | 5 | C-1, C-49 |
+| TOA202 | `array-without-items` | warning | Масив без `items` у 3.0 | 7 | C-5 |
+| TOA203 | `double-array` | warning | `items`-масив із булевим `required` | 7 | C-49 |
+| TOA204 | `format-on-array` | warning | `format` на масиві без `items` | 7 | C-50 |
+| TOA205 | `binary-object` | warning | `type: object` + `format: binary` | 7 | C-51 |
+| TOA206 | `contradictory-object-type` | warning | `type: object` проти не-об'єктних гілок | 7 | C-22 |
+| TOA207 | `example-type-mismatch` | warning | `example` не того JSON-типу | 7 | C-60 |
+| TOA211 | `invalid-default` | warning | `default` не того типу (ігнорується) | 5 | C-28 |
+| TOA301 | `duplicate-enum-value` | warning | Повтори в `enum` (виправляється) | 8 | C-9, C-52 |
+| TOA303 | `nullable-enum-one-of` | warning | Nullable enum через `oneOf` | 8 | C-54 |
+| TOA401 | `discriminator-not-required` | info | Дискримінатор не `required` у варіанті | 11 | C-42 |
+| TOA402 | `discriminator-mapping-unresolved` | error | `mapping` веде в нікуди | 11 | C-4 |
+| TOA501 | `missing-path-parameter` | warning | Змінна шаблону без параметра (виправляється) | 9 | C-6 |
+| TOA502 | `path-parameter-not-in-template` | error | Параметр поза шаблоном / інший регістр | 9 | C-7 |
+| TOA503 | `missing-operation-id` | info | Немає `operationId` | 10 | C-34 |
+| TOA504 | `duplicate-operation-id` | error | Однакові `operationId` | 10 | C-36 |
+| TOA601 | `wildcard-media-type` | warning | `*/*` | 11 | C-38 |
+| TOA800 | `fix-not-applied` | warning | Правка не застосована | 4 | рішення 10–11 |
 
-Змінюється опис `TOA008`: аліас у ключі більше не TOA008 (тепер це TOA014).
+Змінюються: опис TOA008 (аліас у ключі тепер TOA113); TOA002 — рівень error для YAML-рівних ключів, документ читається.
 
 ## Файли
 
@@ -64,49 +86,59 @@
 
 | Файл | Відповідальність | Задача |
 |---|---|---|
-| `lib/src/load/yaml/` (`scanner.dart`, `parser.dart`, `token.dart`, `event.dart`, `style.dart`, `utils.dart`, `error_listener.dart`, `yaml_exception.dart`, `yaml_document.dart`, `LICENSE`, `analysis_options.yaml`) | Скопійовані сканер і парсер `package:yaml` 3.1.4 з виправленням квадратичності | 1 |
-| `lib/src/load/yaml_composer.dart` | `YamlComposer`, `ComposedYaml` — дерево і позиції з подій парсера | 1 |
+| `lib/src/load/yaml/` (`scanner`, `parser`, `token`, `event`, `style`, `utils`, `error_listener`, `yaml_exception`, `yaml_document`, `LICENSE`, `analysis_options.yaml`) | Копія сканера й парсера `package:yaml` 3.1.4 з локальними правками | 1 |
+| `lib/src/load/yaml_composer.dart` | `YamlComposer`, `ComposedYaml` | 1 |
 | `lib/src/load/spec_loader.dart` | `parse` на компоновщику | 1 |
 | `lib/src/config/config_loader.dart` | YAML через компоновщик; `rules` | 2, 6 |
 | `lib/src/load/yaml_event_guard.dart` | видаляється | 2 |
-| `lib/src/parse/object_reader.dart` | TOA107, TOA108 | 3 |
-| `lib/src/normalize/spec_edit.dart` | `EditOperation`, `SpecEdit`, `TreeEditor` | 4 |
-| `lib/src/normalize/normalizer_rule.dart` | `Finding`, `RuleContext`, `NormalizerRule` | 4 |
-| `lib/src/normalize/normalizer.dart` | `Normalizer`, `NormalizedSpec` | 4, 5 |
-| `lib/src/load/spec_document.dart`, `lib/src/resolve/spec_documents.dart`, `lib/src/resolve/spec_reader.dart`, `lib/src/resolve/spec_model.dart`, `lib/src/model/spec_node.dart` | `withRoot`, `others`/`loaded`, `documents:`, `nodes`, `SpecLocation.child` | 4 |
-| `lib/src/normalize/rules/bool_required_to_array.dart`, `lib/src/normalize/rules/drop_invalid_default.dart` | Правила-виправлення | 5 |
+| `lib/src/parse/object_reader.dart` | TOA107, TOA108, TOA109 | 3 |
+| `lib/src/normalize/spec_edit.dart`, `normalizer_rule.dart`, `normalizer.dart` | Рушій правил | 4 (+ реєстрація в 5, 7–11) |
+| `lib/src/load/spec_document.dart`, `lib/src/resolve/spec_documents.dart`, `spec_reader.dart`, `spec_model.dart`, `lib/src/model/spec_node.dart` | `withRoot`, `others`/`loaded`, `documents:`, `nodes`, `SpecLocation.child` | 4 |
+| `lib/src/model/schema.dart` | `SchemaType.accepts` | 5 |
+| `lib/src/normalize/rules/bool_required_to_array.dart`, `drop_invalid_default.dart` | Виправлення схем | 5 |
 | `lib/src/config/project_config.dart`, `lib/src/check/spec_checker.dart` | `disabledRules`; `check` через `Normalizer` | 6 |
-| `lib/src/diagnostics/diagnostic_code.dart` | нові коди | 1, 3, 4, 5 |
+| `lib/src/normalize/rules/schema_shape_rules.dart` | TOA202–TOA207 | 7 |
+| `lib/src/normalize/rules/enum_rules.dart` | TOA301, TOA303 | 8 |
+| `lib/src/normalize/rules/path_param_rules.dart` | TOA501, TOA502 | 9 |
+| `lib/src/normalize/rules/operation_id_rules.dart` | TOA503, TOA504 | 10 |
+| `lib/src/normalize/rules/reference_shape_rules.dart` | TOA106, TOA401, TOA402, TOA601 | 11 |
+| `lib/src/diagnostics/diagnostic_code.dart` | нові коди | 1, 3–5, 7–11 |
+| `lib/typed_openapi.dart`, `CLAUDE.md`, `CHANGELOG.md`, `README.md`, `README.ua.md` | Експорт і документація | 12 |
 | `pubspec.yaml` | `collection`, `string_scanner`; `yaml` → dev | 1, 2 |
+| `test/helpers/normalizer_fixture.dart` | `NormalizerFixture` для тестів правил | 7 |
 
 ## Інтерфейси між задачами
 
 ```dart
 // load (Tasks 1-2)
+typedef YamlWarningHandler = void Function(String message, FileSpan span);   // load/yaml/utils.dart
+Parser(String source, {Uri? sourceUrl, YamlWarningHandler? onWarning, ...});  // load/yaml/parser.dart
 final class ComposedYaml { Object? root; Map<String, SourceSpan> spans;
   ({String message, SourceSpan span})? syntaxError; }
 final class YamlComposer { const YamlComposer(DiagnosticBag);
   static const maxDepth = 1000, minBudget = 16000000, budgetPerChar = 20;
   ComposedYaml? compose(String text, {required String file, required Uri uri, bool json = false}); }
-SpecDocument SpecDocument.withRoot(Map<String, Object?> root);                    // Task 4
 
-// model / resolve (Task 4)
+// model / resolve (Tasks 4-5)
+SpecDocument SpecDocument.withRoot(Map<String, Object?> root);
 SpecLocation SpecLocation.child(Object token);
 SpecDocuments(SpecLoader, SpecDocument root, {Iterable<SpecDocument> others = const []});
 Iterable<SpecDocument> SpecDocuments.loaded;
 SpecModel SpecReader.read(SpecDocument, OpenApiVersion, {SpecDocuments? documents});
-List<SpecNode> SpecModel.nodes;                                                    // by location
+List<SpecNode> SpecModel.nodes;                                    // by location
+bool SchemaType.accepts(Object? value);                            // Task 5
 
-// normalize (Tasks 4-6)
+// normalize (Tasks 4-11)
 enum EditOperation { add, replace, remove }
 final class SpecEdit { SpecEdit.add(SpecLocation, Object?); SpecEdit.replace(SpecLocation, Object?);
   SpecEdit.remove(SpecLocation); SpecLocation location; EditOperation operation; Object? value;
   bool overlaps(SpecEdit other); }
 final class TreeEditor { TreeEditor(Map<String, Object?> root); Map<String, Object?> root;
-  String? apply(SpecEdit edit); }                                // null, or why it failed
+  String? apply(SpecEdit edit); }                                   // null, or why it failed
 final class Finding { const Finding(Diagnostic, {List<SpecEdit> edits}); }
 final class RuleContext { SpecModel model; SpecDocuments documents; OpenApiVersion version;
   Iterable<T> nodes<T extends SpecNode>(); (Object?,)? rawAt(SpecLocation);
+  Map<String, Object?>? rawObject(SpecLocation);
   Finding finding(DiagnosticCode, String message, SpecLocation at, {String? fix, List<SpecEdit> edits}); }
 abstract base class NormalizerRule { String name; List<DiagnosticCode> codes;
   Iterable<Finding> check(RuleContext); String? hint(DiagnosticCode, Preset) => null; }
@@ -115,58 +147,74 @@ final class Normalizer { Normalizer(DiagnosticBag, {List<NormalizerRule>? rules,
   static final List<NormalizerRule> rules; static Set<String> ruleNames;
   NormalizedSpec normalize(SpecDocument, OpenApiVersion); }
 final class NormalizedSpec { SpecModel model; SpecDocuments documents; }
-Set<String> ClientConfig.disabledRules;                                           // Task 6
+Set<String> ClientConfig.disabledRules;                            // Task 6
+
+// tests (Task 7)
+final class NormalizerFixture { NormalizerFixture(String yaml, {Preset? preset});
+  DiagnosticBag diagnostics; NormalizedSpec result;
+  List<Diagnostic> of(DiagnosticCode); List<String?> pointersOf(DiagnosticCode); }
 ```
 
-Після задачі 6: 282 тести, `dart analyze packages` без зауважень.
+Порядок `Normalizer.rules` після задачі 11: `bool-required-to-array`, `drop-invalid-default`, `array-without-items`, `double-array`, `format-on-array`, `binary-object`, `contradictory-object-type`, `example-type-mismatch`, `dedupe-enum-values`, `nullable-enum-one-of`, `declare-missing-path-params`, `path-param-not-in-template`, `missing-operation-id`, `duplicate-operation-id`, `discriminator-property-required`, `discriminator-mapping-target`, `wildcard-media-type`, `component-key-characters`.
+
+Кожну задачу перевірено так: код зібрано й перевірено на окремій гілці, потім задачі 1–12 відтворено з `main` лише з блоків коду цього плану (копіювання файлів, `git apply` diff-ів), і після кожної задачі `dart analyze packages` чистий, `dart format` удруге змінює 0 файлів, `dart test` зелений з кількістю тестів, указаною в задачі; кінцеве дерево збігається з перевіреним.
 
 ---
 
-### Task 1: Свій компоновщик YAML на подіях скопійованого парсера (TOA009, TOA014)
+### Task 1: Свій компоновщик YAML на подіях скопійованого парсера (TOA009, TOA015, TOA113, TOA114)
 
 **Files:**
-- Create: `packages/typed_openapi/lib/src/load/yaml/` (копія з `package:yaml` 3.1.4 + правки), `packages/typed_openapi/lib/src/load/yaml_composer.dart`, `packages/typed_openapi/test/load/yaml_composer_test.dart`
+- Create: `packages/typed_openapi/lib/src/load/yaml/` (копія з `package:yaml` 3.1.4 + локальні правки), `packages/typed_openapi/lib/src/load/yaml_composer.dart`, `packages/typed_openapi/test/load/yaml_composer_test.dart`
 - Modify: `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart`, `packages/typed_openapi/lib/src/load/spec_loader.dart`, `packages/typed_openapi/test/load/spec_loader_test.dart`, `packages/typed_openapi/pubspec.yaml`
 
 **Interfaces:**
-- Consumes: `DiagnosticBag`, `DiagnosticCode`, `JsonPointer`, `Severity`, `SpecDocument` (M1–M2).
-- Produces: `YamlComposer`, `ComposedYaml` (див. «Інтерфейси»); `DiagnosticCode.yamlTagUnsupported` (TOA009), `DiagnosticCode.nonStringKey` (TOA014); `SpecLoader.parse` на компоновщику. `ConfigLoader` поки що лишається на `YamlEventGuard` + `loadYamlNode` (задача 2).
+- Consumes: `DiagnosticBag`, `DiagnosticCode`, `JsonPointer`, `SpecDocument` (M1–M2).
+- Produces: `YamlComposer`, `ComposedYaml`; `Parser(source, {sourceUrl, onWarning})` і `YamlWarningHandler` у `load/yaml/`; коди `yamlTagUnsupported` (TOA009), `yamlWarning` (TOA015), `nonStringKey` (TOA113), `nullKey` (TOA114); `SpecLoader.parse` на компоновщику. `ConfigLoader` поки що лишається на `YamlEventGuard` + `loadYamlNode` (задача 2).
 
 Поведінка, яку закріплюють тести:
-- Скаляри-значення резолвляться рівно як у `package:yaml` (null/bool/int/float/рядок) — порівняльний тест із `loadYaml`; ключі — текст (Failsafe).
-- Тег поза ruleset — TOA009 error, значення читається як текст, решта документа читається; `!!set`/`!!omap` — колекція без тегу; `!custom` розпізнається з тексту (парсер `package:yaml` звітує його як `!`).
-- Ключ-колекція або аліас колекції — TOA014, запис пропускається без побудови; «бомба» з якорями всередині ключів нічого не коштує.
-- Глибина: кожна колекція, яку відкриває парсер (ключі теж), і кожна, у яку розгортається аліас, — рівень; корінь — 0; > 1000 — TOA007. Бюджет аліасів — як у M2.
-- Синтаксичні помилки (зокрема другий документ, невизначений аліас, самопосилання, assert сканера) повертаються в `syntaxError`, не звітуються; `SpecLoader` звітує їх як TOA001.
-- Ворожі flow-рядки (дужки, сховані в лапках і коментарях, ~1 MB) — TOA007 майже лінійно; порівняльний fuzz (seed 7, 20 000 документів) — дерево збігається з `loadYamlNode`.
+- Скаляри-значення резолвляться рівно як у `package:yaml` (порівняльний тест із `loadYaml`); ключі — текст (Failsafe): `200:`, `true:`, `0x1F:` — без діагностики; null-ключ (`~:`, `null:`, порожній) — TOA114 warning «візьми в лапки», читається як текст.
+- Тег поза ruleset — TOA009 error, значення — текст, решта документа читається; `!custom` розпізнається з тексту.
+- Ключ-колекція або аліас колекції — TOA113, запис пропускається без побудови; «бомба» в ключах нічого не коштує.
+- YAML-рівні ключі (`a` і `"a"`) поза `.json` — TOA002 **error**, але читання триває, перемагає останнє значення; `1`/`"1"` і будь-які дублікати в `.json` — TOA002 warning.
+- Попередження парсера (`%FOO`) — TOA015, нічого не друкується.
+- Глибина (кожна колекція, ключі теж; аліаси — розгорнута глибина) > 1000 — TOA007; бюджет аліасів — як у M2 (TOA008).
+- Синтаксичні помилки (другий документ, невизначений аліас, самопосилання, документ, що ламав assert сканера) повертаються в `syntaxError`; `SpecLoader` звітує TOA001. На 300 000 документах fuzz-у M2 (seed 11) жоден `AssertionError` не вилітає.
+- Ворожі flow-рядки (~1 MB, дужки в лапках і коментарях) — TOA007 майже лінійно; порівняльний fuzz (seed 7) — дерево збігається з `loadYamlNode`.
 
 - [ ] **Step 1: Скопіювати сканер і парсер `package:yaml` 3.1.4**
 
 ```bash
-dart pub get
-Y="${PUB_CACHE:-$HOME/.pub-cache}/hosted/pub.dev/yaml-3.1.4"   # yaml 3.1.4 is in the cache: main depends on it
+dart pub get    # yaml 3.1.4 is in the pub cache: main depends on it
+Y="${PUB_CACHE:-$HOME/.pub-cache}/hosted/pub.dev/yaml-3.1.4"
 D=packages/typed_openapi/lib/src/load/yaml
 mkdir -p "$D"
 cp "$Y/LICENSE" "$Y"/lib/src/{scanner,parser,token,event,style,utils,error_listener,yaml_exception,yaml_document}.dart "$D/"
 (cd packages/typed_openapi && dart format lib/src/load/yaml)
 ```
 
-Заголовки файлів (copyright Dart project authors і Kirill Simonov, MIT) і `LICENSE` лишаються без змін.
+Заголовки файлів (MIT; Copyright (c) 2014, the Dart project authors; Copyright (c) 2006, Kirill Simonov) і `LICENSE` не змінюються.
 
-- [ ] **Step 2: Правки копії**
+- [ ] **Step 2: Локальні правки копії**
 
-Створи `packages/typed_openapi/lib/src/load/yaml/analysis_options.yaml`:
+Створи `packages/typed_openapi/lib/src/load/yaml/analysis_options.yaml` (він же — опис локальних змін):
 
 ```yaml
 # The scanner and parser of package:yaml 3.1.4 (MIT, see LICENSE), copied
-# so that typed_openapi can fix their cost on long flow lines and read their
-# events without an implementation import. Changes are marked
-# "typed_openapi:". The code keeps package:yaml's style, so it is checked
-# with the recommended lints only.
+# so that typed_openapi can read their events without an implementation
+# import. Local changes, each marked "typed_openapi:" in the code:
+# - the scanner's cost on long flow lines is linear
+#   (https://github.com/dart-lang/tools/issues/2657, two edits);
+# - the assert in Scanner._saveSimpleKey, which invalid documents can break,
+#   is a syntax error;
+# - warnings go to a YamlWarningHandler instead of being printed;
+# - yaml_document.dart keeps only the directives, style.dart does not import
+#   yaml_node.dart.
+# The code keeps package:yaml's style, so it is checked with the recommended
+# lints only.
 include: package:lints/recommended.yaml
 ```
 
-У `yaml_document.dart` лиши лише `VersionDirective` і `TagDirective` (клас `YamlDocument` і імпорти `dart:collection`, `source_span`, `yaml_node.dart` видали). Файл після правки:
+`yaml_document.dart` — лише директиви (клас `YamlDocument` і імпорти видалено):
 
 ```dart
 // Copyright (c) 2014, the Dart project authors.
@@ -205,14 +253,37 @@ class TagDirective {
 }
 ```
 
-У `style.dart` видали рядок `import 'yaml_node.dart';` (і порожній рядок після нього) і заміни в doc-коментарі `[YamlScalar.wrap]` на `` `YamlScalar.wrap` ``.
+У `style.dart` видали рядок `import 'yaml_node.dart';` (з порожнім рядком після нього) і заміни в doc-коментарі `[YamlScalar.wrap]` на `` `YamlScalar.wrap` ``.
 
-У `scanner.dart` — дві правки (diff відносно відформатованої копії):
+Правки `scanner.dart` (лінійна вартість — https://github.com/dart-lang/tools/issues/2657; assert → синтаксична помилка; попередження — в обробник), `parser.dart` (обробник попереджень) і `utils.dart` (замість глобального `print`-колбека — тип обробника); diff-и відносно відформатованої копії, застосовуються `git apply` з кореня:
 
 ```diff
---- a/packages/typed_openapi/lib/src/load/yaml/scanner.dart	2026-10-11 23:24:00
-+++ b/packages/typed_openapi/lib/src/load/yaml/scanner.dart	2026-10-11 23:24:23
-@@ -331,9 +331,12 @@
+--- a/packages/typed_openapi/lib/src/load/yaml/scanner.dart
++++ b/packages/typed_openapi/lib/src/load/yaml/scanner.dart
+@@ -284,16 +284,21 @@
+       _isBlankOrEndAt(3) &&
+       (_scanner.matches('---') || _scanner.matches('...'));
+ 
+-  /// Creates a scanner that scans [source].
++  /// Creates a scanner that scans [source]; warnings go to [onWarning].
+   Scanner(
+     String source, {
+     Uri? sourceUrl,
+     bool recover = false,
+     ErrorListener? errorListener,
++    YamlWarningHandler? onWarning,
+   }) : _recover = recover,
+        _errorListener = errorListener,
++       _onWarning = onWarning,
+        _scanner = SpanScanner.eager(source, sourceUrl: sourceUrl);
+ 
++  /// typed_openapi: where warnings go instead of being printed.
++  final YamlWarningHandler? _onWarning;
++
+   /// Consumes and returns the next token.
+   Token scan() {
+     if (_streamEndProduced) throw StateError('Out of tokens.');
+@@ -331,9 +336,12 @@
          // If the current token could be a simple key, we need to scan more
          // tokens until we determine whether it is or not. Otherwise we might
          // not emit the `KEY` token before we emit the value of the key.
@@ -228,7 +299,7 @@ class TagDirective {
            break;
          }
        }
-@@ -474,6 +477,10 @@
+@@ -474,6 +482,10 @@
    /// Checks the list of potential simple keys and remove the positions that
    /// cannot contain simple keys anymore.
    void _staleSimpleKeys() {
@@ -239,6 +310,130 @@ class TagDirective {
      for (var i = 0; i < _simpleKeys.length; i++) {
        var key = _simpleKeys[i];
        if (key == null) continue;
+@@ -521,7 +533,18 @@
+ 
+     // A simple key is required only when it is the first token in the current
+     // line. Therefore it is always allowed. But we add a check anyway.
+-    assert(_simpleKeyAllowed || !required);
++    // typed_openapi: invalid documents break this (a token after a multi-line
++    // quoted scalar that ends left of the indentation), so it is a syntax
++    // error here instead of an assert; without asserts package:yaml rejects
++    // the same documents later.
++    if (!_simpleKeyAllowed && required) {
++      _reportError(
++        YamlException(
++          'Expected a key at this indentation.',
++          _scanner.emptySpan,
++        ),
++      );
++    }
+ 
+     if (!_simpleKeyAllowed) return;
+ 
+@@ -879,7 +902,7 @@
+     } else if (name == 'TAG') {
+       token = _scanTagDirectiveValue(start);
+     } else {
+-      warn('Warning: unknown directive.', _scanner.spanFrom(start));
++      _onWarning?.call('Unknown directive.', _scanner.spanFrom(start));
+ 
+       // libyaml doesn't support unknown directives, but the spec says to ignore
+       // them and warn: http://yaml.org/spec/1.2/spec.html#id2781147.
+```
+
+```diff
+--- a/packages/typed_openapi/lib/src/load/yaml/parser.dart
++++ b/packages/typed_openapi/lib/src/load/yaml/parser.dart
+@@ -28,6 +28,9 @@
+   /// The underlying [Scanner] that generates [Token]s.
+   final Scanner _scanner;
+ 
++  /// typed_openapi: where warnings go instead of being printed.
++  final YamlWarningHandler? _onWarning;
++
+   /// The stack of parse states for nested contexts.
+   final _states = <_State>[];
+ 
+@@ -46,17 +49,23 @@
+   /// return invalid or synthetic nodes. If [errorListener] is also supplied,
+   /// its onError method will be called for each error recovered from. It is not
+   /// valid to provide [errorListener] if [recover] is false.
++  ///
++  /// Warnings the YAML spec asks for (an unknown directive, a newer YAML
++  /// version) go to [onWarning].
+   Parser(
+     String source, {
+     Uri? sourceUrl,
+     bool recover = false,
+     ErrorListener? errorListener,
++    YamlWarningHandler? onWarning,
+   }) : assert(recover || errorListener == null),
++       _onWarning = onWarning,
+        _scanner = Scanner(
+          source,
+          sourceUrl: sourceUrl,
+          recover: recover,
+          errorListener: errorListener,
++         onWarning: onWarning,
+        );
+ 
+   /// Consumes and returns the next event.
+@@ -732,10 +741,8 @@
+             token.span,
+           );
+         } else if (token.minor > 2) {
+-          // TODO(nweiz): Print to stderr when issue 6943 is fixed and dart:io
+-          // is available.
+-          warn(
+-            'Warning: this parser only supports YAML 1.1 and 1.2.',
++          _onWarning?.call(
++            'This parser only supports YAML 1.1 and 1.2.',
+             token.span,
+           );
+         }
+```
+
+```diff
+--- a/packages/typed_openapi/lib/src/load/yaml/utils.dart
++++ b/packages/typed_openapi/lib/src/load/yaml/utils.dart
+@@ -7,32 +7,13 @@
+ 
+ import 'package:source_span/source_span.dart';
+ 
+-/// Print a warning.
++/// Receives a warning the YAML spec asks an implementation to give, such as
++/// for an unknown directive.
+ ///
+-/// If [span] is passed, associates the warning with that span.
+-void warn(String message, [SourceSpan? span]) =>
+-    yamlWarningCallback(message, span);
++/// typed_openapi: package:yaml prints these through a global callback; the
++/// copy hands them to the [Parser]'s owner instead.
++typedef YamlWarningHandler = void Function(String message, FileSpan span);
+ 
+-/// A callback for emitting a warning.
+-///
+-/// [message] is the text of the warning. If [span] is passed, it's the portion
+-/// of the document that the warning is associated with and should be included
+-/// in the printed warning.
+-typedef YamlWarningCallback = void Function(String message, [SourceSpan? span]);
+-
+-/// A callback for emitting a warning.
+-///
+-/// In a very few cases, the YAML spec indicates that an implementation should
+-/// emit a warning. To do so, it calls this callback. The default implementation
+-/// prints a message using [print].
+-// ignore: prefer_function_declarations_over_variables
+-YamlWarningCallback yamlWarningCallback = (message, [SourceSpan? span]) {
+-  // TODO(nweiz): Print to stderr with color when issue 6943 is fixed and
+-  // dart:io is available.
+-  if (span != null) message = span.message(message);
+-  print(message);
+-};
+-
+ /// Whether [codeUnit] is a UTF-16 high surrogate.
+ bool isHighSurrogate(int codeUnit) => codeUnit >>> 10 == 0x36;
+ 
 ```
 
 - [ ] **Step 3: Залежності**
@@ -264,25 +459,45 @@ Run: `dart pub get && dart analyze packages` — `No issues found!`.
 
 - [ ] **Step 4: Коди діагностики**
 
-У `lib/src/diagnostics/diagnostic_code.dart` заміни doc-коментар `aliasExpansionTooLarge` і додай TOA009 після нього та TOA014 після `openApiVersionNotString`:
+У `lib/src/diagnostics/diagnostic_code.dart` заміни doc-коментар TOA008:
 
 ```dart
   /// YAML aliases expand to far more nodes than the text has, or the JSON
   /// pointers of the document's nodes add up to more than the budget.
   aliasExpansionTooLarge('TOA008', 'alias-expansion-too-large', .error),
+```
 
+і додай (кожен запис — з порожнім рядком після нього):
+
+Перед рядком `/// The document has no `openapi` field.`:
+
+```dart
   /// A YAML tag outside the JSON Schema ruleset OpenAPI requires, such as
   /// `!!timestamp` or `!custom`; the value is read as its text.
   yamlTagUnsupported('TOA009', 'yaml-tag-unsupported', .error),
 ```
 
+Перед рядком `/// A 3.0 document uses an OpenAPI 3.1 or JSON Schema 2020-12 construct;`:
+
+```dart
+  /// The YAML parser warns about the text, for example about an unknown
+  /// directive; reading goes on.
+  yamlWarning('TOA015', 'yaml-warning', .warning),
+```
+
+Перед рядком `/// The configuration file does not exist.`:
+
 ```dart
   /// A mapping key is a collection, or an alias of one, instead of a
   /// string; the entry is ignored.
-  nonStringKey('TOA014', 'non-string-key', .error),
+  nonStringKey('TOA113', 'non-string-key', .error),
+
+  /// A mapping key is a YAML null (`~`, `null` or empty); it is read as its
+  /// text.
+  nullKey('TOA114', 'null-key', .warning),
 ```
 
-- [ ] **Step 5: Написати тести компоновщика**
+- [ ] **Step 5: Тести компоновщика**
 
 Створи `packages/typed_openapi/test/load/yaml_composer_test.dart`:
 
@@ -401,13 +616,28 @@ void main() {
     });
 
     test('keys are their text, as the Failsafe schema reads them', () {
-      expect(plain('200: a\n~: b\n0x1F: c\n1.0: d\n"q": e\n'), {
+      expect(plain('200: a\ntrue: b\n0x1F: c\n1.0: d\n"q": e\n'), {
         '200': 'a',
-        '~': 'b',
+        'true': 'b',
         '0x1F': 'c',
         '1.0': 'd',
         'q': 'e',
       });
+    });
+
+    test('a null key is a warning to quote it, and is read as its text', () {
+      final (result, bag) = compose('~: a\nnull: b\n: c\n"~": d\n');
+      expect(result!.root, {'~': 'd', 'null': 'b', '': 'c'});
+      expect(
+        bag.all.map((d) => (d.code, d.pointer?.value, d.severity)),
+        [
+          (DiagnosticCode.nullKey, '#/~0', Severity.warning),
+          (DiagnosticCode.nullKey, '#/null', Severity.warning),
+          (DiagnosticCode.nullKey, '#/', Severity.warning),
+          (DiagnosticCode.duplicateKey, '#/~0', Severity.warning),
+        ],
+      );
+      expect(bag.all.first.fix, 'Quote the key: "~".');
     });
   });
 
@@ -463,11 +693,14 @@ void main() {
   });
 
   group('duplicate keys', () {
-    test('keys YAML considers equal are an error, as in YAML', () {
-      final (result, bag) = compose('a: 1\n"a": 2\n');
-      expect(result, isNull);
-      expect(bag.all.single.severity, Severity.error);
-      expect(bag.all.single.message, 'Duplicate mapping key.');
+    test('keys YAML considers equal are an error, as in YAML, and the last '
+        'value wins', () {
+      final (result, bag) = compose('a: 1\n"a": 2\nb: 3\n');
+      expect(result!.root, {'a': 2, 'b': 3});
+      final d = bag.all.single;
+      expect(d.severity, Severity.error);
+      expect(d.message, 'Duplicate mapping key "a"; the last value is used.');
+      expect(d.pointer?.value, '#/a');
     });
 
     test('in a .json file they are a warning and the last value wins', () {
@@ -665,6 +898,15 @@ void main() {
     }, timeout: limit);
   });
 
+  test('a YAML warning is a diagnostic, not a print', () {
+    final (result, bag) = compose('%FOO bar\n---\na: 1\n');
+    expect(result!.root, {'a': 1});
+    final d = bag.all.single;
+    expect(d.code, DiagnosticCode.yamlWarning);
+    expect(d.message, 'Unknown directive.');
+    expect(d.line, 1);
+  });
+
   group('syntax errors are returned, not reported', () {
     for (final (name, text, message) in [
       ('an unclosed flow sequence', 'a: [1, 2\nb: {', null),
@@ -692,16 +934,89 @@ void main() {
       });
     }
 
-    test('package:yaml\'s own assert on invalid YAML is a syntax error', () {
-      // `Scanner._saveSimpleKey` asserts on this document (asserts are on in
-      // tests); with asserts off the parser rejects it.
+    test('the document that broke package:yaml\'s scanner assert is a '
+        'syntax error', () {
+      // `Scanner._saveSimpleKey` asserted on this document; the copy reports
+      // a syntax error there instead.
       final (result, bag) = compose(
         'x-a: &a [1, 2]\nx-z:\n   - ? "\n      , \'s\'] : \n  "!!seq \n'
         '  , *a :  "\n',
       );
       expect(bag.all, isEmpty);
-      expect(result!.syntaxError, isNotNull);
+      expect(
+        result!.syntaxError!.message,
+        'Expected a key at this indentation.',
+      );
     });
+
+    test('no assert escapes on the 300 000 documents of the M2 fuzz', () {
+      // The generator and seed of M2's alias-key fuzz, which found the
+      // scanner assert in 86 of these documents. Any AssertionError fails
+      // the test.
+      final random = Random(11);
+      const tokens = [
+        '- ',
+        '? ',
+        ': ',
+        'k: ',
+        'j: ',
+        '&b ',
+        '*a',
+        '*a ',
+        '*b',
+        '[',
+        ']',
+        '{',
+        '}',
+        ', ',
+        'v',
+        'k',
+        '|',
+        '>',
+        '"q"',
+        "'s'",
+        '"',
+        "'",
+        '#c',
+        '!!str ',
+        '!!seq ',
+        ' ',
+        '*a : ',
+        '? *a',
+        '[*a]',
+        '{*a: 1}',
+        '[*a]: ',
+        '{a: *a}: ',
+        ':',
+        '?',
+        '-',
+        '&c ',
+        'x y',
+        '] : ',
+        ':#',
+        '?"',
+        ":'",
+        '?#',
+        ' --- ',
+        '---',
+        '\t',
+      ];
+      const indents = ['', ' ', '  ', '   ', '    '];
+      var syntaxErrors = 0;
+      for (var i = 0; i < 300000; i++) {
+        final lines = List.generate(2 + random.nextInt(5), (_) {
+          final line = StringBuffer(indents[random.nextInt(indents.length)]);
+          for (var t = 1 + random.nextInt(5); t > 0; t--) {
+            line.write(tokens[random.nextInt(tokens.length)]);
+          }
+          return '  $line';
+        });
+        final text = 'x-a: &a [1, 2]\nx-z:\n${lines.join('\n')}\n';
+        final (result, _) = compose(text);
+        if (result?.syntaxError != null) syntaxErrors++;
+      }
+      expect(syntaxErrors, greaterThan(1000));
+    }, timeout: limit);
   });
 
   test('the composed tree matches package:yaml on random block and flow '
@@ -744,7 +1059,8 @@ void main() {
       final YamlNode node;
       try {
         node = loadYamlNode(text);
-        // The parser's own assertions fire on some invalid documents.
+        // package:yaml's own scanner asserts on some invalid documents; the
+        // comparison skips them (the copy reports a syntax error).
         // ignore: avoid_catching_errors
       } on AssertionError {
         continue;
@@ -754,7 +1070,11 @@ void main() {
       final expected = _failsafeKeys(node);
       if (expected == _skip) continue;
       final (result, bag) = compose(text);
-      expect(bag.all, isEmpty, reason: text);
+      expect(
+        bag.all.where((d) => d.code != DiagnosticCode.nullKey),
+        isEmpty,
+        reason: text,
+      );
       expect(result!.root, expected, reason: text);
       compared++;
     }
@@ -800,12 +1120,9 @@ Object? _failsafeKeys(YamlNode node) {
 }
 ```
 
-- [ ] **Step 6: Переконатися, що тести не компілюються**
+Run: `dart test test/load/yaml_composer_test.dart` — Expected: FAIL (`yaml_composer.dart` не існує).
 
-Run: `dart test test/load/yaml_composer_test.dart`
-Expected: FAIL — `yaml_composer.dart` не існує.
-
-- [ ] **Step 7: Компоновщик**
+- [ ] **Step 6: Компоновщик**
 
 Створи `packages/typed_openapi/lib/src/load/yaml_composer.dart`:
 
@@ -817,7 +1134,6 @@ import 'package:source_span/source_span.dart';
 import '../diagnostics/diagnostic_bag.dart';
 import '../diagnostics/diagnostic_code.dart';
 import '../diagnostics/json_pointer.dart';
-import '../diagnostics/severity.dart';
 // The composer reads the events of package:yaml's parser, copied into
 // yaml/: the YAML syntax exactly as package:yaml tokenizes it, without the
 // recursive loader, which overflows the stack on deep nesting, expands alias
@@ -864,16 +1180,21 @@ final class ComposedYaml {
 ///   `max(`[minBudget]`, `[budgetPerChar]` * text length)`;
 /// - keys that are the same JSON key (`duplicate-key`): a warning and the
 ///   last value wins, except two keys YAML itself considers equal outside a
-///   `.json` file, which are an error, as in YAML;
+///   `.json` file, which are an error (as in YAML) but are read the same
+///   way;
 /// - keys that are not strings (`non-string-key`): a collection, or an alias
 ///   of one, as a key; the entry is dropped and nothing in it is built, so a
 ///   key cannot hide an alias bomb;
+/// - keys that YAML reads as null (`~`, `null`, an empty key)
+///   (`null-key`): a warning; they are read as their text;
+/// - warnings of the YAML parser, such as an unknown directive
+///   (`yaml-warning`);
 /// - tags outside the YAML JSON Schema ruleset, such as `!!timestamp` or
 ///   `!custom` (`yaml-tag-unsupported`): the value is read as its text (a
 ///   collection as plain), so the rest of the file is still checked.
 ///
 /// Scalar keys are read as their text, the YAML Failsafe schema OpenAPI
-/// requires for keys: `200:` is the key `"200"`. Scalar values are resolved
+/// requires for keys: `200:` is the key `"200"`, `true:` the key `"true"`. Scalar values are resolved
 /// with the JSON Schema ruleset exactly as package:yaml's loader does.
 ///
 /// A limit or an undefined alias stops the composition: it is reported and
@@ -953,7 +1274,7 @@ final class _Composition {
   SourceSpan? _lastSpan;
 
   ComposedYaml? run() {
-    final parser = Parser(_text, sourceUrl: _uri);
+    final parser = Parser(_text, sourceUrl: _uri, onWarning: _warning);
     var documents = 0;
     while (!_failed && _syntaxError == null) {
       final event = _next(parser);
@@ -1004,19 +1325,16 @@ final class _Composition {
     } on YamlException catch (e) {
       _syntaxError = (message: e.message, span: e.span ?? _here());
       return null;
-      // package:yaml's scanner asserts an invariant that some invalid
-      // documents break (`assert(_simpleKeyAllowed || !required)` in
-      // `Scanner._saveSimpleKey`). Asserts are off in the shipped CLI, where
-      // the same documents end in a YamlException; with asserts on (tests,
-      // `dart --enable-asserts`) the assert is that syntax error.
-      // ignore: avoid_catching_errors
-    } on AssertionError {
-      _syntaxError = (
-        message: 'The document is not valid YAML.',
-        span: _here(),
-      );
-      return null;
     }
+  }
+
+  void _warning(String message, SourceSpan span) {
+    _diagnostics.report(
+      .yamlWarning,
+      message,
+      file: _file,
+      span: span,
+    );
   }
 
   SourceSpan _here() =>
@@ -1039,6 +1357,7 @@ final class _Composition {
     final pointer = isKey ? frame.pointer : _childPointer(frame);
     final value = _resolve(event, pointer);
     if (isKey) {
+      if (value == null) _nullKey(frame, event.value, event.span);
       _key(frame, event.value, value, event.span);
       if (event.anchor case final name?) {
         _anchors[name] = _Anchor.scalar(value, event.value, event.span);
@@ -1195,26 +1514,33 @@ final class _Composition {
     frame.state = .value;
     if (earlier == null) return;
     final yamlEqual = earlier.value == value;
-    if (yamlEqual && !_json) {
-      _fail(
-        .duplicateKey,
-        'Duplicate mapping key.',
-        frame.pointer.child(text),
-        span,
-        severity: .error,
-      );
-      return;
-    }
     _diagnostics.report(
       .duplicateKey,
       yamlEqual
-          ? 'Duplicate mapping key. The last value is used.'
+          ? 'Duplicate mapping key "$text"; the last value is used.'
           : 'Keys ${earlier.span.text} and ${span.text} are the same key '
                 '"$text" in JSON; the last value is used.',
+      // YAML forbids equal keys; JSON leaves them to the reader.
+      severity: yamlEqual && !_json ? .error : null,
       file: _file,
       pointer: frame.pointer.child(text),
       span: span,
       fix: 'Remove one of the keys.',
+    );
+  }
+
+  void _nullKey(_Frame frame, String text, SourceSpan span) {
+    _diagnostics.report(
+      .nullKey,
+      text.isEmpty
+          ? 'This mapping key is empty, which YAML reads as null; it is read '
+                'as the empty string.'
+          : 'The mapping key $text is null in YAML; it is read as the string '
+                '"$text".',
+      file: _file,
+      pointer: frame.pointer.child(text),
+      span: span,
+      fix: 'Quote the key: "$text".',
     );
   }
 
@@ -1317,13 +1643,11 @@ final class _Composition {
     JsonPointer? pointer,
     SourceSpan span, {
     String? fix,
-    Severity? severity,
   }) {
     _failed = true;
     _diagnostics.report(
       code,
       message,
-      severity: severity,
       file: _file,
       pointer: pointer,
       span: span,
@@ -1615,9 +1939,7 @@ final class _Anchor {
 }
 ```
 
-- [ ] **Step 8: `SpecLoader.parse` на компоновщику і тести завантажувача**
-
-Застосуй (з кореня, `git apply`):
+- [ ] **Step 7: `SpecLoader.parse` на компоновщику і тести завантажувача**
 
 ```diff
 diff --git a/packages/typed_openapi/lib/src/load/spec_loader.dart b/packages/typed_openapi/lib/src/load/spec_loader.dart
@@ -1950,7 +2272,7 @@ diff --git a/packages/typed_openapi/test/load/spec_loader_test.dart b/packages/t
  
  import '../helpers/temp_dir.dart';
  
-@@ -59,14 +59,24 @@ void main() {
+@@ -59,25 +59,75 @@ void main() {
          'api.json',
        )!;
        expect(doc.root['info'], {'title': 'b'});
@@ -1966,10 +2288,12 @@ diff --git a/packages/typed_openapi/test/load/spec_loader_test.dart b/packages/t
        expect(bag.hasErrors, isFalse);
      });
  
+-    test('a duplicate key in YAML is an error', () {
 +    test('a YAML tag outside the JSON Schema ruleset is an error, and the '
 +        'rest of the document is read', () {
-+      final bag = DiagnosticBag();
-+      final doc = SpecLoader(bag).parse(
+       final bag = DiagnosticBag();
+       final doc = SpecLoader(bag).parse(
+-        'openapi: 3.0.3\npaths: {}\npaths: {}\n',
 +        'openapi: 3.0.3\nx-when: !!timestamp 2025-07-27T07:17:05Z\n',
 +        'api.yaml',
 +      )!;
@@ -1977,10 +2301,16 @@ diff --git a/packages/typed_openapi/test/load/spec_loader_test.dart b/packages/t
 +      expect(bag.all.single.code, DiagnosticCode.yamlTagUnsupported);
 +    });
 +
-     test('a duplicate key in YAML is an error', () {
-       final bag = DiagnosticBag();
-       final doc = SpecLoader(bag).parse(
-@@ -78,6 +88,46 @@ void main() {
++    test('a duplicate key in YAML is an error; the last value is used', () {
++      final bag = DiagnosticBag();
++      final doc = SpecLoader(bag).parse(
++        'openapi: 3.0.3\npaths: {/a: {}}\npaths: {}\n',
+         'a.yaml',
+-      );
+-      expect(doc, isNull);
++      )!;
++      expect(doc.root['paths'], <String, Object?>{});
+       expect(bag.all.single.code, DiagnosticCode.duplicateKey);
        expect(bag.all.single.severity, Severity.error);
      });
  
@@ -2167,19 +2497,19 @@ diff --git a/packages/typed_openapi/test/load/spec_loader_test.dart b/packages/t
          final bag = DiagnosticBag();
 ```
 
-Змінені очікування тестів: дублікат у `.json` тепер має позиції й не дає TOA005; група «alias keys» більше не чекає TOA008 «mapping key» для ключів (це TOA014, тести — у `yaml_composer_test.dart`), а лише перевіряє, що бомба обмежена бюджетом. `yaml_event_guard_test.dart` поки лишається (його видаляє задача 2 разом із `YamlEventGuard`).
+Змінені очікування: YAML-дублікат тепер дає документ (останнє значення) і TOA002 error; дублікат у `.json` має позиції (без TOA005); ключі-аліаси перевіряє `yaml_composer_test.dart` (TOA113). `yaml_event_guard_test.dart` лишається до задачі 2.
 
-- [ ] **Step 9: Перевірити**
-
-Run (`dart analyze` — з кореня, решта — з `packages/typed_openapi`):
+- [ ] **Step 8: Перевірити**
 
 ```bash
-dart analyze packages                 # No issues found!
-dart test                             # All tests passed!
-dart format lib test bin && dart format lib test bin   # the second run: 0 changed
+dart analyze packages                                  # з кореня: No issues found!
+dart test                                              # з packages/typed_openapi
+dart format lib test bin && dart format lib test bin   # другий запуск: 0 changed
 ```
 
-- [ ] **Step 10: Заміряти Stripe до і після**
+Expected: 316 тестів.
+
+- [ ] **Step 9: Заміряти Stripe до і після**
 
 ```bash
 C=<path to the research/08 corpus>/typed_openapi.yaml
@@ -2189,9 +2519,9 @@ git worktree add ../m3-before main
 git worktree remove ../m3-before
 ```
 
-Expected: `check stripe` після задачі не повільніший, ніж на `main`. Під час написання плану `SpecLoader.parse` на `spec3.json` (Stripe) займав ~650 мс на `main` і ~355 мс з компоновщиком; OpenAI (`openapi.yaml`) — ~270 мс і ~155 мс.
+Expected: не повільніше, ніж на `main`. Під час написання плану `SpecLoader.parse` на Stripe (`spec3.json`) займав ~650 мс на `main` і ~355 мс з компоновщиком; OpenAI (`openapi.yaml`) — ~270 і ~155 мс.
 
-- [ ] **Step 11: Коміт**
+- [ ] **Step 10: Коміт**
 
 ```bash
 git add packages/typed_openapi
@@ -2210,11 +2540,11 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: `YamlComposer`, `ComposedYaml` (задача 1).
-- Produces: `ConfigLoader` читає звичайне дерево; кожна проблема самого YAML (TOA001/2/7/8/9/14) звітується як `TOA902` з рівнем компоновщика, тим самим pointer і позицією. Імпортів `package:yaml` у `lib/` не лишається.
+- Produces: `ConfigLoader` читає звичайне дерево; кожна проблема самого YAML звітується як `TOA902` з рівнем, pointer і позицією компоновщика. Імпортів `package:yaml` у `lib/` не лишається; `yaml` — лише dev-залежність.
 
-Тести guard-а, що ще мають сенс, уже перенесено в `yaml_composer_test.dart` (задача 1): синтаксис ключів-аліасів, глибина, 100 000 рівнів, кілька документів, ворожі flow-рядки. Fuzz guard-а порівнював guard із деревом `loadYamlNode`; його замінює порівняльний fuzz компоновщика.
+Тести guard-а, що мають сенс, уже в `yaml_composer_test.dart` (задача 1); fuzz guard-а замінено порівняльним fuzz-ом компоновщика і 300 000-документним прогоном на asserts.
 
-- [ ] **Step 1: Тести конфігу**
+- [ ] **Step 1: Тести**
 
 ```diff
 diff --git a/packages/typed_openapi/test/config/config_loader_test.dart b/packages/typed_openapi/test/config/config_loader_test.dart
@@ -2303,9 +2633,9 @@ diff --git a/packages/typed_openapi/test/resolve/spec_reader_test.dart b/package
        '{"openapi": "3.1.0", "info": {"title": "t", "version": "1"}, '
 ```
 
-Run: `dart test test/config` — Expected: FAIL (`rejects a collection as a key without expanding it`: старий guard відкидає весь конфіг).
+Run: `dart test test/config` — Expected: FAIL (guard відкидає весь конфіг із ключем-колекцією).
 
-- [ ] **Step 2: `ConfigLoader` на компоновщику**
+- [ ] **Step 2: `ConfigLoader`**
 
 Заміни `packages/typed_openapi/lib/src/config/config_loader.dart`:
 
@@ -2605,7 +2935,7 @@ class _ConfigReader {
 }
 ```
 
-- [ ] **Step 3: Прибрати guard і перенести `yaml` у dev**
+- [ ] **Step 3: Прибрати guard, `yaml` — у dev**
 
 ```bash
 git rm packages/typed_openapi/lib/src/load/yaml_event_guard.dart \
@@ -2613,7 +2943,7 @@ git rm packages/typed_openapi/lib/src/load/yaml_event_guard.dart \
   packages/typed_openapi/test/load/yaml_event_guard_fuzz_test.dart
 ```
 
-У `pubspec.yaml` видали з `dependencies` рядок `yaml` і коментар над ним, а `dev_dependencies` зроби такими:
+У `pubspec.yaml` видали з `dependencies` рядок `yaml` з коментарем над ним; `dev_dependencies`:
 
 ```yaml
 dev_dependencies:
@@ -2626,13 +2956,13 @@ Run: `grep -rn "import 'package:yaml" packages/typed_openapi/lib` — Expected: 
 
 - [ ] **Step 4: Перевірити**
 
-Run (`dart analyze` — з кореня, решта — з `packages/typed_openapi`):
-
 ```bash
-dart analyze packages                 # No issues found!
-dart test                             # All tests passed!
-dart format lib test bin && dart format lib test bin   # the second run: 0 changed
+dart analyze packages                                  # з кореня: No issues found!
+dart test                                              # з packages/typed_openapi
+dart format lib test bin && dart format lib test bin   # другий запуск: 0 changed
 ```
+
+Expected: 256 тестів (тести guard-а видалено).
 
 - [ ] **Step 5: Коміт**
 
@@ -2645,7 +2975,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
-### Task 3: `$ref` там, де OAS його не дозволяє (TOA107, TOA108)
+### Task 3: `$ref` там, де OAS його не дозволяє, і YAML merge key (TOA107, TOA108, TOA109)
 
 **Files:**
 - Create: `packages/typed_openapi/test/parse/ref_placement_test.dart`
@@ -2653,11 +2983,13 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: `ObjectReader`, `ParseContext.document.spanOf` (M2), позиції компоновщика (задача 1).
-- Produces: `DiagnosticCode.refNotAllowed` (TOA107), `DiagnosticCode.refCommentedOut` (TOA108).
+- Produces: коди `refNotAllowed` (TOA107), `refCommentedOut` (TOA108), `yamlMergeKey` (TOA109).
+
+Поведінка: `$ref` як невідомий ключ і об'єкт-`$ref` замість рядка/значення — TOA107 (підказка `redocly bundle`), а не TOA110/TOA111. Порожній `$ref`, після якого в тексті стоїть `#` (блочний і flow-запис), — TOA108 (підказка взяти в лапки). Ключ `<<` — TOA109 (як невідомий ключ об'єкта і як запис іменованої мапи на кшталт `components.schemas`); ключ лишається звичайним ключем, злиття немає.
 
 - [ ] **Step 1: Коди**
 
-Після `refBaseIgnored` у `diagnostic_code.dart`:
+Перед рядком `/// An object has a key that no OpenAPI version defines; it is ignored.`:
 
 ```dart
   /// A `$ref` where OpenAPI does not accept a Reference Object, as bundlers
@@ -2667,6 +2999,10 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   /// `$ref: #/...` without quotes in YAML: `#` starts a comment, so the
   /// value is null.
   refCommentedOut('TOA108', 'ref-commented-out', .warning),
+
+  /// A YAML 1.1 merge key `<<`, which OpenAPI's YAML does not have; it is
+  /// read as a plain key named `<<`.
+  yamlMergeKey('TOA109', 'yaml-merge-key', .warning),
 ```
 
 - [ ] **Step 2: Тест, що не проходить**
@@ -2803,10 +3139,51 @@ components:
       expect(found.single.code, DiagnosticCode.invalidValue);
     });
   });
+
+  group('a YAML merge key', () {
+    test('in an object is yaml-merge-key, not unknown-key', () {
+      final found = read('''
+openapi: 3.1.0
+info: {title: Shop, version: "1"}
+x-defaults: &defaults {summary: List}
+paths:
+  /orders:
+    get:
+      <<: *defaults
+      responses: {}
+''');
+      final d = found.single;
+      expect(d.code, DiagnosticCode.yamlMergeKey);
+      expect(d.pointer?.value, '#/paths/~1orders/get/<<');
+      expect(d.fix, 'Write the keys out.');
+    });
+
+    test('in a map of named entries stays a plain key and is reported', () {
+      final found = read('''
+openapi: 3.1.0
+info: {title: Shop, version: "1"}
+components:
+  schemas:
+    <<: {Base: {type: object}}
+    Order: {type: object}
+''');
+      expect(
+        found.map((d) => d.code),
+        contains(DiagnosticCode.yamlMergeKey),
+      );
+      expect(
+        found
+            .firstWhere((d) => d.code == DiagnosticCode.yamlMergeKey)
+            .pointer
+            ?.value,
+        '#/components/schemas/<<',
+      );
+    });
+  });
 }
 ```
 
-Run: `dart test test/parse/ref_placement_test.dart` — Expected: FAIL (TOA110/TOA111 замість TOA107/TOA108).
+Run: `dart test test/parse/ref_placement_test.dart` — Expected: FAIL (TOA110/TOA111 замість нових кодів).
 
 - [ ] **Step 3: `ObjectReader`**
 
@@ -2820,10 +3197,22 @@ diff --git a/packages/typed_openapi/lib/src/parse/object_reader.dart b/packages/
  import '../diagnostics/json_pointer.dart';
  import '../model/spec_node.dart';
  import 'parse_context.dart';
-@@ -191,6 +193,16 @@ final class ObjectReader {
+@@ -143,6 +145,7 @@ final class ObjectReader {
+       return null;
+     }
+     final at = pointer.child(key);
++    if (entries.containsKey(_mergeKey)) _merge(at.child(_mergeKey));
+     return Map.unmodifiable({
+       for (final MapEntry(key: name, :value) in entries.entries)
+         if (!skipExtensions || !name.startsWith('x-'))
+@@ -191,6 +194,20 @@ final class ObjectReader {
        if (_read.contains(key)) continue;
        if (!reportExtensions && key.startsWith('x-')) continue;
        unknown[key] = value;
++      if (key == _mergeKey) {
++        _merge(pointer.child(key));
++        continue;
++      }
 +      if (key == r'$ref') {
 +        _context.report(
 +          .refNotAllowed,
@@ -2837,7 +3226,7 @@ diff --git a/packages/typed_openapi/lib/src/parse/object_reader.dart b/packages/
        _context.report(
          .unknownKey,
          'Unknown key "$key"; it is ignored.',
-@@ -221,6 +233,10 @@ final class ObjectReader {
+@@ -221,6 +238,10 @@ final class ObjectReader {
  
    T? _item<T>(Object? raw, JsonPointer at, String expected) {
      if (raw is T) return raw;
@@ -2848,7 +3237,7 @@ diff --git a/packages/typed_openapi/lib/src/parse/object_reader.dart b/packages/
      _context.report(
        .invalidValue,
        'Each item must be $expected, not ${describe(raw)}.',
-@@ -230,6 +246,21 @@ final class ObjectReader {
+@@ -230,6 +251,21 @@ final class ObjectReader {
    }
  
    void _invalid(String key, String expected, Object? raw) {
@@ -2870,7 +3259,7 @@ diff --git a/packages/typed_openapi/lib/src/parse/object_reader.dart b/packages/
      _context.report(
        .invalidValue,
        '"$key" must be $expected, not ${describe(raw)}; it is ignored.',
-@@ -237,6 +268,50 @@ final class ObjectReader {
+@@ -237,6 +273,62 @@ final class ObjectReader {
      );
    }
  
@@ -2878,6 +3267,18 @@ diff --git a/packages/typed_openapi/lib/src/parse/object_reader.dart b/packages/
 +      r'A spec that puts "$ref" anywhere is written for a bundler (Redocly, '
 +      'swagger-cli) that resolves it as a JSON Reference. Bundle it first, '
 +      'for example with `redocly bundle`, and check the bundled file.';
++
++  static const _mergeKey = '<<';
++
++  void _merge(JsonPointer at) {
++    _context.report(
++      .yamlMergeKey,
++      '"<<" is a YAML 1.1 merge key; OpenAPI tools read it as a plain key '
++      'named "<<", and so does this one.',
++      at,
++      fix: 'Write the keys out.',
++    );
++  }
 +
 +  static bool _isRefObject(Object? raw) =>
 +      raw is Map<String, Object?> && raw.containsKey(r'$ref');
@@ -2925,19 +3326,19 @@ diff --git a/packages/typed_openapi/lib/src/parse/object_reader.dart b/packages/
 
 - [ ] **Step 4: Перевірити**
 
-Run (`dart analyze` — з кореня, решта — з `packages/typed_openapi`):
-
 ```bash
-dart analyze packages                 # No issues found!
-dart test                             # All tests passed!
-dart format lib test bin && dart format lib test bin   # the second run: 0 changed
+dart analyze packages                                  # з кореня: No issues found!
+dart test                                              # з packages/typed_openapi
+dart format lib test bin && dart format lib test bin   # другий запуск: 0 changed
 ```
+
+Expected: 265 тестів.
 
 - [ ] **Step 5: Коміт**
 
 ```bash
 git add packages/typed_openapi
-git commit -m "feat(typed_openapi): report $ref where OpenAPI does not allow it
+git commit -m "feat(typed_openapi): report $ref where OpenAPI does not allow it and YAML merge keys
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
@@ -2952,18 +3353,13 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: `SpecReader`, `SpecDocuments`, `SpecModel`, `SpecLoader` (M2), `Preset` (M1).
-- Produces: усе з блоку «normalize» і «model / resolve» в «Інтерфейсах»; `DiagnosticCode.fixNotApplied` (TOA800). `Normalizer.rules` поки порожній — правила додають задачі 5+.
+- Produces: блоки «model / resolve» і «normalize» з «Інтерфейсів»; `RuleContext.rawObject`; код `fixNotApplied` (TOA800). `Normalizer.rules` порожній — правила додають задачі 5, 7–11.
 
-Поведінка, яку закріплюють тести:
-- `TreeEditor` змінює копію: оригінал і вузли, спільні через YAML-аліас, лишаються як були; помилка правки — рядок-причина, не виняток.
-- Виправлення застосовується, модель перечитується, знахідка звітується один раз; TOA111 першого читання, яке виправлення прибрало, у звіт не потрапляє.
-- Знахідки лише-діагностики — один раз, з останнього проходу.
-- З двох правок одного вузла виграє раніше правило, друга — TOA800; три проходи максимум, правки третього — TOA800.
-- Вимкнене правило не працює; пресет додає підказку до `fix`; правки в іншому файлі застосовуються до нього.
+Поведінка: `TreeEditor` змінює копію (оригінал і спільні через аліас вузли — без змін); виправлення застосовується і модель перечитується; TOA111 першого читання, яке прибрало виправлення, у звіт не потрапляє; усі знахідки правила, що щось виправило в проході, звітуються (зокрема ті, що без власної правки); знахідки лише-діагностики — один раз з останнього проходу; з двох правок одного вузла виграє раніше правило (друга — TOA800); три проходи максимум; вимкнене правило не працює; пресет додає підказку; правки в іншому файлі застосовуються до нього.
 
 - [ ] **Step 1: Код**
 
-Перед `configNotFound` у `diagnostic_code.dart`:
+Перед рядком `/// The configuration file does not exist.`:
 
 ```dart
   /// A normalizer fix was not applied: it overlaps an earlier rule's fix,
@@ -3119,6 +3515,32 @@ final class _DropBoolRequired extends NormalizerRule {
   }
 }
 
+/// Removes `x-drop` from the root with one edit carried by the first of
+/// two findings.
+final class _OneEditTwoFindings extends NormalizerRule {
+  const _OneEditTwoFindings();
+
+  @override
+  String get name => 'one-edit-two-findings';
+
+  @override
+  List<DiagnosticCode> get codes => const [.invalidValue];
+
+  @override
+  Iterable<Finding> check(RuleContext context) sync* {
+    final root = context.model.document.location;
+    if (context.rawObject(root)?.containsKey('x-drop') != true) return;
+    final at = root.child('x-drop');
+    yield context.finding(
+      .invalidValue,
+      'First.',
+      at,
+      edits: [SpecEdit.remove(at)],
+    );
+    yield context.finding(.invalidValue, 'Second.', at);
+  }
+}
+
 /// Reports every schema without a type: a diagnostic-only rule.
 final class _Untyped extends NormalizerRule {
   const _Untyped();
@@ -3220,6 +3642,14 @@ components:
     expect(bag.all.single.message, 'Boolean required.');
   });
 
+  test('findings without edits of a rule that fixes are reported too', () {
+    final (_, bag) = normalize(
+      'openapi: 3.0.3\ninfo: {title: t, version: "1"}\nx-drop: 1\n',
+      [const _OneEditTwoFindings()],
+    );
+    expect(bag.all.map((d) => d.message), ['First.', 'Second.']);
+  });
+
   test('diagnostic-only findings are reported once, from the last pass', () {
     final (_, bag) = normalize(
       'openapi: 3.0.3\ninfo: {title: old, version: "1"}\n'
@@ -3306,7 +3736,7 @@ components:
 
 Run: `dart test test/normalize` — Expected: FAIL (немає `normalize/`).
 
-- [ ] **Step 3: Підтримка в моделі й резолвері**
+- [ ] **Step 3: Модель і резолвер**
 
 ```diff
 diff --git a/packages/typed_openapi/lib/src/load/spec_document.dart b/packages/typed_openapi/lib/src/load/spec_document.dart
@@ -3630,6 +4060,13 @@ final class RuleContext {
   (Object?,)? rawAt(SpecLocation location) =>
       documents[location.document]?.valueAt(location.pointer);
 
+  /// The raw value at [location] when it is an object, else null.
+  Map<String, Object?>? rawObject(SpecLocation location) =>
+      switch (rawAt(location)) {
+        (final Map<String, Object?> raw,) => raw,
+        _ => null,
+      };
+
   /// A finding of [code] at [at], with [edits] when it is a fix.
   Finding finding(
     DiagnosticCode code,
@@ -3710,7 +4147,8 @@ final class NormalizedSpec {
 /// [maxPasses] passes have run.
 ///
 /// The report holds what the parser and resolver say about the last pass,
-/// every fix of every pass, and the diagnostics of the last pass's rules.
+/// every finding of a rule that fixed something in a pass, and the findings
+/// of the last pass's rules.
 /// Problems go to the [DiagnosticBag] given to the constructor; files are
 /// loaded once, with their loading problems reported there too.
 final class Normalizer {
@@ -3779,8 +4217,15 @@ final class Normalizer {
         }
         return NormalizedSpec(model, documents);
       }
+      // Every finding of a rule that fixes something in this pass is part of
+      // that fix (a rule may put one edit on the first of several
+      // findings); the other rules' findings come again in the last pass.
+      final fixing = {
+        for (final (rule, finding) in found)
+          if (finding.edits.isNotEmpty) rule,
+      };
       for (final (rule, finding) in found) {
-        if (finding.edits.isNotEmpty) _report(rule, finding);
+        if (fixing.contains(rule)) _report(rule, finding);
       }
       final edited = _apply(documents, found);
       root = edited[root.uri] ?? root;
@@ -3874,13 +4319,13 @@ final class Normalizer {
 
 - [ ] **Step 7: Перевірити**
 
-Run (`dart analyze` — з кореня, решта — з `packages/typed_openapi`):
-
 ```bash
-dart analyze packages                 # No issues found!
-dart test                             # All tests passed!
-dart format lib test bin && dart format lib test bin   # the second run: 0 changed
+dart analyze packages                                  # з кореня: No issues found!
+dart test                                              # з packages/typed_openapi
+dart format lib test bin && dart format lib test bin   # другий запуск: 0 changed
 ```
+
+Expected: 278 тестів.
 
 - [ ] **Step 8: Коміт**
 
@@ -3897,19 +4342,17 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 **Files:**
 - Create: `packages/typed_openapi/lib/src/normalize/rules/bool_required_to_array.dart`, `packages/typed_openapi/lib/src/normalize/rules/drop_invalid_default.dart`, `packages/typed_openapi/test/normalize/schema_fix_rules_test.dart`
-- Modify: `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart`, `packages/typed_openapi/lib/src/normalize/normalizer.dart`
+- Modify: `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart`, `packages/typed_openapi/lib/src/model/schema.dart`, `packages/typed_openapi/lib/src/normalize/normalizer.dart`
 
 **Interfaces:**
-- Consumes: `NormalizerRule`, `RuleContext`, `SpecEdit`, `Normalizer` (задача 4); `SchemaObject` (M2); `ObjectReader.describe` (M2).
-- Produces: `BoolRequiredToArray`, `DropInvalidDefault` у `Normalizer.rules` (саме в цьому порядку); `DiagnosticCode.boolRequired` (TOA201), `DiagnosticCode.invalidDefault` (TOA211).
+- Consumes: `NormalizerRule`, `RuleContext`, `SpecEdit`, `Normalizer` (задача 4); `SchemaObject`, `ObjectReader.describe` (M2).
+- Produces: `BoolRequiredToArray`, `DropInvalidDefault`; `SchemaType.accepts(Object? value)`; коди `boolRequired` (TOA201), `invalidDefault` (TOA211).
 
-Поведінка:
-- `required: true` на властивості → ім'я дописується в `required` батьківського об'єкта (після наявних, без повторів; список створюється, якщо його не було); `required` властивості прибирається. `required: false` прибирається. Властивість, що сама є об'єктом з `required: true`-дітьми, отримує замість булевого `required` список імен дітей (одна правка замість двох конфліктних). `required: true` поза властивістю (у `items`, у корені компонента) правило не чіпає: це C-49, діагностика TOA203 (задача 7).
-- `default`, JSON-тип якого не збігається з жодним `type` схеми, прибирається (`null` при `nullable: true` — допустимий; `integer` приймає `3.0`). Пресет `nestjs` додає рецепт `excludeDynamicDefaults` (research/06 §D.1, п. 2).
+Поведінка: `required: true` на властивості → ім'я дописується в `required` об'єкта (після наявних, без повторів; список створюється), прапорець прибирається; `required: false` прибирається; властивість-об'єкт із `required: true`-дітьми отримує список їхніх імен однією правкою. `required: true` поза властивістю — TOA203 (задача 7). `default` не того типу прибирається (`null` при `nullable: true` допустимий; `integer` приймає `3.0`); `nestjs` — рецепт `excludeDynamicDefaults` (research/06 §D.1, п. 2).
 
 - [ ] **Step 1: Коди**
 
-Перед `fixNotApplied` у `diagnostic_code.dart`:
+Перед рядком `/// A normalizer fix was not applied: it overlaps an earlier rule's fix,`:
 
 ```dart
   /// A property schema says `required: true` or `false` (OpenAPI 2 style);
@@ -3955,11 +4398,12 @@ void main() {
               as Map)[name]!
           as Map<String, Object?>;
 
-  test('every rule is registered once, in order', () {
-    expect(Normalizer.rules.map((r) => r.name), [
-      'bool-required-to-array',
-      'drop-invalid-default',
-    ]);
+  test('the fix rules are registered once, in this order', () {
+    expect(
+      Normalizer.rules.map((r) => r.name),
+      containsAllInOrder(['bool-required-to-array', 'drop-invalid-default']),
+    );
+    expect(Normalizer.ruleNames, hasLength(Normalizer.rules.length));
     expect(const BoolRequiredToArray().codes, [DiagnosticCode.boolRequired]);
     expect(const DropInvalidDefault().codes, [DiagnosticCode.invalidDefault]);
   });
@@ -4095,9 +4539,36 @@ void main() {
 }
 ```
 
-Run: `dart test test/normalize/schema_fix_rules_test.dart` — Expected: FAIL (немає `rules/`).
+Run: `dart test test/normalize/schema_fix_rules_test.dart` — Expected: FAIL.
 
-- [ ] **Step 3: `bool-required-to-array`**
+- [ ] **Step 3: `SchemaType.accepts`**
+
+```diff
+diff --git a/packages/typed_openapi/lib/src/model/schema.dart b/packages/typed_openapi/lib/src/model/schema.dart
+--- a/packages/typed_openapi/lib/src/model/schema.dart
++++ b/packages/typed_openapi/lib/src/model/schema.dart
+@@ -56,6 +56,18 @@ enum SchemaType {
+   static final Map<String, SchemaType> byWire = Map.unmodifiable({
+     for (final type in values) type.wire: type,
+   });
++
++  /// Whether the plain JSON [value] is of this type; `integer` accepts a
++  /// whole number written as `3.0`.
++  bool accepts(Object? value) => switch (this) {
++    .string => value is String,
++    .number => value is num,
++    .integer => value is num && value.isFinite && value == value.truncate(),
++    .boolean => value is bool,
++    .array => value is List<Object?>,
++    .object => value is Map<String, Object?>,
++    .nullType => value == null,
++  };
+ }
+ 
+ /// A Schema Object.
+```
+
+- [ ] **Step 4: Правила**
 
 Створи `packages/typed_openapi/lib/src/normalize/rules/bool_required_to_array.dart`:
 
@@ -4205,8 +4676,6 @@ final class BoolRequiredToArray extends NormalizerRule {
 }
 ```
 
-- [ ] **Step 4: `drop-invalid-default`**
-
 Створи `packages/typed_openapi/lib/src/normalize/rules/drop_invalid_default.dart`:
 
 ```dart
@@ -4236,7 +4705,7 @@ final class DropInvalidDefault extends NormalizerRule {
       if (value == null || schema.types.isEmpty) continue;
       final (raw,) = value;
       if (raw == null && schema.nullable == true) continue;
-      if (schema.types.any((type) => _matches(type, raw))) continue;
+      if (schema.types.any((type) => type.accepts(raw))) continue;
       final types = schema.types.map((t) => t.wire).join(' or ');
       final at = schema.location.child('default');
       yield context.finding(
@@ -4258,57 +4727,38 @@ final class DropInvalidDefault extends NormalizerRule {
           'leaves out defaults computed at runtime.',
     _ => null,
   };
-
-  static bool _matches(SchemaType type, Object? value) => switch (type) {
-    .string => value is String,
-    .number => value is num,
-    .integer => value is num && value.isFinite && value == value.truncate(),
-    .boolean => value is bool,
-    .array => value is List<Object?>,
-    .object => value is Map<String, Object?>,
-    .nullType => value == null,
-  };
 }
 ```
 
-- [ ] **Step 5: Зареєструвати правила**
+- [ ] **Step 5: Зареєструвати**
 
-```diff
-diff --git a/packages/typed_openapi/lib/src/normalize/normalizer.dart b/packages/typed_openapi/lib/src/normalize/normalizer.dart
---- a/packages/typed_openapi/lib/src/normalize/normalizer.dart
-+++ b/packages/typed_openapi/lib/src/normalize/normalizer.dart
-@@ -8,6 +8,8 @@ import '../resolve/spec_documents.dart';
- import '../resolve/spec_model.dart';
- import '../resolve/spec_reader.dart';
- import 'normalizer_rule.dart';
-+import 'rules/bool_required_to_array.dart';
-+import 'rules/drop_invalid_default.dart';
- import 'spec_edit.dart';
- 
- /// The result of normalizing a spec.
-@@ -50,7 +52,10 @@ final class Normalizer {
-   /// Every rule, in the order it runs; an earlier rule's fix wins a
-   /// conflict.
-   static final List<NormalizerRule> rules = List.unmodifiable(
--    <NormalizerRule>[],
-+    <NormalizerRule>[
-+      const BoolRequiredToArray(),
-+      const DropInvalidDefault(),
-+    ],
-   );
- 
-   /// The names of [rules].
+У `lib/src/normalize/normalizer.dart` імпорти правил між `import 'normalizer_rule.dart';` і `import 'spec_edit.dart';` мають бути такими (відсортовано):
+
+```dart
+import 'rules/bool_required_to_array.dart';
+import 'rules/drop_invalid_default.dart';
+```
+
+і список `rules` — таким:
+
+```dart
+  static final List<NormalizerRule> rules = List.unmodifiable(
+    <NormalizerRule>[
+      const BoolRequiredToArray(),
+      const DropInvalidDefault(),
+    ],
+  );
 ```
 
 - [ ] **Step 6: Перевірити**
 
-Run (`dart analyze` — з кореня, решта — з `packages/typed_openapi`):
-
 ```bash
-dart analyze packages                 # No issues found!
-dart test                             # All tests passed!
-dart format lib test bin && dart format lib test bin   # the second run: 0 changed
+dart analyze packages                                  # з кореня: No issues found!
+dart test                                              # з packages/typed_openapi
+dart format lib test bin && dart format lib test bin   # другий запуск: 0 changed
 ```
+
+Expected: 285 тестів.
 
 - [ ] **Step 7: Коміт**
 
@@ -4328,13 +4778,11 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: `Normalizer`, `Normalizer.ruleNames` (задачі 4–5).
-- Produces: `ClientConfig.disabledRules`; ключ `rules` у `defaults` і клієнті; `SpecChecker.check` нормалізує кожну специфікацію з правилами й пресетом клієнта.
+- Produces: `ClientConfig.disabledRules`; ключ `rules` у `defaults` і клієнті (клієнт перекриває `defaults` поіменно; невідоме ім'я — TOA903, не-булеве значення — TOA902); `SpecChecker.check` нормалізує кожну специфікацію з правилами й пресетом клієнта.
 
-- [ ] **Step 1: Тести**
+- [ ] **Step 1: Тести** — застосуй спершу тестові частини diff-ів кроків 2–3; `dart test test/config test/check` — Expected: FAIL (`rules` — невідомий ключ, `check` не дає TOA201).
 
-Тести — у diff-ах кроку 2 (`config_loader_test.dart`) і кроку 3 (`spec_checker_test.dart`); застосуй спершу лише тестові частини і переконайся, що вони падають (`dart test test/config test/check` — FAIL: `rules` — невідомий ключ, `check` не дає TOA201).
-
-- [ ] **Step 2: `ConfigLoader` і його тести**
+- [ ] **Step 2: `ConfigLoader` і тести**
 
 ```diff
 diff --git a/packages/typed_openapi/lib/src/config/config_loader.dart b/packages/typed_openapi/lib/src/config/config_loader.dart
@@ -4593,40 +5041,29 @@ diff --git a/packages/typed_openapi/test/check/spec_checker_test.dart b/packages
    test('only checks the named clients', () {
      final dir = TempDir();
      final path = dir.write('typed_openapi.yaml', '''
+@@ -67,6 +97,7 @@ info: {title: api}
+ paths:
+   /pets:
+     get:
++      operationId: listPets
+       responses:
+         "200": {$ref: "common.yaml#/components/responses/Missing"}
+ ''');
 ```
+
+(`operationId: listPets` у фікстурі тесту `SpecChecker` — щоб правило `missing-operation-id` задачі 10 не змінило очікуваний список.)
 
 - [ ] **Step 4: Перевірити**
 
-Run (`dart analyze` — з кореня, решта — з `packages/typed_openapi`):
-
 ```bash
-dart analyze packages                 # No issues found!
-dart test                             # All tests passed!
-dart format lib test bin && dart format lib test bin   # the second run: 0 changed
+dart analyze packages                                  # з кореня: No issues found!
+dart test                                              # з packages/typed_openapi
+dart format lib test bin && dart format lib test bin   # другий запуск: 0 changed
 ```
 
-Expected: 282 тести.
+Expected: 288 тестів.
 
-- [ ] **Step 5: Прогін корпусу (smoke)**
-
-```bash
-cd packages/typed_openapi
-dart run bin/typed_openapi.dart check -c <path to the research/08 corpus>/typed_openapi.yaml --format json > /tmp/m3-check.json; echo "exit $?"
-```
-
-Expected: exit 1 (TOA009 — error); підсумок за файлом і кодом (стан після задачі 6, під час написання плану):
-
-| Специфікація | Діагностика |
-|---|---|
-| Artemis | TOA009 ×2 (`example: !!timestamp …`), TOA110 ×1 — тепер читається (у M2 — TOA001, файл не читався) |
-| DigitalOcean | TOA107 ×793 (у M2 — TOA110 ×791, TOA111 ×2) |
-| Grace (джерело і бандл — ті самі файли) | TOA108 ×13, TOA111 ×19, TOA110 ×4, TOA021 ×2 |
-| OpenAI | TOA021 ×1, TOA110 ×1 |
-| Stripe, Discord, Medusa, Airflow, Tambo, Jellyfin, Ditto, Google Maps, EFGS | — |
-
-TOA201 і TOA211 у корпусі не трапляються (C-1 у цільових фреймворках за замовчуванням не відтворюється). Правила задач 7–11 додадуть свої коди до цієї таблиці.
-
-- [ ] **Step 6: Коміт**
+- [ ] **Step 5: Коміт**
 
 ```bash
 git add packages/typed_openapi
@@ -4637,29 +5074,2331 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
-## Ненаписані задачі (бюджет плану вичерпано)
+### Task 7: Форма схем: масиви, файли, комбінатори, приклади (TOA202–TOA207, лише діагностика)
 
-Задачі нижче не мають перевіреного коду, тому тут лише їхній обсяг; кожну треба розписати й перевірити так само, як задачі 1–6, перш ніж виконувати. Порядок — як у брифі.
+**Files:**
+- Create: `packages/typed_openapi/lib/src/normalize/rules/schema_shape_rules.dart`, `packages/typed_openapi/test/helpers/normalizer_fixture.dart`, `packages/typed_openapi/test/normalize/schema_shape_rules_test.dart`
+- Modify: `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart`, `packages/typed_openapi/lib/src/normalize/normalizer.dart`
 
-- **Task 7: Схеми масивів і об'єктів (лише діагностика).** TOA202 масив без `items` у документі 3.0 (C-5; пропозиція override `items`), TOA203 подвійний масив з булевим `required` в `items` (C-49; override `items` → `items.items`), TOA204 `format` на масиві без `items` (C-50; override `items: {type: string, format: <f>}`, TOA202 тоді не дублюється), TOA205 `type: object` + `format: binary` (C-51; override `type: string`), TOA206 `type: object` поряд з `oneOf`/`anyOf` без жодної об'єктної гілки (C-22), TOA207 JSON-тип `example` суперечить `type` (C-60; override `type: array` чи `object`). Підказка `nestjs` для TOA202/TOA203: `@ApiProperty({ type: [Item] })` без `isArray` (research/06 §D.1, п. 6).
-- **Task 8: Enum.** Виправлення `dedupe-enum-values` TOA301 (C-9, C-52: JSON-рівні дублікати, лишається перше входження, регістр не зливається; правка `replace` цілого `enum`), діагностика TOA303 nullable enum через `oneOf` з `{enum: [null]}` + `$ref` (C-54). Підказки `nestjs`: `enumName`/`autoFillEnumName` (§D.1, п. 1), для TOA303 — `@nestjs/swagger` ≥ 12 (§D.1, п. 3).
-- **Task 9: Path-параметри.** Виправлення `declare-missing-path-params` TOA501 (C-6: `{name, in: path, required: true, schema: {type: string}}`, правка `add` у `parameters/-` операції, з урахуванням параметрів path item і `$ref`-параметрів) і діагностика TOA502 (C-7: оголошено, але немає в шаблоні, або інший регістр).
-- **Task 10: `operationId`.** TOA503 info — немає `operationId` (C-34), TOA504 error — однакові (C-36), детерміновано за `SpecLocation`. Підказки: `aspnet` — `.WithName(...)`/`[EndpointName]`/Swashbuckle `CustomOperationIds` (§D.4); `nestjs` — `operationIdFactory` (§D.1, п. 2); `fastapi` — `generate_unique_id_function` (§D.2, п. 1); `springdoc` — явний `@Operation(operationId = ...)` (§D.3, п. 2).
-- **Task 11: Дискримінатор, media types, ключі components.** TOA401 info — властивість-дискримінатор не `required` у підсхемах (C-42), TOA402 error — `discriminator.mapping` веде в нікуди (M2 mapping не резолвить, перевірено: `Discriminator.mapping` лише читається), TOA601 — `*/*` (C-38; `springdoc.default-produces-media-type=application/json`, §D.3), TOA106 — ключ components не відповідає `^[a-zA-Z0-9\.\-_]+$` (C-32; `aspnet` — `CustomSchemaIds(... Replace('+', '.'))`, §D.4; `springdoc` — `@Schema(name)`/`use-fqn`, §D.3).
-- **Task 12: Підказки пресетів і документація.** Звести підказки пресетів у правилах задач 5–11 (рецепти — лише з research/06 §D); `CLAUDE.md` (розділ Architecture: `load/yaml/`, `YamlComposer`, `normalize/`; прибрати `NestingScanner`/`YamlEventGuard`, оновити перелік експорту), `CHANGELOG.md`, абзац про `check` у `README.md`/`README.ua.md`; експорт `Normalizer`, `NormalizerRule`, `RuleContext`, `Finding`, `SpecEdit` з `lib/typed_openapi.dart`; повторити smoke-прогін корпусу і записати підсумкову таблицю в research/08.
+**Interfaces:**
+- Consumes: `NormalizerRule`, `RuleContext.rawObject`, `SchemaType.accepts`, `SpecModel.resolveSchema`.
+- Produces: `ArrayWithoutItems`, `DoubleArray`, `FormatOnArray`, `BinaryObject`, `ContradictoryObjectType`, `ExampleTypeMismatch`; тестовий помічник `NormalizerFixture` (`of(code)`, `pointersOf(code)`), який використовують задачі 7–11.
+
+Поведінка: масив без `items` у 3.0 — TOA202 (у 3.1 ні; масив із `format` — лише TOA204); `items`-масив із булевим `required` — TOA203 (C-49); `format` на масиві без `items` — TOA204 з пропозицією override `items: {type: string, format: …}`; `type: object` + `format: binary` — TOA205; `type: object` поряд з `oneOf`/`anyOf`, усі гілки яких відомого не-об'єктного типу, — TOA206 (гілка без типу — «може бути об'єктом», не звітується); `example` не того JSON-типу — TOA207 (тип береться зі схеми, з `$ref` або з `allOf` з одного члена; цикл `allOf` не зациклює правило). Підказки `nestjs` для TOA202/TOA203 — оголошення типу елемента `@ApiProperty({ type: [Item] })` (research/06 §D.1, п. 6).
+
+- [ ] **Step 1: Коди**
+
+Перед рядком `/// A schema's `default` is not of the schema's type; it is ignored.`:
+
+```dart
+  /// An array has no `items` in an OpenAPI 3.0 document, which requires it.
+  arrayWithoutItems('TOA202', 'array-without-items', .warning),
+
+  /// An array's `items` is an array with a boolean `required`: a list
+  /// declared twice by a decorator.
+  doubleArray('TOA203', 'double-array', .warning),
+
+  /// `format` is on an array without `items` instead of on its elements.
+  formatOnArray('TOA204', 'format-on-array', .warning),
+
+  /// `type: object` with `format: binary` instead of a binary string.
+  binaryObject('TOA205', 'binary-object', .warning),
+
+  /// `type: object` next to `oneOf`/`anyOf` whose branches are all of other
+  /// types.
+  contradictoryObjectType('TOA206', 'contradictory-object-type', .warning),
+
+  /// An `example` of a JSON type the schema does not allow.
+  exampleTypeMismatch('TOA207', 'example-type-mismatch', .warning),
+```
+
+- [ ] **Step 1a: Помічник тестів**
+
+Створи `packages/typed_openapi/test/helpers/normalizer_fixture.dart`:
+
+```dart
+import 'package:typed_openapi/src/config/project_config.dart';
+import 'package:typed_openapi/src/diagnostics/diagnostic.dart';
+import 'package:typed_openapi/src/diagnostics/diagnostic_bag.dart';
+import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
+import 'package:typed_openapi/src/load/openapi_version.dart';
+import 'package:typed_openapi/src/load/spec_loader.dart';
+import 'package:typed_openapi/src/normalize/normalizer.dart';
+
+/// A spec read from text and normalized with every rule.
+final class NormalizerFixture {
+  /// Loads [text] as `api.yaml`, detects its version and normalizes it with
+  /// [preset]; the text must load and declare a version.
+  NormalizerFixture(String text, {Preset? preset}) {
+    final document = SpecLoader(diagnostics).parse(text, 'api.yaml')!;
+    final version = OpenApiVersionDetector(diagnostics).detect(document)!;
+    result = Normalizer(diagnostics, preset: preset).normalize(
+      document,
+      version,
+    );
+  }
+
+  /// Every diagnostic.
+  final DiagnosticBag diagnostics = DiagnosticBag();
+
+  /// What the normalizer produced.
+  late final NormalizedSpec result;
+
+  /// The diagnostics with [code], in report order.
+  List<Diagnostic> of(DiagnosticCode code) => [
+    for (final d in diagnostics.sorted)
+      if (d.code == code) d,
+  ];
+
+  /// The pointers of the diagnostics with [code], in report order.
+  List<String?> pointersOf(DiagnosticCode code) => [
+    for (final d in of(code)) d.pointer?.value,
+  ];
+}
+```
+
+- [ ] **Step 2: Тест, що не проходить**
+
+Створи `packages/typed_openapi/test/normalize/schema_shape_rules_test.dart`:
+
+```dart
+import 'package:test/test.dart';
+import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
+import 'package:typed_openapi/src/diagnostics/severity.dart';
+
+import '../helpers/normalizer_fixture.dart';
+
+void main() {
+  /// A document of [version] whose `components.schemas` are [schemas].
+  String spec(String schemas, {String version = '3.0.3'}) =>
+      'openapi: $version\ninfo: {title: Shop, version: "1"}\n'
+      'components:\n  schemas:\n$schemas';
+
+  const base = '#/components/schemas';
+
+  group('array-without-items', () {
+    const schemas = '''
+    Tags: {type: array}
+    Ids: {type: array, items: {type: string}}
+''';
+
+    test('an array without items in 3.0 is reported', () {
+      final run = NormalizerFixture(spec(schemas));
+      expect(run.pointersOf(DiagnosticCode.arrayWithoutItems), ['$base/Tags']);
+      expect(
+        run.of(DiagnosticCode.arrayWithoutItems).single.severity,
+        Severity.warning,
+      );
+    });
+
+    test('3.1 does not require items', () {
+      final run = NormalizerFixture(spec(schemas, version: '3.1.0'));
+      expect(run.of(DiagnosticCode.arrayWithoutItems), isEmpty);
+    });
+  });
+
+  test('double-array: items that are arrays with a boolean required', () {
+    final run = NormalizerFixture(
+      spec('''
+    Order:
+      type: object
+      properties:
+        lines:
+          type: array
+          items:
+            required: true
+            type: array
+            items: {type: string}
+'''),
+    );
+    expect(run.pointersOf(DiagnosticCode.doubleArray), [
+      '$base/Order/properties/lines/items',
+    ]);
+    expect(
+      run.of(DiagnosticCode.doubleArray).single.fix,
+      contains('inner "items"'),
+    );
+  });
+
+  test('format-on-array replaces array-without-items for that schema', () {
+    final run = NormalizerFixture(
+      spec('    Ids: {type: array, format: uuid}\n'),
+    );
+    expect(run.pointersOf(DiagnosticCode.formatOnArray), ['$base/Ids/format']);
+    expect(run.of(DiagnosticCode.arrayWithoutItems), isEmpty);
+    expect(
+      run.of(DiagnosticCode.formatOnArray).single.fix,
+      contains('{type: string, format: uuid}'),
+    );
+  });
+
+  test('binary-object: a file written as an object', () {
+    final run = NormalizerFixture(
+      spec('''
+    Upload:
+      type: object
+      properties:
+        file: {type: object, format: binary}
+        data: {type: string, format: binary}
+'''),
+    );
+    expect(run.pointersOf(DiagnosticCode.binaryObject), [
+      '$base/Upload/properties/file/type',
+    ]);
+  });
+
+  group('contradictory-object-type', () {
+    test('object next to branches that are all scalars', () {
+      final run = NormalizerFixture(
+        spec(r'''
+    Amount:
+      type: object
+      oneOf: [{type: string}, {$ref: '#/components/schemas/Cents'}]
+    Cents: {type: integer}
+'''),
+      );
+      final d = run.of(DiagnosticCode.contradictoryObjectType).single;
+      expect(d.pointer?.value, '$base/Amount/type');
+      expect(d.message, contains('integer, string'));
+    });
+
+    test('a branch that may be an object is not reported', () {
+      final run = NormalizerFixture(
+        spec('''
+    Pet:
+      type: object
+      anyOf: [{type: string}, {type: object}, {description: anything}]
+'''),
+      );
+      expect(run.of(DiagnosticCode.contradictoryObjectType), isEmpty);
+    });
+  });
+
+  group('example-type-mismatch', () {
+    test('a list example for an object, through a one-member allOf', () {
+      final run = NormalizerFixture(
+        spec(r'''
+    Token: {type: object, properties: {value: {type: string}}}
+    Session:
+      type: object
+      properties:
+        tokens:
+          allOf: [{$ref: '#/components/schemas/Token'}]
+          example: [{value: a}, {value: b}]
+        count: {type: integer, example: 3}
+        ratio: {type: number, example: "1.5"}
+'''),
+      );
+      expect(run.pointersOf(DiagnosticCode.exampleTypeMismatch), [
+        '$base/Session/properties/tokens/example',
+        '$base/Session/properties/ratio/example',
+      ]);
+      expect(
+        run.of(DiagnosticCode.exampleTypeMismatch).first.message,
+        'The example is a list, but the schema is object; clients built from '
+        'the schema fail on such values.',
+      );
+    });
+
+    test('allOf members that point at each other end, not loop', () {
+      final run = NormalizerFixture(
+        spec(r'''
+    A: {allOf: [{$ref: '#/components/schemas/B'}], example: 1}
+    B: {allOf: [{$ref: '#/components/schemas/A'}]}
+'''),
+      );
+      expect(run.of(DiagnosticCode.exampleTypeMismatch), isEmpty);
+    });
+  });
+
+  test('nestjs gets the element type recipe for arrays', () {
+    final run = NormalizerFixture(
+      spec('    Tags: {type: array}\n'),
+      preset: .nestjs,
+    );
+    expect(
+      run.of(DiagnosticCode.arrayWithoutItems).single.fix,
+      endsWith('@ApiProperty({ type: [Item] }).'),
+    );
+  });
+}
+```
+
+Run: `dart test test/normalize/schema_shape_rules_test.dart` — Expected: FAIL (правил ще немає).
+
+- [ ] **Step 3: Правила**
+
+Створи `packages/typed_openapi/lib/src/normalize/rules/schema_shape_rules.dart`:
+
+```dart
+import '../../config/project_config.dart';
+import '../../diagnostics/diagnostic_code.dart';
+import '../../model/schema.dart';
+import '../../parse/object_reader.dart';
+import '../normalizer_rule.dart';
+
+/// An array without `items` in an OpenAPI 3.0 document (C-5), which 3.0
+/// requires; its elements are read as any JSON value.
+final class ArrayWithoutItems extends NormalizerRule {
+  /// Creates the rule.
+  const ArrayWithoutItems();
+
+  @override
+  String get name => 'array-without-items';
+
+  @override
+  List<DiagnosticCode> get codes => const [.arrayWithoutItems];
+
+  @override
+  Iterable<Finding> check(RuleContext context) sync* {
+    if (context.version != .v30) return;
+    for (final schema in context.nodes<SchemaObject>()) {
+      if (!schema.types.contains(SchemaType.array) || schema.items != null) {
+        continue;
+      }
+      // A format on the array is FormatOnArray's finding.
+      if (schema.format != null || _hasItemsKey(context, schema)) continue;
+      yield context.finding(
+        .arrayWithoutItems,
+        'This array has no "items", which OpenAPI 3.0 requires; its elements '
+        'are read as any JSON value.',
+        schema.location,
+        fix:
+            'Add "items" with the element schema at the source, or override '
+            '"items" of this schema.',
+      );
+    }
+  }
+
+  @override
+  String? hint(DiagnosticCode code, Preset preset) => switch (preset) {
+    .nestjs =>
+      'In NestJS, give the element type: @ApiProperty({ type: [Item] }).',
+    _ => null,
+  };
+
+  /// Whether [schema] writes an `items` key, even one the parser rejected.
+  static bool _hasItemsKey(RuleContext context, SchemaObject schema) =>
+      context.rawObject(schema.location)?.containsKey('items') ?? false;
+}
+
+/// An array whose `items` is an array again and carries a boolean
+/// `required` (C-49): the NestJS `type: [X]` plus `isArray: true` pattern,
+/// which reads as a list of lists.
+final class DoubleArray extends NormalizerRule {
+  /// Creates the rule.
+  const DoubleArray();
+
+  @override
+  String get name => 'double-array';
+
+  @override
+  List<DiagnosticCode> get codes => const [.doubleArray];
+
+  @override
+  Iterable<Finding> check(RuleContext context) sync* {
+    for (final schema in context.nodes<SchemaObject>()) {
+      final items = schema.items;
+      if (!schema.types.contains(SchemaType.array) ||
+          items is! SchemaObject ||
+          !items.types.contains(SchemaType.array)) {
+        continue;
+      }
+      final raw = context.rawObject(items.location);
+      if (raw == null || raw['required'] is! bool) continue;
+      yield context.finding(
+        .doubleArray,
+        'The items of this array are arrays too and say "required: '
+        '${raw['required']}", the shape a decorator gives a list declared '
+        'twice; clients read a list of lists.',
+        items.location,
+        fix:
+            'If the field is a flat list, declare it once at the source; '
+            'until then, override "items" of this schema with the inner '
+            '"items".',
+      );
+    }
+  }
+
+  @override
+  String? hint(DiagnosticCode code, Preset preset) => switch (preset) {
+    .nestjs =>
+      'In NestJS, write @ApiProperty({ type: [Item] }) without '
+          '`isArray: true`.',
+    _ => null,
+  };
+}
+
+/// `format` on an array without `items` (C-50): the format belongs to the
+/// elements.
+final class FormatOnArray extends NormalizerRule {
+  /// Creates the rule.
+  const FormatOnArray();
+
+  @override
+  String get name => 'format-on-array';
+
+  @override
+  List<DiagnosticCode> get codes => const [.formatOnArray];
+
+  @override
+  Iterable<Finding> check(RuleContext context) sync* {
+    for (final schema in context.nodes<SchemaObject>()) {
+      final format = schema.format;
+      if (format == null ||
+          !schema.types.contains(SchemaType.array) ||
+          schema.items != null ||
+          ArrayWithoutItems._hasItemsKey(context, schema)) {
+        continue;
+      }
+      yield context.finding(
+        .formatOnArray,
+        '"format: $format" is on the array, which has no "items", not on its '
+        'elements.',
+        schema.location.child('format'),
+        fix:
+            'Move it into the elements at the source; until then, override '
+            '"items" of this schema with {type: string, format: $format}.',
+      );
+    }
+  }
+}
+
+/// `type: object` with `format: binary` (C-51): a file is
+/// `type: string, format: binary`.
+final class BinaryObject extends NormalizerRule {
+  /// Creates the rule.
+  const BinaryObject();
+
+  @override
+  String get name => 'binary-object';
+
+  @override
+  List<DiagnosticCode> get codes => const [.binaryObject];
+
+  @override
+  Iterable<Finding> check(RuleContext context) sync* {
+    for (final schema in context.nodes<SchemaObject>()) {
+      if (schema.format != 'binary' ||
+          !schema.types.contains(SchemaType.object)) {
+        continue;
+      }
+      yield context.finding(
+        .binaryObject,
+        '"type: object" with "format: binary" does not describe a file; a '
+        'file is "type: string, format: binary".',
+        schema.location.child('type'),
+        fix:
+            'Write "type: string" at the source; until then, override "type" '
+            'of this schema with string.',
+      );
+    }
+  }
+}
+
+/// `type: object` next to `oneOf`/`anyOf` whose branches are all of other
+/// types (C-22): no value matches both.
+final class ContradictoryObjectType extends NormalizerRule {
+  /// Creates the rule.
+  const ContradictoryObjectType();
+
+  @override
+  String get name => 'contradictory-object-type';
+
+  @override
+  List<DiagnosticCode> get codes => const [.contradictoryObjectType];
+
+  @override
+  Iterable<Finding> check(RuleContext context) sync* {
+    for (final schema in context.nodes<SchemaObject>()) {
+      final branches = [...schema.oneOf, ...schema.anyOf];
+      if (branches.isEmpty || !schema.types.contains(SchemaType.object)) {
+        continue;
+      }
+      final types = <SchemaType>{};
+      var known = true;
+      for (final branch in branches) {
+        final resolved = context.model.resolveSchema(branch);
+        if (resolved is! SchemaObject || resolved.types.isEmpty) {
+          known = false;
+          break;
+        }
+        types.addAll(resolved.types);
+      }
+      if (!known || types.contains(SchemaType.object)) continue;
+      final names = (types.map((t) => t.wire).toList()..sort()).join(', ');
+      yield context.finding(
+        .contradictoryObjectType,
+        '"type: object" is next to "oneOf"/"anyOf" whose branches are all '
+        '$names; no value matches both.',
+        schema.location.child('type'),
+        fix:
+            'Remove "type: object" at the source; until then, override "type" '
+            'of this schema.',
+      );
+    }
+  }
+}
+
+/// An `example` whose JSON type the schema does not allow (C-60), such as
+/// a list for an object schema: clients built from the schema fail on such
+/// values.
+final class ExampleTypeMismatch extends NormalizerRule {
+  /// Creates the rule.
+  const ExampleTypeMismatch();
+
+  @override
+  String get name => 'example-type-mismatch';
+
+  @override
+  List<DiagnosticCode> get codes => const [.exampleTypeMismatch];
+
+  @override
+  Iterable<Finding> check(RuleContext context) sync* {
+    for (final schema in context.nodes<SchemaObject>()) {
+      final example = schema.example;
+      if (example == null) continue;
+      final (value,) = example;
+      if (value == null) continue;
+      final types = _effectiveTypes(context, schema, {});
+      if (types.isEmpty || types.any((t) => t.accepts(value))) continue;
+      final names = types.map((t) => t.wire).join(' or ');
+      yield context.finding(
+        .exampleTypeMismatch,
+        'The example is ${ObjectReader.describe(value)}, but the schema is '
+        '$names; clients built from the schema fail on such values.',
+        schema.location.child('example'),
+        fix:
+            'Fix the schema or the example at the source; if the example is '
+            'right, override "type" of this schema.',
+      );
+    }
+  }
+
+  /// The types [schema] allows: its own, or those of the only schema it
+  /// refers to (`$ref`, or `allOf` with one member); `object` for a schema
+  /// with properties and no type.
+  static List<SchemaType> _effectiveTypes(
+    RuleContext context,
+    SchemaObject schema,
+    Set<SchemaObject> seen,
+  ) {
+    if (!seen.add(schema)) return const [];
+    if (schema.types.isNotEmpty) return schema.types;
+    if (schema.properties.isNotEmpty) return const [.object];
+    final target = schema.ref != null
+        ? context.model.resolveSchema(schema)
+        : schema.allOf.length == 1
+        ? context.model.resolveSchema(schema.allOf.single)
+        : null;
+    if (target is! SchemaObject) return const [];
+    return _effectiveTypes(context, target, seen);
+  }
+}
+```
+
+- [ ] **Step 4: Зареєструвати**
+
+У `lib/src/normalize/normalizer.dart` імпорти правил між `import 'normalizer_rule.dart';` і `import 'spec_edit.dart';` мають бути такими (відсортовано):
+
+```dart
+import 'rules/bool_required_to_array.dart';
+import 'rules/drop_invalid_default.dart';
+import 'rules/schema_shape_rules.dart';
+```
+
+і список `rules` — таким:
+
+```dart
+  static final List<NormalizerRule> rules = List.unmodifiable(
+    <NormalizerRule>[
+      const BoolRequiredToArray(),
+      const DropInvalidDefault(),
+      const ArrayWithoutItems(),
+      const DoubleArray(),
+      const FormatOnArray(),
+      const BinaryObject(),
+      const ContradictoryObjectType(),
+      const ExampleTypeMismatch(),
+    ],
+  );
+```
+
+- [ ] **Step 5: Перевірити**
+
+```bash
+dart analyze packages                                  # з кореня: No issues found!
+dart test                                              # з packages/typed_openapi
+dart format lib test bin && dart format lib test bin   # другий запуск: 0 changed
+```
+
+Expected: 298 тестів.
+
+- [ ] **Step 6: Коміт**
+
+```bash
+git add packages/typed_openapi
+git commit -m "feat(typed_openapi): report array, file, combinator and example shape defects
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 8: Enum: `dedupe-enum-values` (TOA301, виправлення) і nullable enum через `oneOf` (TOA303)
+
+**Files:**
+- Create: `packages/typed_openapi/lib/src/normalize/rules/enum_rules.dart`, `packages/typed_openapi/test/normalize/enum_rules_test.dart`
+- Modify: `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart`, `packages/typed_openapi/lib/src/normalize/normalizer.dart`
+
+**Interfaces:**
+- Consumes: `NormalizerRule`, `SpecEdit.replace`, `NormalizerFixture` (задача 7); `DeepCollectionEquality` з `package:collection`.
+- Produces: `DedupeEnumValues`, `NullableEnumOneOf`; коди `duplicateEnumValue` (TOA301), `nullableEnumOneOf` (TOA303).
+
+Поведінка: повтори в `enum` (JSON-рівність: `2` і `2.0` — одне значення, `Admin` і `admin` — різні) прибираються однією правкою `replace` усього `enum`, лишається перше входження; понад 3 повтори — додаток «схоже на кілька злитих enum» (C-52). `oneOf` з двох гілок — enum лише з `null` і `$ref` — TOA303 з пропозицією override nullable-посилання. Підказки `nestjs`: `enumName`/`autoFillEnumName` (§D.1, п. 1) і `@nestjs/swagger` 12 (§D.1, п. 3).
+
+- [ ] **Step 1: Коди**
+
+Перед рядком `/// A normalizer fix was not applied: it overlaps an earlier rule's fix,`:
+
+```dart
+  /// An `enum` repeats a value; the repeats are removed.
+  duplicateEnumValue('TOA301', 'duplicate-enum-value', .warning),
+
+  /// A nullable enum written as `oneOf` of an enum of only `null` and a
+  /// `$ref`.
+  nullableEnumOneOf('TOA303', 'nullable-enum-one-of', .warning),
+```
+
+- [ ] **Step 2: Тест, що не проходить**
+
+Створи `packages/typed_openapi/test/normalize/enum_rules_test.dart`:
+
+```dart
+import 'package:test/test.dart';
+import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
+import 'package:typed_openapi/src/model/schema.dart';
+
+import '../helpers/normalizer_fixture.dart';
+
+void main() {
+  String spec(String schemas) =>
+      'openapi: 3.0.3\ninfo: {title: Shop, version: "1"}\n'
+      'components:\n  schemas:\n$schemas';
+
+  group('dedupe-enum-values', () {
+    test('repeats are removed, the first occurrence stays, case is kept', () {
+      final run = NormalizerFixture(
+        spec('''
+    Role: {type: string, enum: [user, admin, user, Admin, admin]}
+    Level: {type: integer, enum: [1, 2.0, 2]}
+'''),
+      );
+      final schemas = run.result.model.document.components!.schemas;
+      expect((schemas['Role']! as SchemaObject).enumValues, [
+        'user',
+        'admin',
+        'Admin',
+      ]);
+      expect((schemas['Level']! as SchemaObject).enumValues, [1, 2.0]);
+      final d = run.of(DiagnosticCode.duplicateEnumValue);
+      expect(d.map((d) => d.pointer?.value), [
+        '#/components/schemas/Role/enum',
+        '#/components/schemas/Level/enum',
+      ]);
+      expect(
+        d.first.message,
+        'The enum repeats "user", "admin"; the repeats are removed and the '
+        'first occurrence of each value is kept.',
+      );
+    });
+
+    test('many repeats suggest merged enums; nestjs gets enumName', () {
+      final run = NormalizerFixture(
+        spec('''
+    Status:
+      type: string
+      enum: [BUILT, ERROR, QUEUED, READY, BUILT, ERROR, QUEUED, READY]
+'''),
+        preset: .nestjs,
+      );
+      final d = run.of(DiagnosticCode.duplicateEnumValue).single;
+      expect(d.message, contains('several enums merged into one'));
+      expect(d.fix, contains('enumName'));
+    });
+  });
+
+  group('nullable-enum-one-of', () {
+    test('oneOf of a null-only enum and a reference is reported', () {
+      final run = NormalizerFixture(
+        spec(r'''
+    Currency: {type: string, enum: [EUR, USD]}
+    Price:
+      type: object
+      properties:
+        currency:
+          nullable: true
+          oneOf:
+            - {type: string, nullable: true, enum: [null]}
+            - {$ref: '#/components/schemas/Currency'}
+'''),
+      );
+      final d = run.of(DiagnosticCode.nullableEnumOneOf).single;
+      expect(
+        d.pointer?.value,
+        '#/components/schemas/Price/properties/currency/oneOf',
+      );
+      expect(d.message, contains('"#/components/schemas/Currency"'));
+    });
+
+    test('an ordinary oneOf is not reported', () {
+      final run = NormalizerFixture(
+        spec(r'''
+    Pet:
+      oneOf:
+        - {$ref: '#/components/schemas/Cat'}
+        - {type: string, enum: [none]}
+    Cat: {type: object}
+'''),
+      );
+      expect(run.of(DiagnosticCode.nullableEnumOneOf), isEmpty);
+    });
+  });
+}
+```
+
+Run: `dart test test/normalize/enum_rules_test.dart` — Expected: FAIL (правил ще немає).
+
+- [ ] **Step 3: Правила**
+
+Створи `packages/typed_openapi/lib/src/normalize/rules/enum_rules.dart`:
+
+```dart
+import 'dart:convert';
+
+import 'package:collection/collection.dart';
+
+import '../../config/project_config.dart';
+import '../../diagnostics/diagnostic_code.dart';
+import '../../model/schema.dart';
+import '../normalizer_rule.dart';
+import '../spec_edit.dart';
+
+/// Values repeated in an `enum` (C-9, C-52) are removed; the first
+/// occurrence of each stays, in order. Values are compared as JSON, so
+/// `Admin` and `admin` are two values.
+final class DedupeEnumValues extends NormalizerRule {
+  /// Creates the rule.
+  const DedupeEnumValues();
+
+  /// More repeats than this suggest several enums merged into one (C-52).
+  static const _mergedEnums = 3;
+
+  static const _equality = DeepCollectionEquality();
+
+  @override
+  String get name => 'dedupe-enum-values';
+
+  @override
+  List<DiagnosticCode> get codes => const [.duplicateEnumValue];
+
+  @override
+  Iterable<Finding> check(RuleContext context) sync* {
+    for (final schema in context.nodes<SchemaObject>()) {
+      final values = schema.enumValues;
+      if (values == null) continue;
+      final kept = <Object?>[];
+      final repeated = <Object?>[];
+      for (final value in values) {
+        final seen = kept.any((k) => _equality.equals(k, value));
+        (seen ? repeated : kept).add(value);
+      }
+      if (repeated.isEmpty) continue;
+      final at = schema.location.child('enum');
+      final shown = repeated.map(jsonEncode).toSet().join(', ');
+      yield context.finding(
+        .duplicateEnumValue,
+        'The enum repeats $shown; the repeats are removed and the first '
+        'occurrence of each value is kept'
+        '${repeated.length > _mergedEnums ? '. So many repeats look like '
+                  'several enums merged into one' : ''}.',
+        at,
+        fix: 'Remove the repeated values at the source.',
+        edits: [SpecEdit.replace(at, kept)],
+      );
+    }
+  }
+
+  @override
+  String? hint(DiagnosticCode code, Preset preset) => switch (preset) {
+    .nestjs =>
+      'In NestJS, give the enum its own schema with `enumName` (the CLI '
+          'plugin option `autoFillEnumName` sets it) instead of spreading '
+          'several TypeScript enums into one list.',
+    _ => null,
+  };
+}
+
+/// A nullable enum written as `oneOf` of an enum of only `null` and a
+/// `$ref` (C-54, NestJS 11): the intent is a nullable reference, but
+/// generators read a union.
+final class NullableEnumOneOf extends NormalizerRule {
+  /// Creates the rule.
+  const NullableEnumOneOf();
+
+  @override
+  String get name => 'nullable-enum-one-of';
+
+  @override
+  List<DiagnosticCode> get codes => const [.nullableEnumOneOf];
+
+  @override
+  Iterable<Finding> check(RuleContext context) sync* {
+    for (final schema in context.nodes<SchemaObject>()) {
+      if (schema.oneOf.length != 2) continue;
+      final nulls = schema.oneOf.whereType<SchemaObject>().where(_onlyNull);
+      final refs = schema.oneOf.whereType<SchemaObject>().where(
+        (s) => s.ref != null,
+      );
+      if (nulls.length != 1 || refs.length != 1) continue;
+      final ref = refs.single.ref!;
+      yield context.finding(
+        .nullableEnumOneOf,
+        'This is a nullable reference to "$ref" written as "oneOf" with an '
+        'enum of only null; generators read it as a union of two types.',
+        schema.location.child('oneOf'),
+        fix:
+            'Write a nullable reference to "$ref" at the source; until then, '
+            'override this schema as a nullable "$ref".',
+      );
+    }
+  }
+
+  static bool _onlyNull(SchemaObject schema) {
+    final values = schema.enumValues;
+    return values != null &&
+        values.isNotEmpty &&
+        values.every((v) => v == null) &&
+        schema.ref == null;
+  }
+
+  @override
+  String? hint(DiagnosticCode code, Preset preset) => switch (preset) {
+    .nestjs =>
+      'In NestJS, @nestjs/swagger 12 writes nullability according to the '
+          'document version; on 11.x keep the document at OpenAPI 3.0.',
+    _ => null,
+  };
+}
+```
+
+- [ ] **Step 4: Зареєструвати**
+
+У `lib/src/normalize/normalizer.dart` імпорти правил між `import 'normalizer_rule.dart';` і `import 'spec_edit.dart';` мають бути такими (відсортовано):
+
+```dart
+import 'rules/bool_required_to_array.dart';
+import 'rules/drop_invalid_default.dart';
+import 'rules/enum_rules.dart';
+import 'rules/schema_shape_rules.dart';
+```
+
+і список `rules` — таким:
+
+```dart
+  static final List<NormalizerRule> rules = List.unmodifiable(
+    <NormalizerRule>[
+      const BoolRequiredToArray(),
+      const DropInvalidDefault(),
+      const ArrayWithoutItems(),
+      const DoubleArray(),
+      const FormatOnArray(),
+      const BinaryObject(),
+      const ContradictoryObjectType(),
+      const ExampleTypeMismatch(),
+      const DedupeEnumValues(),
+      const NullableEnumOneOf(),
+    ],
+  );
+```
+
+- [ ] **Step 5: Перевірити**
+
+```bash
+dart analyze packages                                  # з кореня: No issues found!
+dart test                                              # з packages/typed_openapi
+dart format lib test bin && dart format lib test bin   # другий запуск: 0 changed
+```
+
+Expected: 302 тестів.
+
+- [ ] **Step 6: Коміт**
+
+```bash
+git add packages/typed_openapi
+git commit -m "feat(typed_openapi): dedupe enum values and report nullable enums through oneOf
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 9: Path-параметри: `declare-missing-path-params` (TOA501, виправлення) і параметр поза шаблоном (TOA502)
+
+**Files:**
+- Create: `packages/typed_openapi/lib/src/normalize/rules/path_param_rules.dart`, `packages/typed_openapi/test/normalize/path_param_rules_test.dart`
+- Modify: `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart`, `packages/typed_openapi/lib/src/normalize/normalizer.dart`
+
+**Interfaces:**
+- Consumes: `NormalizerRule`, `SpecEdit.add/replace`, `SpecModel.resolve`, `NormalizerFixture`.
+- Produces: `DeclareMissingPathParams`, `PathParamNotInTemplate`; коди `missingPathParameter` (TOA501), `pathParameterNotInTemplate` (TOA502).
+
+Поведінка: змінна шаблону без path-параметра (ні в path item, ні в операції, з урахуванням `$ref`-параметрів) — одна знахідка на операцію й одна правка її `parameters` (додає `{name, in: path, required: true, schema: {type: string}}` для кожної змінної; списку не було — створює). Параметр, що відрізняється лише регістром, не додається: це TOA502 «шаблон пише його як {id}». Оголошений path-параметр поза шаблоном — TOA502 error у місці запису параметра. Операція, записана як `$ref` (TOA107), пропускається.
+
+- [ ] **Step 1: Коди**
+
+Перед рядком `/// A normalizer fix was not applied: it overlaps an earlier rule's fix,`:
+
+```dart
+  /// A variable of the path template has no path parameter; one is added.
+  missingPathParameter('TOA501', 'missing-path-parameter', .warning),
+
+  /// A path parameter is not a variable of the path template, or is one in
+  /// another case.
+  pathParameterNotInTemplate(
+    'TOA502',
+    'path-parameter-not-in-template',
+    .error,
+  ),
+```
+
+- [ ] **Step 2: Тест, що не проходить**
+
+Створи `packages/typed_openapi/test/normalize/path_param_rules_test.dart`:
+
+```dart
+import 'package:test/test.dart';
+import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
+import 'package:typed_openapi/src/diagnostics/severity.dart';
+import 'package:typed_openapi/src/model/operation.dart';
+
+import '../helpers/normalizer_fixture.dart';
+
+void main() {
+  String spec(String paths) =>
+      'openapi: 3.0.3\ninfo: {title: Shop, version: "1"}\npaths:\n$paths';
+
+  group('declare-missing-path-params', () {
+    test('every missing variable is added to the operation', () {
+      final run = NormalizerFixture(
+        spec('''
+  /shops/{shop}/orders/{order}:
+    get:
+      parameters:
+        - {name: limit, in: query, schema: {type: integer}}
+      responses: {}
+    delete:
+      responses: {}
+'''),
+      );
+      final item = run.result.model.resolve(
+        run.result.model.document.paths['/shops/{shop}/orders/{order}']!,
+      )!;
+      final get = item.operations['get']!;
+      final names = [
+        for (final p in get.parameters) run.result.model.resolve(p)!.name,
+      ];
+      expect(names, ['limit', 'shop', 'order']);
+      final added = run.result.model.resolve(get.parameters[1])!;
+      expect(added.placement, ParameterLocation.path);
+      expect(added.required, isTrue);
+      expect(item.operations['delete']!.parameters, hasLength(2));
+      final found = run.of(DiagnosticCode.missingPathParameter);
+      expect(found, hasLength(2));
+      expect(
+        found.first.message,
+        'The path /shops/{shop}/orders/{order} has {shop}, {order}, but this '
+        'operation declares no path parameter "shop", "order"; they are '
+        'added as required string path parameters.',
+      );
+      expect(found.first.severity, Severity.warning);
+      expect(
+        found.first.pointer?.value,
+        '#/paths/~1shops~1{shop}~1orders~1{order}/get',
+      );
+    });
+
+    test('parameters of the path item and references count as declared', () {
+      final run = NormalizerFixture(
+        spec(r'''
+  /users/{id}/posts/{post}:
+    parameters:
+      - {$ref: '#/components/parameters/Id'}
+    get:
+      parameters:
+        - {name: post, in: path, required: true, schema: {type: string}}
+      responses: {}
+components:
+  parameters:
+    Id: {name: id, in: path, required: true, schema: {type: string}}
+'''),
+      );
+      expect(run.of(DiagnosticCode.missingPathParameter), isEmpty);
+      expect(run.of(DiagnosticCode.pathParameterNotInTemplate), isEmpty);
+    });
+  });
+
+  group('path-param-not-in-template', () {
+    test('a renamed or differently cased parameter is an error', () {
+      final run = NormalizerFixture(
+        spec('''
+  /users/{id}:
+    get:
+      parameters:
+        - {name: userId, in: path, required: true, schema: {type: string}}
+        - {name: ID, in: path, required: true, schema: {type: string}}
+      responses: {}
+'''),
+      );
+      final found = run.of(DiagnosticCode.pathParameterNotInTemplate);
+      expect(found.map((d) => d.pointer?.value), [
+        '#/paths/~1users~1{id}/get/parameters/0',
+        '#/paths/~1users~1{id}/get/parameters/1',
+      ]);
+      expect(found.first.severity, Severity.error);
+      expect(found.last.message, endsWith('which writes it as {id}.'));
+      // {id} is not added: the case mismatch is the finding.
+      expect(run.of(DiagnosticCode.missingPathParameter), isEmpty);
+    });
+  });
+}
+```
+
+Run: `dart test test/normalize/path_param_rules_test.dart` — Expected: FAIL (правил ще немає).
+
+- [ ] **Step 3: Правила**
+
+Створи `packages/typed_openapi/lib/src/normalize/rules/path_param_rules.dart`:
+
+```dart
+import '../../diagnostics/diagnostic_code.dart';
+import '../../model/operation.dart';
+import '../../model/spec_node.dart';
+import '../normalizer_rule.dart';
+import '../spec_edit.dart';
+
+/// The path templates of a spec with their path items, as both path rules
+/// read them.
+final class _PathTemplates {
+  _PathTemplates(this.context);
+
+  final RuleContext context;
+
+  static final _variable = RegExp(r'\{([^{}]+)\}');
+
+  /// Every templated path with its resolved path item, in document order.
+  Iterable<(String, PathItem)> get paths sync* {
+    for (final MapEntry(key: template, value: item)
+        in context.model.document.paths.entries) {
+      final resolved = context.model.resolve(item);
+      if (resolved != null) yield (template, resolved);
+    }
+  }
+
+  /// The variables of [template], in order, each once.
+  static List<String> variablesOf(String template) => [
+    ...{for (final m in _variable.allMatches(template)) m.group(1)!},
+  ];
+
+  /// The path parameters among [parameters], with where each is written.
+  List<(Parameter, SpecLocation)> pathParameters(
+    List<RefOr<Parameter>> parameters,
+  ) => [
+    for (final parameter in parameters)
+      if (context.model.resolve(parameter) case final resolved?
+          when resolved.placement == .path && resolved.name != null)
+        (resolved, _siteOf(parameter, resolved)),
+  ];
+
+  static SpecLocation _siteOf(RefOr<Parameter> written, Parameter resolved) =>
+      switch (written) {
+        Ref() => written.location,
+        Inline() => resolved.location,
+      };
+}
+
+/// A variable of the path template without a declared path parameter (C-6)
+/// gets `{name, in: path, required: true, schema: {type: string}}` in each
+/// operation that lacks it: a path segment is a string on the wire.
+final class DeclareMissingPathParams extends NormalizerRule {
+  /// Creates the rule.
+  const DeclareMissingPathParams();
+
+  @override
+  String get name => 'declare-missing-path-params';
+
+  @override
+  List<DiagnosticCode> get codes => const [.missingPathParameter];
+
+  @override
+  Iterable<Finding> check(RuleContext context) sync* {
+    final templates = _PathTemplates(context);
+    for (final (template, item) in templates.paths) {
+      final variables = _PathTemplates.variablesOf(template);
+      if (variables.isEmpty) continue;
+      final shared = {
+        for (final (p, _) in templates.pathParameters(item.parameters)) p.name,
+      };
+      for (final operation in item.operations.values) {
+        // An operation written as a `$ref` is TOA107 already; it is empty.
+        if (operation.unknownKeys.containsKey(r'$ref')) continue;
+        final declared = {
+          ...shared,
+          for (final (p, _) in templates.pathParameters(operation.parameters))
+            p.name,
+        };
+        final lowered = {for (final n in declared) n!.toLowerCase()};
+        // A name that differs only in case is PathParamNotInTemplate's
+        // finding; adding a parameter would hide it.
+        final missing = [
+          for (final v in variables)
+            if (!declared.contains(v) && !lowered.contains(v.toLowerCase())) v,
+        ];
+        if (missing.isEmpty) continue;
+        // One finding per operation: a fix is one edit of its parameters.
+        final names = missing.map((m) => '"$m"').join(', ');
+        yield context.finding(
+          .missingPathParameter,
+          'The path $template has ${missing.map((m) => '{$m}').join(', ')}, '
+          'but this operation declares no path parameter $names; '
+          '${missing.length == 1 ? 'it is' : 'they are'} added as required '
+          'string path parameters.',
+          operation.location,
+          fix:
+              'Declare each at the source as {name: <name>, in: path, '
+              'required: true, schema: {type: string}}.',
+          edits: [_edit(context, operation, missing)],
+        );
+      }
+    }
+  }
+
+  /// One edit that adds every parameter of [names] to [operation].
+  static SpecEdit _edit(
+    RuleContext context,
+    Operation operation,
+    List<String> names,
+  ) {
+    final at = operation.location.child('parameters');
+    final added = [
+      for (final name in names)
+        {
+          'name': name,
+          'in': 'path',
+          'required': true,
+          'schema': {'type': 'string'},
+        },
+    ];
+    return switch (context.rawAt(at)) {
+      (final List<Object?> existing,) => SpecEdit.replace(at, [
+        ...existing,
+        ...added,
+      ]),
+      _ => SpecEdit.add(at, added),
+    };
+  }
+}
+
+/// A declared path parameter that is not a variable of the path template,
+/// or is one in another case (C-7). Which name is right cannot be told, so
+/// this is a diagnostic only.
+final class PathParamNotInTemplate extends NormalizerRule {
+  /// Creates the rule.
+  const PathParamNotInTemplate();
+
+  @override
+  String get name => 'path-param-not-in-template';
+
+  @override
+  List<DiagnosticCode> get codes => const [.pathParameterNotInTemplate];
+
+  @override
+  Iterable<Finding> check(RuleContext context) sync* {
+    final templates = _PathTemplates(context);
+    for (final (template, item) in templates.paths) {
+      final variables = _PathTemplates.variablesOf(template);
+      final parameters = [
+        ...templates.pathParameters(item.parameters),
+        for (final operation in item.operations.values)
+          ...templates.pathParameters(operation.parameters),
+      ];
+      for (final (parameter, site) in parameters) {
+        final name = parameter.name!;
+        if (variables.contains(name)) continue;
+        final other = variables
+            .where((v) => v.toLowerCase() == name.toLowerCase())
+            .firstOrNull;
+        yield context.finding(
+          .pathParameterNotInTemplate,
+          'Path parameter "$name" is not in the path template $template'
+          '${other == null ? '' : ', which writes it as {$other}'}.',
+          site,
+          fix:
+              'Make the parameter name and the template variable the same at '
+              'the source; until then, override the name of this parameter.',
+        );
+      }
+    }
+  }
+}
+```
+
+- [ ] **Step 4: Зареєструвати**
+
+У `lib/src/normalize/normalizer.dart` імпорти правил між `import 'normalizer_rule.dart';` і `import 'spec_edit.dart';` мають бути такими (відсортовано):
+
+```dart
+import 'rules/bool_required_to_array.dart';
+import 'rules/drop_invalid_default.dart';
+import 'rules/enum_rules.dart';
+import 'rules/path_param_rules.dart';
+import 'rules/schema_shape_rules.dart';
+```
+
+і список `rules` — таким:
+
+```dart
+  static final List<NormalizerRule> rules = List.unmodifiable(
+    <NormalizerRule>[
+      const BoolRequiredToArray(),
+      const DropInvalidDefault(),
+      const ArrayWithoutItems(),
+      const DoubleArray(),
+      const FormatOnArray(),
+      const BinaryObject(),
+      const ContradictoryObjectType(),
+      const ExampleTypeMismatch(),
+      const DedupeEnumValues(),
+      const NullableEnumOneOf(),
+      const DeclareMissingPathParams(),
+      const PathParamNotInTemplate(),
+    ],
+  );
+```
+
+- [ ] **Step 5: Перевірити**
+
+```bash
+dart analyze packages                                  # з кореня: No issues found!
+dart test                                              # з packages/typed_openapi
+dart format lib test bin && dart format lib test bin   # другий запуск: 0 changed
+```
+
+Expected: 305 тестів.
+
+- [ ] **Step 6: Коміт**
+
+```bash
+git add packages/typed_openapi
+git commit -m "feat(typed_openapi): declare missing path parameters and report stray ones
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 10: `operationId`: відсутній (TOA503) і повторений (TOA504)
+
+**Files:**
+- Create: `packages/typed_openapi/lib/src/normalize/rules/operation_id_rules.dart`, `packages/typed_openapi/test/normalize/operation_id_rules_test.dart`
+- Modify: `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart`, `packages/typed_openapi/lib/src/normalize/normalizer.dart`
+
+**Interfaces:**
+- Consumes: `NormalizerRule`, `RuleContext.nodes<Operation>()`, `SpecDocuments.displayPath`, `NormalizerFixture`.
+- Produces: `MissingOperationId`, `DuplicateOperationId`; коди `missingOperationId` (TOA503, info), `duplicateOperationId` (TOA504, error).
+
+Поведінка: операція без `operationId` — TOA503 info (операція-`$ref` пропускається); повтор — TOA504 на кожній наступній за `SpecLocation`, з місцем першої. Підказки: `aspnet` — `.WithName`/`[EndpointName]`/Swashbuckle `CustomOperationIds` (§D.4); `nestjs` — `operationIdFactory` (§D.1, п. 2); `fastapi` — `generate_unique_id_function` (§D.2, п. 1); `springdoc` — `@Operation(operationId = …)` (§D.3, п. 2).
+
+- [ ] **Step 1: Коди**
+
+Перед рядком `/// A normalizer fix was not applied: it overlaps an earlier rule's fix,`:
+
+```dart
+  /// An operation has no `operationId`.
+  missingOperationId('TOA503', 'missing-operation-id', .info),
+
+  /// Two operations share an `operationId`.
+  duplicateOperationId('TOA504', 'duplicate-operation-id', .error),
+```
+
+- [ ] **Step 2: Тест, що не проходить**
+
+Створи `packages/typed_openapi/test/normalize/operation_id_rules_test.dart`:
+
+```dart
+import 'package:test/test.dart';
+import 'package:typed_openapi/src/config/project_config.dart';
+import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
+import 'package:typed_openapi/src/diagnostics/severity.dart';
+
+import '../helpers/normalizer_fixture.dart';
+
+void main() {
+  const spec = '''
+openapi: 3.0.3
+info: {title: Shop, version: "1"}
+paths:
+  /orders:
+    get: {operationId: list, responses: {}}
+    post: {responses: {}}
+  /orders/archive:
+    get: {operationId: list, responses: {}}
+''';
+
+  test('missing-operation-id is info at the operation', () {
+    final d = NormalizerFixture(spec).of(DiagnosticCode.missingOperationId);
+    expect(d.single.pointer?.value, '#/paths/~1orders/post');
+    expect(d.single.severity, Severity.info);
+  });
+
+  test(r'an operation written as a $ref is left to ref-not-allowed', () {
+    final run = NormalizerFixture(r'''
+openapi: 3.0.3
+info: {title: Shop, version: "1"}
+paths:
+  /orders/{id}:
+    get: {$ref: resources/orders/get.yml}
+''');
+    expect(run.of(DiagnosticCode.missingOperationId), isEmpty);
+    expect(run.of(DiagnosticCode.missingPathParameter), isEmpty);
+    expect(run.of(DiagnosticCode.refNotAllowed), hasLength(1));
+  });
+
+  test('duplicate-operation-id names the first owner of the id', () {
+    final d = NormalizerFixture(spec).of(DiagnosticCode.duplicateOperationId);
+    expect(
+      d.single.pointer?.value,
+      '#/paths/~1orders~1archive/get/operationId',
+    );
+    expect(d.single.severity, Severity.error);
+    expect(
+      d.single.message,
+      'operationId "list" is also the id of the operation at '
+      '#/paths/~1orders/get; method names would clash.',
+    );
+  });
+
+  test('presets add their recipes', () {
+    expect(
+      NormalizerFixture(
+        spec,
+        preset: .aspnet,
+      ).of(DiagnosticCode.missingOperationId).single.fix,
+      contains('[EndpointName("getUser")]'),
+    );
+    for (final (preset, recipe) in [
+      (Preset.nestjs, 'operationIdFactory'),
+      (Preset.fastapi, 'generate_unique_id_function'),
+      (Preset.springdoc, '@Operation(operationId'),
+    ]) {
+      expect(
+        NormalizerFixture(
+          spec,
+          preset: preset,
+        ).of(DiagnosticCode.duplicateOperationId).single.fix,
+        contains(recipe),
+      );
+    }
+  });
+}
+```
+
+Run: `dart test test/normalize/operation_id_rules_test.dart` — Expected: FAIL (правил ще немає).
+
+- [ ] **Step 3: Правила**
+
+Створи `packages/typed_openapi/lib/src/normalize/rules/operation_id_rules.dart`:
+
+```dart
+import '../../config/project_config.dart';
+import '../../diagnostics/diagnostic_code.dart';
+import '../../model/operation.dart';
+import '../normalizer_rule.dart';
+
+/// An operation without `operationId` (C-34): the generator has to name its
+/// method after the HTTP method and path.
+final class MissingOperationId extends NormalizerRule {
+  /// Creates the rule.
+  const MissingOperationId();
+
+  @override
+  String get name => 'missing-operation-id';
+
+  @override
+  List<DiagnosticCode> get codes => const [.missingOperationId];
+
+  @override
+  Iterable<Finding> check(RuleContext context) sync* {
+    for (final operation in context.nodes<Operation>()) {
+      // An operation written as a `$ref` is TOA107 already; it is empty.
+      if (operation.operationId != null ||
+          operation.unknownKeys.containsKey(r'$ref')) {
+        continue;
+      }
+      yield context.finding(
+        .missingOperationId,
+        'This operation has no "operationId", so its method is named after '
+        'the HTTP method and the path.',
+        operation.location,
+        fix:
+            'Add an operationId at the source, or override the method name of '
+            'this operation.',
+      );
+    }
+  }
+
+  @override
+  String? hint(DiagnosticCode code, Preset preset) => switch (preset) {
+    .aspnet =>
+      'In ASP.NET, name the endpoint: .WithName("getUser") or '
+          '[EndpointName("getUser")]; with Swashbuckle, '
+          'CustomOperationIds(api => api.TryGetMethodInfo(out var mi) ? '
+          'mi.Name : null).',
+    _ => null,
+  };
+}
+
+/// Operations that share an `operationId` (C-36); which one keeps the name
+/// cannot be told, so this is a diagnostic only.
+final class DuplicateOperationId extends NormalizerRule {
+  /// Creates the rule.
+  const DuplicateOperationId();
+
+  @override
+  String get name => 'duplicate-operation-id';
+
+  @override
+  List<DiagnosticCode> get codes => const [.duplicateOperationId];
+
+  @override
+  Iterable<Finding> check(RuleContext context) sync* {
+    final first = <String, Operation>{};
+    for (final operation in context.nodes<Operation>()) {
+      final id = operation.operationId;
+      if (id == null) continue;
+      final earlier = first[id];
+      if (earlier == null) {
+        first[id] = operation;
+        continue;
+      }
+      final where = earlier.location.document == operation.location.document
+          ? earlier.pointer.value
+          : '${context.documents.displayPath(earlier.location.document)}'
+                '${earlier.pointer.value}';
+      yield context.finding(
+        .duplicateOperationId,
+        'operationId "$id" is also the id of the operation at $where; method '
+        'names would clash.',
+        operation.location.child('operationId'),
+        fix:
+            'Give each operation its own operationId at the source, or '
+            'override the method name of this operation.',
+      );
+    }
+  }
+
+  @override
+  String? hint(DiagnosticCode code, Preset preset) => switch (preset) {
+    .nestjs =>
+      'In NestJS, set `operationIdFactory` in SwaggerModule.createDocument '
+          '(the default is controllerKey_methodKey).',
+    .fastapi =>
+      'In FastAPI, pass `generate_unique_id_function` to FastAPI(...).',
+    .springdoc =>
+      'In springdoc, set @Operation(operationId = "...") explicitly; the '
+          'generated _1 suffixes are not stable.',
+    _ => null,
+  };
+}
+```
+
+- [ ] **Step 4: Зареєструвати**
+
+У `lib/src/normalize/normalizer.dart` імпорти правил між `import 'normalizer_rule.dart';` і `import 'spec_edit.dart';` мають бути такими (відсортовано):
+
+```dart
+import 'rules/bool_required_to_array.dart';
+import 'rules/drop_invalid_default.dart';
+import 'rules/enum_rules.dart';
+import 'rules/operation_id_rules.dart';
+import 'rules/path_param_rules.dart';
+import 'rules/schema_shape_rules.dart';
+```
+
+і список `rules` — таким:
+
+```dart
+  static final List<NormalizerRule> rules = List.unmodifiable(
+    <NormalizerRule>[
+      const BoolRequiredToArray(),
+      const DropInvalidDefault(),
+      const ArrayWithoutItems(),
+      const DoubleArray(),
+      const FormatOnArray(),
+      const BinaryObject(),
+      const ContradictoryObjectType(),
+      const ExampleTypeMismatch(),
+      const DedupeEnumValues(),
+      const NullableEnumOneOf(),
+      const DeclareMissingPathParams(),
+      const PathParamNotInTemplate(),
+      const MissingOperationId(),
+      const DuplicateOperationId(),
+    ],
+  );
+```
+
+- [ ] **Step 5: Перевірити**
+
+```bash
+dart analyze packages                                  # з кореня: No issues found!
+dart test                                              # з packages/typed_openapi
+dart format lib test bin && dart format lib test bin   # другий запуск: 0 changed
+```
+
+Expected: 309 тестів.
+
+- [ ] **Step 6: Коміт**
+
+```bash
+git add packages/typed_openapi
+git commit -m "feat(typed_openapi): report missing and duplicate operationIds
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 11: Дискримінатор, media type, ключі components (TOA401, TOA402, TOA601, TOA106)
+
+**Files:**
+- Create: `packages/typed_openapi/lib/src/normalize/rules/reference_shape_rules.dart`, `packages/typed_openapi/test/normalize/reference_shape_rules_test.dart`
+- Modify: `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart`, `packages/typed_openapi/lib/src/normalize/normalizer.dart`
+
+**Interfaces:**
+- Consumes: `NormalizerRule`, `RefTarget.parse` (M2), `SpecModel.resolveSchema`, `Components` (M2), `NormalizerFixture`.
+- Produces: `DiscriminatorPropertyRequired`, `DiscriminatorMappingTarget`, `WildcardMediaType`, `ComponentKeyCharacters`; коди `invalidComponentKey` (TOA106), `discriminatorNotRequired` (TOA401, info), `discriminatorMappingUnresolved` (TOA402, error), `wildcardMediaType` (TOA601).
+
+Поведінка: властивість-дискримінатор не `required` у варіанті `oneOf`/`anyOf` (з урахуванням `allOf`) — TOA401 у місці варіанта; значення `discriminator.mapping`, що веде в нікуди (ім'я без `#`, `/`, `.` шукається в `components.schemas`, решта — як `$ref`), — TOA402 (M2 mapping не резолвить); `*/*` — TOA601; ключ `components.*` поза `^[a-zA-Z0-9\.\-_]+$` — TOA106. Підказки: `aspnet` — `[JsonPolymorphic]`/`[JsonDerivedType]` (§D.4, п. 4) і `CustomSchemaIds` (§D.4); `fastapi` — унікальні імена моделей (§D.2, п. 5); `springdoc` — `discriminatorMapping` (§D.3, п. 6), `default-produces-media-type` (§D.3, п. 1), `@Schema(name)` (§D.3, п. 1).
+
+- [ ] **Step 1: Коди**
+
+Перед рядком `/// A `$ref` where OpenAPI does not accept a Reference Object, as bundlers`:
+
+```dart
+  /// A key in `components` has characters OpenAPI does not allow there.
+  invalidComponentKey('TOA106', 'invalid-component-key', .warning),
+```
+
+Перед рядком `/// A variable of the path template has no path parameter; one is added.`:
+
+```dart
+  /// The discriminator property is not required in a variant.
+  discriminatorNotRequired('TOA401', 'discriminator-not-required', .info),
+
+  /// A `discriminator.mapping` value points to a schema that does not
+  /// exist.
+  discriminatorMappingUnresolved(
+    'TOA402',
+    'discriminator-mapping-unresolved',
+    .error,
+  ),
+```
+
+Перед рядком `/// A normalizer fix was not applied: it overlaps an earlier rule's fix,`:
+
+```dart
+  /// `*/*` is used as a media type.
+  wildcardMediaType('TOA601', 'wildcard-media-type', .warning),
+```
+
+- [ ] **Step 2: Тест, що не проходить**
+
+Створи `packages/typed_openapi/test/normalize/reference_shape_rules_test.dart`:
+
+```dart
+import 'package:test/test.dart';
+import 'package:typed_openapi/src/config/project_config.dart';
+import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
+import 'package:typed_openapi/src/diagnostics/severity.dart';
+
+import '../helpers/normalizer_fixture.dart';
+
+void main() {
+  const pets = r'''
+openapi: 3.1.0
+info: {title: Pets, version: "1"}
+components:
+  schemas:
+    Pet:
+      oneOf:
+        - {$ref: '#/components/schemas/Cat'}
+        - {$ref: '#/components/schemas/Dog'}
+      discriminator:
+        propertyName: kind
+        mapping:
+          cat: '#/components/schemas/Cat'
+          dog: Dog
+          bird: '#/components/schemas/Bird'
+          fish: Fish
+    Base:
+      type: object
+      required: [kind]
+      properties: {kind: {type: string}}
+    Cat:
+      allOf: [{$ref: '#/components/schemas/Base'}]
+    Dog:
+      type: object
+      properties: {kind: {type: string}}
+''';
+
+  test('discriminator-property-required: through allOf counts', () {
+    final d = NormalizerFixture(pets).of(
+      DiagnosticCode.discriminatorNotRequired,
+    );
+    expect(d.single.pointer?.value, '#/components/schemas/Dog');
+    expect(d.single.severity, Severity.info);
+  });
+
+  test('discriminator-mapping-target: names and references', () {
+    final d = NormalizerFixture(pets).of(
+      DiagnosticCode.discriminatorMappingUnresolved,
+    );
+    expect(d.map((d) => d.pointer?.value), [
+      '#/components/schemas/Pet/discriminator/mapping/bird',
+      '#/components/schemas/Pet/discriminator/mapping/fish',
+    ]);
+    expect(d.first.severity, Severity.error);
+    expect(
+      d.first.message,
+      'discriminator.mapping "bird" points to '
+      '"#/components/schemas/Bird", which does not exist.',
+    );
+  });
+
+  test('wildcard-media-type in a response; springdoc gets the property', () {
+    final run = NormalizerFixture('''
+openapi: 3.1.0
+info: {title: Pets, version: "1"}
+paths:
+  /pets:
+    get:
+      operationId: list
+      responses:
+        "200":
+          description: ok
+          content:
+            "*/*": {schema: {type: string}}
+            application/json: {schema: {type: string}}
+''', preset: .springdoc);
+    final d = run.of(DiagnosticCode.wildcardMediaType).single;
+    expect(d.pointer?.value, '#/paths/~1pets/get/responses/200/content/*~1*');
+    expect(d.fix, contains('springdoc.default-produces-media-type'));
+  });
+
+  test('component-key-characters; aspnet gets CustomSchemaIds', () {
+    final run = NormalizerFixture('''
+openapi: 3.1.0
+info: {title: Pets, version: "1"}
+components:
+  schemas:
+    "Page[User]": {type: object}
+    Ns.Outer+Inner: {type: object}
+    Pet_v2.1-beta: {type: object}
+  responses:
+    "Not Found": {description: missing}
+''', preset: Preset.aspnet);
+    final d = run.of(DiagnosticCode.invalidComponentKey);
+    expect(d.map((d) => d.pointer?.value), [
+      '#/components/schemas/Page[User]',
+      '#/components/schemas/Ns.Outer+Inner',
+      '#/components/responses/Not Found',
+    ]);
+    expect(d.first.fix, contains('CustomSchemaIds'));
+  });
+}
+```
+
+Run: `dart test test/normalize/reference_shape_rules_test.dart` — Expected: FAIL (правил ще немає).
+
+- [ ] **Step 3: Правила**
+
+Створи `packages/typed_openapi/lib/src/normalize/rules/reference_shape_rules.dart`:
+
+```dart
+import '../../config/project_config.dart';
+import '../../diagnostics/diagnostic_code.dart';
+import '../../model/operation.dart';
+import '../../model/schema.dart';
+import '../../resolve/ref_target.dart';
+import '../normalizer_rule.dart';
+
+/// The discriminator property is not `required` in a variant (C-42): a
+/// payload without it cannot be told apart.
+final class DiscriminatorPropertyRequired extends NormalizerRule {
+  /// Creates the rule.
+  const DiscriminatorPropertyRequired();
+
+  @override
+  String get name => 'discriminator-property-required';
+
+  @override
+  List<DiagnosticCode> get codes => const [.discriminatorNotRequired];
+
+  @override
+  Iterable<Finding> check(RuleContext context) sync* {
+    for (final schema in context.nodes<SchemaObject>()) {
+      final property = schema.discriminator?.propertyName;
+      if (property == null) continue;
+      for (final branch in [...schema.oneOf, ...schema.anyOf]) {
+        final variant = context.model.resolveSchema(branch);
+        if (variant is! SchemaObject) continue;
+        if (_required(context, variant, {}).contains(property)) continue;
+        yield context.finding(
+          .discriminatorNotRequired,
+          'Discriminator property "$property" is not required in this '
+          'variant; a payload without it cannot be told apart.',
+          variant.location,
+          fix: 'Add "$property" to "required" of this schema at the source.',
+        );
+      }
+    }
+  }
+
+  /// The names [schema] requires, its `allOf` members included.
+  static Set<String> _required(
+    RuleContext context,
+    SchemaObject schema,
+    Set<SchemaObject> seen,
+  ) {
+    if (!seen.add(schema)) return const {};
+    return {
+      ...schema.required,
+      for (final member in schema.allOf)
+        if (context.model.resolveSchema(member) case final SchemaObject m)
+          ..._required(context, m, seen),
+    };
+  }
+
+  @override
+  String? hint(DiagnosticCode code, Preset preset) => switch (preset) {
+    .aspnet =>
+      'In ASP.NET, put [JsonPolymorphic] on an abstract base type and '
+          '[JsonDerivedType(typeof(Bar), "bar")] on it for each variant.',
+    _ => null,
+  };
+}
+
+/// A `discriminator.mapping` value that points nowhere (C-4). M2 does not
+/// resolve mapping values, so this rule does.
+final class DiscriminatorMappingTarget extends NormalizerRule {
+  /// Creates the rule.
+  const DiscriminatorMappingTarget();
+
+  @override
+  String get name => 'discriminator-mapping-target';
+
+  @override
+  List<DiagnosticCode> get codes => const [.discriminatorMappingUnresolved];
+
+  @override
+  Iterable<Finding> check(RuleContext context) sync* {
+    final schemas = context.model.document.components?.schemas ?? const {};
+    for (final discriminator in context.nodes<Discriminator>()) {
+      for (final MapEntry(key: value, value: target)
+          in discriminator.mapping.entries) {
+        final exists = _isName(target)
+            ? schemas.containsKey(target)
+            : switch (RefTarget.parse(
+                target,
+                discriminator.location.document,
+              )) {
+                ResolvableRef(:final location) =>
+                  context.rawAt(location) != null,
+                BrokenRef() => false,
+              };
+        if (exists) continue;
+        yield context.finding(
+          .discriminatorMappingUnresolved,
+          'discriminator.mapping "$value" points to "$target", which does '
+          'not exist.',
+          discriminator.location.child('mapping').child(value),
+          fix:
+              'Point it at an existing schema at the source; until then, '
+              'override the mapping of this discriminator.',
+        );
+      }
+    }
+  }
+
+  /// Whether [target] is a schema name rather than a reference: OpenAPI
+  /// reads a value without `#`, `/` or `.` as a name in
+  /// `components.schemas`.
+  static bool _isName(String target) => !target.contains(RegExp('[#/.]'));
+
+  @override
+  String? hint(DiagnosticCode code, Preset preset) => switch (preset) {
+    .fastapi =>
+      'In FastAPI, give models unique names across the app; same-named '
+          'models from different modules get renamed keys.',
+    .springdoc =>
+      'In springdoc, declare the mapping: @Schema(discriminatorProperty = '
+          '"kind", discriminatorMapping = {@DiscriminatorMapping(value = '
+          '"foo1", schema = Foo1.class)}).',
+    _ => null,
+  };
+}
+
+/// `*/*` as a media type (C-38): the client cannot pick a decoder.
+final class WildcardMediaType extends NormalizerRule {
+  /// Creates the rule.
+  const WildcardMediaType();
+
+  @override
+  String get name => 'wildcard-media-type';
+
+  @override
+  List<DiagnosticCode> get codes => const [.wildcardMediaType];
+
+  @override
+  Iterable<Finding> check(RuleContext context) sync* {
+    for (final media in context.nodes<MediaType>()) {
+      if (media.pointer.tokens.lastOrNull != '*/*') continue;
+      yield context.finding(
+        .wildcardMediaType,
+        'The media type "*/*" does not say how the body is encoded, so the '
+        'client cannot pick a decoder.',
+        media.location,
+        fix:
+            'Declare the actual media type (usually application/json) at the '
+            'source, or override the content type here.',
+      );
+    }
+  }
+
+  @override
+  String? hint(DiagnosticCode code, Preset preset) => switch (preset) {
+    .springdoc =>
+      'In springdoc, set springdoc.default-produces-media-type='
+          'application/json.',
+    _ => null,
+  };
+}
+
+/// A key in `components` with characters OpenAPI does not allow there
+/// (C-32): only letters, digits, `.`, `-` and `_`.
+final class ComponentKeyCharacters extends NormalizerRule {
+  /// Creates the rule.
+  const ComponentKeyCharacters();
+
+  static final _key = RegExp(r'^[a-zA-Z0-9\.\-_]+$');
+
+  @override
+  String get name => 'component-key-characters';
+
+  @override
+  List<DiagnosticCode> get codes => const [.invalidComponentKey];
+
+  @override
+  Iterable<Finding> check(RuleContext context) sync* {
+    final components = context.model.document.components;
+    if (components == null) return;
+    for (final (section, keys) in [
+      ('schemas', components.schemas.keys),
+      ('responses', components.responses.keys),
+      ('parameters', components.parameters.keys),
+      ('examples', components.examples.keys),
+      ('requestBodies', components.requestBodies.keys),
+      ('headers', components.headers.keys),
+      ('securitySchemes', components.securitySchemes.keys),
+      ('pathItems', components.pathItems.keys),
+      ('mediaTypes', components.mediaTypes.keys),
+    ]) {
+      for (final key in keys) {
+        if (_key.hasMatch(key)) continue;
+        yield context.finding(
+          .invalidComponentKey,
+          'The component name "$key" has characters OpenAPI does not allow '
+          'in component keys (only letters, digits, ".", "-" and "_").',
+          components.location.child(section).child(key),
+          fix: 'Rename it at the source; type names are derived from it.',
+        );
+      }
+    }
+  }
+
+  @override
+  String? hint(DiagnosticCode code, Preset preset) => switch (preset) {
+    .aspnet =>
+      "With Swashbuckle, set CustomSchemaIds(t => t.FullName!.Replace('+', "
+          "'.')).",
+    .springdoc => 'In springdoc, name the schema with @Schema(name = "...").',
+    _ => null,
+  };
+}
+```
+
+- [ ] **Step 4: Зареєструвати**
+
+У `lib/src/normalize/normalizer.dart` імпорти правил між `import 'normalizer_rule.dart';` і `import 'spec_edit.dart';` мають бути такими (відсортовано):
+
+```dart
+import 'rules/bool_required_to_array.dart';
+import 'rules/drop_invalid_default.dart';
+import 'rules/enum_rules.dart';
+import 'rules/operation_id_rules.dart';
+import 'rules/path_param_rules.dart';
+import 'rules/reference_shape_rules.dart';
+import 'rules/schema_shape_rules.dart';
+```
+
+і список `rules` — таким:
+
+```dart
+  static final List<NormalizerRule> rules = List.unmodifiable(
+    <NormalizerRule>[
+      const BoolRequiredToArray(),
+      const DropInvalidDefault(),
+      const ArrayWithoutItems(),
+      const DoubleArray(),
+      const FormatOnArray(),
+      const BinaryObject(),
+      const ContradictoryObjectType(),
+      const ExampleTypeMismatch(),
+      const DedupeEnumValues(),
+      const NullableEnumOneOf(),
+      const DeclareMissingPathParams(),
+      const PathParamNotInTemplate(),
+      const MissingOperationId(),
+      const DuplicateOperationId(),
+      const DiscriminatorPropertyRequired(),
+      const DiscriminatorMappingTarget(),
+      const WildcardMediaType(),
+      const ComponentKeyCharacters(),
+    ],
+  );
+```
+
+- [ ] **Step 5: Перевірити**
+
+```bash
+dart analyze packages                                  # з кореня: No issues found!
+dart test                                              # з packages/typed_openapi
+dart format lib test bin && dart format lib test bin   # другий запуск: 0 changed
+```
+
+Expected: 313 тестів.
+
+- [ ] **Step 6: Коміт**
+
+```bash
+git add packages/typed_openapi
+git commit -m "feat(typed_openapi): report discriminator, media type and component key defects
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 12: Каталог правил, документація, публічний API, прогін корпусу
+
+**Files:**
+- Create: `packages/typed_openapi/test/normalize/rule_catalog_test.dart`
+- Modify: `CLAUDE.md`, `packages/typed_openapi/CHANGELOG.md`, `packages/typed_openapi/README.md`, `packages/typed_openapi/README.ua.md`, `packages/typed_openapi/lib/typed_openapi.dart`
+
+**Interfaces:**
+- Consumes: усе з задач 1–11.
+- Produces: експорт `Normalizer`, `NormalizedSpec`, `NormalizerRule`, `RuleContext`, `Finding`, `SpecEdit`, `EditOperation`, `SpecDocuments`; тест каталогу (унікальні kebab-case імена, кожен код — в одного правила, повний набір кодів M3, кожен фреймворк-пресет має рецепти, `generic` — ні, правила не звітують кодами парсера).
+
+- [ ] **Step 1: Тест каталогу**
+
+Створи `packages/typed_openapi/test/normalize/rule_catalog_test.dart`:
+
+```dart
+import 'package:test/test.dart';
+import 'package:typed_openapi/src/config/project_config.dart';
+import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
+import 'package:typed_openapi/src/normalize/normalizer.dart';
+
+void main() {
+  test('rule names are unique kebab-case, and each code has one rule', () {
+    final names = Normalizer.rules.map((r) => r.name).toList();
+    expect(names.toSet(), hasLength(names.length));
+    for (final name in names) {
+      expect(name, matches(RegExp(r'^[a-z0-9]+(-[a-z0-9]+)*$')));
+    }
+    final codes = [for (final rule in Normalizer.rules) ...rule.codes];
+    expect(codes.toSet(), hasLength(codes.length));
+  });
+
+  test('every M3 rule code is in the catalog, in its range', () {
+    final ids = {
+      for (final rule in Normalizer.rules)
+        for (final code in rule.codes) code.id,
+    };
+    expect(ids, {
+      'TOA106',
+      'TOA201',
+      'TOA202',
+      'TOA203',
+      'TOA204',
+      'TOA205',
+      'TOA206',
+      'TOA207',
+      'TOA211',
+      'TOA301',
+      'TOA303',
+      'TOA401',
+      'TOA402',
+      'TOA501',
+      'TOA502',
+      'TOA503',
+      'TOA504',
+      'TOA601',
+    });
+  });
+
+  test('each framework preset has recipes, generic has none', () {
+    String? hintFor(Preset preset) => [
+      for (final rule in Normalizer.rules)
+        for (final code in rule.codes) ?rule.hint(code, preset),
+    ].firstOrNull;
+    for (final preset in [
+      Preset.nestjs,
+      Preset.fastapi,
+      Preset.springdoc,
+      Preset.aspnet,
+    ]) {
+      expect(hintFor(preset), isNotNull, reason: preset.name);
+    }
+    expect(hintFor(Preset.generic), isNull);
+  });
+
+  test('a code a rule reports is never one the parser reports', () {
+    const parser = {
+      DiagnosticCode.unknownKey,
+      DiagnosticCode.invalidValue,
+      DiagnosticCode.missingRequiredField,
+    };
+    for (final rule in Normalizer.rules) {
+      expect(rule.codes.toSet().intersection(parser), isEmpty);
+    }
+  });
+}
+```
+
+Run: `dart test test/normalize/rule_catalog_test.dart` — Expected: PASS (тест закріплює стан після задач 5–11; FAIL, якщо якоїсь задачі бракує).
+
+- [ ] **Step 2: Документація і експорт**
+
+```diff
+diff --git a/CLAUDE.md b/CLAUDE.md
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -36,29 +36,26 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
+   `Severity`, `JsonPointer`, `DiagnosticBag`, and the reporters
+   (`DiagnosticReporter`, `TextReporter`, `JsonReporter`, `ReportFormat`).
+ - `load/` - `SpecLoader` reads JSON/YAML into a `SpecDocument` (plain tree,
+-  absolute file URI, source spans by JSON pointer, `valueAt(pointer)`);
+-  `YamlEventGuard` runs package:yaml's own `Parser` over the text before
+-  `loadYamlNode` (an iterative state machine: it builds no tree, hashes
+-  nothing and cannot overflow the stack) and reads its events. It reports
+-  collections nested deeper than 1000 levels (TOA007; the root collection is
+-  level 0, keys and the one-pair mappings of `[k: v]` count) and an alias
+-  inside a mapping key, directly or inside a collection used as the key
+-  (TOA008): `loadYamlNode` hashes keys as trees, which is exponential for an
+-  alias bomb. Aliases anywhere else (values, flow collections, `<<: *a`) and
+-  `?` keys without aliases are fine. A syntax error stops the guard silently
+-  and `loadYamlNode` reports it (TOA001). The scanner of package:yaml is
+-  quadratic in the flow depth of a long line, so the guard first parses the
+-  text up to where a crude bracket count passes the limit (quotes are not
+-  considered: it only picks where to look first, the parser decides); text
+-  that hides closing brackets in quotes is read in full at that cost.
+-  Aliases in values still expand in
+-  the conversion to a plain tree, so `SpecLoader` also limits that:
+-  deeper than 1000 levels once aliases are expanded is TOA007; a budget of
+-  `max(16000000, 20 * text length)` characters, where each converted node
+-  (first visit or repeat) costs the length of its JSON pointer + 1 (the
+-  pointer is what it keeps in `spans`), is TOA008 when spent (an alias bomb,
+-  or very long keys); both return no document. `OpenApiVersionDetector`
+-  reads the version.
++  absolute file URI, source spans by JSON pointer, `valueAt(pointer)`,
++  `withRoot`) through `YamlComposer`, which `ConfigLoader` uses too.
++  `load/yaml/` is a copy of package:yaml 3.1.4's scanner and parser (MIT,
++  see its `LICENSE` and `analysis_options.yaml` for the local changes: linear
++  cost on long flow lines, dart-lang/tools#2657; the scanner assert is a
++  syntax error; warnings go to a handler, never `print`). `YamlComposer`
++  builds the plain tree from the parser's events with an explicit stack, in
++  one pass: nesting deeper than 1000 levels (every collection the parser
++  opens, keys included, and every collection an alias expands to; the root
++  is level 0) is TOA007; a budget of `max(16000000, 20 * text length)`
++  characters, each built node (first visit or through an alias) costing its
++  JSON pointer length + 1, is TOA008 when spent; both return no document.
++  Scalar keys are their text (YAML Failsafe: `200:` is `"200"`); a null key
++  is TOA114 (warning), a collection key or an alias of one TOA113 (the entry
++  is dropped and never built). Duplicate keys are TOA002, last value wins
++  (error when YAML itself sees equal keys outside `.json`). Tags outside the
++  JSON Schema ruleset are TOA009 (the value is read as its text); parser
++  warnings are TOA015. A syntax error is returned to the caller, which
++  reports TOA001 (`.json` falls back to `jsonDecode` without positions).
++  `OpenApiVersionDetector` reads the version.
+ - `model/` - the immutable typed model, a superset of OAS 3.0/3.1/3.2:
+   `SpecNode` (every node has a `SpecLocation` = file URI + pointer, `x-`
+   `extensions` and reported `unknownKeys`), `RefOr<T>` = `Ref<T>` | `Inline<T>`,
+@@ -67,7 +64,9 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
+ - `parse/` - `OpenApiParser` (document, components, fragments for `$ref`
+   targets), `OperationParser`, `SchemaParser`, all on `ObjectReader` (typed
+   field access; wrong types and non-finite numbers -> TOA111, missing required
+-  -> TOA112, unknown keys -> TOA110). Parsers record nodes, `$ref`s and
++  -> TOA112, unknown keys -> TOA110; a `$ref` where OAS accepts no Reference
++  Object -> TOA107, `$ref: #/...` emptied by a YAML comment -> TOA108, the
++  YAML merge key `<<` -> TOA109). Parsers record nodes, `$ref`s and
+   version-specific constructs (`SpecFeature`) in a shared `SpecIndex`, which
+   also remembers every location a parser has read (`visited`): a location is
+   read once, so a later read (a `$ref` into a region and then one to its
+@@ -77,10 +76,23 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
+   file name that is not UTF-8 after percent-decoding -> TOA100, a host ->
+   TOA102), `SpecDocuments` loads other local files once by
+   URI, `RefResolver` follows every `$ref` (parsing each on-demand target once)
+-  and reports TOA100-TOA105, `SpecModel` answers `resolve`/`resolveSchema`;
+-  `SpecReader` runs parse -> resolve -> dialect check.
++  and reports TOA100-TOA105, `SpecModel` answers `resolve`/`resolveSchema`
++  and lists `nodes` by location; `SpecReader` runs parse -> resolve ->
++  dialect check.
++- `normalize/` - `Normalizer` runs up to 3 passes of read (`SpecReader`) ->
++  rules -> edits: a `NormalizerRule` reads the model through a
++  `RuleContext` and returns `Finding`s (a diagnostic and, for a fix,
++  `SpecEdit`s: document URI + pointer + add/replace/remove); `TreeEditor`
++  applies edits copy-on-write to the plain trees and the model is read
++  again. Parser diagnostics of intermediate passes go to a scratch bag; the
++  report has the last pass's, every finding of a rule that fixed something,
++  and the last pass's findings. An edit overlapping an earlier rule's edit,
++  or left after 3 passes, is TOA800. Rules (`normalize/rules/`, in
++  `Normalizer.rules` order) never change the model and never read text;
++  presets only add framework recipes (`NormalizerRule.hint`). Config
++  `rules: {<name>: false}` in `defaults` or a client turns a rule off.
+ - `config/` - `ConfigLoader`, `ProjectConfig`, `ClientConfig`, `Preset`.
+-- `check/` - `SpecChecker`: config -> load -> version -> `SpecReader`.
++- `check/` - `SpecChecker`: config -> load -> version -> `Normalizer`.
+ - `cli/` - `TypedOpenApiCli` (`cli.dart`, owns the `CommandRunner` and maps
+   usage errors to exit code 64) and `CheckCommand` (`check_command.dart`,
+   options `--config/-c` and `--format`, client names as positional
+@@ -92,13 +104,17 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
+   `DiagnosticCode`, `JsonPointer`, `Severity` and the reporters), the loader
+   (`SpecLoader`, `SpecDocument`, `OpenApiVersion`, `OpenApiVersionDetector`),
+   the whole `model/` (`SpecNode`, `SpecLocation`, `RefOr`, `Ref`, `Inline`,
+-  `RefKind`, `OpenApiDocument` and the other OAS objects) and the entry points
+-  `SpecReader` and `SpecModel`. Not exported: `CheckCommand`, the internals of
+-  `parse/` (`OpenApiParser`, `OperationParser`, `SchemaParser`, `ObjectReader`,
+-  `ParseContext`, `SpecIndex`, `DialectChecker`) and `resolve/` (`RefTarget`,
+-  `RefResolver`, `SpecDocuments`), and `YamlEventGuard`.
+-
+-Data flows loader -> parser -> resolver -> checker, every stage writing
++  `RefKind`, `OpenApiDocument` and the other OAS objects), the entry points
++  `SpecReader`, `SpecModel` and `SpecDocuments`, and the normalizer
++  (`Normalizer`, `NormalizedSpec`, `NormalizerRule`, `RuleContext`,
++  `Finding`, `SpecEdit`, `EditOperation`). Not exported: `CheckCommand`, the
++  internals of `parse/` (`OpenApiParser`, `OperationParser`, `SchemaParser`,
++  `ObjectReader`, `ParseContext`, `SpecIndex`, `DialectChecker`), `resolve/`
++  (`RefTarget`, `RefResolver`), `normalize/` (`TreeEditor`, the rule
++  classes), `YamlComposer` and `load/yaml/`.
++
++Data flows loader -> parser -> resolver -> normalizer -> checker, every stage
++writing
+ problems into one `DiagnosticBag`; reporters read the bag at the end.
+ 
+ Rules of the pipeline:
+diff --git a/packages/typed_openapi/CHANGELOG.md b/packages/typed_openapi/CHANGELOG.md
+--- a/packages/typed_openapi/CHANGELOG.md
++++ b/packages/typed_openapi/CHANGELOG.md
+@@ -16,17 +16,39 @@
+ - The dialect is detected by content: 3.1 constructs in a 3.0 document
+   (TOA020), `nullable` in 3.1+ (TOA021), 3.2 constructs in older documents
+   (TOA022).
+-- Loading: a guard reads package:yaml's own parser events before the document
+-  is loaded. Nesting deeper than 1000 levels (exact, keys and `[k: v]` pairs
+-  included) is reported (TOA007) instead of crashing, and so is an alias
+-  inside a mapping key (TOA008), which the YAML parser would expand
+-  exponentially before any check runs. Aliases in values and flow
+-  collections are fine. Once aliases are expanded, an alias bomb or very
+-  long keys (the JSON pointers of all nodes add up to more than
+-  `max(16000000, 20 * text length)` characters) are reported (TOA008) instead
+-  of hanging or exhausting memory, and expansion deeper than 1000 levels is
+-  TOA007. YAML keys such as `1` and `"1"` that merge into one JSON key are
+-  reported (TOA002); a directory given as the spec or the config is reported
+-  as such. The yaml dependency is pinned to `>=3.1.4 <3.2.0` for the guard.
++- Loading: YAML and JSON are read by `YamlComposer` from the events of a
++  copy of package:yaml's parser, in one iterative pass. Nesting deeper than
++  1000 levels, also once aliases are expanded, is TOA007; an alias bomb or
++  very long keys (JSON pointers of all built nodes above
++  `max(16000000, 20 * text length)` characters) are TOA008. A collection as a
++  mapping key is TOA113 and is never built, so a key cannot hide an alias
++  bomb; a null key is TOA114. Keys are their text (`200:` is `"200"`); keys
++  that are one JSON key are TOA002, the last value wins. YAML tags outside
++  the JSON Schema ruleset (`!!timestamp`, `!!binary`, `!custom`) are TOA009
++  and the value is read as text; parser warnings are TOA015. The copied
++  scanner is linear on long flow lines (dart-lang/tools#2657), so hostile
++  one-line files are rejected in moments. A directory given as the spec or
++  the config is reported as such; package:yaml is no longer a dependency.
++- `$ref` where OpenAPI does not accept a Reference Object (an operation,
++  `description`) is TOA107 with a hint to bundle the spec (`redocly bundle`);
++  `$ref: #/...` without quotes, which YAML reads as a comment, is TOA108; the
++  YAML merge key `<<` is TOA109.
++- Normalizer: `check` runs named rules over the model and applies the fixes
++  that follow from the spec or the protocol, reading the spec again (at most
++  3 passes; a fix that cannot be applied is TOA800). Fixes:
++  `bool-required-to-array` (TOA201), `drop-invalid-default` (TOA211),
++  `dedupe-enum-values` (TOA301), `declare-missing-path-params` (TOA501).
++  Diagnostics: arrays without `items` in 3.0 (TOA202), double arrays (TOA203),
++  `format` on an array (TOA204), binary objects (TOA205), `type: object`
++  against non-object branches (TOA206), examples of the wrong type (TOA207),
++  nullable enums through `oneOf` (TOA303), discriminator property not
++  required (TOA401), unresolved discriminator mapping (TOA402), path
++  parameters not in the template (TOA502), missing and duplicate
++  `operationId` (TOA503, TOA504), `*/*` media types (TOA601), component keys
++  with invalid characters (TOA106). Presets add framework recipes to the
++  hints; `rules: {<name>: false}` in `defaults` or a client turns a rule off
++  (unknown names are TOA903).
++- Programmatic API: `Normalizer`, `NormalizedSpec`, `NormalizerRule`,
++  `RuleContext`, `Finding`, `SpecEdit`, `EditOperation`, `SpecDocuments`.
+ - A region of a spec that several `$ref`s, enclosing nodes or clients reach is
+   read once, and an identical diagnostic is reported once.
+diff --git a/packages/typed_openapi/README.md b/packages/typed_openapi/README.md
+--- a/packages/typed_openapi/README.md
++++ b/packages/typed_openapi/README.md
+@@ -34,6 +34,16 @@ dart run typed_openapi check --format json
+ `check` reads the whole spec, follows its `$ref`s (also into other local
+ files) and reports unknown keys, wrong value types, broken or looping
+ references and constructs that the declared OpenAPI version does not have.
++Then it runs the normalizer: named rules fix the defects whose fix follows
++from the spec or from HTTP (`required: true` on a property, repeated enum
++values, undeclared path parameters, defaults of the wrong type) and report
++the rest with what to change at the source. A `preset` adds the recipe for
++your framework to those hints. Turn a rule off per client or in `defaults`:
++
++```yaml
++defaults:
++  rules: {dedupe-enum-values: false}
++```
+ 
+ Every finding has a stable code (`TOA011`), a JSON pointer into the spec and,
+ for files the parser could position, a line and column. Exit code `1` means
+diff --git a/packages/typed_openapi/README.ua.md b/packages/typed_openapi/README.ua.md
+--- a/packages/typed_openapi/README.ua.md
++++ b/packages/typed_openapi/README.ua.md
+@@ -35,6 +35,16 @@ dart run typed_openapi check --format json
+ `check` читає всю специфікацію, проходить її `$ref` (зокрема в інші локальні
+ файли) і повідомляє про невідомі ключі, значення неправильного типу, биті або
+ зациклені посилання і конструкції, яких немає в оголошеній версії OpenAPI.
++Потім працює нормалізатор: іменовані правила виправляють дефекти, виправлення
++яких випливає зі специфікації або з HTTP (`required: true` на властивості,
++повторені значення enum, неоголошені path-параметри, `default` не того типу),
++а про решту повідомляють, що змінити в джерелі. `preset` додає до цих підказок
++рецепт для вашого фреймворку. Правило вимикається в клієнті або в `defaults`:
++
++```yaml
++defaults:
++  rules: {dedupe-enum-values: false}
++```
+ 
+ У кожної знахідки є стабільний код (`TOA011`), JSON-pointer на місце в
+ специфікації і, якщо парсер зміг визначити позицію, рядок і колонка. Код
+diff --git a/packages/typed_openapi/lib/typed_openapi.dart b/packages/typed_openapi/lib/typed_openapi.dart
+--- a/packages/typed_openapi/lib/typed_openapi.dart
++++ b/packages/typed_openapi/lib/typed_openapi.dart
+@@ -2,7 +2,8 @@
+ ///
+ /// The programmatic API mirrors the CLI: load a config, check specs, report
+ /// diagnostics. [SpecReader] reads a loaded spec into the typed model
+-/// ([SpecModel]) with its `$ref`s resolved.
++/// ([SpecModel]) with its `$ref`s resolved; [Normalizer] runs the named
++/// rules over it and applies their fixes.
+ library;
+ 
+ export 'src/check/spec_checker.dart' show SpecChecker;
+@@ -49,5 +50,10 @@ export 'src/model/security.dart'
+         SecuritySchemeType;
+ export 'src/model/spec_node.dart'
+     show Inline, Ref, RefKind, RefOr, SpecLocation, SpecNode;
++export 'src/normalize/normalizer.dart' show NormalizedSpec, Normalizer;
++export 'src/normalize/normalizer_rule.dart'
++    show Finding, NormalizerRule, RuleContext;
++export 'src/normalize/spec_edit.dart' show EditOperation, SpecEdit;
++export 'src/resolve/spec_documents.dart' show SpecDocuments;
+ export 'src/resolve/spec_model.dart' show SpecModel;
+ export 'src/resolve/spec_reader.dart' show SpecReader;
+```
+
+- [ ] **Step 3: Перевірити**
+
+```bash
+dart analyze packages                                  # з кореня: No issues found!
+dart test                                              # з packages/typed_openapi
+dart format lib test bin && dart format lib test bin   # другий запуск: 0 changed
+```
+
+```bash
+cd packages/typed_openapi && dart pub publish --dry-run   # Package has 0 warnings (after the commit)
+```
+
+Expected: 317 тестів.
+
+- [ ] **Step 4: Прогін корпусу (smoke)**
+
+```bash
+cd packages/typed_openapi
+dart run bin/typed_openapi.dart check -c <path to the research/08 corpus>/typed_openapi.yaml --format json > ../../m3-check.json; echo "exit $?"
+```
+
+Expected: exit 1. Підсумок за специфікацією і кодом (стан під час написання плану):
+
+| Специфікація | Діагностика |
+|---|---|
+| Artemis | TOA009 ×2, TOA110 ×1, TOA401 ×2 — тепер читається (у M2 — TOA001) |
+| DigitalOcean | TOA107 ×793 (у M2 — TOA110 ×791, TOA111 ×2) |
+| Ditto | TOA202 ×2, TOA207 ×7, TOA503 ×131 |
+| Google Maps | TOA207 ×1 |
+| Grace (джерело і бандл) | TOA108 ×13, TOA111 ×19, TOA110 ×4, TOA021 ×2 |
+| Jellyfin | TOA401 ×44 |
+| Medusa | TOA207 ×2 |
+| OpenAI | TOA021 ×1, TOA110 ×1, TOA207 ×7, TOA401 ×11, TOA503 ×30, TOA601 ×1 |
+| Tambo | TOA207 ×2 |
+| Stripe, Discord, Airflow, EFGS | — |
+
+Видали `m3-check.json` після перегляду. Таблицю перенеси в research/08 окремим `docs:`-комітом, коли користувач підтвердить її.
+
+- [ ] **Step 5: Коміт**
+
+```bash
+git add packages/typed_openapi
+git commit -m "docs(typed_openapi): document the normalizer and export its API
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+---
 
 ## Самоперевірка
 
-- **Покриття специфікації.** Рішення 2 (теги — задача 1; `$ref` поза OAS — задача 3), 3 (правила над моделлю, `SpecEdit`, ≤ 3 проходи — задача 4), 4 (діагностика парсера з останнього проходу — задача 4), 6 (свій компоновщик: глибина, бюджет, дублікати, теги, нерядкові ключі; `_toPlain` і перевірка за подіями зникають — задачі 1–2), 7 (пресети лише уточнюють підказки — `NormalizerRule.hint`, задача 4; вимикання правил у конфігу і TOA903 — задача 6). Таблиця «Виправлення»: `bool-required-to-array`, `drop-invalid-default` — задача 5; `dedupe-enum-values`, `declare-missing-path-params` — ненаписані задачі 8–9. Таблиця «Лише діагностика»: TOA107, TOA108, TOA009, TOA014 — задачі 1, 3; решта — ненаписані задачі 7–11. Рішення 1 і 5 — обмеження для всіх правил (Global Constraints).
-- **Заглушки.** Задачі 1–6 містять увесь код (нові файли повністю, зміни — diff-ами, які застосовує `git apply`); ненаписані задачі винесено окремо й позначено.
-- **Узгодженість типів.** `SpecLocation.child`, `RuleContext.finding`, `SpecEdit.add/replace/remove`, `Normalizer(bag, rules:, disabled:, preset:)`, `ClientConfig.disabledRules` — однакові в задачах 4–6 і тестах.
+- **Покриття специфікації.** Рішення 2 (теги — задача 1; `$ref` поза OAS — задача 3), 3 (правила над моделлю, `SpecEdit`, ≤ 3 проходи — задача 4), 4 (діагностика парсера з останнього проходу — задача 4), 5 (інтерпретація для Dart — поза M3; правила лише виправляють дефекти й діагностують), 6 (свій компоновщик: глибина, бюджет, дублікати, теги, нерядкові ключі; перевірка за подіями й конвертер зникають — задачі 1–2), 7 (пресети лише уточнюють підказки — `NormalizerRule.hint`; вимикання правил і TOA903 — задача 6). Таблиця «Виправлення»: `bool-required-to-array`, `drop-invalid-default` — задача 5; `dedupe-enum-values` — 8; `declare-missing-path-params` — 9. Таблиця «Лише діагностика»: TOA502 — 9; TOA503, TOA504 — 10; TOA202–TOA207 — 7; TOA303 — 8; TOA401, TOA402, TOA601, TOA106 — 11; TOA107, TOA108 — 3; TOA009 і нерядковий ключ (TOA113) — 1. «Перенесено з M2»: теги, `$ref` поза OAS, `$ref` без лапок, merge key `<<`, asserts і одна глибина компоновщика — задачі 1–3.
+- **Заглушки.** Кожна задача містить увесь код (нові файли — повністю, зміни — diff-ами для `git apply` або блоками з точним місцем вставки); шлях до корпусу research/08 — єдине, що виконавець підставляє сам (корпусу немає в репозиторії).
+- **Узгодженість типів.** `SpecLocation.child`, `RuleContext.finding/rawObject`, `SpecEdit.add/replace/remove`, `Normalizer(bag, rules:, disabled:, preset:)`, `ClientConfig.disabledRules`, `NormalizerFixture.of/pointersOf` — однакові в задачах і тестах; відтворення з `main` це підтверджує.
 
 ## Відкриті питання до користувача
 
-1. **Ключі-числа і `null`.** Таблиця специфікації називає «число, null» нерядковими ключами (TOA00x, error). План читає скалярні ключі як текст (Failsafe, як вимагає OAS), бо `200:` у `responses` — поширений запис і наявний тест M2 закріплює його як валідний. Робити `200:`/`~:` помилкою (або warning з порадою взяти в лапки)?
-2. **`AssertionError`.** Бриф каже «ловити лише `YamlException`». Гарантувати, що assert сканера не вилетить у checked-режимі, без вузького `catch (AssertionError)` неможливо (рішення 3). Залишити вузький catch, чи прибрати сам assert у скопійованому сканері (третя правка копії)?
-3. **Номер коду нерядкового ключа:** TOA014 (рішення 1) — підходить?
-4. **YAML-дублікати як error з відмовою читати документ** (поведінка M1–M2, рішення 5) — лишаємо, чи переводимо на warning «перемагає останнє», як для JSON, щоб показати решту проблем файлу (R2.5)?
-5. **`warn()` у скопійованому сканері/парсері** друкує в stdout (невідома директива `%FOO`, `%YAML 1.3`), що псує `--format json`. Це поведінка `package:yaml` і в M2; виправити в копії (діагностика або тиша)?
-6. **Merge key `<<`** (відкладено з M2 у M3): у брифі його немає, план не додає підказки. Додати окреме правило/діагностику?
+1. **TOA207 на корпусі шумить помірно** (Ditto ×7, OpenAI ×7, Medusa ×2, Tambo ×2, Google Maps ×1): частина — справжні суперечності, частина — приклади-рядки для чисел (`example: "1.5"` при `type: number`). Лишити warning чи знизити до info для скалярних розбіжностей і лишити warning лише для об'єкт↔масив (C-60)?
+2. **TOA401 на Jellyfin ×44, OpenAI ×11**: дискримінатор не `required` у варіантах — це info, але таких місць багато. Достатньо одного звіту на дискримінатор (з переліком варіантів) замість одного на варіант?
+3. **TOA503 (info) на Ditto ×131, OpenAI ×30** — очікуваний шум для специфікацій без `operationId`. Лишити info за замовчуванням (рівні перевизначаються в M5)?
+4. **Merge key `<<` у мапі з іменованими записами** (`components.schemas: {<<: *base}`) звітується TOA109, але запис `<<` далі читається як схема з ім'ям `<<` — її вміст дає ще й TOA110. Прибрати такий запис із моделі після TOA109, чи лишити як є (рішення 6 каже «звичайний ключ»)?
+5. **Спільний файл кількох клієнтів** перевіряється один раз — з `rules`/`preset` першого клієнта за іменем. Перевіряти його окремо для кожного набору правил?
 
