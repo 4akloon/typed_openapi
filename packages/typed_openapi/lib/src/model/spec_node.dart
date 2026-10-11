@@ -15,6 +15,11 @@ final class SpecLocation implements Comparable<SpecLocation> {
   /// The pointer to the node inside [document].
   final JsonPointer pointer;
 
+  /// The location of [token] (a property name or a list index) under this
+  /// one, in the same document.
+  SpecLocation child(Object token) =>
+      SpecLocation(document, pointer.child(token));
+
   @override
   bool operator ==(Object other) =>
       other is SpecLocation &&

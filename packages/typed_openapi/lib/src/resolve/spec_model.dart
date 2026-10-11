@@ -18,6 +18,11 @@ final class SpecModel {
   /// The root document.
   final OpenApiDocument document;
 
+  /// Every node read from any file, ordered by location.
+  late final List<SpecNode> nodes = List.unmodifiable(
+    _nodes.values.toList()..sort((a, b) => a.location.compareTo(b.location)),
+  );
+
   final Map<SpecLocation, SpecNode> _nodes;
   final Map<SpecLocation, SpecLocation> _targets;
 

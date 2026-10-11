@@ -8,8 +8,16 @@ import '../load/spec_loader.dart';
 /// The documents of one spec: the root document and every file its `$ref`s
 /// reach, each loaded once and keyed by absolute URI.
 final class SpecDocuments {
-  /// Creates the set for [root]; other files are read with [_loader].
-  SpecDocuments(this._loader, this.root) {
+  /// Creates the set for [root]; other files are read with [_loader],
+  /// except [others], which are already loaded.
+  SpecDocuments(
+    this._loader,
+    this.root, {
+    Iterable<SpecDocument> others = const [],
+  }) {
+    for (final document in others) {
+      _documents[document.uri] = document;
+    }
     _documents[root.uri] = root;
   }
 
@@ -33,6 +41,13 @@ final class SpecDocuments {
         : null;
     return _documents[uri] = document;
   }
+
+  /// Every document loaded so far, the root first.
+  Iterable<SpecDocument> get loaded => [
+    root,
+    for (final document in _documents.values)
+      if (document != null && document.uri != root.uri) document,
+  ];
 
   /// Whether a file (not a directory) is at [uri].
   ///

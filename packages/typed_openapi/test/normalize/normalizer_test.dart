@@ -1,0 +1,288 @@
+import 'package:path/path.dart' as p;
+import 'package:test/test.dart';
+import 'package:typed_openapi/src/config/project_config.dart';
+import 'package:typed_openapi/src/diagnostics/diagnostic_bag.dart';
+import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
+import 'package:typed_openapi/src/load/spec_loader.dart';
+import 'package:typed_openapi/src/model/document.dart';
+import 'package:typed_openapi/src/model/schema.dart';
+import 'package:typed_openapi/src/normalize/normalizer.dart';
+import 'package:typed_openapi/src/normalize/normalizer_rule.dart';
+import 'package:typed_openapi/src/normalize/spec_edit.dart';
+
+import '../helpers/temp_dir.dart';
+
+/// Renames the title "old" to "new": a fix that holds after one pass.
+final class _RenameTitle extends NormalizerRule {
+  const _RenameTitle();
+
+  @override
+  String get name => 'rename-title';
+
+  @override
+  List<DiagnosticCode> get codes => const [.invalidValue];
+
+  @override
+  Iterable<Finding> check(RuleContext context) sync* {
+    for (final info in context.nodes<Info>()) {
+      if (info.title != 'old') continue;
+      final at = info.location.child('title');
+      yield context.finding(
+        .invalidValue,
+        'The title is old.',
+        at,
+        fix: 'Rename it.',
+        edits: [SpecEdit.replace(at, 'new')],
+      );
+    }
+  }
+
+  @override
+  String? hint(DiagnosticCode code, Preset preset) =>
+      preset == .nestjs ? 'Use @ApiTitle.' : null;
+}
+
+/// Removes `required: true` from every schema: the fix M3's
+/// `bool-required-to-array` makes, without moving the name.
+final class _DropBoolRequired extends NormalizerRule {
+  const _DropBoolRequired();
+
+  @override
+  String get name => 'drop-bool-required';
+
+  @override
+  List<DiagnosticCode> get codes => const [.invalidValue];
+
+  @override
+  Iterable<Finding> check(RuleContext context) sync* {
+    for (final schema in context.nodes<SchemaObject>()) {
+      final raw = context.rawAt(schema.location)?.$1;
+      if (raw is! Map<String, Object?> || raw['required'] is! bool) continue;
+      final at = schema.location.child('required');
+      yield context.finding(
+        .invalidValue,
+        'Boolean required.',
+        at,
+        edits: [SpecEdit.remove(at)],
+      );
+    }
+  }
+}
+
+/// Removes `x-drop` from the root with one edit carried by the first of
+/// two findings.
+final class _OneEditTwoFindings extends NormalizerRule {
+  const _OneEditTwoFindings();
+
+  @override
+  String get name => 'one-edit-two-findings';
+
+  @override
+  List<DiagnosticCode> get codes => const [.invalidValue];
+
+  @override
+  Iterable<Finding> check(RuleContext context) sync* {
+    final root = context.model.document.location;
+    if (context.rawObject(root)?.containsKey('x-drop') != true) return;
+    final at = root.child('x-drop');
+    yield context.finding(
+      .invalidValue,
+      'First.',
+      at,
+      edits: [SpecEdit.remove(at)],
+    );
+    yield context.finding(.invalidValue, 'Second.', at);
+  }
+}
+
+/// Reports every schema without a type: a diagnostic-only rule.
+final class _Untyped extends NormalizerRule {
+  const _Untyped();
+
+  @override
+  String get name => 'untyped';
+
+  @override
+  List<DiagnosticCode> get codes => const [.missingRequiredField];
+
+  @override
+  Iterable<Finding> check(RuleContext context) sync* {
+    for (final schema in context.nodes<SchemaObject>()) {
+      if (schema.types.isNotEmpty || schema.ref != null) continue;
+      yield context.finding(
+        .missingRequiredField,
+        'No type.',
+        schema.location,
+      );
+    }
+  }
+}
+
+/// Sets `info.title` on every pass: it never settles.
+final class _AlwaysEdits extends NormalizerRule {
+  const _AlwaysEdits(this.name);
+
+  @override
+  final String name;
+
+  @override
+  List<DiagnosticCode> get codes => const [.invalidValue];
+
+  @override
+  Iterable<Finding> check(RuleContext context) sync* {
+    final info = context.nodes<Info>().single;
+    yield context.finding(
+      .invalidValue,
+      'Title by $name.',
+      info.location,
+      edits: [
+        SpecEdit.replace(info.location.child('title'), '${info.title}+'),
+      ],
+    );
+  }
+}
+
+void main() {
+  const spec = '''
+openapi: 3.0.3
+info: {title: old, version: "1"}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        name: {type: string, required: true}
+''';
+
+  (NormalizedSpec, DiagnosticBag) normalize(
+    String text,
+    List<NormalizerRule> rules, {
+    Set<String> disabled = const {},
+    Preset? preset,
+  }) {
+    final bag = DiagnosticBag();
+    final document = SpecLoader(bag).parse(text, 'api.yaml')!;
+    final result = Normalizer(
+      bag,
+      rules: rules,
+      disabled: disabled,
+      preset: preset,
+    ).normalize(document, .v30);
+    return (result, bag);
+  }
+
+  test('a fix is applied, the model is read again and reported once', () {
+    final (result, bag) = normalize(spec, [const _RenameTitle()]);
+    expect(result.model.document.info?.title, 'new');
+    expect(result.documents.root.root['info'], {
+      'title': 'new',
+      'version': '1',
+    });
+    expect(bag.all.map((d) => (d.code, d.pointer?.value)), [
+      (DiagnosticCode.invalidValue, '#/info/title'),
+      (
+        DiagnosticCode.invalidValue,
+        '#/components/schemas/Pet/properties/name/required',
+      ),
+    ]);
+    expect(bag.all.first.message, 'The title is old.');
+    expect(bag.all.first.line, 2);
+  });
+
+  test('parser diagnostics come from the last pass only', () {
+    // The first read reports `required: true` as invalid-value; the fix
+    // removes it, so the report has the fix and not the parser's complaint.
+    final (_, bag) = normalize(spec, [const _DropBoolRequired()]);
+    expect(bag.all.single.message, 'Boolean required.');
+  });
+
+  test('findings without edits of a rule that fixes are reported too', () {
+    final (_, bag) = normalize(
+      'openapi: 3.0.3\ninfo: {title: t, version: "1"}\nx-drop: 1\n',
+      [const _OneEditTwoFindings()],
+    );
+    expect(bag.all.map((d) => d.message), ['First.', 'Second.']);
+  });
+
+  test('diagnostic-only findings are reported once, from the last pass', () {
+    final (_, bag) = normalize(
+      'openapi: 3.0.3\ninfo: {title: old, version: "1"}\n'
+      'components: {schemas: {Any: {description: anything}}}\n',
+      [const _RenameTitle(), const _Untyped()],
+    );
+    expect(bag.all.map((d) => d.message), ['The title is old.', 'No type.']);
+  });
+
+  test('of two overlapping fixes the earlier rule wins, with a warning', () {
+    final (result, bag) = normalize(spec, [
+      const _AlwaysEdits('first'),
+      const _AlwaysEdits('second'),
+    ]);
+    expect(result.model.document.info?.title, 'old++');
+    final skipped = bag.all
+        .where((d) => d.code == DiagnosticCode.fixNotApplied)
+        .map((d) => d.message)
+        .toSet();
+    expect(skipped, contains(contains('overlaps a fix of rule "first"')));
+  });
+
+  test('the normalizer stops after three passes and says so', () {
+    final (result, bag) = normalize(spec, [const _AlwaysEdits('loop')]);
+    expect(result.model.document.info?.title, 'old++');
+    expect(Normalizer.maxPasses, 3);
+    expect(
+      bag.all
+          .where((d) => d.code == DiagnosticCode.fixNotApplied)
+          .single
+          .message,
+      contains('still changed after 3 passes'),
+    );
+  });
+
+  test('a disabled rule does not run', () {
+    final (result, bag) = normalize(
+      spec,
+      [const _RenameTitle()],
+      disabled: {'rename-title'},
+    );
+    expect(result.model.document.info?.title, 'old');
+    expect(bag.all.single.code, DiagnosticCode.invalidValue);
+    expect(bag.all.single.pointer?.value, contains('required'));
+  });
+
+  test('a preset adds the framework hint to the fix', () {
+    final (_, bag) = normalize(spec, [const _RenameTitle()], preset: .nestjs);
+    expect(bag.all.first.fix, 'Rename it. Use @ApiTitle.');
+  });
+
+  test('fixes in another file are applied to that file', () {
+    final dir = TempDir();
+    dir.write(
+      'pet.yaml',
+      'Pet:\n  type: object\n  properties:\n'
+          '    name: {type: string, required: true}\n',
+    );
+    final path = dir.write('api.yaml', r'''
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Pet: {$ref: "pet.yaml#/Pet"}
+''');
+    final bag = DiagnosticBag();
+    final document = SpecLoader(bag).load(path, displayPath: 'api.yaml')!;
+    final result = Normalizer(
+      bag,
+      rules: [const _DropBoolRequired()],
+    ).normalize(document, .v30);
+    final pet = result.documents[p.toUri(p.join(dir.path, 'pet.yaml'))]!;
+    expect(pet.root['Pet'], {
+      'type': 'object',
+      'properties': {
+        'name': {'type': 'string'},
+      },
+    });
+    expect(bag.all.single.file, 'pet.yaml');
+    expect(bag.all.single.line, 4);
+  });
+}

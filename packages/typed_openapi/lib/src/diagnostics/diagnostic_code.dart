@@ -125,6 +125,10 @@ enum DiagnosticCode {
   /// text.
   nullKey('TOA114', 'null-key', .warning),
 
+  /// A normalizer fix was not applied: it overlaps an earlier rule's fix,
+  /// its target is gone, or the spec kept changing.
+  fixNotApplied('TOA800', 'fix-not-applied', .warning),
+
   /// The configuration file does not exist.
   configNotFound('TOA901', 'config-not-found', .error),
 

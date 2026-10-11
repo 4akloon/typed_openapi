@@ -27,6 +27,13 @@ final class SpecDocument {
 
   final Map<String, SourceSpan> _spans;
 
+  /// This document with [root] as its contents and the same positions.
+  ///
+  /// Positions stay keyed by pointer: a node an edit added has none, and a
+  /// list item an edit moved keeps the position of its old index.
+  SpecDocument withRoot(Map<String, Object?> root) =>
+      SpecDocument(file: file, uri: uri, root: root, spans: _spans);
+
   /// Whether source positions were recorded.
   bool get hasPositions => _spans.isNotEmpty;
 
