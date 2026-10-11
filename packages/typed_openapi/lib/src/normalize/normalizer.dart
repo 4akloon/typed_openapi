@@ -10,6 +10,7 @@ import '../resolve/spec_reader.dart';
 import 'normalizer_rule.dart';
 import 'rules/bool_required_to_array.dart';
 import 'rules/drop_invalid_default.dart';
+import 'rules/schema_shape_rules.dart';
 import 'spec_edit.dart';
 
 /// The result of normalizing a spec.
@@ -56,6 +57,12 @@ final class Normalizer {
     <NormalizerRule>[
       const BoolRequiredToArray(),
       const DropInvalidDefault(),
+      const ArrayWithoutItems(),
+      const DoubleArray(),
+      const FormatOnArray(),
+      const BinaryObject(),
+      const ContradictoryObjectType(),
+      const ExampleTypeMismatch(),
     ],
   );
 

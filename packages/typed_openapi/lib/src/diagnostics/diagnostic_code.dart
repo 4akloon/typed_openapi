@@ -129,6 +129,31 @@ enum DiagnosticCode {
   /// the name is moved into the object's `required` list.
   boolRequired('TOA201', 'bool-required', .warning),
 
+  /// An array has no `items` in an OpenAPI 3.0 document, which requires it.
+  arrayWithoutItems('TOA202', 'array-without-items', .warning),
+
+  /// An array's `items` is an array with a boolean `required`: a list
+  /// declared twice by a decorator.
+  doubleArray('TOA203', 'double-array', .warning),
+
+  /// `format` is on an array without `items` instead of on its elements.
+  formatOnArray('TOA204', 'format-on-array', .warning),
+
+  /// `type: object` with `format: binary` instead of a binary string.
+  binaryObject('TOA205', 'binary-object', .warning),
+
+  /// `type: object` next to `oneOf`/`anyOf` whose branches are all of other
+  /// types.
+  contradictoryObjectType('TOA206', 'contradictory-object-type', .warning),
+
+  /// An `example` whose structure the schema does not allow: an object for
+  /// an array, or a structure for a scalar and back.
+  exampleTypeMismatch('TOA207', 'example-type-mismatch', .warning),
+
+  /// An `example` that is a scalar of another type than the scalar schema,
+  /// such as a string for a number; only the documentation is off.
+  exampleScalarType('TOA208', 'example-scalar-type', .info),
+
   /// A schema's `default` is not of the schema's type; it is ignored.
   invalidDefault('TOA211', 'invalid-default', .warning),
 
