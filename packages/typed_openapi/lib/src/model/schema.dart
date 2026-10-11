@@ -62,7 +62,9 @@ enum SchemaType {
   bool accepts(Object? value) => switch (this) {
     .string => value is String,
     .number => value is num,
-    .integer => value is num && value.isFinite && value == value.truncate(),
+    .integer =>
+      value is int ||
+          (value is double && value.isFinite && value == value.floorToDouble()),
     .boolean => value is bool,
     .array => value is List<Object?>,
     .object => value is Map<String, Object?>,

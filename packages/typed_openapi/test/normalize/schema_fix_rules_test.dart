@@ -117,6 +117,43 @@ void main() {
       );
     });
 
+    test('a parent whose required is not a list is left alone', () {
+      final (result, bag) = normalize('''
+    Tag:
+      type: object
+      required: "z"
+      properties:
+        name: {type: string, required: true}
+''');
+      final tag = schemaIn(result, 'Tag');
+      expect(tag['required'], 'z');
+      expect((tag['properties']! as Map)['name'], {
+        'type': 'string',
+        'required': true,
+      });
+      // The parser keeps its TOA111 on the parent's list and on the flag that
+      // could not be moved.
+      final codes = {for (final d in bag.all) (d.code, d.pointer?.value)};
+      expect(
+        codes,
+        containsAll([
+          (DiagnosticCode.invalidValue, '#/components/schemas/Tag/required'),
+          (
+            DiagnosticCode.boolRequired,
+            '#/components/schemas/Tag/properties/name/required',
+          ),
+        ]),
+      );
+      expect(
+        bag.all.singleWhere((d) => d.code == DiagnosticCode.boolRequired).fix,
+        contains('a list'),
+      );
+      expect(
+        bag.all.where((d) => d.code == DiagnosticCode.fixNotApplied),
+        isEmpty,
+      );
+    });
+
     test('a valid required list is left alone', () {
       final (_, bag) = normalize('''
     Tag:
@@ -158,6 +195,24 @@ void main() {
       );
     });
 
+    test('a whole number is an integer, however large', () {
+      final (result, bag) = normalize('''
+    Limits:
+      type: object
+      properties:
+        max64: {type: integer, default: 18446744073709551615}
+        big: {type: integer, default: 1e19}
+        whole: {type: integer, default: 3.0}
+        half: {type: integer, default: 3.5}
+''');
+      final properties = schemaIn(result, 'Limits')['properties']! as Map;
+      expect((properties['max64']! as Map).containsKey('default'), isTrue);
+      expect((properties['big']! as Map).containsKey('default'), isTrue);
+      expect((properties['whole']! as Map)['default'], 3.0);
+      expect((properties['half']! as Map).containsKey('default'), isFalse);
+      expect(bag.all.map((d) => d.code), [DiagnosticCode.invalidDefault]);
+    });
+
     test('nestjs gets a hint about dynamic defaults', () {
       final (_, bag) = normalize(
         '    When: {type: string, format: date-time, default: 0}\n',
@@ -165,5 +220,21 @@ void main() {
       );
       expect(bag.all.single.fix, contains('excludeDynamicDefaults'));
     });
+  });
+
+  test('SchemaType.accepts follows the JSON type of a plain value', () {
+    expect(SchemaType.integer.accepts(1.0), isTrue);
+    expect(SchemaType.integer.accepts(1e19), isTrue);
+    expect(SchemaType.integer.accepts(-1e300), isTrue);
+    expect(SchemaType.integer.accepts(1.5), isFalse);
+    expect(SchemaType.integer.accepts(double.infinity), isFalse);
+    expect(SchemaType.integer.accepts(double.nan), isFalse);
+    expect(SchemaType.number.accepts(1), isTrue);
+    expect(SchemaType.number.accepts('1'), isFalse);
+    expect(SchemaType.nullType.accepts(null), isTrue);
+    expect(SchemaType.string.accepts(null), isFalse);
+    expect(SchemaType.array.accepts(<Object?>[]), isTrue);
+    expect(SchemaType.object.accepts(<String, Object?>{}), isTrue);
+    expect(SchemaType.boolean.accepts(0), isFalse);
   });
 }

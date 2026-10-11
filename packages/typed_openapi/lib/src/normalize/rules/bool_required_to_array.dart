@@ -34,10 +34,16 @@ final class BoolRequiredToArray extends NormalizerRule {
         if (flag) (added[schema.location] ??= []).add(name);
       }
     }
+    final flagged = {
+      for (final (_, _, property, _) in flags) property.location,
+    };
     final findings = <Finding>[];
     final listed = <SpecLocation>{};
     for (final (schema, name, property, flag) in flags) {
       final at = property.location.child('required');
+      // A parent whose "required" is something else than a list cannot take
+      // the name; its own TOA111 stays and has to be fixed first.
+      final blocked = flag && _cannotTake(context, schema, flagged);
       findings.add(
         context.finding(
           .boolRequired,
@@ -49,15 +55,19 @@ final class BoolRequiredToArray extends NormalizerRule {
                     'a property missing from "required" is optional, so the '
                     'flag is removed.',
           at,
-          fix: flag
+          fix: blocked
+              ? 'Make "required" of the object schema a list, then add '
+                    '"$name" to it and remove "required" from the property.'
+              : flag
               ? 'Add "$name" to "required" of the object schema and remove '
                     '"required" from the property.'
               : 'Remove "required: false" from the property.',
           edits: [
             // A property that is also an object with required properties
             // gets its "required" replaced by that list below instead.
-            if (!added.containsKey(property.location)) SpecEdit.remove(at),
-            if (flag && listed.add(schema.location))
+            if (!blocked && !added.containsKey(property.location))
+              SpecEdit.remove(at),
+            if (flag && !blocked && listed.add(schema.location))
               _listEdit(context, schema, added[schema.location]!),
           ],
         ),
@@ -65,6 +75,18 @@ final class BoolRequiredToArray extends NormalizerRule {
     }
     return findings;
   }
+
+  /// Whether `required` of [schema] is neither missing, nor a list, nor the
+  /// flag of a property in [flagged] that this rule replaces by a list.
+  static bool _cannotTake(
+    RuleContext context,
+    SchemaObject schema,
+    Set<SpecLocation> flagged,
+  ) => switch (context.rawAt(schema.location.child('required'))) {
+    null || (final List<Object?> _,) => false,
+    (final bool _,) => !flagged.contains(schema.location),
+    _ => true,
+  };
 
   /// `required` of [property] when it is a boolean.
   static bool? _flagOf(RuleContext context, SchemaObject property) =>
