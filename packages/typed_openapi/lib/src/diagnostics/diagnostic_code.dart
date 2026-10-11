@@ -65,8 +65,15 @@ enum DiagnosticCode {
   /// A `$ref` is empty, truncated or not a URI with a JSON pointer.
   invalidRef('TOA100', 'invalid-ref', .error),
 
+  /// A `$ref` points to a file or a node that does not exist.
+  unresolvedRef('TOA101', 'unresolved-ref', .error),
+
   /// A `$ref` points to a remote URL; only local files are read.
   remoteRef('TOA102', 'remote-ref', .error),
+
+  /// A `$ref` points to a node of another kind, such as a schema where a
+  /// parameter is expected.
+  refKindMismatch('TOA104', 'ref-kind-mismatch', .error),
 
   /// `$id` or `$self` would change the base URI of `$ref`s; this tool
   /// resolves them against the file location instead.
