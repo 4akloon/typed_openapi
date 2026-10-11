@@ -11,6 +11,7 @@ import 'normalizer_rule.dart';
 import 'rules/bool_required_to_array.dart';
 import 'rules/drop_invalid_default.dart';
 import 'rules/enum_rules.dart';
+import 'rules/path_param_rules.dart';
 import 'rules/schema_shape_rules.dart';
 import 'spec_edit.dart';
 
@@ -66,6 +67,8 @@ final class Normalizer {
       const ExampleTypeMismatch(),
       const DedupeEnumValues(),
       const NullableEnumOneOf(),
+      const DeclareMissingPathParams(),
+      const PathParamNotInTemplate(),
     ],
   );
 

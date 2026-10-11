@@ -164,6 +164,17 @@ enum DiagnosticCode {
   /// `$ref`.
   nullableEnumOneOf('TOA303', 'nullable-enum-one-of', .warning),
 
+  /// A variable of the path template has no path parameter; one is added.
+  missingPathParameter('TOA501', 'missing-path-parameter', .warning),
+
+  /// A path parameter is not a variable of the path template, or is one in
+  /// another case.
+  pathParameterNotInTemplate(
+    'TOA502',
+    'path-parameter-not-in-template',
+    .error,
+  ),
+
   /// A normalizer fix was not applied: it overlaps an earlier rule's fix,
   /// its target is gone, or the spec kept changing.
   fixNotApplied('TOA800', 'fix-not-applied', .warning),
