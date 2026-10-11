@@ -50,6 +50,16 @@ enum DiagnosticCode {
     .warning,
   ),
 
+  /// An object has a key that no OpenAPI version defines; it is ignored.
+  unknownKey('TOA110', 'unknown-key', .warning),
+
+  /// A field has the wrong JSON type or a value the spec does not allow; it
+  /// is ignored.
+  invalidValue('TOA111', 'invalid-value', .warning),
+
+  /// A field the spec requires is missing.
+  missingRequiredField('TOA112', 'missing-required-field', .warning),
+
   /// The configuration file does not exist.
   configNotFound('TOA901', 'config-not-found', .error),
 
