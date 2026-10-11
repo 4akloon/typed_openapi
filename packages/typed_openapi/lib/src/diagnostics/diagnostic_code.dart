@@ -62,6 +62,12 @@ enum DiagnosticCode {
   /// anyway.
   openApi32InOlder('TOA022', 'openapi-3-2-in-older', .info),
 
+  /// A `$ref` is empty, truncated or not a URI with a JSON pointer.
+  invalidRef('TOA100', 'invalid-ref', .error),
+
+  /// A `$ref` points to a remote URL; only local files are read.
+  remoteRef('TOA102', 'remote-ref', .error),
+
   /// `$id` or `$self` would change the base URI of `$ref`s; this tool
   /// resolves them against the file location instead.
   refBaseIgnored('TOA105', 'ref-base-ignored', .warning),
