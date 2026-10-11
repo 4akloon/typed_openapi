@@ -1,0 +1,53 @@
+include: package:lints/recommended.yaml
+
+linter:
+  rules:
+    - always_declare_return_types
+    - avoid_bool_literals_in_conditional_expressions
+    - avoid_catching_errors
+    - avoid_classes_with_only_static_members
+    - avoid_dynamic_calls
+    - avoid_multiple_declarations_per_line
+    - avoid_type_to_string
+    - avoid_types_as_parameter_names
+    - avoid_unused_constructor_parameters
+    - avoid_void_async
+    - cancel_subscriptions
+    - close_sinks
+    - combinators_ordering
+    - directives_ordering
+    - eol_at_end_of_file
+    - file_names
+    - leading_newlines_in_multiline_strings
+    - library_names
+    - literal_only_boolean_expressions
+    - matching_super_parameters
+    - no_literal_bool_comparisons
+    - no_self_assignments
+    - only_throw_errors
+    - prefer_asserts_with_message
+    - prefer_const_constructors
+    - prefer_const_declarations
+    - prefer_final_in_for_each
+    - prefer_final_locals
+    - prefer_if_elements_to_conditional_expressions
+    - prefer_null_aware_method_calls
+    - prefer_single_quotes
+    - public_member_api_docs
+    - require_trailing_commas
+    - sort_constructors_first
+    - test_types_in_equals
+    - throw_in_finally
+    - type_annotate_public_apis
+    - unnecessary_await_in_return
+    - unnecessary_breaks
+    - unnecessary_raw_strings
+    - unnecessary_statements
+    - unreachable_from_main
+    - use_enums
+    - use_named_constants
+    - use_raw_strings
+    - use_string_buffers
+
+formatter:
+  trailing_commas: preserve

@@ -1,0 +1,68 @@
+# Publishes one package to pub.dev when its release tag is pushed.
+#
+# Tag convention: <package>-v<version> (e.g. `typed_openapi-v0.1.0`,
+# `typed_openapi_runtime-v0.1.1`) — only the tagged package is published,
+# matching the repo's "bump only what changed" release policy.
+#
+# Auth is pub.dev's GitHub Actions OIDC flow (no secrets): `dart-lang/setup-dart`
+# mints a temporary pub.dev credential from the job's `id-token`. For it to be
+# accepted, each package must have automated publishing enabled on pub.dev
+# (Admin → Automated publishing): repository `4akLoon/typed_openapi`, tag pattern
+# `<package>-v{{version}}`, and the `pub.dev` GitHub environment required.
+# NOTE: pub.dev only allows this for *existing* packages — the very first
+# version of each package has to be published manually (`dart pub publish`).
+name: Publish
+
+on:
+  push:
+    tags:
+      - 'typed_openapi-v*'
+      - 'typed_openapi_runtime-v*'
+
+jobs:
+  publish:
+    name: Publish to pub.dev
+    runs-on: ubuntu-latest
+    environment: pub.dev
+    permissions:
+      id-token: write # pub.dev OIDC token exchange
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Parse package & version from the tag
+        id: meta
+        run: |
+          TAG="$GITHUB_REF_NAME"
+          echo "package=${TAG%-v*}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG##*-v}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify the pubspec version matches the tag
+        run: >-
+          grep -qx 'version: ${{ steps.meta.outputs.version }}'
+          'packages/${{ steps.meta.outputs.package }}/pubspec.yaml'
+
+      # The workspace is resolved BEFORE any pub.dev credential exists (same
+      # fix as analytics_hub). `dart-lang/setup-dart` runs
+      # `dart pub token add https://pub.dev --env-var PUB_TOKEN`, after which
+      # pub attaches that OIDC token to *every* pub.dev request — including
+      # the anonymous package-listing reads a resolve does. pub.dev rejects
+      # the token on those reads, so pub sees empty version lists and dies
+      # with "... doesn't match any versions". The Flutter action is used here
+      # only as a credential-free way to get a Dart SDK for the resolve.
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Install dependencies (workspace)
+        run: dart pub get
+
+      # Mints the temporary pub.dev credential from the job's OIDC token.
+      # Deliberately last: the credential exists only for the publish call.
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Publish ${{ steps.meta.outputs.package }} ${{ steps.meta.outputs.version }}
+        run: dart pub publish --force
+        working-directory: packages/${{ steps.meta.outputs.package }}

@@ -1,0 +1,16 @@
+name: typed_openapi
+description: >
+  OpenAPI 3.x to Dart client generator for imperfect, code-first specs:
+  named normalizer rules, diagnostics with stable codes, overrides,
+  open enums, unions with an unknown variant and typed errors.
+version: 0.0.1
+homepage: https://github.com/4akLoon/typed_openapi
+repository: https://github.com/4akLoon/typed_openapi
+
+environment:
+  sdk: ">=3.8.0 <4.0.0"
+
+dev_dependencies:
+  test: ^1.24.0
+
+resolution: workspace

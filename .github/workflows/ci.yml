@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  analyze-test:
+    name: Analyze & test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Install dependencies (workspace)
+        run: dart pub get
+
+      - name: Verify formatting
+        run: >-
+          dart format --output=none --set-exit-if-changed
+          packages/typed_openapi
+          packages/typed_openapi_runtime
+
+      - name: Analyze
+        run: >-
+          dart analyze
+          packages/typed_openapi
+          packages/typed_openapi_runtime
+
+      # Skipped while a package has no tests yet (`dart test` fails on an
+      # empty test/ directory).
+      - name: Test typed_openapi
+        run: if [ -d test ]; then dart test; fi
+        working-directory: packages/typed_openapi
+
+      - name: Test typed_openapi_runtime
+        run: if [ -d test ]; then dart test; fi
+        working-directory: packages/typed_openapi_runtime
+
+  publish-dry-run:
+    name: Publish dry-run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Install dependencies (workspace)
+        run: dart pub get
+
+      # Dry-run each publishable package.
+      - name: Dry-run typed_openapi
+        run: dart pub publish --dry-run
+        working-directory: packages/typed_openapi
+
+      - name: Dry-run typed_openapi_runtime
+        run: dart pub publish --dry-run
+        working-directory: packages/typed_openapi_runtime
