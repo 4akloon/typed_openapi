@@ -40,11 +40,14 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `NestingScanner` rejects text nested deeper than 1000 levels before the
   recursive YAML parser sees it (it is YAML-context aware: quotes and brackets
   are syntax only at a value start, block scalars are skipped, `- `, `? ` and
-  empty-key `: ` markers each nest one level). YAML aliases bypass the text
-  scan, so `SpecLoader` also limits the conversion to a plain tree: deeper
-  than 1000 levels once aliases are expanded is TOA007, more than
-  `max(100000, 20 * text length)` converted nodes is TOA008 (an alias bomb);
-  both return no document. `OpenApiVersionDetector` reads the version.
+  empty-key `: ` markers each nest one level). The same scan rejects an alias
+  in a mapping key (`? *a`, `*a : v`, `{*a : v}`) with TOA008, because the
+  YAML parser would expand it before any later check. Aliases in values
+  bypass the text scan, so `SpecLoader` also limits the conversion to a plain
+  tree: deeper than 1000 levels once aliases are expanded is TOA007; a budget
+  of `max(100000, 20 * text length)` units, where a node costs 1 on its first
+  visit and its depth + 1 on every repeat (only aliases repeat), is TOA008
+  when spent (an alias bomb); both return no document. `OpenApiVersionDetector` reads the version.
 - `model/` - the immutable typed model, a superset of OAS 3.0/3.1/3.2:
   `SpecNode` (every node has a `SpecLocation` = file URI + pointer, `x-`
   `extensions` and reported `unknownKeys`), `RefOr<T>` = `Ref<T>` | `Inline<T>`,
