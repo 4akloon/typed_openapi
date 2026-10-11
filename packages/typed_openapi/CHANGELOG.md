@@ -16,16 +16,17 @@
 - The dialect is detected by content: 3.1 constructs in a 3.0 document
   (TOA020), `nullable` in 3.1+ (TOA021), 3.2 constructs in older documents
   (TOA022).
-- Loading: nesting deeper than 1000 levels, in the text or once YAML aliases
-  are expanded, is reported (TOA007) instead of crashing; an alias bomb, or
-  very long keys (the JSON pointers of all nodes add up to more than
-  `max(16000000, 20 * text length)` characters), is reported (TOA008)
-  instead of hanging or exhausting memory. YAML aliases are supported only as
-  block values (`key: *a`, `- *a`, `<<: *a`); an alias in a flow collection
-  or in key position, and (in a document with aliases) an explicit `?` key,
-  is reported (TOA008), because the YAML parser would expand it before any
-  check runs. YAML keys such as `1` and `"1"` that merge into one JSON key
-  are reported (TOA002); a directory given as the spec or the config is
-  reported as such.
+- Loading: a guard reads package:yaml's own parser events before the document
+  is loaded. Nesting deeper than 1000 levels (exact, keys and `[k: v]` pairs
+  included) is reported (TOA007) instead of crashing, and so is an alias
+  inside a mapping key (TOA008), which the YAML parser would expand
+  exponentially before any check runs. Aliases in values and flow
+  collections are fine. Once aliases are expanded, an alias bomb or very
+  long keys (the JSON pointers of all nodes add up to more than
+  `max(16000000, 20 * text length)` characters) are reported (TOA008) instead
+  of hanging or exhausting memory, and expansion deeper than 1000 levels is
+  TOA007. YAML keys such as `1` and `"1"` that merge into one JSON key are
+  reported (TOA002); a directory given as the spec or the config is reported
+  as such. The yaml dependency is pinned to `>=3.1.4 <3.2.0` for the guard.
 - A region of a spec that several `$ref`s, enclosing nodes or clients reach is
   read once, and an identical diagnostic is reported once.

@@ -6,8 +6,8 @@ import 'package:typed_openapi/src/diagnostics/diagnostic_bag.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
 import 'package:typed_openapi/src/diagnostics/json_pointer.dart';
 import 'package:typed_openapi/src/diagnostics/severity.dart';
-import 'package:typed_openapi/src/load/nesting_scanner.dart';
 import 'package:typed_openapi/src/load/spec_loader.dart';
+import 'package:typed_openapi/src/load/yaml_event_guard.dart';
 
 import '../helpers/temp_dir.dart';
 
@@ -90,7 +90,7 @@ void main() {
       expect(SpecLoader(bag).parse(text, 'api.json'), isNull);
       final d = bag.all.single;
       expect(d.code, DiagnosticCode.nestingTooDeep);
-      expect(d.column, 7 + NestingScanner.maxDepth);
+      expect(d.column, 7 + YamlEventGuard.maxDepth);
     });
 
     test('YAML nested deeper than the limit is an error too', () {
@@ -127,12 +127,12 @@ void main() {
           'not a stack overflow', () {
         final bag = DiagnosticBag();
         final text = deepAlias();
-        expect(const NestingScanner().scan(text), isNull);
+        expect(const YamlEventGuard().check(text), isNull);
         expect(SpecLoader(bag).parse(text, 'api.yaml'), isNull);
         final d = bag.all.single;
         expect(d.code, DiagnosticCode.nestingTooDeep);
         expect(d.message, contains('alias'));
-        expect(d.pointer!.tokens, hasLength(NestingScanner.maxDepth + 1));
+        expect(d.pointer!.tokens, hasLength(YamlEventGuard.maxDepth + 1));
         expect(d.pointer!.tokens.take(2), ['x-use', '0']);
         expect(d.span, isNotNull);
       }, timeout: limit);
@@ -181,7 +181,7 @@ void main() {
         final bag = DiagnosticBag();
         final doc = SpecLoader(bag).parse(
           'openapi: 3.1.0\nx-deep: '
-              '${'[' * NestingScanner.maxDepth}${']' * NestingScanner.maxDepth}\n',
+              '${'[' * YamlEventGuard.maxDepth}${']' * YamlEventGuard.maxDepth}\n',
           'api.yaml',
         );
         expect(doc, isNotNull);
@@ -192,8 +192,8 @@ void main() {
         final bag = DiagnosticBag();
         final doc = SpecLoader(bag).parse(
           'openapi: 3.1.0\nx-deep: '
-              '${'[' * (NestingScanner.maxDepth + 1)}'
-              '${']' * (NestingScanner.maxDepth + 1)}\n',
+              '${'[' * (YamlEventGuard.maxDepth + 1)}'
+              '${']' * (YamlEventGuard.maxDepth + 1)}\n',
           'api.yaml',
         );
         expect(doc, isNull);
@@ -209,14 +209,14 @@ void main() {
               '{"openapi": "3.1.0", "x": ${'[' * levels}${']' * levels}}';
           final bag = DiagnosticBag();
           expect(
-            SpecLoader(bag).parse(doc(NestingScanner.maxDepth), 'a.$extension'),
+            SpecLoader(bag).parse(doc(YamlEventGuard.maxDepth), 'a.$extension'),
             isNotNull,
           );
           expect(bag.all, isEmpty);
           expect(
             SpecLoader(
               bag,
-            ).parse(doc(NestingScanner.maxDepth + 1), 'a.$extension'),
+            ).parse(doc(YamlEventGuard.maxDepth + 1), 'a.$extension'),
             isNull,
           );
           expect(bag.all.single.code, DiagnosticCode.nestingTooDeep);
@@ -282,11 +282,11 @@ x-two: *base
       }, timeout: limit);
     });
 
-    group('unsupported aliases', () {
+    group('alias keys', () {
       const limit = Timeout(Duration(seconds: 30));
 
-      /// A fan-out 9, level 7 alias bomb written with block aliases only
-      /// (so the scan accepts it), followed by [tail].
+      /// A fan-out 9, level 7 alias bomb (written in block style), followed
+      /// by [tail].
       String bomb(String tail) {
         final text = StringBuffer(
           'openapi: 3.1.0\nx-bomb:\n  l0: &l0 [x, x, x, x, x, x, x, x, x]\n',
@@ -301,95 +301,67 @@ x-two: *base
         return '$text';
       }
 
-      test('the bomb itself passes the scan', () {
-        expect(const NestingScanner().scan(bomb('x-k: 1')), isNull);
-      });
+      test('the bomb itself passes the guard and is bounded by the budget', () {
+        final bag = DiagnosticBag();
+        expect(const YamlEventGuard().check(bomb('x-k: 1')), isNull);
+        expect(SpecLoader(bag).parse(bomb('x-k: 1'), 'api.yaml'), isNull);
+        expect(bag.all.single.message, isNot(contains('mapping key')));
+      }, timeout: limit);
 
+      // Every key syntax of the re-reviews: package:yaml parses each as a key
+      // that contains an alias, and the guard must see it before loading.
       for (final (name, tail) in [
         ('after a ? marker', '? *l7\n: v'),
         ('inside a ? key sequence', '? [*l7]\n: v'),
         ('inside a ? key block sequence', '? - *l7\n: v'),
         ('inside a ? key block sequence at the same column', '?\n- *l7\n: v'),
-        (
-          'inside a nested ? key block sequence at the same column',
-          'x-k:\n  ?\n  - *l7\n  : v',
-        ),
+        ('inside a nested ? key', 'x-k:\n  ?\n  - *l7\n  : v'),
         ('before a colon', '*l7 : v'),
         ('in a flow mapping', 'x-k: {*l7 : v}'),
         ('as an entry of a flow mapping', 'x-k: {a: 1, *l7 : v}'),
         ('as a bare entry of a flow mapping', 'x-k: {*l7, a: 1}'),
         ('after a ? inside a flow mapping', 'x-k: {? *l7 : v}'),
         ('after a ? inside a flow sequence', 'x-k: [? *l7 : v]'),
-        ('after a bare ? inside a flow sequence', 'x-k: [? *l7]'),
-        ('after a ? after a comma in a flow mapping', 'x-k: {a: 1, ? *l7 : v}'),
-        ('inside a ? flow key', 'x-k: {? [*l7] : v}'),
         ('inside a flow sequence key', '[*l7]: v'),
         ('inside a flow mapping key', '{a: *l7}: v'),
-        ('inside a flow sequence key in a flow mapping', 'x-k: {[*l7]: v}'),
+        ('inside a flow key of a flow mapping', 'x-k: {[*l7]: v}'),
         ('inside a tagged flow sequence key', '!!seq [*l7]: v'),
         ('inside an anchored flow sequence key', '&z [*l7]: v'),
-        ('inside a flow key in a flow sequence', 'x-k: [[*l7]: v]'),
-        ('inside a flow key in a block sequence', '- [*l7]: v'),
-        ('inside a flow mapping key without a colon', 'x-k: {[*l7]}'),
-        (
-          'inside a flow mapping key on its own line',
-          'x-k:\n  {\n   [*l7]\n  }',
-        ),
-        ('inside a flow mapping key before a comma', 'x-k: {[*l7], a: 1}'),
+        ('inside a flow key in a block sequence', 'x-k:\n  - [*l7]: v'),
+        ('inside a flow key without a colon', 'x-k: {[*l7]}'),
+        ('inside a flow key on its own line', 'x-k:\n  {\n   [*l7]\n  }'),
+        ('inside a flow key before a comma', 'x-k: {[*l7], a: 1}'),
         ('inside a flow mapping in a flow mapping', 'x-k: {{a: *l7}}'),
-        (
-          'inside a flow key with the colon on the next line',
-          'x-k: [ [*l7]\n  : v]',
-        ),
-        ('as a key after a bare dash line', 'x-k:\n  - a\n  -\n    *l7 : v'),
+        ('inside a flow key, colon on the next line', 'x-k: [ [*l7]\n  : v]'),
+        ('after a bare dash line', 'x-k:\n  - a\n  -\n    *l7 : v'),
         (
           'in a flow mapping after a bare dash line',
           'x-k:\n  - a\n  -\n    {*l7 : v}',
         ),
+        ('after a : and a # without a blank', 'x-k:\n  {a:# x, b: *l7}: v'),
+        ('in a flow key after a : and a #', 'x-k:\n  [{a:# x, b: *l7}]: v'),
+        ('in a flow sequence after a : and a #', 'x-k:\n  [a:#, *l7]: v'),
         (
-          'as a flow sequence key after a bare dash line',
-          'x-k:\n  - a\n  -\n    [*l7]: v',
+          'after a : and a quote without a blank',
+          "x-k:\n  {true:'x, c: *l7}: v",
         ),
-        ('followed by text', 'x-k: *l7 more'),
-        ('on its own line', 'x-k:\n  *l7'),
+        ('after a ? and a quote without a blank', 'x-k:\n  {?"a : *l7}: v'),
+        ('after a nested ? and a quote', 'x-k:\n  {x: {?"a : *l7}}: v'),
+        ('after a ? and a # without a blank', 'x-k:\n  {?#a : {v: *l7}}: 1'),
+        ('after a " in a flow mapping', 'x-k:\n  [{a:"b, c: *l7}]: 1'),
+        ('after an indented ---', 'x-k:\n --- "q:\n    j: 1\n    ? *l7'),
       ]) {
-        test('an alias $name is rejected before it is expanded', () {
+        test('an alias $name is reported before it is expanded', () {
           final bag = DiagnosticBag();
           expect(SpecLoader(bag).parse(bomb(tail), 'api.yaml'), isNull);
           final d = bag.all.single;
           expect(d.code, DiagnosticCode.aliasExpansionTooLarge);
-          expect(d.message, contains('block values'));
+          expect(d.message, contains('mapping key'));
           expect(d.span, isNotNull);
         }, timeout: limit);
       }
 
-      test('explicit and collection keys are accepted without aliases', () {
-        final bag = DiagnosticBag();
-        final doc = SpecLoader(bag).parse(
-          'openapi: 3.1.0\nx-a:\n  ? /pets\n  : 1\nx-b: {? b : 2}\n',
-          'api.yaml',
-        );
-        expect(bag.all.where((d) => d.severity == Severity.error), isEmpty);
-        expect(doc, isNotNull);
-      }, timeout: limit);
-
-      test('JSON-like values next to block aliases are accepted', () {
-        final bag = DiagnosticBag();
-        final doc = SpecLoader(bag).parse(
-          '''
-openapi: 3.1.0
-x-base: &base [1, 2]
-x-flow: {"a": [1, {"b": [2]}], "c": "*base"}
-x-list: [[1], [2]]
-x-ref: *base
-''',
-          'api.yaml',
-        );
-        expect(bag.all, isEmpty);
-        expect(doc, isNotNull);
-      }, timeout: limit);
-
-      test('a merge key and block aliases are accepted', () {
+      test('aliases everywhere except in keys are accepted', () {
         final bag = DiagnosticBag();
         final doc = SpecLoader(bag).parse(
           '''
@@ -400,54 +372,32 @@ x-merge:
   <<: *base
   b: 2
 x-value: *ref # the same list
+x-own-line:
+  *ref
 x-seq:
   - *ref
   - - *base
   - k: *base
+x-flow: {k: *ref, j: [*ref, *base]}
+x-list: [*ref, *ref]
+x-text: |
+  *x : v
+x-md: some *bold* text
+  * item
+? /pets
+: 1
 ''',
           'api.yaml',
         );
         expect(bag.all, isEmpty);
         expect(doc, isNotNull);
-        expect(doc!.root['x-value'], [1, 2]);
-      }, timeout: limit);
-
-      test('an alias in a flow collection is rejected with a hint', () {
-        final bag = DiagnosticBag();
-        expect(
-          SpecLoader(bag).parse(
-            'openapi: 3.1.0\nx-a: &a 1\nx-b: [*a, *a]\n',
-            'api.yaml',
-          ),
-          isNull,
-        );
-        final d = bag.all.single;
-        expect(d.code, DiagnosticCode.aliasExpansionTooLarge);
-        expect(d.line, 3);
-        expect(d.fix, contains('block value'));
-      }, timeout: limit);
-
-      test('a * inside quotes, comments, block scalars or plain text is not '
-          'an alias', () {
-        final bag = DiagnosticBag();
-        final doc = SpecLoader(bag).parse(
-          '''
-openapi: 3.1.0
-x-a: {"*k": 1, '*j': 2, p*q: 3}
-"*l" : 4
-'*m': 5
-x-b: a * b
-x-c: some *bold* text
-  and *more* text
-x-d: |
-  *x : v
-  [*x]
-x-e: text # *x : v
-''',
-          'api.yaml',
-        );
-        expect(bag.all.where((d) => d.severity == Severity.error), isEmpty);
-        expect(doc, isNotNull);
+        expect(doc!.root['x-flow'], {
+          'k': [1, 2],
+          'j': [
+            [1, 2],
+            {'a': 1},
+          ],
+        });
       }, timeout: limit);
 
       test(

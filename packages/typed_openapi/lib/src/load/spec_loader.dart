@@ -9,8 +9,8 @@ import 'package:yaml/yaml.dart';
 import '../diagnostics/diagnostic_bag.dart';
 import '../diagnostics/diagnostic_code.dart';
 import '../diagnostics/json_pointer.dart';
-import 'nesting_scanner.dart';
 import 'spec_document.dart';
+import 'yaml_event_guard.dart';
 
 /// Reads spec files (JSON or YAML) into [SpecDocument]s.
 ///
@@ -71,7 +71,7 @@ final class SpecLoader {
   /// duplicate key) is read again with `jsonDecode`, without positions.
   SpecDocument? parse(String text, String file, {Uri? uri}) {
     final location = uri ?? p.toUri(p.normalize(p.absolute(file)));
-    final found = const NestingScanner().scan(text);
+    final found = const YamlEventGuard().check(text);
     if (found != null) {
       final span = SourceFile.fromString(
         text,
@@ -81,21 +81,20 @@ final class SpecLoader {
         case .tooDeep:
           _diagnostics.report(
             .nestingTooDeep,
-            'The document nests deeper than ${NestingScanner.maxDepth} '
+            'The document nests deeper than ${YamlEventGuard.maxDepth} '
             'levels.',
             file: file,
             span: span,
           );
-        case .alias:
+        case .aliasInKey:
           _diagnostics.report(
             .aliasExpansionTooLarge,
-            'YAML aliases are only supported as block values (`key: *a` or '
-            '`- *a`). OpenAPI keys are strings, and an alias in any other '
-            'position, or an explicit "?" key in a document with aliases, '
-            'can expand without bound, so the document is not read.',
+            'A YAML alias is used in a mapping key. OpenAPI keys are '
+            'strings, and an alias there can expand without bound, so the '
+            'document is not read.',
             file: file,
             span: span,
-            fix: 'Write the alias as a block value, or write its content out.',
+            fix: 'Write the key out instead of aliasing it.',
           );
       }
       return null;
@@ -216,9 +215,9 @@ final class SpecLoader {
 ///
 /// YAML aliases make the tree a graph that shares nodes, so walking it as a
 /// tree can take far more steps, and go far deeper, than the text suggests.
-/// The text-level `NestingScanner` cannot see that, so the conversion
+/// The `YamlEventGuard` runs before aliases are expanded and cannot see that, so the conversion
 /// enforces both limits itself: it stops at the first node deeper than
-/// [NestingScanner.maxDepth] (`nesting-too-deep`) and once the nodes it has
+/// [YamlEventGuard.maxDepth] (`nesting-too-deep`) and once the nodes it has
 /// converted have cost more than its budget (`alias-expansion-too-large`).
 /// Either is reported once, at that node, and sets [failed].
 ///
@@ -257,7 +256,7 @@ final class _PlainConverter {
   bool failed = false;
 
   /// Converts [node], which is at [pointer], [depth] collections deep (the
-  /// root is 0, as for the `NestingScanner`).
+  /// root is 0, as for the `YamlEventGuard`).
   Object? convert(YamlNode node, JsonPointer pointer, int depth) {
     if (failed) return null;
     _budget -= pointer.value.length + 1;
@@ -279,10 +278,10 @@ final class _PlainConverter {
       return null;
     }
     final isCollection = node is YamlMap || node is YamlList;
-    if (isCollection && depth > NestingScanner.maxDepth) {
+    if (isCollection && depth > YamlEventGuard.maxDepth) {
       _fail(
         .nestingTooDeep,
-        'The document nests deeper than ${NestingScanner.maxDepth} levels'
+        'The document nests deeper than ${YamlEventGuard.maxDepth} levels'
         '${mayHaveAliases ? ', counting what its aliases expand to' : ''}.',
         node,
         pointer,

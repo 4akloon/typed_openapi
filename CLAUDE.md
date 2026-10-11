@@ -37,19 +37,23 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   (`DiagnosticReporter`, `TextReporter`, `JsonReporter`, `ReportFormat`).
 - `load/` - `SpecLoader` reads JSON/YAML into a `SpecDocument` (plain tree,
   absolute file URI, source spans by JSON pointer, `valueAt(pointer)`);
-  `NestingScanner` rejects text nested deeper than 1000 levels before the
-  recursive YAML parser sees it (it is YAML-context aware: quotes and brackets
-  are syntax only at a value start, block scalars are skipped, `- `, `? ` and
-  empty-key `: ` markers each nest one level; a root flow collection is level
-  0, like a root block mapping). The same scan accepts an alias only as a
-  block value (`key: *a`, `- *a`, nothing but blanks and a comment after it
-  on the line) and reports any other alias with TOA008: in a flow collection,
-  in key position, followed by text, alone on a line. In a document that has
-  an alias it also reports an explicit `?` key; without aliases `?` keys are
-  left alone. The YAML parser would otherwise expand such aliases (hash them
-  as keys) before any later check. Aliases in values bypass the text scan,
-  so `SpecLoader` also limits the conversion to a plain tree: deeper than
-  1000 levels once aliases are expanded is TOA007; a budget of
+  `YamlEventGuard` runs package:yaml's own `Parser` over the text before
+  `loadYamlNode` (an iterative state machine: it builds no tree, hashes
+  nothing and cannot overflow the stack) and reads its events. It reports
+  collections nested deeper than 1000 levels (TOA007; the root collection is
+  level 0, keys and the one-pair mappings of `[k: v]` count) and an alias
+  inside a mapping key, directly or inside a collection used as the key
+  (TOA008): `loadYamlNode` hashes keys as trees, which is exponential for an
+  alias bomb. Aliases anywhere else (values, flow collections, `<<: *a`) and
+  `?` keys without aliases are fine. A syntax error stops the guard silently
+  and `loadYamlNode` reports it (TOA001). The scanner of package:yaml is
+  quadratic in the flow depth of a long line, so the guard first parses the
+  text up to where a crude bracket count passes the limit (quotes are not
+  considered: it only picks where to look first, the parser decides); text
+  that hides closing brackets in quotes is read in full at that cost.
+  Aliases in values still expand in
+  the conversion to a plain tree, so `SpecLoader` also limits that:
+  deeper than 1000 levels once aliases are expanded is TOA007; a budget of
   `max(16000000, 20 * text length)` characters, where each converted node
   (first visit or repeat) costs the length of its JSON pointer + 1 (the
   pointer is what it keeps in `spans`), is TOA008 when spent (an alias bomb,
@@ -92,7 +96,7 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `SpecReader` and `SpecModel`. Not exported: `CheckCommand`, the internals of
   `parse/` (`OpenApiParser`, `OperationParser`, `SchemaParser`, `ObjectReader`,
   `ParseContext`, `SpecIndex`, `DialectChecker`) and `resolve/` (`RefTarget`,
-  `RefResolver`, `SpecDocuments`), and `NestingScanner`.
+  `RefResolver`, `SpecDocuments`), and `YamlEventGuard`.
 
 Data flows loader -> parser -> resolver -> checker, every stage writing
 problems into one `DiagnosticBag`; reporters read the bag at the end.
@@ -143,6 +147,11 @@ Rules of the pipeline:
 - No `analyzer` dependency in the generator core; tests run `dart analyze` on
   generated fixtures as a subprocess.
 - Escape every string taken from the spec at every interpolation site.
+- One implementation import is allowed: `YamlEventGuard` reads
+  `package:yaml/src/parser.dart` and `src/event.dart` (the parser's events are
+  the only exact view of what `loadYamlNode` will do). The yaml dependency is
+  therefore pinned to `>=3.1.4 <3.2.0`; widening it means re-running the guard's
+  tests and fuzz test.
 
 ## Where things are
 

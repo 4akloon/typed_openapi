@@ -6,7 +6,7 @@ import 'package:yaml/yaml.dart';
 
 import '../diagnostics/diagnostic_bag.dart';
 import '../diagnostics/json_pointer.dart';
-import '../load/nesting_scanner.dart';
+import '../load/yaml_event_guard.dart';
 import 'project_config.dart';
 
 /// Reads `typed_openapi.yaml` into a [ProjectConfig].
@@ -66,18 +66,16 @@ final class ConfigLoader {
       );
       return null;
     }
-    final found = const NestingScanner().scan(text);
+    final found = const YamlEventGuard().check(text);
     if (found != null) {
       _diagnostics.report(
         .configInvalid,
         switch (found.problem) {
           .tooDeep =>
-            'The config nests deeper than ${NestingScanner.maxDepth} levels.',
-          .alias =>
-            'YAML aliases are only supported as block values (`key: *a` or '
-                '`- *a`). OpenAPI keys are strings, and an alias in any other '
-                'position, or an explicit "?" key in a config with aliases, '
-                'can expand without bound.',
+            'The config nests deeper than ${YamlEventGuard.maxDepth} levels.',
+          .aliasInKey =>
+            'The config uses a YAML alias in a mapping key. Keys are '
+                'strings, and an alias there can expand without bound.',
         },
         file: path,
         span: SourceFile.fromString(text).span(found.offset, found.offset + 1),

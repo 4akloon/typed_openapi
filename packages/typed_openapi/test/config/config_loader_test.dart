@@ -110,7 +110,7 @@ clients:
       final bag = DiagnosticBag();
       expect(ConfigLoader(bag).load(path), isNull);
       expect(bag.all.single.code, DiagnosticCode.configInvalid);
-      expect(bag.all.single.message, contains('block values'));
+      expect(bag.all.single.message, contains('mapping key'));
     }, timeout: const Timeout(Duration(seconds: 30)));
   }
 
