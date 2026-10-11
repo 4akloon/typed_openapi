@@ -6,6 +6,7 @@ import 'package:source_span/source_span.dart';
 import '../diagnostics/diagnostic_bag.dart';
 import '../diagnostics/json_pointer.dart';
 import '../load/yaml_composer.dart';
+import '../normalize/normalizer.dart';
 import 'project_config.dart';
 
 /// Reads `typed_openapi.yaml` into a [ProjectConfig].
@@ -17,7 +18,7 @@ final class ConfigLoader {
   const ConfigLoader(this._diagnostics);
 
   static const _topLevelKeys = {'defaults', 'clients'};
-  static const _defaultsKeys = {'preset', 'line_width'};
+  static const _defaultsKeys = {'preset', 'line_width', 'rules'};
   static const _clientKeys = {
     'input',
     'output',
@@ -25,6 +26,7 @@ final class ConfigLoader {
     'overrides',
     'baseline',
     'line_width',
+    'rules',
   };
 
   final DiagnosticBag _diagnostics;
@@ -79,10 +81,12 @@ final class ConfigLoader {
     final defaults = reader.mapAt(root, 'defaults', .root);
     Preset? defaultPreset;
     int? defaultWidth;
+    var defaultRules = const <String, bool>{};
     if (defaults != null) {
       reader.checkKeys(defaults, _defaultsKeys, defaultsPointer);
       defaultPreset = reader.presetAt(defaults, defaultsPointer);
       defaultWidth = reader.intAt(defaults, 'line_width', defaultsPointer);
+      defaultRules = reader.rulesAt(defaults, defaultsPointer);
     }
 
     final clientsPointer = JsonPointer.root.child('clients');
@@ -116,6 +120,7 @@ final class ConfigLoader {
           ClientConfig.defaultLineWidth;
       final overrides = reader.stringAt(value, 'overrides', pointer);
       final baseline = reader.stringAt(value, 'baseline', pointer);
+      final rules = {...defaultRules, ...reader.rulesAt(value, pointer)};
       if (input == null || output == null) continue;
       outputSpans[name] = reader.spanAt(pointer.child('output'));
       clients.add(
@@ -127,6 +132,10 @@ final class ConfigLoader {
           preset: preset,
           overrides: overrides == null ? null : resolve(overrides),
           baseline: baseline == null ? null : resolve(baseline),
+          disabledRules: {
+            for (final MapEntry(:key, :value) in rules.entries)
+              if (!value) key,
+          },
         ),
       );
     }
@@ -266,6 +275,38 @@ class _ConfigReader {
     if (value is int && value > 0) return value;
     invalid('"$key" must be a positive integer.', at.child(key));
     return null;
+  }
+
+  /// `rules` of [parent]: normalizer rule names mapped to whether they run.
+  /// Unknown names are reported and skipped.
+  Map<String, bool> rulesAt(Map<String, Object?> parent, JsonPointer at) {
+    final rules = mapAt(parent, 'rules', at);
+    if (rules == null) return const {};
+    final pointer = at.child('rules');
+    final known = Normalizer.ruleNames;
+    final result = <String, bool>{};
+    for (final MapEntry(key: name, :value) in rules.entries) {
+      if (!known.contains(name)) {
+        diagnostics.report(
+          .configUnknownKey,
+          'Unknown normalizer rule "$name".',
+          file: file,
+          pointer: pointer.child(name),
+          span: spanAt(pointer.child(name)),
+          fix: 'Known rules: ${(known.toList()..sort()).join(', ')}.',
+        );
+        continue;
+      }
+      if (value is! bool) {
+        invalid(
+          'Rule "$name" must be true or false.',
+          pointer.child(name),
+        );
+        continue;
+      }
+      result[name] = value;
+    }
+    return result;
   }
 
   Preset? presetAt(Map<String, Object?> parent, JsonPointer at) {

@@ -27,6 +27,7 @@ final class ClientConfig {
     this.preset,
     this.overrides,
     this.baseline,
+    this.disabledRules = const {},
   });
 
   /// Line width of generated code when the config does not set one.
@@ -52,6 +53,9 @@ final class ClientConfig {
 
   /// Absolute path of the baseline file.
   final String? baseline;
+
+  /// Normalizer rules the config turns off for this client, by name.
+  final Set<String> disabledRules;
 }
 
 /// The parsed `typed_openapi.yaml`.

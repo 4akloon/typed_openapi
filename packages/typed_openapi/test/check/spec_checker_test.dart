@@ -32,6 +32,36 @@ clients:
     );
   });
 
+  test('normalizes each spec with the client\'s rules', () {
+    final dir = TempDir();
+    const spec = '''
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Tag:
+      type: object
+      properties:
+        name: {type: string, required: true}
+''';
+    dir.write('a.yaml', spec);
+    dir.write('b.yaml', spec);
+    final path = dir.write('typed_openapi.yaml', '''
+clients:
+  a: {input: a.yaml, output: lib/a}
+  b:
+    input: b.yaml
+    output: lib/b
+    rules: {bool-required-to-array: false}
+''');
+    final bag = DiagnosticBag();
+    SpecChecker(bag).check(ConfigLoader(bag).load(path)!);
+    expect(bag.all.map((d) => (d.code, d.file)), [
+      (DiagnosticCode.boolRequired, 'a.yaml'),
+      (DiagnosticCode.invalidValue, 'b.yaml'),
+    ]);
+  });
+
   test('only checks the named clients', () {
     final dir = TempDir();
     final path = dir.write('typed_openapi.yaml', '''
@@ -59,6 +89,36 @@ clients:
     expect(bag.all.single.code, DiagnosticCode.unsupportedOpenApiVersion);
   });
 
+  test('a shared spec is checked once per preset and rule set', () {
+    final dir = TempDir();
+    dir.write('shared.yaml', '''
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Tag:
+      type: object
+      properties:
+        name: {type: string, required: true}
+''');
+    final path = dir.write('typed_openapi.yaml', '''
+clients:
+  a: {input: shared.yaml, output: lib/a}
+  b:
+    input: shared.yaml
+    output: lib/b
+    rules: {bool-required-to-array: false}
+  c: {input: shared.yaml, output: lib/c}
+''');
+    final bag = DiagnosticBag();
+    SpecChecker(bag).check(ConfigLoader(bag).load(path)!);
+    // a and c share one run (TOA201); b runs without the fix (TOA111).
+    expect(bag.all.map((d) => d.code), [
+      DiagnosticCode.boolRequired,
+      DiagnosticCode.invalidValue,
+    ]);
+  });
+
   test('reads each spec into the model and follows its references', () {
     final dir = TempDir();
     dir.write('specs/api.yaml', r'''
@@ -67,6 +127,7 @@ info: {title: api}
 paths:
   /pets:
     get:
+      operationId: listPets
       responses:
         "200": {$ref: "common.yaml#/components/responses/Missing"}
 ''');

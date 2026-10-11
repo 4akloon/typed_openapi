@@ -114,6 +114,45 @@ clients:
     expect(bag.all.single.span, isNotNull);
   });
 
+  test('reads rules from defaults and clients; a client overrides', () {
+    final path = TempDir().write('c.yaml', '''
+defaults:
+  rules: {bool-required-to-array: false, drop-invalid-default: false}
+clients:
+  a: {input: a.json, output: lib/a}
+  b:
+    input: b.json
+    output: lib/b
+    rules: {drop-invalid-default: true}
+''');
+    final bag = DiagnosticBag();
+    final clients = ConfigLoader(bag).load(path)!.clients;
+    expect(bag.all, isEmpty);
+    expect(clients.first.disabledRules, {
+      'bool-required-to-array',
+      'drop-invalid-default',
+    });
+    expect(clients.last.disabledRules, {'bool-required-to-array'});
+  });
+
+  test('an unknown rule name is a warning; a value that is not a boolean '
+      'is an error', () {
+    final path = TempDir().write('c.yaml', '''
+clients:
+  a:
+    input: a.json
+    output: lib/a
+    rules: {bool-required: false, drop-invalid-default: off}
+''');
+    final bag = DiagnosticBag();
+    expect(ConfigLoader(bag).load(path)!.clients.single.disabledRules, isEmpty);
+    expect(bag.all.map((d) => (d.code, d.pointer?.value)), [
+      (DiagnosticCode.configUnknownKey, '#/clients/a/rules/bool-required'),
+      (DiagnosticCode.configInvalid, '#/clients/a/rules/drop-invalid-default'),
+    ]);
+    expect(bag.all.first.fix, contains('bool-required-to-array'));
+  });
+
   test('accepts an alias in a value', () {
     final path = TempDir().write('typed_openapi.yaml', '''
 clients:
