@@ -5,13 +5,18 @@ import 'spec_document.dart';
 /// The OpenAPI line a document declares in its `openapi` field.
 enum OpenApiVersion {
   /// OpenAPI 3.0.x.
-  v30,
+  v30('3.0'),
 
   /// OpenAPI 3.1.x.
-  v31,
+  v31('3.1'),
 
   /// OpenAPI 3.2.x.
-  v32,
+  v32('3.2');
+
+  const OpenApiVersion(this.label);
+
+  /// The version as people write it, such as `3.1`.
+  final String label;
 }
 
 /// Reads the OpenAPI version of a [SpecDocument].

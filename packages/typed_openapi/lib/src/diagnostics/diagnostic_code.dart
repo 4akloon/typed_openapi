@@ -50,6 +50,18 @@ enum DiagnosticCode {
     .warning,
   ),
 
+  /// A 3.0 document uses an OpenAPI 3.1 or JSON Schema 2020-12 construct;
+  /// it is read as 3.1.
+  openApi31InOpenApi30('TOA020', 'openapi-3-1-in-3-0', .warning),
+
+  /// A 3.1 or later document uses `nullable`, which only 3.0 defines; it is
+  /// read as in 3.0.
+  nullableAfterOpenApi30('TOA021', 'nullable-after-3-0', .warning),
+
+  /// A document older than 3.2 uses an OpenAPI 3.2 construct; it is read
+  /// anyway.
+  openApi32InOlder('TOA022', 'openapi-3-2-in-older', .info),
+
   /// `$id` or `$self` would change the base URI of `$ref`s; this tool
   /// resolves them against the file location instead.
   refBaseIgnored('TOA105', 'ref-base-ignored', .warning),
