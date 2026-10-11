@@ -110,9 +110,14 @@ final class Normalizer {
       final hasEdits = found.any((f) => f.$2.edits.isNotEmpty);
       if (!hasEdits || pass == maxPasses) {
         scratch.all.forEach(_diagnostics.add);
+        final reported = <SpecEdit>[];
         for (final (rule, finding) in found) {
           _report(rule, finding);
           for (final edit in finding.edits) {
+            // An edit proposed twice (a path item shared by several paths)
+            // is one fix.
+            if (reported.any(edit.sameAs)) continue;
+            reported.add(edit);
             _notApplied(
               documents,
               rule,
@@ -142,26 +147,23 @@ final class Normalizer {
     }
   }
 
-  /// Applies the edits of [found] in order, skipping any that overlaps an
-  /// earlier one; returns the edited documents by URI.
+  /// Applies the edits of [found] in order; returns the edited documents by
+  /// URI.
+  ///
+  /// An edit equal to an applied one is skipped. An edit that overlaps an
+  /// applied one waits: it is not reported, because its rule proposes it
+  /// again in the next pass if it is still needed (and the last pass
+  /// reports every edit that is still proposed).
   Map<Uri, SpecDocument> _apply(
     SpecDocuments documents,
     List<(NormalizerRule, Finding)> found,
   ) {
-    final accepted = <(NormalizerRule, SpecEdit)>[];
+    final accepted = <SpecEdit>[];
     final editors = <Uri, TreeEditor>{};
     for (final (rule, finding) in found) {
       for (final edit in finding.edits) {
-        final earlier = accepted.where((a) => a.$2.overlaps(edit)).firstOrNull;
-        if (earlier != null) {
-          _notApplied(
-            documents,
-            rule,
-            edit,
-            'it overlaps a fix of rule "${earlier.$1.name}"',
-          );
-          continue;
-        }
+        if (accepted.any(edit.sameAs)) continue;
+        if (accepted.any((a) => a.overlaps(edit))) continue;
         final uri = edit.location.document;
         final document = documents[uri];
         if (document == null) {
@@ -174,7 +176,7 @@ final class Normalizer {
           _notApplied(documents, rule, edit, problem);
           continue;
         }
-        accepted.add((rule, edit));
+        accepted.add(edit);
       }
     }
     return {

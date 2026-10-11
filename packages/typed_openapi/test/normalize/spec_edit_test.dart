@@ -10,6 +10,48 @@ void main() {
   SpecLocation at(String pointer) =>
       SpecLocation(file, JsonPointer.parse(pointer));
 
+  test('sameAs compares location, operation and the value deeply', () {
+    final edit = SpecEdit.replace(at('#/a'), {
+      'k': [1, 2],
+    });
+    expect(
+      edit.sameAs(
+        SpecEdit.replace(at('#/a'), {
+          'k': [1, 2],
+        }),
+      ),
+      isTrue,
+    );
+    expect(
+      edit.sameAs(
+        SpecEdit.add(at('#/a'), {
+          'k': [1, 2],
+        }),
+      ),
+      isFalse,
+    );
+    expect(
+      edit.sameAs(
+        SpecEdit.replace(at('#/b'), {
+          'k': [1, 2],
+        }),
+      ),
+      isFalse,
+    );
+    expect(
+      edit.sameAs(
+        SpecEdit.replace(at('#/a'), {
+          'k': [1, 3],
+        }),
+      ),
+      isFalse,
+    );
+    expect(
+      SpecEdit.remove(at('#/a')).sameAs(SpecEdit.remove(at('#/a'))),
+      isTrue,
+    );
+  });
+
   test('add, replace and remove change a copy, never the original', () {
     final original = <String, Object?>{
       'a': {'b': 1, 'c': 2},

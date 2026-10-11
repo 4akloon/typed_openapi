@@ -86,11 +86,14 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   applies edits copy-on-write to the plain trees and the model is read
   again. Parser diagnostics of intermediate passes go to a scratch bag; the
   report has the last pass's, every finding of a rule that fixed something,
-  and the last pass's findings. An edit overlapping an earlier rule's edit,
-  or left after 3 passes, is TOA800. Edits overlap when they touch the same
-  node or one lies inside the other, and also when one adds or removes a list
-  element and the other's pointer passes through that list (indexes shift;
-  the later edit waits for the next pass). Rules (`normalize/rules/`, in
+  and the last pass's findings. An edit still proposed after 3 passes, or
+  whose file cannot be read or whose target is gone, is TOA800. An edit equal
+  to an applied one (same location, operation and value) is skipped, and one
+  that overlaps an applied edit waits silently for the next pass, where its
+  rule proposes it again if it is still needed. Edits overlap when they touch
+  the same node or one lies inside the other, and also when one adds or
+  removes a list element and the other's pointer passes through that list
+  (indexes shift). Rules (`normalize/rules/`, in
   `Normalizer.rules` order) never change the model and never read text;
   presets only add framework recipes (`NormalizerRule.hint`). Config
   `rules: {<name>: false}` in `defaults` or a client turns a rule off

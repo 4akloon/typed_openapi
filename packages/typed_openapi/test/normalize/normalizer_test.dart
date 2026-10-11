@@ -1,6 +1,7 @@
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:typed_openapi/src/config/project_config.dart';
+import 'package:typed_openapi/src/diagnostics/diagnostic.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_bag.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
 import 'package:typed_openapi/src/load/spec_loader.dart';
@@ -8,6 +9,8 @@ import 'package:typed_openapi/src/model/document.dart';
 import 'package:typed_openapi/src/model/schema.dart';
 import 'package:typed_openapi/src/normalize/normalizer.dart';
 import 'package:typed_openapi/src/normalize/normalizer_rule.dart';
+import 'package:typed_openapi/src/normalize/rules/drop_invalid_default.dart';
+import 'package:typed_openapi/src/normalize/rules/path_param_rules.dart';
 import 'package:typed_openapi/src/normalize/spec_edit.dart';
 
 import '../helpers/temp_dir.dart';
@@ -184,10 +187,12 @@ final class _Untyped extends NormalizerRule {
 
 /// Sets `info.title` on every pass: it never settles.
 final class _AlwaysEdits extends NormalizerRule {
-  const _AlwaysEdits(this.name);
+  const _AlwaysEdits(this.name, [this.suffix = '+']);
 
   @override
   final String name;
+
+  final String suffix;
 
   @override
   List<DiagnosticCode> get codes => const [.invalidValue];
@@ -200,13 +205,15 @@ final class _AlwaysEdits extends NormalizerRule {
       'Title by $name.',
       info.location,
       edits: [
-        SpecEdit.replace(info.location.child('title'), '${info.title}+'),
+        SpecEdit.replace(info.location.child('title'), '${info.title}$suffix'),
       ],
     );
   }
 }
 
 void main() {
+  bool isNotApplied(Diagnostic d) => d.code == DiagnosticCode.fixNotApplied;
+
   const spec = '''
 openapi: 3.0.3
 info: {title: old, version: "1"}
@@ -277,17 +284,81 @@ components:
     expect(bag.all.map((d) => d.message), ['The title is old.', 'No type.']);
   });
 
-  test('of two overlapping fixes the earlier rule wins, with a warning', () {
+  test('a fix that overlaps an earlier one waits for the next pass', () {
+    // declare-missing-path-params replaces the whole parameter list, which
+    // contains the default that drop-invalid-default removes.
+    final (result, bag) = normalize(
+      '''
+openapi: 3.0.3
+info: {title: t, version: "1"}
+paths:
+  /items/{id}:
+    get:
+      parameters:
+        - {name: limit, in: query, schema: {type: integer, default: many}}
+      responses: {}
+''',
+      [const DeclareMissingPathParams(), const DropInvalidDefault()],
+    );
+    final get =
+        ((result.documents.root.root['paths']! as Map)['/items/{id}']!
+                as Map)['get']!
+            as Map;
+    expect(get['parameters'], [
+      {
+        'name': 'limit',
+        'in': 'query',
+        'schema': {'type': 'integer'},
+      },
+      {
+        'name': 'id',
+        'in': 'path',
+        'required': true,
+        'schema': {'type': 'string'},
+      },
+    ]);
+    expect(bag.all.where(isNotApplied), isEmpty);
+  });
+
+  test('the same fix proposed twice is applied once, without a warning', () {
+    final (result, bag) = normalize(
+      r'''
+openapi: 3.0.3
+info: {title: t, version: "1"}
+paths:
+  /b/{x}:
+    $ref: '#/components/x-items/Shared'
+  /c/{x}:
+    $ref: '#/components/x-items/Shared'
+components:
+  x-items:
+    Shared:
+      get: {responses: {}}
+''',
+      [const DeclareMissingPathParams()],
+    );
+    expect(bag.all.where(isNotApplied), isEmpty);
+    final shared =
+        ((result.documents.root.root['components']! as Map)['x-items']!
+                as Map)['Shared']!
+            as Map;
+    expect((shared['get'] as Map)['parameters'], hasLength(1));
+  });
+
+  test('a fix that never fits is reported as not applied', () {
     final (result, bag) = normalize(spec, [
       const _AlwaysEdits('first'),
-      const _AlwaysEdits('second'),
+      const _AlwaysEdits('second', '-'),
     ]);
     expect(result.model.document.info?.title, 'old++');
-    final skipped = bag.all
-        .where((d) => d.code == DiagnosticCode.fixNotApplied)
-        .map((d) => d.message)
-        .toSet();
-    expect(skipped, contains(contains('overlaps a fix of rule "first"')));
+    final skipped = bag.all.where(isNotApplied).map((d) => d.message).toSet();
+    expect(
+      skipped,
+      contains(
+        'A fix of rule "second" was not applied: the spec still changed '
+        'after 3 passes.',
+      ),
+    );
   });
 
   test('the normalizer stops after three passes and says so', () {

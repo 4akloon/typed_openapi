@@ -198,8 +198,8 @@ enum DiagnosticCode {
   /// `*/*` is used as a media type.
   wildcardMediaType('TOA601', 'wildcard-media-type', .warning),
 
-  /// A normalizer fix was not applied: it overlaps an earlier rule's fix,
-  /// its target is gone, or the spec kept changing.
+  /// A normalizer fix was not applied: its file cannot be read, its target is
+  /// gone, or the spec kept changing after the last pass.
   fixNotApplied('TOA800', 'fix-not-applied', .warning),
 
   /// The configuration file does not exist.

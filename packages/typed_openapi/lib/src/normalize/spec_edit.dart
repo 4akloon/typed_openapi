@@ -1,5 +1,7 @@
 import 'dart:collection';
 
+import 'package:collection/collection.dart';
+
 import '../model/spec_node.dart';
 
 /// What a [SpecEdit] does at its location.
@@ -36,6 +38,15 @@ final class SpecEdit {
   /// The new plain value for [EditOperation.add] and
   /// [EditOperation.replace].
   final Object? value;
+
+  /// Whether [other] is this very edit: the same location, operation and
+  /// deeply equal value.
+  bool sameAs(SpecEdit other) =>
+      location == other.location &&
+      operation == other.operation &&
+      _equality.equals(value, other.value);
+
+  static const _equality = DeepCollectionEquality();
 
   /// Whether this edit and [other] touch the same node, or one of them a
   /// node inside the other's, or one of them shifts the items of a list the
