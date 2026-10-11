@@ -125,6 +125,13 @@ enum DiagnosticCode {
   /// text.
   nullKey('TOA114', 'null-key', .warning),
 
+  /// A property schema says `required: true` or `false` (OpenAPI 2 style);
+  /// the name is moved into the object's `required` list.
+  boolRequired('TOA201', 'bool-required', .warning),
+
+  /// A schema's `default` is not of the schema's type; it is ignored.
+  invalidDefault('TOA211', 'invalid-default', .warning),
+
   /// A normalizer fix was not applied: it overlaps an earlier rule's fix,
   /// its target is gone, or the spec kept changing.
   fixNotApplied('TOA800', 'fix-not-applied', .warning),

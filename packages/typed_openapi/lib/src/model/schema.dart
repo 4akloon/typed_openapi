@@ -56,6 +56,18 @@ enum SchemaType {
   static final Map<String, SchemaType> byWire = Map.unmodifiable({
     for (final type in values) type.wire: type,
   });
+
+  /// Whether the plain JSON [value] is of this type; `integer` accepts a
+  /// whole number written as `3.0`.
+  bool accepts(Object? value) => switch (this) {
+    .string => value is String,
+    .number => value is num,
+    .integer => value is num && value.isFinite && value == value.truncate(),
+    .boolean => value is bool,
+    .array => value is List<Object?>,
+    .object => value is Map<String, Object?>,
+    .nullType => value == null,
+  };
 }
 
 /// A Schema Object.

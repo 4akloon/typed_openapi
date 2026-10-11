@@ -8,6 +8,8 @@ import '../resolve/spec_documents.dart';
 import '../resolve/spec_model.dart';
 import '../resolve/spec_reader.dart';
 import 'normalizer_rule.dart';
+import 'rules/bool_required_to_array.dart';
+import 'rules/drop_invalid_default.dart';
 import 'spec_edit.dart';
 
 /// The result of normalizing a spec.
@@ -51,7 +53,10 @@ final class Normalizer {
   /// Every rule, in the order it runs; an earlier rule's fix wins a
   /// conflict.
   static final List<NormalizerRule> rules = List.unmodifiable(
-    <NormalizerRule>[],
+    <NormalizerRule>[
+      const BoolRequiredToArray(),
+      const DropInvalidDefault(),
+    ],
   );
 
   /// The names of [rules].
