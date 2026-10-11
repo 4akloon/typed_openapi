@@ -22,6 +22,9 @@ enum DiagnosticCode {
   /// The input file exists but cannot be read as UTF-8 text.
   inputUnreadable('TOA006', 'input-unreadable', .error),
 
+  /// The document nests deeper than the parser can follow.
+  nestingTooDeep('TOA007', 'nesting-too-deep', .error),
+
   /// The document has no `openapi` field.
   missingOpenApiVersion('TOA010', 'missing-openapi-version', .error),
 

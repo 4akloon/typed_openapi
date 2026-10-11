@@ -7,6 +7,7 @@ import 'package:yaml/yaml.dart';
 
 import '../diagnostics/diagnostic_bag.dart';
 import '../diagnostics/json_pointer.dart';
+import 'nesting_scanner.dart';
 import 'spec_document.dart';
 
 /// Reads spec files (JSON or YAML) into [SpecDocument]s.
@@ -68,6 +69,19 @@ final class SpecLoader {
   /// duplicate key) is read again with `jsonDecode`, without positions.
   SpecDocument? parse(String text, String file, {Uri? uri}) {
     final location = uri ?? p.toUri(p.normalize(p.absolute(file)));
+    final tooDeep = const NestingScanner().findTooDeep(text);
+    if (tooDeep != null) {
+      _diagnostics.report(
+        .nestingTooDeep,
+        'The document nests deeper than ${NestingScanner.maxDepth} levels.',
+        file: file,
+        span: SourceFile.fromString(
+          text,
+          url: location,
+        ).span(tooDeep, tooDeep + 1),
+      );
+      return null;
+    }
     final YamlNode node;
     try {
       node = loadYamlNode(text, sourceUrl: Uri.file(file));

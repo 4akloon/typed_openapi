@@ -6,6 +6,7 @@ import 'package:yaml/yaml.dart';
 
 import '../diagnostics/diagnostic_bag.dart';
 import '../diagnostics/json_pointer.dart';
+import '../load/nesting_scanner.dart';
 import 'project_config.dart';
 
 /// Reads `typed_openapi.yaml` into a [ProjectConfig].
@@ -62,6 +63,16 @@ final class ConfigLoader {
         .configInvalid,
         'Cannot read $path: ${e.message}.',
         file: path,
+      );
+      return null;
+    }
+    final tooDeep = const NestingScanner().findTooDeep(text);
+    if (tooDeep != null) {
+      _diagnostics.report(
+        .configInvalid,
+        'The config nests deeper than ${NestingScanner.maxDepth} levels.',
+        file: path,
+        span: SourceFile.fromString(text).span(tooDeep, tooDeep + 1),
       );
       return null;
     }

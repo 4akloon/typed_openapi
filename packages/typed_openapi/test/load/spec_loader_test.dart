@@ -6,6 +6,7 @@ import 'package:typed_openapi/src/diagnostics/diagnostic_bag.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
 import 'package:typed_openapi/src/diagnostics/json_pointer.dart';
 import 'package:typed_openapi/src/diagnostics/severity.dart';
+import 'package:typed_openapi/src/load/nesting_scanner.dart';
 import 'package:typed_openapi/src/load/spec_loader.dart';
 
 import '../helpers/temp_dir.dart';
@@ -81,6 +82,21 @@ void main() {
       final bag = DiagnosticBag();
       expect(SpecLoader(bag).parse('- a\n- b\n', 'a.yaml'), isNull);
       expect(bag.all.single.code, DiagnosticCode.rootNotObject);
+    });
+
+    test('nesting deeper than the limit is an error, not a crash', () {
+      final bag = DiagnosticBag();
+      final text = '{"a": ${'[' * 20000}${']' * 20000}}';
+      expect(SpecLoader(bag).parse(text, 'api.json'), isNull);
+      final d = bag.all.single;
+      expect(d.code, DiagnosticCode.nestingTooDeep);
+      expect(d.column, 7 + NestingScanner.maxDepth - 1);
+    });
+
+    test('YAML nested deeper than the limit is an error too', () {
+      final bag = DiagnosticBag();
+      expect(SpecLoader(bag).parse('- ' * 20000, 'api.yaml'), isNull);
+      expect(bag.all.single.code, DiagnosticCode.nestingTooDeep);
     });
     test('YAML keys 1 and "1" are one JSON key: a warning, last wins', () {
       final bag = DiagnosticBag();

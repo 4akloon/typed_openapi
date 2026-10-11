@@ -77,6 +77,17 @@ clients:
     expect(bag.all.single.message, contains('is a directory'));
   });
 
+  test('reports a config nested too deeply instead of crashing', () {
+    final path = TempDir().write(
+      'typed_openapi.yaml',
+      'clients: ${'[' * 20000}${']' * 20000}\n',
+    );
+    final bag = DiagnosticBag();
+    expect(ConfigLoader(bag).load(path), isNull);
+    expect(bag.all.single.code, DiagnosticCode.configInvalid);
+    expect(bag.all.single.message, contains('nests deeper'));
+  });
+
   test('reports unknown keys as warnings and keeps going', () {
     final dir = TempDir();
     final path = dir.write('c.yaml', '''
