@@ -50,6 +50,10 @@ enum DiagnosticCode {
     .warning,
   ),
 
+  /// `$id` or `$self` would change the base URI of `$ref`s; this tool
+  /// resolves them against the file location instead.
+  refBaseIgnored('TOA105', 'ref-base-ignored', .warning),
+
   /// An object has a key that no OpenAPI version defines; it is ignored.
   unknownKey('TOA110', 'unknown-key', .warning),
 
