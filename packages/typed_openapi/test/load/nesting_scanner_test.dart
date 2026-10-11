@@ -159,98 +159,130 @@ c: [1, 2]
     expect(scanner.findTooDeep(text, limit: 10), isNull);
   });
 
-  group('findAliasKey', () {
-    int? find(String text) => scanner.findAliasKey(text);
+  group('findUnsupportedAlias', () {
+    int? find(String text) => scanner.findUnsupportedAlias(text);
 
-    test('finds an alias after a ? marker', () {
-      expect(find('a:\n  ? *x\n  : v\n'), 5);
-      expect(find('? *x\n'), 0);
-      expect(find('?\n  *x\n'), 0);
+    test('accepts an alias as a block value', () {
+      expect(find('a: *x\n'), isNull);
+      expect(find('<<: *x\n'), isNull);
+      expect(find('a: *x'), isNull);
+      expect(find('- *x\n- *y # c\n'), isNull);
+      expect(find('- - *x\n'), isNull);
+      expect(find('- k: *x\n'), isNull);
+      expect(find('a:\n  b: *x  \n  c: *y\t# c\n'), isNull);
+      expect(find('"q": *x\n'), isNull);
+      expect(find("'q': *x # c\n"), isNull);
+      expect(find('a: *x\r\nb: *y\r\n'), isNull);
+      expect(find('a: [1, 2]\nb: *x\nc: {d: [e]}\n'), isNull);
     });
 
-    test('with an alias anywhere, rejects every explicit ? key', () {
-      expect(find('? [*x]\n: v\n'), 0);
-      expect(find('? - *x\n: v\n'), 0);
+    test('rejects an alias in a flow collection, at any depth', () {
+      expect(find('a: [*x]\n'), 4);
+      expect(find('a: {b: *x}\n'), 7);
+      expect(find('a: [*x, *y]\n'), 4);
+      expect(find('a: {b: [c, {d: *x}]}\n'), 15);
+      expect(find('[*x]: v\n'), 1);
+      expect(find('{*x : v}'), 1);
+      expect(find('{*x, a: 1}'), 1);
+      expect(find('a: {[*x]}'), 5);
+      expect(find('a: {{a: *x}}'), 8);
+      expect(find('a: [\n  *x\n]\n'), 7);
+      expect(find('a: [ [*x]\n  : v]'), 6);
+      expect(find('- [*x]: v\n'), 3);
+      expect(find('!!seq [*x]: v\n'), 7);
+      expect(find('&z [*x]: v\n'), 4);
+    });
+
+    test('rejects an alias that is not a block value', () {
+      expect(find('*x : v\n'), 0);
+      expect(find('- *x : v\n'), 2);
+      expect(find('*x\n'), 0);
+      expect(find('a:\n  *x\n'), 5);
+      expect(find('a: *x, b\n'), 3);
+      expect(find('a: *x b\n'), 3);
+      expect(find('a: &b *x\n'), 6);
+      expect(find('*x :\n  v\n'), 0);
+      expect(find('a: &x 1\n*x\n: v\n'), 8);
+    });
+
+    test('rejects an alias after a bare block marker line', () {
+      const alias = '*x : v';
+      expect(find('x:\n  - a\n  -\n    $alias\n'), 17);
+      expect(find('x:\n  - a\n  - \n    {$alias}\n'), 19);
+      expect(find('x:\n  ? a\n  :\n    $alias\n'), 17);
+      expect(find('x: a\ny:\n  $alias\n'), 10);
+    });
+
+    test('with an alias in the text, rejects every explicit ? key', () {
+      expect(find('? [a]\n: v\nb: *x\n'), 0);
       expect(find('?\n- *x\n: v\n'), 0);
       expect(find('a:\n  ?\n  - *x\n  : v\n'), 5);
-      expect(find('? a\n: *x\n'), 0);
-      expect(find('a:\n  ? k\n  : v\n  b: *y\n'), 5);
-      expect(find('b: &y 1\n? k\n: *y\n'), 8);
-      expect(find('{? *x : v}'), 3);
-      expect(find('[? *x : v]'), 3);
-      expect(find('[? *x]'), 1);
-      expect(find('{a: 1, ? *x : v}'), 9);
-      expect(find('{? [*x] : v}'), 1);
-      expect(find('[\n? *x\n]'), 2);
+      expect(find('b: &y 1\n? k\n: *y\n'), 14);
+      expect(find('b: &y 1\n? k\nz: 1\nc: *y\n'), 8);
+      expect(find('{? a : v}\nb: *x\n'), 1);
+      expect(find('[\n? a\n]\nb: *x\n'), 2);
     });
 
-    test('with an alias anywhere, rejects a flow collection used as a key', () {
-      expect(find('[*x]: v\n'), 0);
-      expect(find('{a: *x}: v\n'), 0);
-      expect(find('- [*x]: v\n'), 2);
-      expect(find('!!seq [*x]: v\n'), 6);
-      expect(find('&z [*x]: v\n'), 3);
-      expect(find('{[*x]: v}'), 1);
-      expect(find('[[*x]: v]'), 1);
-      expect(find('{{a: *x}: v}'), 1);
-      expect(find('[a] : v\nb: *x\n'), 0);
-      expect(find('b: *x\n[a] : v\n'), 6);
-      expect(find('{a: 1}:v\nb: *x\n'), 0);
-    });
-
-    test('without an alias, explicit and collection keys are left alone', () {
+    test('without an alias, nothing is rejected', () {
       expect(find('? /pets\n: v\n'), isNull);
       expect(find('[a]: v\n'), isNull);
       expect(find('{? a : v}'), isNull);
       expect(find('{"a": [1, 2], "b": {"c": [3]}}'), isNull);
     });
 
-    test('with an alias, JSON-like collections that are values are fine', () {
-      expect(
-        find('x: &a [1]\ny: *a\nz: {"a": [1, 2], "b": {"c": [3]}}\n'),
-        isNull,
-      );
-      expect(find('x: [1] # note: here\ny: *x\n'), isNull);
-      expect(find('what? *x\n'), isNull);
-      expect(find('a: ?x\nb: *y\n'), isNull);
-      expect(find('a: [ ?x, *y ]\n'), isNull);
+    test('a collection key without an alias inside is harmless', () {
+      expect(find('{a: 1}: v\nb: *x\n'), isNull);
+      expect(find('[a]  # note: [x]: y\nb: *x\n'), isNull);
     });
 
-    test('finds an alias before a value indicator', () {
-      expect(find('*x : v\n'), 0);
-      expect(find('a:\n  *x : v\n'), 5);
-      expect(find('- *x : v\n'), 2);
-      expect(find('*x :\n  v\n'), 0);
+    test('reads lines the way package:yaml does after odd scalars', () {
+      // Each document was found by fuzzing: package:yaml reads the alias
+      // as a key (or in a flow collection), so the scan must not skip it.
+      const prefix = 'x-a: &a [1, 2]\nx-z:\n';
+      for (final body in [
+        // A value on its own line, a deeper "continuation", then a new key.
+        '     j: #c\n       x yk\n      "|:[\n       [], !!seq \n     [*a]:\n',
+        // `?` directly followed by a bracket, a comment right after `[`.
+        '     {?[*a]\n     }\n',
+        '     [#c, !!seq "\n       [*a], {a: *a}: \n     ]\n',
+        // Text after a closing quote does not open a plain scalar.
+        '    &b !!map \n       k: "q"#cx y\n       *a : #c\n',
+        // A block scalar header on its own line is not a deeper child.
+        '     -!!seq v] : \n     >\n       :: k, :\n     {a: *a}: &c \n',
+        '   {#c\n   [*a]}\n',
+      ]) {
+        expect(find('$prefix$body'), isNotNull, reason: body);
+      }
     });
 
-    test('finds an alias key inside a flow collection', () {
-      expect(find('{*x : v}'), 1);
-      expect(find('{a: 1, *x: v}'), 7);
-      expect(find('{*x, a: 1}'), 1);
-      expect(find('{a: 1, *x}'), 7);
-      expect(find('[*x : v]'), 1);
-      expect(find('a: [{b: [1], *x : 2}]'), 13);
-    });
-
-    test('ignores aliases in value position', () {
-      expect(find('a: *x\n'), isNull);
-      expect(find('<<: *x\n'), isNull);
-      expect(find('- *x\n- *y # c\n'), isNull);
-      expect(find('a: {b: *x, c: [*x, *y]}\n'), isNull);
-      expect(find('{a: *x}'), isNull);
-      expect(find('{a: *x , b: 1}'), isNull);
-      expect(find('[*x, *y]'), isNull);
-    });
-
-    test('ignores a * that is not an alias', () {
+    test('a * that is not an alias token is ignored', () {
       expect(find('"*x" : v\n'), isNull);
       expect(find("'*x' : v\n"), isNull);
       expect(find('a*b : v\n'), isNull);
       expect(find('a: b * c\n'), isNull);
-      expect(find('a: |\n  *x : v\n'), isNull);
+      expect(find('a: |\n  *x : v\n  [*x]\n'), isNull);
       expect(find('# *x : v\n'), isNull);
       expect(find('a: "[*x : v]"\n'), isNull);
       expect(find('a: b\n  *x : v\n'), isNull);
+      expect(find('a: some *bold* text\n  and *more*\n'), isNull);
+      expect(find('{"a": "*x"}'), isNull);
+      expect(find('a: what? *x\n'), isNull);
     });
+  });
+
+  test('a bare block marker line does not hide the nesting after it', () {
+    expect(
+      scanner.findTooDeep('x:\n  - a\n  -\n    ${'- ' * 50000}x'),
+      isNotNull,
+    );
+    expect(
+      scanner.findTooDeep('x:\n  - a\n  -\n    ${'[' * 50000}${']' * 50000}'),
+      isNotNull,
+    );
+    expect(
+      scanner.findTooDeep('x:\n  ? a\n  :\n    ${'[' * 50000}'),
+      isNotNull,
+    );
+    expect(scanner.findTooDeep('x: a\ny:\n  ${'[' * 50000}'), isNotNull);
   });
 }

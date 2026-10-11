@@ -102,33 +102,32 @@ void main() {
     group('aliases', () {
       const limit = Timeout(Duration(seconds: 30));
 
-      String chain(int anchors, {int levelsEach = 1}) {
+      /// Anchors a0..a[anchors], each a mapping that holds the previous one
+      /// as a block value.
+      String chain(int anchors) {
         final text = StringBuffer(
           'openapi: 3.1.0\ncomponents:\n  schemas:\n'
           '    a0: &a0 {type: string}\n',
         );
         for (var i = 1; i <= anchors; i++) {
-          text.writeln(
-            '    a$i: &a$i ${'{items: ' * levelsEach}*a${i - 1}'
-            '${'}' * levelsEach}',
-          );
+          text.writeln('    a$i: &a$i\n      items: *a${i - 1}');
         }
         return '$text';
       }
 
-      /// A document whose text nests [levels] deep, with an alias of it
-      /// inside a text that is [levels] deep again. Comments pad the text so
-      /// that the expansion stays within the budget.
-      String deepAlias(int levels) =>
-          'openapi: 3.1.0\n# ${'p' * 100000}\n'
-          'x-deep: &deep ${'[' * levels}x${']' * levels}\n'
-          'x-use: ${'[' * levels}*deep${']' * levels}\n';
+      /// A document whose text nests 600 levels deep (a flow sequence), with
+      /// an alias of it under 450 block sequences (the scan counts each `- `
+      /// as 2 levels, so that is 900 for it).
+      String deepAlias() =>
+          'openapi: 3.1.0\n'
+          'x-deep: &deep ${'[' * 600}x${']' * 600}\n'
+          'x-use:\n  ${'- ' * 450}*deep\n';
 
       test('aliases whose text is shallow but expand deep are reported, '
           'not a stack overflow', () {
         final bag = DiagnosticBag();
-        final text = deepAlias(600);
-        expect(const NestingScanner().findTooDeep(text), isNull);
+        final text = deepAlias();
+        expect(const NestingScanner().scan(text), isNull);
         expect(SpecLoader(bag).parse(text, 'api.yaml'), isNull);
         final d = bag.all.single;
         expect(d.code, DiagnosticCode.nestingTooDeep);
@@ -150,9 +149,10 @@ void main() {
           'openapi: 3.1.0\nx-bomb:\n  l0: &l0 [x, x, x, x, x, x, x, x, x]\n',
         );
         for (var i = 1; i <= 9; i++) {
-          text.writeln(
-            '  l$i: &l$i [${List.filled(9, '*l${i - 1}').join(', ')}]',
-          );
+          text.writeln('  l$i: &l$i');
+          for (var n = 0; n < 9; n++) {
+            text.writeln('    - *l${i - 1}');
+          }
         }
         final bag = DiagnosticBag();
         expect(SpecLoader(bag).parse('$text', 'api.yaml'), isNull);
@@ -282,21 +282,28 @@ x-two: *base
       }, timeout: limit);
     });
 
-    group('alias keys', () {
+    group('unsupported aliases', () {
       const limit = Timeout(Duration(seconds: 30));
 
+      /// A fan-out 9, level 7 alias bomb written with block aliases only
+      /// (so the scan accepts it), followed by [tail].
       String bomb(String tail) {
         final text = StringBuffer(
           'openapi: 3.1.0\nx-bomb:\n  l0: &l0 [x, x, x, x, x, x, x, x, x]\n',
         );
         for (var i = 1; i <= 7; i++) {
-          text.writeln(
-            '  l$i: &l$i [${List.filled(9, '*l${i - 1}').join(', ')}]',
-          );
+          text.writeln('  l$i: &l$i');
+          for (var n = 0; n < 9; n++) {
+            text.writeln('    - *l${i - 1}');
+          }
         }
         text.writeln(tail);
         return '$text';
       }
+
+      test('the bomb itself passes the scan', () {
+        expect(const NestingScanner().scan(bomb('x-k: 1')), isNull);
+      });
 
       for (final (name, tail) in [
         ('after a ? marker', '? *l7\n: v'),
@@ -323,13 +330,35 @@ x-two: *base
         ('inside an anchored flow sequence key', '&z [*l7]: v'),
         ('inside a flow key in a flow sequence', 'x-k: [[*l7]: v]'),
         ('inside a flow key in a block sequence', '- [*l7]: v'),
+        ('inside a flow mapping key without a colon', 'x-k: {[*l7]}'),
+        (
+          'inside a flow mapping key on its own line',
+          'x-k:\n  {\n   [*l7]\n  }',
+        ),
+        ('inside a flow mapping key before a comma', 'x-k: {[*l7], a: 1}'),
+        ('inside a flow mapping in a flow mapping', 'x-k: {{a: *l7}}'),
+        (
+          'inside a flow key with the colon on the next line',
+          'x-k: [ [*l7]\n  : v]',
+        ),
+        ('as a key after a bare dash line', 'x-k:\n  - a\n  -\n    *l7 : v'),
+        (
+          'in a flow mapping after a bare dash line',
+          'x-k:\n  - a\n  -\n    {*l7 : v}',
+        ),
+        (
+          'as a flow sequence key after a bare dash line',
+          'x-k:\n  - a\n  -\n    [*l7]: v',
+        ),
+        ('followed by text', 'x-k: *l7 more'),
+        ('on its own line', 'x-k:\n  *l7'),
       ]) {
         test('an alias $name is rejected before it is expanded', () {
           final bag = DiagnosticBag();
           expect(SpecLoader(bag).parse(bomb(tail), 'api.yaml'), isNull);
           final d = bag.all.single;
           expect(d.code, DiagnosticCode.aliasExpansionTooLarge);
-          expect(d.message, contains('mapping key'));
+          expect(d.message, contains('block values'));
           expect(d.span, isNotNull);
         }, timeout: limit);
       }
@@ -344,14 +373,15 @@ x-two: *base
         expect(doc, isNotNull);
       }, timeout: limit);
 
-      test('JSON next to aliases is accepted', () {
+      test('JSON-like values next to block aliases are accepted', () {
         final bag = DiagnosticBag();
         final doc = SpecLoader(bag).parse(
           '''
 openapi: 3.1.0
 x-base: &base [1, 2]
-x-flow: {"a": [1, {"b": [2]}], "c": *base}
+x-flow: {"a": [1, {"b": [2]}], "c": "*base"}
 x-list: [[1], [2]]
+x-ref: *base
 ''',
           'api.yaml',
         );
@@ -359,7 +389,7 @@ x-list: [[1], [2]]
         expect(doc, isNotNull);
       }, timeout: limit);
 
-      test('a merge key and aliases in values are accepted', () {
+      test('a merge key and block aliases are accepted', () {
         final bag = DiagnosticBag();
         final doc = SpecLoader(bag).parse(
           '''
@@ -369,11 +399,11 @@ x-ref: &ref [1, 2]
 x-merge:
   <<: *base
   b: 2
-x-value: *ref
-x-flow: {k: *ref, j: [*ref, *base]}
+x-value: *ref # the same list
 x-seq:
   - *ref
-  - *base
+  - - *base
+  - k: *base
 ''',
           'api.yaml',
         );
@@ -382,7 +412,23 @@ x-seq:
         expect(doc!.root['x-value'], [1, 2]);
       }, timeout: limit);
 
-      test('a * inside quotes or plain text is not an alias', () {
+      test('an alias in a flow collection is rejected with a hint', () {
+        final bag = DiagnosticBag();
+        expect(
+          SpecLoader(bag).parse(
+            'openapi: 3.1.0\nx-a: &a 1\nx-b: [*a, *a]\n',
+            'api.yaml',
+          ),
+          isNull,
+        );
+        final d = bag.all.single;
+        expect(d.code, DiagnosticCode.aliasExpansionTooLarge);
+        expect(d.line, 3);
+        expect(d.fix, contains('block value'));
+      }, timeout: limit);
+
+      test('a * inside quotes, comments, block scalars or plain text is not '
+          'an alias', () {
         final bag = DiagnosticBag();
         final doc = SpecLoader(bag).parse(
           '''
@@ -391,12 +437,36 @@ x-a: {"*k": 1, '*j': 2, p*q: 3}
 "*l" : 4
 '*m': 5
 x-b: a * b
+x-c: some *bold* text
+  and *more* text
+x-d: |
+  *x : v
+  [*x]
+x-e: text # *x : v
 ''',
           'api.yaml',
         );
         expect(bag.all.where((d) => d.severity == Severity.error), isEmpty);
         expect(doc, isNotNull);
       }, timeout: limit);
+
+      test(
+        'nesting after a bare block marker line is reported, not a crash',
+        () {
+          for (final deep in ['- ' * 50000, '[' * 50000]) {
+            final bag = DiagnosticBag();
+            expect(
+              SpecLoader(bag).parse(
+                'openapi: 3.1.0\nx:\n  - a\n  -\n    ${deep}x\n',
+                'api.yaml',
+              ),
+              isNull,
+            );
+            expect(bag.all.single.code, DiagnosticCode.nestingTooDeep);
+          }
+        },
+        timeout: limit,
+      );
     });
 
     test('YAML keys 1 and "1" are one JSON key: a warning, last wins', () {

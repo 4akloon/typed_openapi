@@ -41,14 +41,16 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   recursive YAML parser sees it (it is YAML-context aware: quotes and brackets
   are syntax only at a value start, block scalars are skipped, `- `, `? ` and
   empty-key `: ` markers each nest one level; a root flow collection is level
-  0, like a root block mapping). The same scan rejects, with TOA008, an alias
-  used as a key (`*a : v`, `{*a : v}`, `{*a, b: 1}`) and, when the text has
-  any alias, every explicit `?` key and every flow collection used as an
-  implicit key (`[*a]: v`, `{a: *a}: v`): the YAML parser would expand them
-  before any later check. Aliases in values bypass the text scan, so
-  `SpecLoader` also limits the conversion to a plain tree: deeper than 1000
-  levels once aliases are expanded is TOA007; a budget of
-  `max(16000000, 100 * text length)` characters, where every converted node
+  0, like a root block mapping). The same scan accepts an alias only as a
+  block value (`key: *a`, `- *a`, nothing but blanks and a comment after it
+  on the line) and reports any other alias with TOA008: in a flow collection,
+  in key position, followed by text, alone on a line. In a document that has
+  an alias it also reports an explicit `?` key; without aliases `?` keys are
+  left alone. The YAML parser would otherwise expand such aliases (hash them
+  as keys) before any later check. Aliases in values bypass the text scan,
+  so `SpecLoader` also limits the conversion to a plain tree: deeper than
+  1000 levels once aliases are expanded is TOA007; a budget of
+  `max(16000000, 20 * text length)` characters, where each converted node
   (first visit or repeat) costs the length of its JSON pointer + 1 (the
   pointer is what it keeps in `spans`), is TOA008 when spent (an alias bomb,
   or very long keys); both return no document. `OpenApiVersionDetector`

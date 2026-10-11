@@ -86,16 +86,16 @@ final class SpecLoader {
             file: file,
             span: span,
           );
-        case .aliasKey:
+        case .alias:
           _diagnostics.report(
             .aliasExpansionTooLarge,
-            'OpenAPI keys are strings. In a document with aliases, an alias '
-            'used as a mapping key, an explicit "?" key or a collection '
-            'used as a key can expand without bound, so the document is '
-            'not read.',
+            'YAML aliases are only supported as block values (`key: *a` or '
+            '`- *a`). OpenAPI keys are strings, and an alias in any other '
+            'position, or an explicit "?" key in a document with aliases, '
+            'can expand without bound, so the document is not read.',
             file: file,
             span: span,
-            fix: 'Write the key out as a plain string.',
+            fix: 'Write the alias as a block value, or write its content out.',
           );
       }
       return null;
@@ -240,7 +240,7 @@ final class _PlainConverter {
   static const minBudget = 16000000;
 
   /// The budget per character of text, once that exceeds [minBudget].
-  static const budgetPerChar = 100;
+  static const budgetPerChar = 20;
 
   final DiagnosticBag _diagnostics;
   final String _file;

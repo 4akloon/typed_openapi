@@ -73,10 +73,11 @@ final class ConfigLoader {
         switch (found.problem) {
           .tooDeep =>
             'The config nests deeper than ${NestingScanner.maxDepth} levels.',
-          .aliasKey =>
-            'OpenAPI keys are strings. In a config with aliases, an alias '
-                'used as a mapping key, an explicit "?" key or a collection '
-                'used as a key can expand without bound.',
+          .alias =>
+            'YAML aliases are only supported as block values (`key: *a` or '
+                '`- *a`). OpenAPI keys are strings, and an alias in any other '
+                'position, or an explicit "?" key in a config with aliases, '
+                'can expand without bound.',
         },
         file: path,
         span: SourceFile.fromString(text).span(found.offset, found.offset + 1),

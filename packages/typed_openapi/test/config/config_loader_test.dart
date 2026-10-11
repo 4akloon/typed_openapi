@@ -92,14 +92,17 @@ clients:
     ('an explicit ? key', 'x-key:\n  ? *l7\n  : v'),
     ('a flow sequence key', '[*l7]: v'),
     ('a flow mapping key', '{a: *l7}: v'),
+    ('a flow mapping key without a colon', 'x-key: {[*l7]}'),
     ('a ? key inside a flow mapping', 'x-key: {? *l7 : v}'),
+    ('a key after a bare dash line', 'x-key:\n  - a\n  -\n    *l7 : v'),
   ]) {
     test('rejects $name with an alias before expanding it', () {
       final text = StringBuffer('x-l0: &l0 [x, x, x, x, x, x, x, x, x]\n');
       for (var i = 1; i <= 7; i++) {
-        text.writeln(
-          'x-l$i: &l$i [${List.filled(9, '*l${i - 1}').join(', ')}]',
-        );
+        text.writeln('x-l$i: &l$i');
+        for (var n = 0; n < 9; n++) {
+          text.writeln('  - *l${i - 1}');
+        }
       }
       text.writeln(key);
       text.writeln('clients:\n  api: {input: a.json, output: lib/api}');
@@ -107,15 +110,19 @@ clients:
       final bag = DiagnosticBag();
       expect(ConfigLoader(bag).load(path), isNull);
       expect(bag.all.single.code, DiagnosticCode.configInvalid);
-      expect(bag.all.single.message, contains('mapping key'));
+      expect(bag.all.single.message, contains('block values'));
     }, timeout: const Timeout(Duration(seconds: 30)));
   }
 
   test('accepts an alias in a value', () {
     final path = TempDir().write('typed_openapi.yaml', '''
 clients:
-  api: {input: &i a.json, output: lib/api}
-  other: {input: *i, output: lib/other}
+  api:
+    input: &i a.json
+    output: lib/api
+  other:
+    input: *i
+    output: lib/other
 ''');
     final bag = DiagnosticBag();
     expect(ConfigLoader(bag).load(path)!.clients, hasLength(2));

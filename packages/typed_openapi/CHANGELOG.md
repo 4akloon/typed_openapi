@@ -19,11 +19,13 @@
 - Loading: nesting deeper than 1000 levels, in the text or once YAML aliases
   are expanded, is reported (TOA007) instead of crashing; an alias bomb, or
   very long keys (the JSON pointers of all nodes add up to more than
-  `max(16000000, 100 * text length)` characters), is reported (TOA008)
-  instead of hanging or exhausting memory, and so is an alias used as a key
-  and, in a document with aliases, an explicit `?` key or a collection used
-  as a key, which the YAML parser would expand before any check runs; YAML
-  keys such as `1` and `"1"` that merge into one JSON key are reported
-  (TOA002); a directory given as the spec or the config is reported as such.
+  `max(16000000, 20 * text length)` characters), is reported (TOA008)
+  instead of hanging or exhausting memory. YAML aliases are supported only as
+  block values (`key: *a`, `- *a`, `<<: *a`); an alias in a flow collection
+  or in key position, and (in a document with aliases) an explicit `?` key,
+  is reported (TOA008), because the YAML parser would expand it before any
+  check runs. YAML keys such as `1` and `"1"` that merge into one JSON key
+  are reported (TOA002); a directory given as the spec or the config is
+  reported as such.
 - A region of a spec that several `$ref`s, enclosing nodes or clients reach is
   read once, and an identical diagnostic is reported once.
