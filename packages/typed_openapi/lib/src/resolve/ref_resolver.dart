@@ -91,7 +91,59 @@ final class RefResolver {
           targets[use.site] = location;
       }
     }
+    _reportCycles(targets, documents);
     return SpecModel(document: document, nodes: index.nodes, targets: targets);
+  }
+
+  /// Reports every loop of `$ref`s that never reaches a node without one.
+  ///
+  /// A key of [targets] is a node whose `$ref` resolved, so a chain that
+  /// stays inside the keys only passes through references. A recursive
+  /// schema is not a loop: its chain ends at the schema itself, which has
+  /// no `$ref`.
+  void _reportCycles(
+    Map<SpecLocation, SpecLocation> targets,
+    SpecDocuments documents,
+  ) {
+    final done = <SpecLocation>{};
+    for (final start in targets.keys.toList()..sort()) {
+      final path = <SpecLocation>[];
+      final positions = <SpecLocation, int>{};
+      SpecLocation? current = start;
+      while (current != null &&
+          targets.containsKey(current) &&
+          !done.contains(current)) {
+        final seen = positions[current];
+        if (seen != null) {
+          _reportCycle(path.sublist(seen), documents);
+          break;
+        }
+        positions[current] = path.length;
+        path.add(current);
+        current = targets[current];
+      }
+      done.addAll(path);
+    }
+  }
+
+  void _reportCycle(List<SpecLocation> cycle, SpecDocuments documents) {
+    final first = cycle.reduce((a, b) => a.compareTo(b) <= 0 ? a : b);
+    final start = cycle.indexOf(first);
+    final ordered = [...cycle.skip(start), ...cycle.take(start), first];
+    String name(SpecLocation location) => location.document == first.document
+        ? location.pointer.value
+        : '${documents.displayPath(location.document)}'
+              '${location.pointer.value}';
+    final pointer = first.pointer.child(r'$ref');
+    _diagnostics.report(
+      .refCycle,
+      'These references point at each other and never reach a definition: '
+      '${ordered.map(name).join(' -> ')}.',
+      file: documents.displayPath(first.document),
+      pointer: pointer,
+      span: documents[first.document]?.spanOf(pointer),
+      fix: 'Point one of them at the actual definition.',
+    );
   }
 
   static RefKind? _kindOf(SpecNode node) => switch (node) {

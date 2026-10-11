@@ -243,4 +243,74 @@ paths:
     final reports = bag.all.where((d) => d.code == DiagnosticCode.invalidValue);
     expect(reports.map((d) => d.pointer?.value), ['#/x-shared/limit']);
   });
+
+  group('cycles', () {
+    test('two schemas that only point at each other are a loop', () {
+      dir.write('api.yaml', '''
+$info
+components:
+  schemas:
+    A: {\$ref: "#/components/schemas/B"}
+    B: {\$ref: "#/components/schemas/A", description: Loops.}
+''');
+      final (model, bag) = resolve('api.yaml');
+      final d = bag.all.single;
+      expect(d.code, DiagnosticCode.refCycle);
+      expect(d.pointer?.value, r'#/components/schemas/A/$ref');
+      expect(
+        d.message,
+        'These references point at each other and never reach a definition: '
+        '#/components/schemas/A -> #/components/schemas/B -> '
+        '#/components/schemas/A.',
+      );
+      final a = model.document.components!.schemas['A']!;
+      expect(model.resolveSchema(a), isNull);
+    });
+
+    test('a schema that points at itself is a loop', () {
+      dir.write('api.yaml', '''
+$info
+components:
+  schemas:
+    A: {\$ref: "#/components/schemas/A"}
+''');
+      final (_, bag) = resolve('api.yaml');
+      expect(bag.all.single.code, DiagnosticCode.refCycle);
+    });
+
+    test('a loop is reported once, not by every reference into it', () {
+      dir.write('api.yaml', '''
+$info
+components:
+  parameters:
+    A: {\$ref: "#/components/parameters/B"}
+    B: {\$ref: "#/components/parameters/C"}
+    C: {\$ref: "#/components/parameters/B"}
+''');
+      final (model, bag) = resolve('api.yaml');
+      expect(
+        bag.all.single.message,
+        contains('B -> #/components/parameters/C'),
+      );
+      final a = model.document.components!.parameters['A']!;
+      expect(model.resolve(a), isNull);
+    });
+
+    test('a loop across files names the other file', () {
+      dir.write('api.yaml', '''
+$info
+components:
+  schemas:
+    A: {\$ref: "other.yaml#/B"}
+''');
+      dir.write('other.yaml', 'B: {\$ref: "api.yaml#/components/schemas/A"}\n');
+      final (_, bag) = resolve('api.yaml');
+      expect(
+        bag.all.single.message,
+        endsWith(
+          '#/components/schemas/A -> other.yaml#/B -> #/components/schemas/A.',
+        ),
+      );
+    });
+  });
 }

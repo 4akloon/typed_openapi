@@ -71,6 +71,9 @@ enum DiagnosticCode {
   /// A `$ref` points to a remote URL; only local files are read.
   remoteRef('TOA102', 'remote-ref', .error),
 
+  /// `$ref`s point at each other in a loop that never reaches a definition.
+  refCycle('TOA103', 'ref-cycle', .error),
+
   /// A `$ref` points to a node of another kind, such as a schema where a
   /// parameter is expected.
   refKindMismatch('TOA104', 'ref-kind-mismatch', .error),
