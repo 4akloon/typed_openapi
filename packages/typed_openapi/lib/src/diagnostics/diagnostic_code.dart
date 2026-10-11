@@ -157,6 +157,13 @@ enum DiagnosticCode {
   /// A schema's `default` is not of the schema's type; it is ignored.
   invalidDefault('TOA211', 'invalid-default', .warning),
 
+  /// An `enum` repeats a value; the repeats are removed.
+  duplicateEnumValue('TOA301', 'duplicate-enum-value', .warning),
+
+  /// A nullable enum written as `oneOf` of an enum of only `null` and a
+  /// `$ref`.
+  nullableEnumOneOf('TOA303', 'nullable-enum-one-of', .warning),
+
   /// A normalizer fix was not applied: it overlaps an earlier rule's fix,
   /// its target is gone, or the spec kept changing.
   fixNotApplied('TOA800', 'fix-not-applied', .warning),
