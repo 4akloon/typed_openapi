@@ -17,4 +17,15 @@ void main() {
     expect(() => bag.all.clear(), throwsUnsupportedError);
     expect(bag.all, hasLength(1));
   });
+
+  test('sorted returns report order and count tallies a severity', () {
+    final bag = DiagnosticBag()
+      ..report(DiagnosticCode.parseError, 'x', file: 'b.json')
+      ..report(DiagnosticCode.duplicateKey, 'y', file: 'a.json');
+    expect(bag.sorted.map((d) => d.file), ['a.json', 'b.json']);
+    expect(bag.all.map((d) => d.file), ['b.json', 'a.json']);
+    expect(bag.count(Severity.error), 1);
+    expect(bag.count(Severity.warning), 1);
+    expect(bag.count(Severity.info), 0);
+  });
 }

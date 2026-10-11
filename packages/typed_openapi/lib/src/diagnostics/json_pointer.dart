@@ -25,10 +25,10 @@ extension type const JsonPointer._(String value) {
   List<String> get tokens => value == '#'
       ? const []
       : [for (final token in value.substring(2).split('/')) _unescape(token)];
+
+  static String _escape(String token) =>
+      token.replaceAll('~', '~0').replaceAll('/', '~1');
+
+  static String _unescape(String token) =>
+      token.replaceAll('~1', '/').replaceAll('~0', '~');
 }
-
-String _escape(String token) =>
-    token.replaceAll('~', '~0').replaceAll('/', '~1');
-
-String _unescape(String token) =>
-    token.replaceAll('~1', '/').replaceAll('~0', '~');

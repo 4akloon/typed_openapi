@@ -1,6 +1,6 @@
 ## typed_openapi
 
-![Dart](https://img.shields.io/badge/Dart-%3E%3D3.8-0175C2?logo=dart&logoColor=white)
+![Dart](https://img.shields.io/badge/Dart-%3E%3D3.10-0175C2?logo=dart&logoColor=white)
 ![Style](https://img.shields.io/badge/style-lints-brightgreen)
 
 Monorepo for `typed_openapi`: an OpenAPI 3.x → Dart client generator built for

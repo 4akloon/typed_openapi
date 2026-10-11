@@ -8,7 +8,7 @@ homepage: https://github.com/4akLoon/typed_openapi
 repository: https://github.com/4akLoon/typed_openapi
 
 environment:
-  sdk: ">=3.8.0 <4.0.0"
+  sdk: ">=3.10.0 <4.0.0"
 
 dependencies:
   dio: ^5.11.1

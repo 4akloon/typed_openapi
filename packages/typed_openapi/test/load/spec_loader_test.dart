@@ -11,13 +11,12 @@ import 'package:typed_openapi/src/load/spec_loader.dart';
 import '../helpers/temp_dir.dart';
 
 void main() {
-  group('parseSpec', () {
+  group('SpecLoader.parse', () {
     test('reads JSON with positions for every node', () {
       final bag = DiagnosticBag();
-      final doc = parseSpec(
+      final doc = SpecLoader(bag).parse(
         '{\n  "openapi": "3.0.3",\n  "paths": {\n    "/users": {}\n  }\n}',
         'api.json',
-        bag,
       )!;
       expect(bag.all, isEmpty);
       expect(doc.root['openapi'], '3.0.3');
@@ -29,10 +28,9 @@ void main() {
 
     test('reads YAML and turns non-string keys into strings', () {
       final bag = DiagnosticBag();
-      final doc = parseSpec(
+      final doc = SpecLoader(bag).parse(
         'openapi: 3.1.0\nresponses:\n  200:\n    description: ok\n',
         'api.yaml',
-        bag,
       )!;
       expect(bag.all, isEmpty);
       expect(doc.root['responses'], {
@@ -42,7 +40,10 @@ void main() {
 
     test('reports a syntax error with its position', () {
       final bag = DiagnosticBag();
-      final doc = parseSpec('{\n  "openapi": "3.0.3",\n', 'api.json', bag);
+      final doc = SpecLoader(bag).parse(
+        '{\n  "openapi": "3.0.3",\n',
+        'api.json',
+      );
       expect(doc, isNull);
       final d = bag.all.single;
       expect(d.code, DiagnosticCode.parseError);
@@ -52,10 +53,9 @@ void main() {
 
     test('a duplicate key in JSON is a warning; the last value wins', () {
       final bag = DiagnosticBag();
-      final doc = parseSpec(
+      final doc = SpecLoader(bag).parse(
         '{"openapi": "3.0.3", "info": {"title": "a"}, "info": {"title": "b"}}',
         'api.json',
-        bag,
       )!;
       expect(doc.root['info'], {'title': 'b'});
       expect(doc.hasPositions, isFalse);
@@ -68,10 +68,9 @@ void main() {
 
     test('a duplicate key in YAML is an error', () {
       final bag = DiagnosticBag();
-      final doc = parseSpec(
+      final doc = SpecLoader(bag).parse(
         'openapi: 3.0.3\npaths: {}\npaths: {}\n',
         'a.yaml',
-        bag,
       );
       expect(doc, isNull);
       expect(bag.all.single.code, DiagnosticCode.duplicateKey);
@@ -80,33 +79,35 @@ void main() {
 
     test('a root that is not an object is an error', () {
       final bag = DiagnosticBag();
-      expect(parseSpec('- a\n- b\n', 'a.yaml', bag), isNull);
+      expect(SpecLoader(bag).parse('- a\n- b\n', 'a.yaml'), isNull);
       expect(bag.all.single.code, DiagnosticCode.rootNotObject);
     });
   });
 
-  group('loadSpec', () {
+  group('SpecLoader.load', () {
     test('reports a missing file', () {
       final bag = DiagnosticBag();
-      expect(loadSpec('/nope/api.json', bag, displayPath: 'api.json'), isNull);
+      expect(
+        SpecLoader(bag).load('/nope/api.json', displayPath: 'api.json'),
+        isNull,
+      );
       expect(bag.all.single.code, DiagnosticCode.inputNotFound);
       expect(bag.all.single.file, 'api.json');
     });
 
     test('reports a file that is not UTF-8', () {
-      final dir = createTempDir();
+      final dir = TempDir();
       final path = p.join(dir.path, 'bad.json');
       File(path).writeAsBytesSync([0xFF, 0xFE, 0x41]);
       final bag = DiagnosticBag();
-      expect(loadSpec(path, bag), isNull);
+      expect(SpecLoader(bag).load(path), isNull);
       expect(bag.all.single.code, DiagnosticCode.inputUnreadable);
     });
 
     test('reads a file from disk', () {
-      final dir = createTempDir();
-      final path = writeFile(dir, 'api.yaml', 'openapi: 3.0.3\n');
+      final path = TempDir().write('api.yaml', 'openapi: 3.0.3\n');
       final bag = DiagnosticBag();
-      expect(loadSpec(path, bag)!.root, {'openapi': '3.0.3'});
+      expect(SpecLoader(bag).load(path)!.root, {'openapi': '3.0.3'});
     });
   });
 }

@@ -16,7 +16,15 @@ class DiagnosticBag {
   List<Diagnostic> get all => List.unmodifiable(_items);
 
   /// Whether any diagnostic has [Severity.error].
-  bool get hasErrors => _items.any((d) => d.severity == Severity.error);
+  bool get hasErrors => _items.any((d) => d.severity == .error);
+
+  /// All diagnostics in report order: by file, position, pointer, code and
+  /// message (see [Diagnostic.compareTo]).
+  List<Diagnostic> get sorted => _items.toList()..sort();
+
+  /// How many diagnostics have [severity].
+  int count(Severity severity) =>
+      _items.where((d) => d.severity == severity).length;
 
   /// Adds an already built [diagnostic].
   void add(Diagnostic diagnostic) => _items.add(diagnostic);

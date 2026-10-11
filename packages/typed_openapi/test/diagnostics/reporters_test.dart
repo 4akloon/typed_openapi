@@ -30,9 +30,9 @@ void main() {
       );
   }
 
-  test('formatText sorts by file and prints 1-based positions', () {
+  test('TextReporter sorts by file and prints 1-based positions', () {
     expect(
-      formatText(sample().all),
+      const TextReporter().format(sample()),
       'info TOA005 positions-unavailable: No positions.\n'
       '  --> a.json\n'
       'error TOA011 unsupported-openapi-version: '
@@ -44,8 +44,10 @@ void main() {
     );
   });
 
-  test('formatJson is stable and machine-readable', () {
-    final json = jsonDecode(formatJson(sample().all)) as Map<String, Object?>;
+  test('JsonReporter is stable and machine-readable', () {
+    final json =
+        jsonDecode(const JsonReporter().format(sample()))
+            as Map<String, Object?>;
     final first =
         (json['diagnostics']! as List<Object?>)[1] as Map<String, Object?>;
     expect(first, {
@@ -60,5 +62,10 @@ void main() {
       'fix': 'Emit OpenAPI 3.',
     });
     expect(json['summary'], {'error': 1, 'warning': 0, 'info': 1});
+  });
+
+  test('ReportFormat maps each format to its reporter', () {
+    expect(ReportFormat.text.reporter, isA<TextReporter>());
+    expect(ReportFormat.json.reporter, isA<JsonReporter>());
   });
 }

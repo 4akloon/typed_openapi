@@ -8,12 +8,13 @@
 - [Everyday commands](#everyday-commands)
 - [Design rules](#design-rules)
 - [Coding conventions](#coding-conventions)
+- [Object-oriented code and Dart 3.10](#object-oriented-code-and-dart-310)
 - [Tests](#tests)
 - [Commits & pull requests](#commits--pull-requests)
 
 ## Prerequisites
 
-- Dart SDK `>=3.8.0 <4.0.0`. Both packages are pure Dart; Flutter is not needed.
+- Dart SDK `>=3.10.0 <4.0.0`. Both packages are pure Dart; Flutter is not needed.
 
 ## Getting the code
 
@@ -75,6 +76,22 @@ Enforced via `analysis_options.yaml` (built on `package:lints/recommended.yaml`)
 - `public_member_api_docs` — every public member needs a doc comment.
 - `sort_constructors_first`, `prefer_final_locals`, and the other rules
   listed in `analysis_options.yaml`.
+
+## Object-oriented code and Dart 3.10
+
+- No top-level functions, except `main` in `bin/` and in tests. Private helpers
+  are private methods (static if they need no state); constants live in the
+  class they belong to.
+- Components that report problems get a `DiagnosticBag` through the constructor
+  and never throw on bad user input.
+- Use language features from Dart 3.10 on: dot shorthands wherever the context
+  type is known (`.error`, `severity: .error`), null-aware collection elements
+  (`'k': ?v`), switch expressions and patterns, records, class modifiers
+  (`final`, `sealed`, `interface`) and extension types. In tests, `expect(...)`
+  arguments have no context type, so use full names there.
+- Primary constructors (Dart 3.13) are not used, to keep the SDK floor at 3.10.
+
+See [CLAUDE.md](CLAUDE.md) for the same rules in short form.
 
 ## Tests
 
