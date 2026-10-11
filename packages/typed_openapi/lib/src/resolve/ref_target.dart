@@ -39,16 +39,25 @@ sealed class RefTarget {
         );
       }
       document = base.resolveUri(parsed).removeFragment();
+      if (document.hasAuthority && document.authority.isNotEmpty) {
+        return BrokenRef(
+          .remoteRef,
+          '"$ref" names another host; only local files are read.',
+          fix:
+              'Save the document next to the spec and refer to it by a '
+              'relative path.',
+        );
+      }
+      if (document.hasQuery) {
+        return BrokenRef(
+          .invalidRef,
+          '"$ref" has a query string, which a local file cannot have.',
+        );
+      }
     }
-    final pointer = _pointer(fragment);
-    if (pointer == null) {
-      return BrokenRef(
-        .invalidRef,
-        '"$ref" does not end with a JSON pointer such as '
-        '"#/components/schemas/Name".',
-        fix: r'Plain-name fragments ($anchor) are not supported.',
-      );
-    }
+    final read = _pointer(ref, fragment);
+    final pointer = read.pointer;
+    if (pointer == null) return read.broken!;
     final tokens = pointer.tokens;
     if (tokens.isNotEmpty && tokens.last.isEmpty) {
       return BrokenRef(
@@ -71,21 +80,52 @@ sealed class RefTarget {
   static final _badPercent = RegExp('%(?![0-9A-Fa-f]{2})');
   static final _badTilde = RegExp('~(?![01])');
 
-  static JsonPointer? _pointer(String fragment) {
-    if (fragment.isEmpty) return JsonPointer.root;
-    if (!fragment.startsWith('/') || _badPercent.hasMatch(fragment)) {
-      return null;
+  static ({JsonPointer? pointer, BrokenRef? broken}) _pointer(
+    String ref,
+    String fragment,
+  ) {
+    if (fragment.isEmpty) return (pointer: JsonPointer.root, broken: null);
+    if (!fragment.startsWith('/')) {
+      return (
+        pointer: null,
+        broken: BrokenRef(
+          .invalidRef,
+          '"$ref" does not end with a JSON pointer such as '
+          '"#/components/schemas/Name".',
+          fix: r'Plain-name fragments ($anchor) are not supported.',
+        ),
+      );
     }
-    final String decoded;
+    final String? decoded = _decode(fragment);
+    if (decoded == null) {
+      return (
+        pointer: null,
+        broken: BrokenRef(
+          .invalidRef,
+          '"$ref" has an invalid percent-escape in the fragment.',
+        ),
+      );
+    }
+    if (_badTilde.hasMatch(decoded)) {
+      return (
+        pointer: null,
+        broken: BrokenRef(
+          .invalidRef,
+          '"$ref" has a "~" that is not followed by 0 or 1.',
+        ),
+      );
+    }
+    return (pointer: JsonPointer.parse('#$decoded'), broken: null);
+  }
+
+  static String? _decode(String fragment) {
+    if (_badPercent.hasMatch(fragment)) return null;
+    if (!fragment.contains('%')) return fragment;
     try {
-      decoded = fragment.contains('%')
-          ? Uri.decodeComponent(fragment)
-          : fragment;
+      return Uri.decodeComponent(fragment);
     } on FormatException {
       return null;
     }
-    if (_badTilde.hasMatch(decoded)) return null;
-    return JsonPointer.parse('#$decoded');
   }
 }
 

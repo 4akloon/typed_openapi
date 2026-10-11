@@ -62,4 +62,38 @@ void main() {
       'missing.',
     );
   });
+
+  test('a document with a query or a host is not a local file', () {
+    expect(target('x.yaml?q#/A'), 'TOA100');
+    expect(target('//host/x.yaml#/A'), 'TOA102');
+    expect(target('file://host/x.yaml#/A'), 'TOA102');
+    expect(target('file:///abs/x.yaml#/A'), 'file:///abs/x.yaml#/A');
+  });
+
+  test('a bad fragment says what is wrong with it', () {
+    String reason(String ref) =>
+        (RefTarget.parse(ref, base) as BrokenRef).reason;
+
+    expect(
+      reason('#/a/%zz'),
+      '"#/a/%zz" has an invalid percent-escape in the fragment.',
+    );
+    expect(
+      reason('#/a~2b'),
+      '"#/a~2b" has a "~" that is not followed by 0 or 1.',
+    );
+    expect(
+      reason('#/a%7E'),
+      '"#/a%7E" has a "~" that is not followed by 0 or 1.',
+    );
+    expect(
+      reason('#Pet'),
+      '"#Pet" does not end with a JSON pointer such as '
+      '"#/components/schemas/Name".',
+    );
+    expect(
+      reason('x.yaml?q#/A'),
+      '"x.yaml?q#/A" has a query string, which a local file cannot have.',
+    );
+  });
 }
