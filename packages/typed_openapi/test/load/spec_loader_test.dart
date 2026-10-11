@@ -98,6 +98,7 @@ void main() {
       expect(SpecLoader(bag).parse('- ' * 20000, 'api.yaml'), isNull);
       expect(bag.all.single.code, DiagnosticCode.nestingTooDeep);
     });
+
     test('YAML keys 1 and "1" are one JSON key: a warning, last wins', () {
       final bag = DiagnosticBag();
       final doc = SpecLoader(bag).parse(

@@ -39,4 +39,60 @@ c: [1, 2]
     final text = '${'[' * 20000}${']' * 20000}';
     expect(scanner.findTooDeep(text), NestingScanner.maxDepth);
   });
+
+  test('a stray quote in a plain scalar does not hide what follows', () {
+    const head = "a: it 'x\nb: ";
+    final text = '$head${'[' * 20000}${']' * 20000}';
+    expect(scanner.findTooDeep(text), head.length + NestingScanner.maxDepth);
+  });
+
+  test('a stray quote in a block scalar does not hide what follows', () {
+    const head = "a: |\n  it 'x\nb: ";
+    final text = '$head${'[' * 20000}${']' * 20000}';
+    expect(scanner.findTooDeep(text), head.length + NestingScanner.maxDepth);
+  });
+
+  test('an unbalanced brace in a plain scalar is not a collection', () {
+    final text = List.generate(
+      1200,
+      (n) => 'p$n:\n  description: use { to open\n',
+    ).join();
+    expect(scanner.findTooDeep(text), isNull);
+  });
+
+  test('an apostrophe in a plain scalar does not open a string', () {
+    const text = "a: it's here\nb: [1, [2]]\nc: 'it''s'\nd: [[1]]\n";
+    expect(scanner.findTooDeep(text, limit: 3), isNull);
+  });
+
+  test('brackets in quoted values are not collections', () {
+    expect(scanner.findTooDeep('key: "a [ b"\nk2: [1]\n', limit: 2), isNull);
+    expect(
+      scanner.findTooDeep("key: 'it''s [ fine'\nk2: [1]\n", limit: 2),
+      isNull,
+    );
+  });
+
+  test('a block scalar hides its lines but not the lines after it', () {
+    const hidden = 'a: |\n  [[[[[[\n  {{{{{{\n\n  [[[[[[\nb: [1]\n';
+    expect(scanner.findTooDeep(hidden, limit: 3), isNull);
+    const after = 'a: |\n  x\nb:\n        c: 1\n';
+    expect(scanner.findTooDeep(after, limit: 6), 18);
+    const seq = '- a: |\n    x\n  b: [[[1]]]\n';
+    expect(scanner.findTooDeep(seq, limit: 4), 20);
+  });
+
+  test('anchors, tags and document markers do not hide a collection', () {
+    expect(scanner.findTooDeep('a: &x [[[1]]]\n', limit: 2), 8);
+    expect(scanner.findTooDeep('a: !!seq [[[1]]]\n', limit: 2), 11);
+    expect(scanner.findTooDeep('--- ${'[' * 20000}'), isNotNull);
+    expect(scanner.findTooDeep('--- [1]\n--- |\n  [[[[\n', limit: 6), isNull);
+  });
+
+  test('a lone CR and CRLF are line breaks', () {
+    expect(scanner.findTooDeep('a:\r        b: 1\r', limit: 6), 9);
+    expect(scanner.findTooDeep('a:\r\n        b: 1\r\n', limit: 6), 10);
+    expect(scanner.findTooDeep('  x\r' * 10, limit: 6), isNull);
+    expect(scanner.findTooDeep('  x\r\n' * 10, limit: 6), isNull);
+  });
 }
