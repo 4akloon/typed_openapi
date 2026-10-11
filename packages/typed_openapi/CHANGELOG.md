@@ -28,7 +28,8 @@
   and the value is read as text; parser warnings are TOA015. The copied
   scanner is linear on long flow lines (dart-lang/tools#2657), so hostile
   one-line files are rejected in moments. A directory given as the spec or
-  the config is reported as such; package:yaml is no longer a dependency.
+  the config is reported as such; package:yaml is no longer a runtime
+  dependency (it is used by tests only).
 - `$ref` where OpenAPI does not accept a Reference Object (an operation,
   `description`) is TOA107 with a hint to bundle the spec (`redocly bundle`);
   `$ref: #/...` without quotes, which YAML reads as a comment, is TOA108; the
@@ -45,9 +46,20 @@
   required (TOA401), unresolved discriminator mapping (TOA402), path
   parameters not in the template (TOA502), missing and duplicate
   `operationId` (TOA503, TOA504), `*/*` media types (TOA601), component keys
-  with invalid characters (TOA106). Presets add framework recipes to the
-  hints; `rules: {<name>: false}` in `defaults` or a client turns a rule off
-  (unknown names are TOA903).
+  with invalid characters (TOA106), and an example of another scalar type
+  (TOA208, info). Presets add framework recipes to the hints;
+  `rules: {<name>: false}` in `defaults` or a client turns a rule off. The
+  rule names are `array-without-items`, `binary-object`,
+  `bool-required-to-array`, `component-key-characters`,
+  `contradictory-object-type`, `declare-missing-path-params`,
+  `dedupe-enum-values`, `discriminator-mapping-target`,
+  `discriminator-property-required`, `double-array`,
+  `drop-invalid-default`, `duplicate-operation-id`,
+  `example-type-mismatch`, `format-on-array`, `missing-operation-id`,
+  `nullable-enum-one-of`, `path-param-not-in-template` and
+  `wildcard-media-type`. An unknown name is TOA903 (the message lists the
+  known ones); a `rules` value that is not a map, or a rule set to anything
+  but `true` or `false`, is TOA902.
 - Programmatic API: `Normalizer`, `NormalizedSpec`, `NormalizerRule`,
   `RuleContext`, `Finding`, `SpecEdit`, `EditOperation`, `SpecDocuments`.
 - A region of a spec that several `$ref`s, enclosing nodes or clients reach is
