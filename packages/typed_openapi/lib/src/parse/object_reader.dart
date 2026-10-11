@@ -1,3 +1,5 @@
+import 'package:source_span/source_span.dart';
+
 import '../diagnostics/json_pointer.dart';
 import '../model/spec_node.dart';
 import 'parse_context.dart';
@@ -143,9 +145,12 @@ final class ObjectReader {
       return null;
     }
     final at = pointer.child(key);
+    // In a map of named entries, a merge key is not an entry: it is reported
+    // and left out, so it does not become a schema or a path named "<<".
+    if (entries.containsKey(_mergeKey)) _merge(at.child(_mergeKey));
     return Map.unmodifiable({
       for (final MapEntry(key: name, :value) in entries.entries)
-        if (!skipExtensions || !name.startsWith('x-'))
+        if ((!skipExtensions || !name.startsWith('x-')) && name != _mergeKey)
           name: ?read(value, at.child(name)),
     });
   }
@@ -191,6 +196,20 @@ final class ObjectReader {
       if (_read.contains(key)) continue;
       if (!reportExtensions && key.startsWith('x-')) continue;
       unknown[key] = value;
+      if (key == _mergeKey) {
+        _merge(pointer.child(key));
+        continue;
+      }
+      if (key == r'$ref') {
+        _context.report(
+          .refNotAllowed,
+          'OpenAPI does not accept a Reference Object here, so this '
+          r'"$ref" is ignored.',
+          pointer.child(key),
+          fix: _bundleFix,
+        );
+        continue;
+      }
       _context.report(
         .unknownKey,
         'Unknown key "$key"; it is ignored.',
@@ -221,6 +240,10 @@ final class ObjectReader {
 
   T? _item<T>(Object? raw, JsonPointer at, String expected) {
     if (raw is T) return raw;
+    if (_isRefObject(raw)) {
+      _refNotAllowed(at, expected);
+      return null;
+    }
     _context.report(
       .invalidValue,
       'Each item must be $expected, not ${describe(raw)}.',
@@ -230,12 +253,83 @@ final class ObjectReader {
   }
 
   void _invalid(String key, String expected, Object? raw) {
+    final at = pointer.child(key);
+    if (_isRefObject(raw)) {
+      _refNotAllowed(at, expected);
+      return;
+    }
+    if (key == r'$ref' && raw == null && _commentFollows(at)) {
+      _context.report(
+        .refCommentedOut,
+        r'This "$ref" is empty: without quotes, "#" starts a YAML comment, '
+        'so the reference was read as a comment.',
+        at,
+        fix: r"Quote the reference: $ref: '#/components/schemas/Pet'.",
+      );
+      return;
+    }
     _context.report(
       .invalidValue,
       '"$key" must be $expected, not ${describe(raw)}; it is ignored.',
       pointer.child(key),
     );
   }
+
+  static const _bundleFix =
+      r'A spec that puts "$ref" anywhere is written for a bundler (Redocly, '
+      'swagger-cli) that resolves it as a JSON Reference. Bundle it first, '
+      'for example with `redocly bundle`, and check the bundled file.';
+
+  static const _mergeKey = '<<';
+
+  void _merge(JsonPointer at) {
+    _context.report(
+      .yamlMergeKey,
+      '"<<" is a YAML 1.1 merge key; OpenAPI tools read it as a plain key '
+      'named "<<", so its keys are not merged here.',
+      at,
+      fix: 'Write the keys out.',
+    );
+  }
+
+  static bool _isRefObject(Object? raw) =>
+      raw is Map<String, Object?> && raw.containsKey(r'$ref');
+
+  void _refNotAllowed(JsonPointer at, String expected) {
+    _context.report(
+      .refNotAllowed,
+      'OpenAPI expects $expected here, not a Reference Object, so this '
+      r'"$ref" is ignored.',
+      at,
+      fix: _bundleFix,
+    );
+  }
+
+  /// Whether the empty value at [at] was written as `key: #...`, so that
+  /// the `#` started a comment.
+  ///
+  /// package:yaml puts an empty block value at the `:` of its key, and an
+  /// empty flow value at the token after it, which is on a later line when
+  /// a comment ended the line.
+  bool _commentFollows(JsonPointer at) {
+    final span = _context.document.spanOf(at);
+    if (span is! FileSpan) return false;
+    final file = span.file;
+    String lineAt(int line) => file.getText(
+      file.getOffset(line),
+      line + 1 < file.lines ? file.getOffset(line + 1) : file.length,
+    );
+    final line = span.start.line;
+    final before = file.getText(file.getOffset(line), span.start.offset);
+    final rest = lineAt(line).substring(before.length);
+    if (_blockComment.hasMatch(rest)) return true;
+    return before.trim().isEmpty &&
+        line > 0 &&
+        _flowComment.hasMatch(lineAt(line - 1));
+  }
+
+  static final _blockComment = RegExp(r'^:?[ \t]+#');
+  static final _flowComment = RegExp(r':[ \t]+#[^\n]*\n?$');
 
   void _missing(String key) {
     _context.report(

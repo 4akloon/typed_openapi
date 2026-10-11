@@ -95,6 +95,18 @@ enum DiagnosticCode {
   /// resolves them against the file location instead.
   refBaseIgnored('TOA105', 'ref-base-ignored', .warning),
 
+  /// A `$ref` where OpenAPI does not accept a Reference Object, as bundlers
+  /// such as Redocly allow; it is ignored.
+  refNotAllowed('TOA107', 'ref-not-allowed', .warning),
+
+  /// `$ref: #/...` without quotes in YAML: `#` starts a comment, so the
+  /// value is null.
+  refCommentedOut('TOA108', 'ref-commented-out', .warning),
+
+  /// A YAML 1.1 merge key `<<`, which OpenAPI's YAML does not have; it is
+  /// read as a plain key named `<<`.
+  yamlMergeKey('TOA109', 'yaml-merge-key', .warning),
+
   /// An object has a key that no OpenAPI version defines; it is ignored.
   unknownKey('TOA110', 'unknown-key', .warning),
 
