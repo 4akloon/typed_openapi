@@ -86,6 +86,15 @@ void main() {
     });
   });
 
+  test('edits of elements of one list overlap: indexes shift', () {
+    SpecEdit remove(String pointer) => SpecEdit.remove(at(pointer));
+    expect(remove('#/l/0').overlaps(remove('#/l/2')), isTrue);
+    expect(remove('#/l/0').overlaps(remove('#/l/-')), isTrue);
+    expect(remove('#/l/-').overlaps(remove('#/l/-')), isTrue);
+    expect(remove('#/l/0').overlaps(remove('#/m/0')), isFalse);
+    expect(remove('#/a/x').overlaps(remove('#/a/y')), isFalse);
+  });
+
   test('edits overlap when one is at or inside the other', () {
     final b = SpecEdit.remove(at('#/a/b'));
     expect(b.overlaps(SpecEdit.remove(at('#/a/b'))), isTrue);

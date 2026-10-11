@@ -38,17 +38,34 @@ final class SpecEdit {
   final Object? value;
 
   /// Whether this edit and [other] touch the same node, or one of them a
-  /// node inside the other's.
+  /// node inside the other's, or both an element of the same list: edits are
+  /// computed against one tree but applied one after another, so an earlier
+  /// insert or removal shifts the index of a later one.
   bool overlaps(SpecEdit other) {
     if (location.document != other.location.document) return false;
     final a = location.pointer.tokens;
     final b = other.location.pointer.tokens;
+    if (a.length == b.length && a.isNotEmpty && _sameListItems(a, b)) {
+      return true;
+    }
     final shorter = a.length < b.length ? a : b;
     for (var i = 0; i < shorter.length; i++) {
       if (a[i] != b[i]) return false;
     }
     return true;
   }
+
+  static bool _sameListItems(List<String> a, List<String> b) {
+    for (var i = 0; i < a.length - 1; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return _isItemToken(a.last) && _isItemToken(b.last);
+  }
+
+  static bool _isItemToken(String token) =>
+      token == '-' || _itemPattern.hasMatch(token);
+
+  static final _itemPattern = RegExp(r'^(0|[1-9][0-9]{0,8})$');
 }
 
 /// Applies [SpecEdit]s to a plain tree without changing it: every object

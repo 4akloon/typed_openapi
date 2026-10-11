@@ -95,6 +95,31 @@ final class _OneEditTwoFindings extends NormalizerRule {
   }
 }
 
+/// Removes every `bad` item of the root's `x-l` list, each by its own index.
+final class _DropBadItems extends NormalizerRule {
+  const _DropBadItems();
+
+  @override
+  String get name => 'drop-bad-items';
+
+  @override
+  List<DiagnosticCode> get codes => const [.invalidValue];
+
+  @override
+  Iterable<Finding> check(RuleContext context) sync* {
+    final root = context.model.document.location;
+    final items = context.rawObject(root)?['x-l'];
+    if (items is! List<Object?>) return;
+    final list = root.child('x-l');
+    final edits = [
+      for (var i = 0; i < items.length; i++)
+        if (items[i] == 'bad') SpecEdit.remove(list.child(i)),
+    ];
+    if (edits.isEmpty) return;
+    yield context.finding(.invalidValue, 'Bad items.', list, edits: edits);
+  }
+}
+
 /// Reports every schema without a type: a diagnostic-only rule.
 final class _Untyped extends NormalizerRule {
   const _Untyped();
@@ -238,6 +263,18 @@ components:
       contains('still changed after 3 passes'),
     );
   });
+
+  test(
+    'removing several items of one list by index removes the right ones',
+    () {
+      final (result, _) = normalize(
+        'openapi: 3.0.3\ninfo: {title: t, version: "1"}\n'
+        'x-l: [bad, ok, bad, last]\n',
+        [const _DropBadItems()],
+      );
+      expect(result.documents.root.root['x-l'], ['ok', 'last']);
+    },
+  );
 
   test('a disabled rule does not run', () {
     final (result, bag) = normalize(
