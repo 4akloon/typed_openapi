@@ -37,6 +37,7 @@
 | Конверти (R6.4) | `{data: T}` за замовчуванням розгортається, метод повертає `T` |
 | Імена (R5.1) | Як у схемі: `operationId` → lowerCamelCase, імена схем без змін (`Dto` лишається); трансформації лише явні (конфіг, пресет) |
 | Числа (R6.2) | `integer` → `int`; `number` + `float`/`double` → `double`; `number` без формату → `num`; мапінг і override налаштовуються |
+| Власні типи (R6.8) | `types.formats` / `types.schemas` / override: `{type, import, converter?}`; без конвертера — контракт `fromJson`/`toJson`, з конвертером — клас із `fromJson`/`toJson`; без нових залежностей |
 | Вичерпність (8) | `exhaustive` за замовчуванням для enum, union-ів, подій SSE і помилок операції; вимикається на рівні схеми в override-ах (`exhaustive: false`); звіт R14.1 позначає нові значення як source-breaking (§7.8) |
 
 ---
