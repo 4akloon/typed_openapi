@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:test/test.dart';
 import 'package:typed_openapi/src/load/nesting_scanner.dart';
 
@@ -94,5 +96,34 @@ c: [1, 2]
     expect(scanner.findTooDeep('a:\r\n        b: 1\r\n', limit: 6), 10);
     expect(scanner.findTooDeep('  x\r' * 10, limit: 6), isNull);
     expect(scanner.findTooDeep('  x\r\n' * 10, limit: 6), isNull);
+  });
+
+  test('a continuation line starting with a bracket is scalar text', () {
+    final deep = '- ' * 20000;
+    expect(scanner.findTooDeep('a: foo\n  [x\nb:\n  $deep'), isNotNull);
+    expect(scanner.findTooDeep('a: foo\n  {x\nb:\n  $deep'), isNotNull);
+    expect(scanner.findTooDeep('- foo\n  [x\n- $deep'), isNotNull);
+    expect(scanner.findTooDeep("a: foo\n  'x\nb:\n  $deep"), isNotNull);
+    expect(scanner.findTooDeep('a: foo\n  - [x\nb:\n  $deep'), isNotNull);
+    expect(scanner.findTooDeep('a: foo\n  [[[[[[\nb: 1\n', limit: 3), isNull);
+  });
+
+  test('a flow collection after a plain scalar is real when not indented', () {
+    expect(scanner.findTooDeep('a: foo\n[[[x]]]: 1\n', limit: 2), 9);
+    expect(scanner.findTooDeep('a:\n  [[[x]]]\n', limit: 2), 5);
+  });
+
+  test('pretty-printed JSON nested 600 levels is not double counted', () {
+    Object? value = 'x';
+    for (var i = 0; i < 600; i++) {
+      value = {'a': value};
+    }
+    final text = const JsonEncoder.withIndent('  ').convert(value);
+    expect(scanner.findTooDeep(text), isNull);
+  });
+
+  test('markers at the start of a line count inside flow collections', () {
+    expect(scanner.findTooDeep('[\n${'- ' * 3}x\n]', limit: 5), 6);
+    expect(scanner.findTooDeep('[\n${'- ' * 2}x\n]', limit: 5), isNull);
   });
 }
