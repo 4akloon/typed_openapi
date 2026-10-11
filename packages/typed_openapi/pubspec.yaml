@@ -7,8 +7,18 @@ version: 0.0.1
 homepage: https://github.com/4akLoon/typed_openapi
 repository: https://github.com/4akLoon/typed_openapi
 
+executables:
+  typed_openapi:
+
 environment:
   sdk: ">=3.8.0 <4.0.0"
+
+dependencies:
+  args: ^2.7.0
+  io: ^1.1.0
+  path: ^1.9.1
+  source_span: ^1.10.2
+  yaml: ^3.1.4
 
 dev_dependencies:
   test: ^1.24.0
