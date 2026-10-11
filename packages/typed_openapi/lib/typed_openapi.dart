@@ -1,7 +1,8 @@
 /// OpenAPI 3.x to Dart client generator.
 ///
 /// The programmatic API mirrors the CLI: load a config, check specs, report
-/// diagnostics.
+/// diagnostics. [SpecReader] reads a loaded spec into the typed model
+/// ([SpecModel]) with its `$ref`s resolved.
 library;
 
 export 'src/check/spec_checker.dart' show SpecChecker;
@@ -20,3 +21,33 @@ export 'src/load/openapi_version.dart'
     show OpenApiVersion, OpenApiVersionDetector;
 export 'src/load/spec_document.dart' show SpecDocument;
 export 'src/load/spec_loader.dart' show SpecLoader;
+export 'src/model/document.dart' show Components, Info, OpenApiDocument, Tag;
+export 'src/model/operation.dart'
+    show
+        Encoding,
+        Example,
+        Header,
+        MediaType,
+        Operation,
+        Parameter,
+        ParameterLocation,
+        ParameterStyle,
+        PathItem,
+        RequestBody,
+        Response,
+        SecurityRequirement,
+        Server,
+        ServerVariable;
+export 'src/model/schema.dart'
+    show BooleanSchema, Discriminator, Schema, SchemaObject, SchemaType;
+export 'src/model/security.dart'
+    show
+        ApiKeyLocation,
+        OAuthFlow,
+        OAuthFlows,
+        SecurityScheme,
+        SecuritySchemeType;
+export 'src/model/spec_node.dart'
+    show Inline, Ref, RefKind, RefOr, SpecLocation, SpecNode;
+export 'src/resolve/spec_model.dart' show SpecModel;
+export 'src/resolve/spec_reader.dart' show SpecReader;

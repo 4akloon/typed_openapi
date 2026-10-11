@@ -11,7 +11,10 @@ void main() {
 
   setUp(() {
     final dir = TempDir();
-    dir.write('specs/ok.yaml', 'openapi: 3.1.0\n');
+    dir.write(
+      'specs/ok.yaml',
+      'openapi: 3.1.0\ninfo: {title: ok, version: "1"}\n',
+    );
     dir.write('specs/old.json', '{\n  "swagger": "2.0"\n}');
     configPath = dir.write('typed_openapi.yaml', '''
 clients:
@@ -80,5 +83,27 @@ clients:
     expect(code, 1);
     expect(out, contains('TOA902'));
     expect(err, isEmpty);
+  });
+
+  test('reports broken references in the spec', () async {
+    final dir = TempDir();
+    dir.write('api.yaml', r'''
+openapi: 3.0.0
+info: {title: api, version: "1"}
+components:
+  schemas:
+    Owner: {properties: {pet: {$ref: "#/components/schemas/"}}}
+''');
+    final path = dir.write(
+      'typed_openapi.yaml',
+      'clients:\n  api: {input: api.yaml, output: lib/api}\n',
+    );
+    final (code, out, _) = await run(['check', '-c', path]);
+    expect(code, 1);
+    expect(out, contains('error TOA100 invalid-ref'));
+    expect(
+      out,
+      contains(r'  at #/components/schemas/Owner/properties/pet/$ref'),
+    );
   });
 }

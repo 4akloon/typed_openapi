@@ -31,6 +31,10 @@ dart run typed_openapi check core_api   # one client
 dart run typed_openapi check --format json
 ```
 
+`check` reads the whole spec, follows its `$ref`s (also into other local
+files) and reports unknown keys, wrong value types, broken or looping
+references and constructs that the declared OpenAPI version does not have.
+
 Every finding has a stable code (`TOA011`), a JSON pointer into the spec and,
 for files the parser could position, a line and column. Exit code `1` means
 at least one error, `64` wrong arguments or an unknown client, `78` the

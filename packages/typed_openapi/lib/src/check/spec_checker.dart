@@ -4,6 +4,7 @@ import '../config/project_config.dart';
 import '../diagnostics/diagnostic_bag.dart';
 import '../load/openapi_version.dart';
 import '../load/spec_loader.dart';
+import '../resolve/spec_reader.dart';
 
 /// Loads every client's spec and reports what is wrong with it.
 ///
@@ -17,12 +18,15 @@ final class SpecChecker {
 
   /// Checks the spec of every client in [config].
   ///
-  /// [only] limits the run to clients with these names; empty means all.
-  /// A file shared by several clients is checked once. Spec paths in
-  /// diagnostics are relative to the config file's directory.
+  /// Each spec is loaded, its OpenAPI version detected, and then it is read
+  /// into the model with its `$ref`s resolved. [only] limits the run to
+  /// clients with these names; empty means all. A file shared by several
+  /// clients is checked once. Spec paths in diagnostics are relative to the
+  /// config file's directory.
   void check(ProjectConfig config, {Set<String> only = const {}}) {
     final loader = SpecLoader(_diagnostics);
     final detector = OpenApiVersionDetector(_diagnostics);
+    final reader = SpecReader(_diagnostics);
     final configDir = p.dirname(p.absolute(config.file));
     final checked = <String>{};
     for (final client in config.clients) {
@@ -33,7 +37,9 @@ final class SpecChecker {
         displayPath: p.relative(client.input, from: configDir),
       );
       if (document == null) continue;
-      detector.detect(document);
+      final version = detector.detect(document);
+      if (version == null) continue;
+      reader.read(document, version);
     }
   }
 }

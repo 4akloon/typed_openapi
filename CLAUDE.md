@@ -28,18 +28,38 @@ cd packages/<package> && dart pub publish --dry-run # before publishing
 Git commands run from the repo root. Commit messages are Conventional Commits
 (`feat(typed_openapi): ...`, `refactor(...)`, `docs: ...`).
 
-## Architecture of M1 (`dart run typed_openapi check`)
+## Architecture (`dart run typed_openapi check`)
 
 All under `packages/typed_openapi/lib/src/`, one folder per stage:
 
 - `diagnostics/` - `Diagnostic`, `DiagnosticCode` (stable `TOAnnn` catalog),
   `Severity`, `JsonPointer`, `DiagnosticBag`, and the reporters
   (`DiagnosticReporter`, `TextReporter`, `JsonReporter`, `ReportFormat`).
-- `load/` - `SpecLoader` reads JSON/YAML into a `SpecDocument` (plain tree plus
-  source spans by JSON pointer); `OpenApiVersionDetector` reads its OpenAPI
-  version.
+- `load/` - `SpecLoader` reads JSON/YAML into a `SpecDocument` (plain tree,
+  absolute file URI, source spans by JSON pointer, `valueAt(pointer)`);
+  `NestingScanner` rejects text nested deeper than 1000 levels before the
+  recursive YAML parser sees it (it is YAML-context aware: quotes and brackets
+  are syntax only at a value start, block scalars are skipped, `- `, `? ` and
+  empty-key `: ` markers each nest one level); `OpenApiVersionDetector` reads
+  the version.
+- `model/` - the immutable typed model, a superset of OAS 3.0/3.1/3.2:
+  `SpecNode` (every node has a `SpecLocation` = file URI + pointer, `x-`
+  `extensions` and reported `unknownKeys`), `RefOr<T>` = `Ref<T>` | `Inline<T>`,
+  `Schema` = `BooleanSchema` | `SchemaObject` (`$ref` is a keyword there),
+  `OpenApiDocument` and the other OAS objects.
+- `parse/` - `OpenApiParser` (document, components, fragments for `$ref`
+  targets), `OperationParser`, `SchemaParser`, all on `ObjectReader` (typed
+  field access; wrong types and non-finite numbers -> TOA111, missing required
+  -> TOA112, unknown keys -> TOA110). Parsers record nodes, `$ref`s and
+  version-specific constructs (`SpecFeature`) in a shared `SpecIndex`;
+  `DialectChecker` turns the constructs into TOA020-TOA022.
+- `resolve/` - `RefTarget` reads a `$ref` value (a query or a bad fragment ->
+  TOA100, a host -> TOA102), `SpecDocuments` loads other local files once by
+  URI, `RefResolver` follows every `$ref` (parsing each on-demand target once)
+  and reports TOA100-TOA105, `SpecModel` answers `resolve`/`resolveSchema`;
+  `SpecReader` runs parse -> resolve -> dialect check.
 - `config/` - `ConfigLoader`, `ProjectConfig`, `ClientConfig`, `Preset`.
-- `check/` - `SpecChecker`.
+- `check/` - `SpecChecker`: config -> load -> version -> `SpecReader`.
 - `cli/` - `TypedOpenApiCli` (`cli.dart`, owns the `CommandRunner` and maps
   usage errors to exit code 64) and `CheckCommand` (`check_command.dart`,
   options `--config/-c` and `--format`, client names as positional
@@ -48,8 +68,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
 - `lib/typed_openapi.dart` exports the public API: the classes above except
   `CheckCommand`, each with a `show` list.
 
-Data flows loader -> checker, every stage writing problems into one
-`DiagnosticBag`; reporters read the bag at the end.
+Data flows loader -> parser -> resolver -> checker, every stage writing
+problems into one `DiagnosticBag`; reporters read the bag at the end.
 
 Rules of the pipeline:
 
