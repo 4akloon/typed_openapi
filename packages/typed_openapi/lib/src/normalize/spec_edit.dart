@@ -38,28 +38,39 @@ final class SpecEdit {
   final Object? value;
 
   /// Whether this edit and [other] touch the same node, or one of them a
-  /// node inside the other's, or both an element of the same list: edits are
-  /// computed against one tree but applied one after another, so an earlier
-  /// insert or removal shifts the index of a later one.
+  /// node inside the other's, or one of them shifts the items of a list the
+  /// other's pointer goes through.
+  ///
+  /// Edits are computed against one tree but applied one after another, so
+  /// an earlier insert or removal in a list moves the index a later edit
+  /// names. A pointer that looks like an index is taken for one, also as an
+  /// object key; that only defers an edit by a pass.
   bool overlaps(SpecEdit other) {
     if (location.document != other.location.document) return false;
     final a = location.pointer.tokens;
     final b = other.location.pointer.tokens;
-    if (a.length == b.length && a.isNotEmpty && _sameListItems(a, b)) {
-      return true;
-    }
     final shorter = a.length < b.length ? a : b;
-    for (var i = 0; i < shorter.length; i++) {
-      if (a[i] != b[i]) return false;
+    var nested = true;
+    for (var i = 0; i < shorter.length && nested; i++) {
+      nested = a[i] == b[i];
     }
-    return true;
+    return nested || _shifts(a, b) || other._shifts(b, a);
   }
 
-  static bool _sameListItems(List<String> a, List<String> b) {
-    for (var i = 0; i < a.length - 1; i++) {
-      if (a[i] != b[i]) return false;
+  /// Whether this edit adds or removes a list item and [through] goes
+  /// through the same list, at any depth below it.
+  bool _shifts(List<String> own, List<String> through) {
+    if (operation == .replace || own.isEmpty || !_isItemToken(own.last)) {
+      return false;
     }
-    return _isItemToken(a.last) && _isItemToken(b.last);
+    final parent = own.length - 1;
+    if (through.length <= parent || !_isItemToken(through[parent])) {
+      return false;
+    }
+    for (var i = 0; i < parent; i++) {
+      if (own[i] != through[i]) return false;
+    }
+    return true;
   }
 
   static bool _isItemToken(String token) =>

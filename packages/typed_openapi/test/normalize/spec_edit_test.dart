@@ -86,12 +86,20 @@ void main() {
     });
   });
 
-  test('edits of elements of one list overlap: indexes shift', () {
+  test('an edit that shifts list items overlaps edits in that list', () {
     SpecEdit remove(String pointer) => SpecEdit.remove(at(pointer));
+    SpecEdit add(String pointer) => SpecEdit.add(at(pointer), 1);
+    SpecEdit replace(String pointer) => SpecEdit.replace(at(pointer), 1);
+    expect(
+      remove('#/l/1').overlaps(replace('#/l/2/schema/type')),
+      isTrue,
+    );
+    expect(replace('#/l/2/schema/type').overlaps(remove('#/l/1')), isTrue);
     expect(remove('#/l/0').overlaps(remove('#/l/2')), isTrue);
-    expect(remove('#/l/0').overlaps(remove('#/l/-')), isTrue);
-    expect(remove('#/l/-').overlaps(remove('#/l/-')), isTrue);
-    expect(remove('#/l/0').overlaps(remove('#/m/0')), isFalse);
+    expect(add('#/l/-').overlaps(add('#/l/-')), isTrue);
+    expect(add('#/l/-').overlaps(replace('#/l/0/x')), isTrue);
+    expect(replace('#/l/0').overlaps(replace('#/l/2')), isFalse);
+    expect(remove('#/l/0').overlaps(replace('#/m/1/x')), isFalse);
     expect(remove('#/a/x').overlaps(remove('#/a/y')), isFalse);
   });
 

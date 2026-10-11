@@ -120,6 +120,45 @@ final class _DropBadItems extends NormalizerRule {
   }
 }
 
+/// Removes the item `a` of the root's `x-l` list and renames the item `b`
+/// in the same pass: the rename names an index the removal shifts.
+final class _RemoveThenRename extends NormalizerRule {
+  const _RemoveThenRename();
+
+  @override
+  String get name => 'remove-then-rename';
+
+  @override
+  List<DiagnosticCode> get codes => const [.invalidValue];
+
+  @override
+  Iterable<Finding> check(RuleContext context) sync* {
+    final root = context.model.document.location;
+    final items = context.rawObject(root)?['x-l'];
+    if (items is! List<Object?>) return;
+    final list = root.child('x-l');
+    for (var i = 0; i < items.length; i++) {
+      final name = (items[i] as Map<String, Object?>)['name'];
+      if (name == 'a') {
+        yield context.finding(
+          .invalidValue,
+          'Drop a.',
+          list.child(i),
+          edits: [SpecEdit.remove(list.child(i))],
+        );
+      } else if (name == 'b') {
+        final at = list.child(i).child('name');
+        yield context.finding(
+          .invalidValue,
+          'Rename b.',
+          at,
+          edits: [SpecEdit.replace(at, 'B')],
+        );
+      }
+    }
+  }
+}
+
 /// Reports every schema without a type: a diagnostic-only rule.
 final class _Untyped extends NormalizerRule {
   const _Untyped();
@@ -275,6 +314,18 @@ components:
       expect(result.documents.root.root['x-l'], ['ok', 'last']);
     },
   );
+
+  test('an edit behind a removed list item is proposed again next pass', () {
+    final (result, _) = normalize(
+      'openapi: 3.0.3\ninfo: {title: t, version: "1"}\n'
+      'x-l: [{name: a}, {name: b}, {name: c}]\n',
+      [const _RemoveThenRename()],
+    );
+    expect(result.documents.root.root['x-l'], [
+      {'name': 'B'},
+      {'name': 'c'},
+    ]);
+  });
 
   test('a disabled rule does not run', () {
     final (result, bag) = normalize(
