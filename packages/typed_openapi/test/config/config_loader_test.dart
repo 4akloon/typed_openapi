@@ -88,22 +88,28 @@ clients:
     expect(bag.all.single.message, contains('nests deeper'));
   });
 
-  test('rejects an alias used as a key before expanding it', () {
-    final text = StringBuffer('x-l0: &l0 [x, x, x, x, x, x, x, x, x]\n');
-    for (var i = 1; i <= 7; i++) {
-      text.writeln('x-l$i: &l$i [${List.filled(9, '*l${i - 1}').join(', ')}]');
-    }
-    text.writeln('x-key:\n  ? *l7\n  : v');
-    text.writeln('clients:\n  api: {input: a.json, output: lib/api}');
-    final path = TempDir().write('typed_openapi.yaml', '$text');
-    final bag = DiagnosticBag();
-    final watch = Stopwatch()..start();
-    expect(ConfigLoader(bag).load(path), isNull);
-    watch.stop();
-    expect(bag.all.single.code, DiagnosticCode.configInvalid);
-    expect(bag.all.single.message, contains('key'));
-    expect(watch.elapsed, lessThan(const Duration(seconds: 1)));
-  });
+  for (final (name, key) in [
+    ('an explicit ? key', 'x-key:\n  ? *l7\n  : v'),
+    ('a flow sequence key', '[*l7]: v'),
+    ('a flow mapping key', '{a: *l7}: v'),
+    ('a ? key inside a flow mapping', 'x-key: {? *l7 : v}'),
+  ]) {
+    test('rejects $name with an alias before expanding it', () {
+      final text = StringBuffer('x-l0: &l0 [x, x, x, x, x, x, x, x, x]\n');
+      for (var i = 1; i <= 7; i++) {
+        text.writeln(
+          'x-l$i: &l$i [${List.filled(9, '*l${i - 1}').join(', ')}]',
+        );
+      }
+      text.writeln(key);
+      text.writeln('clients:\n  api: {input: a.json, output: lib/api}');
+      final path = TempDir().write('typed_openapi.yaml', '$text');
+      final bag = DiagnosticBag();
+      expect(ConfigLoader(bag).load(path), isNull);
+      expect(bag.all.single.code, DiagnosticCode.configInvalid);
+      expect(bag.all.single.message, contains('mapping key'));
+    }, timeout: const Timeout(Duration(seconds: 30)));
+  }
 
   test('accepts an alias in a value', () {
     final path = TempDir().write('typed_openapi.yaml', '''

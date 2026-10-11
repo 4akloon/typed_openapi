@@ -13,7 +13,22 @@ void main() {
 
   test('finds the bracket that goes one level too deep', () {
     final text = '{"a": ${'[' * 6}${']' * 6}}';
-    expect(scanner.findTooDeep(text, limit: 5), 10);
+    expect(scanner.findTooDeep(text, limit: 5), 11);
+  });
+
+  test('a root flow collection is level 0, like a root block mapping', () {
+    expect(
+      scanner.findTooDeep('{"a": ${'[' * 5}${']' * 5}}', limit: 5),
+      isNull,
+    );
+    expect(scanner.findTooDeep('a: ${'[' * 5}${']' * 5}', limit: 5), isNull);
+    expect(scanner.findTooDeep('a: ${'[' * 6}${']' * 6}', limit: 5), 8);
+    expect(scanner.findTooDeep('${'[' * 5}${']' * 5}', limit: 5), isNull);
+    expect(
+      scanner.findTooDeep('---\n# c\n{"a": [[[[[1]]]]]}', limit: 5),
+      isNull,
+    );
+    expect(scanner.findTooDeep('- ${'[' * 5}${']' * 5}', limit: 5), 5);
   });
 
   test('ignores brackets in strings and comments', () {
@@ -39,7 +54,7 @@ c: [1, 2]
 
   test('scans 20 000 levels without recursion', () {
     final text = '${'[' * 20000}${']' * 20000}';
-    expect(scanner.findTooDeep(text), NestingScanner.maxDepth);
+    expect(scanner.findTooDeep(text), NestingScanner.maxDepth + 1);
   });
 
   test('a stray quote in a plain scalar does not hide what follows', () {
@@ -148,18 +163,57 @@ c: [1, 2]
     int? find(String text) => scanner.findAliasKey(text);
 
     test('finds an alias after a ? marker', () {
-      expect(find('a:\n  ? *x\n  : v\n'), 7);
-      expect(find('? *x\n'), 2);
-      expect(find('?\n  *x\n'), 4);
+      expect(find('a:\n  ? *x\n  : v\n'), 5);
+      expect(find('? *x\n'), 0);
+      expect(find('?\n  *x\n'), 0);
     });
 
-    test('finds an alias anywhere inside a ? key, not after it', () {
-      expect(find('? [*x]\n: v\n'), 3);
-      expect(find('? - *x\n: v\n'), 4);
-      expect(find('? {a: *x}\n: v\n'), 6);
-      expect(find('? a\n: *x\n'), isNull);
-      expect(find('a:\n  ? k\n  : *x\n  b: *y\n'), isNull);
-      expect(find('? k\n# c\n: [*x]\n'), isNull);
+    test('with an alias anywhere, rejects every explicit ? key', () {
+      expect(find('? [*x]\n: v\n'), 0);
+      expect(find('? - *x\n: v\n'), 0);
+      expect(find('?\n- *x\n: v\n'), 0);
+      expect(find('a:\n  ?\n  - *x\n  : v\n'), 5);
+      expect(find('? a\n: *x\n'), 0);
+      expect(find('a:\n  ? k\n  : v\n  b: *y\n'), 5);
+      expect(find('b: &y 1\n? k\n: *y\n'), 8);
+      expect(find('{? *x : v}'), 3);
+      expect(find('[? *x : v]'), 3);
+      expect(find('[? *x]'), 1);
+      expect(find('{a: 1, ? *x : v}'), 9);
+      expect(find('{? [*x] : v}'), 1);
+      expect(find('[\n? *x\n]'), 2);
+    });
+
+    test('with an alias anywhere, rejects a flow collection used as a key', () {
+      expect(find('[*x]: v\n'), 0);
+      expect(find('{a: *x}: v\n'), 0);
+      expect(find('- [*x]: v\n'), 2);
+      expect(find('!!seq [*x]: v\n'), 6);
+      expect(find('&z [*x]: v\n'), 3);
+      expect(find('{[*x]: v}'), 1);
+      expect(find('[[*x]: v]'), 1);
+      expect(find('{{a: *x}: v}'), 1);
+      expect(find('[a] : v\nb: *x\n'), 0);
+      expect(find('b: *x\n[a] : v\n'), 6);
+      expect(find('{a: 1}:v\nb: *x\n'), 0);
+    });
+
+    test('without an alias, explicit and collection keys are left alone', () {
+      expect(find('? /pets\n: v\n'), isNull);
+      expect(find('[a]: v\n'), isNull);
+      expect(find('{? a : v}'), isNull);
+      expect(find('{"a": [1, 2], "b": {"c": [3]}}'), isNull);
+    });
+
+    test('with an alias, JSON-like collections that are values are fine', () {
+      expect(
+        find('x: &a [1]\ny: *a\nz: {"a": [1, 2], "b": {"c": [3]}}\n'),
+        isNull,
+      );
+      expect(find('x: [1] # note: here\ny: *x\n'), isNull);
+      expect(find('what? *x\n'), isNull);
+      expect(find('a: ?x\nb: *y\n'), isNull);
+      expect(find('a: [ ?x, *y ]\n'), isNull);
     });
 
     test('finds an alias before a value indicator', () {
@@ -186,7 +240,6 @@ c: [1, 2]
       expect(find('{a: *x}'), isNull);
       expect(find('{a: *x , b: 1}'), isNull);
       expect(find('[*x, *y]'), isNull);
-      expect(find('? a\n: *x\n'), isNull);
     });
 
     test('ignores a * that is not an alias', () {

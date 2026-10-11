@@ -61,8 +61,11 @@ final class NestingScanner {
     bool aliasKeys = true,
   }) {
     final flowKinds = <bool>[];
+    final flowOpens = <int>[];
     var keyPosition = false;
-    var keyIndent = -1;
+    var sawAlias = false;
+    int? complexKey;
+    var contentSeen = false;
     var flow = 0;
     var block = 0;
     var flowBase = 0;
@@ -127,16 +130,10 @@ final class NestingScanner {
           atLineStart = false;
           valueStart = false;
         } else {
-          if (flow == 0 &&
-              keyIndent >= 0 &&
-              char != '#' &&
-              block <= keyIndent) {
-            keyIndent = -1;
-          }
           final marker = _markerLength(text, i);
           if (marker > 0) {
+            if (char == '?') complexKey ??= i;
             if (flow == 0) {
-              if (char == '?') keyIndent = block;
               markerColumn = block;
               block += marker;
               if (block > limit) return ScanFinding._(.tooDeep, i);
@@ -166,11 +163,20 @@ final class NestingScanner {
         valueStart = true;
         continue;
       }
-      if (aliasKeys && atValue && char == '*') {
-        final forced = keyIndent >= 0 || (flow > 0 && keyPosition);
-        if (forced || _precedesValueIndicator(text, _propertyEnd(text, i))) {
+      final rootLevel = !contentSeen;
+      contentSeen = true;
+      if (atValue && char == '*') {
+        sawAlias = true;
+        final forced = flow > 0 && keyPosition;
+        if (aliasKeys &&
+            (forced || _precedesValueIndicator(text, _propertyEnd(text, i)))) {
           return ScanFinding._(.aliasKey, i);
         }
+      }
+      if (flow > 0 && atValue && char == '?' && _isBlank(text, i + 1)) {
+        complexKey ??= i;
+        valueStart = true;
+        continue;
       }
       if (atValue && (char == '"' || char == "'")) {
         plainOpen = false;
@@ -178,10 +184,11 @@ final class NestingScanner {
         continue;
       }
       if (atValue && (char == '[' || char == '{')) {
-        if (flow == 0) flowBase = block;
+        if (flow == 0) flowBase = rootLevel && block == 0 ? -1 : block;
         plainOpen = false;
         flow++;
         flowKinds.add(char == '{');
+        flowOpens.add(i);
         keyPosition = char == '{';
         if (flowBase + flow > limit) return ScanFinding._(.tooDeep, i);
         valueStart = true;
@@ -192,6 +199,8 @@ final class NestingScanner {
         if (char == ']' || char == '}') {
           flow--;
           flowKinds.removeLast();
+          final open = flowOpens.removeLast();
+          if (_precedesColon(text, i + 1)) complexKey ??= open;
           keyPosition = false;
         } else if (char == ',' || char == ':') {
           valueStart = true;
@@ -221,7 +230,19 @@ final class NestingScanner {
         if (atValue) plainThreshold = threshold;
       }
     }
-    return null;
+    return aliasKeys && sawAlias ? _finding(complexKey) : null;
+  }
+
+  static ScanFinding? _finding(int? complexKey) =>
+      complexKey == null ? null : ScanFinding._(.aliasKey, complexKey);
+
+  /// Whether a `:` follows [from] after optional blanks, on the same line.
+  static bool _precedesColon(String text, int from) {
+    var i = from;
+    while (i < text.length && (text[i] == ' ' || text[i] == '\t')) {
+      i++;
+    }
+    return i < text.length && text[i] == ':';
   }
 
   /// Whether a `:` value indicator follows [from] after optional blanks.

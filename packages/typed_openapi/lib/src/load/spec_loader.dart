@@ -1,4 +1,3 @@
-import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -90,12 +89,13 @@ final class SpecLoader {
         case .aliasKey:
           _diagnostics.report(
             .aliasExpansionTooLarge,
-            'A YAML alias is used in a mapping key. OpenAPI keys are '
-            'strings, and an alias there can expand without bound, so the '
-            'document is not read.',
+            'OpenAPI keys are strings. In a document with aliases, an alias '
+            'used as a mapping key, an explicit "?" key or a collection '
+            'used as a key can expand without bound, so the document is '
+            'not read.',
             file: file,
             span: span,
-            fix: 'Write the key out instead of aliasing it.',
+            fix: 'Write the key out as a plain string.',
           );
       }
       return null;
@@ -119,7 +119,10 @@ final class SpecLoader {
     final converter = _PlainConverter(
       _diagnostics,
       file,
-      max(_PlainConverter.minBudget, 20 * text.length),
+      max(
+        _PlainConverter.minBudget,
+        _PlainConverter.budgetPerChar * text.length,
+      ),
       mayHaveAliases: text.contains('*'),
     );
     final root = converter.convert(node, .root, 0);
@@ -219,13 +222,12 @@ final class SpecLoader {
 /// converted have cost more than its budget (`alias-expansion-too-large`).
 /// Either is reported once, at that node, and sets [failed].
 ///
-/// The first visit of a node costs 1: such nodes are written in the text, so
-/// their number is bounded by its length. Every later visit, which only
-/// aliases cause, costs its depth plus one: a converted node keeps a pointer
-/// with a segment per level above it, so thousands of aliases of a node
-/// hundreds of levels deep take as much memory and time as millions of
-/// shallow nodes. Ordinary specs use few aliases, and those sit about ten
-/// levels deep, so the budget is far from them.
+/// Every converted node, whether read for the first time or reached again
+/// through an alias, costs the length of its JSON pointer plus one. The
+/// pointer string is what a node keeps in [spans], so the sum of the costs
+/// is the memory the conversion holds and the time it spends. Ordinary
+/// specs cost a few times their text length, far below the budget; aliases
+/// of a deep node or of a node under a long key add up quickly.
 final class _PlainConverter {
   _PlainConverter(
     this._diagnostics,
@@ -234,8 +236,11 @@ final class _PlainConverter {
     required this.mayHaveAliases,
   });
 
-  /// The smallest budget: ordinary specs never come near it.
-  static const minBudget = 100000;
+  /// The smallest budget, in characters: ordinary specs never come near it.
+  static const minBudget = 16000000;
+
+  /// The budget per character of text, once that exceeds [minBudget].
+  static const budgetPerChar = 100;
 
   final DiagnosticBag _diagnostics;
   final String _file;
@@ -244,8 +249,6 @@ final class _PlainConverter {
   /// Whether the text may contain aliases, which decides how a depth error
   /// is worded.
   final bool mayHaveAliases;
-
-  final Set<YamlNode> _seen = HashSet<YamlNode>.identity();
 
   /// The source range of every converted node, by pointer value.
   final Map<String, SourceSpan> spans = {};
@@ -257,15 +260,21 @@ final class _PlainConverter {
   /// root is 0, as for the `NestingScanner`).
   Object? convert(YamlNode node, JsonPointer pointer, int depth) {
     if (failed) return null;
-    _budget -= _seen.add(node) ? 1 : depth + 1;
+    _budget -= pointer.value.length + 1;
     if (_budget < 0) {
       _fail(
         .aliasExpansionTooLarge,
-        'YAML aliases expand to far more nodes than the text has; the '
-        'document is not read.',
+        mayHaveAliases
+            ? 'YAML aliases expand to far more nodes than the text has; the '
+                  'document is not read.'
+            : 'The JSON pointers of the document\'s nodes add up to more than '
+                  'the supported size, because of very long keys or very '
+                  'deep nesting; the document is not read.',
         node,
         pointer,
-        fix: 'Remove the nested aliases.',
+        fix: mayHaveAliases
+            ? 'Remove the nested aliases.'
+            : 'Shorten the longest keys.',
       );
       return null;
     }

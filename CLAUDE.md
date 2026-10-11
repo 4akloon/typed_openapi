@@ -40,14 +40,19 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `NestingScanner` rejects text nested deeper than 1000 levels before the
   recursive YAML parser sees it (it is YAML-context aware: quotes and brackets
   are syntax only at a value start, block scalars are skipped, `- `, `? ` and
-  empty-key `: ` markers each nest one level). The same scan rejects an alias
-  in a mapping key (`? *a`, `*a : v`, `{*a : v}`) with TOA008, because the
-  YAML parser would expand it before any later check. Aliases in values
-  bypass the text scan, so `SpecLoader` also limits the conversion to a plain
-  tree: deeper than 1000 levels once aliases are expanded is TOA007; a budget
-  of `max(100000, 20 * text length)` units, where a node costs 1 on its first
-  visit and its depth + 1 on every repeat (only aliases repeat), is TOA008
-  when spent (an alias bomb); both return no document. `OpenApiVersionDetector` reads the version.
+  empty-key `: ` markers each nest one level; a root flow collection is level
+  0, like a root block mapping). The same scan rejects, with TOA008, an alias
+  used as a key (`*a : v`, `{*a : v}`, `{*a, b: 1}`) and, when the text has
+  any alias, every explicit `?` key and every flow collection used as an
+  implicit key (`[*a]: v`, `{a: *a}: v`): the YAML parser would expand them
+  before any later check. Aliases in values bypass the text scan, so
+  `SpecLoader` also limits the conversion to a plain tree: deeper than 1000
+  levels once aliases are expanded is TOA007; a budget of
+  `max(16000000, 100 * text length)` characters, where every converted node
+  (first visit or repeat) costs the length of its JSON pointer + 1 (the
+  pointer is what it keeps in `spans`), is TOA008 when spent (an alias bomb,
+  or very long keys); both return no document. `OpenApiVersionDetector`
+  reads the version.
 - `model/` - the immutable typed model, a superset of OAS 3.0/3.1/3.2:
   `SpecNode` (every node has a `SpecLocation` = file URI + pointer, `x-`
   `extensions` and reported `unknownKeys`), `RefOr<T>` = `Ref<T>` | `Inline<T>`,
