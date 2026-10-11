@@ -92,9 +92,11 @@ final class ConfigLoader {
     String resolve(String value) => p.normalize(p.join(baseDir, value));
 
     final clients = <ClientConfig>[];
+    final declared = <String>{};
     final outputSpans = <String, SourceSpan>{};
     for (final MapEntry(:key, :value) in clientNodes.nodes.entries) {
       final name = '${(key as YamlNode).value}';
+      declared.add(name);
       final pointer = clientsPointer.child(name);
       if (value is! YamlMap) {
         reader.invalid('Client "$name" must be a mapping.', value, pointer);
@@ -126,7 +128,11 @@ final class ConfigLoader {
     }
     clients.sort((a, b) => a.name.compareTo(b.name));
     _checkOutputOverlap(clients, outputSpans, path);
-    return ProjectConfig(file: path, clients: clients);
+    return ProjectConfig(
+      file: path,
+      clients: clients,
+      declaredClients: declared,
+    );
   }
 
   void _checkOutputOverlap(

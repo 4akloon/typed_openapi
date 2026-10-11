@@ -17,8 +17,17 @@ void main() {
     expect(detect('openapi: "3.2.1"').$1, OpenApiVersion.v32);
   });
 
-  test('accepts an unquoted YAML number such as 3.0', () {
-    expect(detect('openapi: 3.0').$1, OpenApiVersion.v30);
+  test('accepts an unquoted YAML number such as 3.0 with a warning', () {
+    final (version, bag) = detect('openapi: 3.0');
+    expect(version, OpenApiVersion.v30);
+    expect(bag.all.single.code, DiagnosticCode.openApiVersionNotString);
+    expect(bag.all.single.pointer?.value, '#/openapi');
+  });
+
+  test('does not throw on a minor version too large for an int', () {
+    final (version, bag) = detect('openapi: "3.99999999999999999999"');
+    expect(version, isNull);
+    expect(bag.all.single.code, DiagnosticCode.unsupportedOpenApiVersion);
   });
 
   test('reads a newer 3.x minor as 3.2 with a warning', () {

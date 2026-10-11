@@ -57,11 +57,19 @@ final class ClientConfig {
 /// The parsed `typed_openapi.yaml`.
 final class ProjectConfig {
   /// Creates a project configuration.
-  const ProjectConfig({required this.file, required this.clients});
+  const ProjectConfig({
+    required this.file,
+    required this.clients,
+    required this.declaredClients,
+  });
 
   /// Path of the config file as given by the user.
   final String file;
 
   /// Clients sorted by name.
   final List<ClientConfig> clients;
+
+  /// Every key under `clients`, including clients that are invalid and so
+  /// missing from [clients].
+  final Set<String> declaredClients;
 }

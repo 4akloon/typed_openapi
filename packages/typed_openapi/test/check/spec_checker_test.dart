@@ -41,4 +41,18 @@ clients:
     SpecChecker(bag).check(config, only: {'a'});
     expect(bag.all.single.file, 'a.yaml');
   });
+
+  test('checks a spec shared by several clients once', () {
+    final dir = TempDir();
+    dir.write('shared.json', '{"swagger": "2.0"}');
+    final path = dir.write('typed_openapi.yaml', '''
+clients:
+  a: {input: shared.json, output: lib/a}
+  b: {input: shared.json, output: lib/b}
+''');
+    final bag = DiagnosticBag();
+    final config = ConfigLoader(bag).load(path)!;
+    SpecChecker(bag).check(config);
+    expect(bag.all.single.code, DiagnosticCode.unsupportedOpenApiVersion);
+  });
 }

@@ -21,7 +21,7 @@ Minimum SDK: Dart 3.10 (`>=3.10.0 <4.0.0`), also for generated code.
 dart pub get                                 # repo root, once and after pubspec edits
 dart analyze packages                        # repo root; must print "No issues found!"
 cd packages/typed_openapi && dart test       # also in typed_openapi_runtime
-cd packages/typed_openapi && dart format lib test   # a second run must change 0 files
+cd packages/typed_openapi && dart format lib test bin   # a second run must change 0 files
 cd packages/<package> && dart pub publish --dry-run # before publishing
 ```
 
@@ -36,16 +36,17 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `Severity`, `JsonPointer`, `DiagnosticBag`, and the reporters
   (`DiagnosticReporter`, `TextReporter`, `JsonReporter`, `ReportFormat`).
 - `load/` - `SpecLoader` reads JSON/YAML into a `SpecDocument` (plain tree plus
-  source spans by JSON pointer).
+  source spans by JSON pointer); `OpenApiVersionDetector` reads its OpenAPI
+  version.
 - `config/` - `ConfigLoader`, `ProjectConfig`, `ClientConfig`, `Preset`.
-- `check/` - `OpenApiVersionDetector`, `SpecChecker`.
+- `check/` - `SpecChecker`.
 - `cli/` - `TypedOpenApiCli` (`cli.dart`, owns the `CommandRunner` and maps
   usage errors to exit code 64) and `CheckCommand` (`check_command.dart`,
   options `--config/-c` and `--format`, client names as positional
   arguments); `bin/typed_openapi.dart` only calls `TypedOpenApiCli().run(args)`
   and sets `exitCode`.
-- `lib/typed_openapi.dart` exports the public API: the classes above, each with
-  a `show` list.
+- `lib/typed_openapi.dart` exports the public API: the classes above except
+  `CheckCommand`, each with a `show` list.
 
 Data flows loader -> checker, every stage writing problems into one
 `DiagnosticBag`; reporters read the bag at the end.
@@ -58,7 +59,8 @@ Rules of the pipeline:
   message (`Diagnostic.compareTo`, `DiagnosticBag.sorted`).
 - The CLI never calls `exit()`; commands return the code. Reports go to
   stdout, usage errors to stderr. Codes: `0` ok, `1` errors found, `64` usage,
-  `78` config error.
+  `78` the config file could not be loaded (TOA904 and per-client TOA902 exit
+  `1`).
 
 ## Code rules
 

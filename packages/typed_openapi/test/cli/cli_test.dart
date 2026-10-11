@@ -67,4 +67,18 @@ clients:
     expect(code, 64);
     expect(err, contains('Unknown client: nope.'));
   });
+
+  test('prints the config error for a declared but invalid client', () async {
+    final dir = TempDir();
+    dir.write('ok.yaml', 'openapi: 3.1.0\n');
+    final path = dir.write('typed_openapi.yaml', '''
+clients:
+  broken: {output: lib/broken}
+  ok: {input: ok.yaml, output: lib/ok}
+''');
+    final (code, out, err) = await run(['check', '-c', path, 'broken']);
+    expect(code, 1);
+    expect(out, contains('TOA902'));
+    expect(err, isEmpty);
+  });
 }

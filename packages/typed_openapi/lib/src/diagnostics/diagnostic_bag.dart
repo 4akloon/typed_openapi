@@ -9,7 +9,7 @@ import 'severity.dart';
 ///
 /// Processing code reports problems here instead of throwing, so a single
 /// run shows every problem it can find.
-class DiagnosticBag {
+final class DiagnosticBag {
   final List<Diagnostic> _items = [];
 
   /// All diagnostics in the order they were reported.

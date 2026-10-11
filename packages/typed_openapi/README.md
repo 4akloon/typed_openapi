@@ -4,7 +4,7 @@ OpenAPI 3.x → Dart client generator for imperfect, code-first specs.
 
 > **Status:** early design, not published yet.
 
-- Input: local OpenAPI 3.0 / 3.1 file (JSON or YAML).
+- Input: local OpenAPI 3.0 / 3.1 / 3.2 file (JSON or YAML).
 - Output: ready-to-use Dart code on Dio, no `build_runner` step.
 - Models follow the `json_serializable` contract (`fromJson` / `toJson`).
 - Spec defects are fixed by named normalizer rules and reported as diagnostics
@@ -33,7 +33,8 @@ dart run typed_openapi check --format json
 
 Every finding has a stable code (`TOA011`), a JSON pointer into the spec and,
 for files the parser could position, a line and column. Exit code `1` means
-at least one error, `78` means the config could not be read.
+at least one error, `64` wrong arguments or an unknown client, `78` the
+config could not be read.
 
 Generated clients depend on
 [`typed_openapi_runtime`](../typed_openapi_runtime/README.md).

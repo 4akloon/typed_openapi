@@ -48,9 +48,7 @@ final class CheckCommand extends Command<int> {
     final config = ConfigLoader(diagnostics).load(results.option('config')!);
     if (config != null) {
       final only = results.rest.toSet();
-      final unknown = only.difference({
-        for (final client in config.clients) client.name,
-      });
+      final unknown = only.difference(config.declaredClients);
       if (unknown.isNotEmpty) {
         usageException(
           'Unknown client: ${(unknown.toList()..sort()).join(', ')}.',

@@ -38,7 +38,8 @@ final class OpenApiVersionDetector {
     }
     final pointer = JsonPointer.root.child('openapi');
     final match = _version.firstMatch('$declared');
-    if (match == null) {
+    final minor = match == null ? null : int.tryParse(match.group(1)!);
+    if (minor == null) {
       _diagnostics.report(
         .unsupportedOpenApiVersion,
         'OpenAPI "$declared" is not supported; only 3.0, 3.1 and 3.2 are.',
@@ -48,14 +49,24 @@ final class OpenApiVersionDetector {
       );
       return null;
     }
-    switch (int.parse(match.group(1)!)) {
+    if (declared is! String) {
+      _diagnostics.report(
+        .openApiVersionNotString,
+        'The "openapi" field is the number $declared, not a string.',
+        file: document.file,
+        pointer: pointer,
+        span: document.spanOf(pointer),
+        fix: 'Quote the version, for example openapi: "3.1.0".',
+      );
+    }
+    switch (minor) {
       case 0:
         return .v30;
       case 1:
         return .v31;
       case 2:
         return .v32;
-      case final minor:
+      default:
         _diagnostics.report(
           .unknownOpenApiMinorVersion,
           'OpenAPI 3.$minor is newer than this tool knows; reading it as 3.2.',

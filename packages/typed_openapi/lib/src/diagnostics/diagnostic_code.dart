@@ -39,6 +39,14 @@ enum DiagnosticCode {
     .warning,
   ),
 
+  /// The `openapi` field is not a string, so YAML may have changed it (3.10
+  /// reads as 3.1).
+  openApiVersionNotString(
+    'TOA013',
+    'openapi-version-not-string',
+    .warning,
+  ),
+
   /// The configuration file does not exist.
   configNotFound('TOA901', 'config-not-found', .error),
 

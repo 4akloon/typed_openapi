@@ -18,13 +18,16 @@ final class SpecChecker {
   /// Checks the spec of every client in [config].
   ///
   /// [only] limits the run to clients with these names; empty means all.
-  /// Spec paths in diagnostics are relative to the config file's directory.
+  /// A file shared by several clients is checked once. Spec paths in
+  /// diagnostics are relative to the config file's directory.
   void check(ProjectConfig config, {Set<String> only = const {}}) {
     final loader = SpecLoader(_diagnostics);
     final detector = OpenApiVersionDetector(_diagnostics);
     final configDir = p.dirname(p.absolute(config.file));
+    final checked = <String>{};
     for (final client in config.clients) {
       if (only.isNotEmpty && !only.contains(client.name)) continue;
+      if (!checked.add(p.absolute(client.input))) continue;
       final document = loader.load(
         client.input,
         displayPath: p.relative(client.input, from: configDir),
