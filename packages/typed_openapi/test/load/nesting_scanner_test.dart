@@ -126,4 +126,21 @@ c: [1, 2]
     expect(scanner.findTooDeep('[\n${'- ' * 3}x\n]', limit: 5), 6);
     expect(scanner.findTooDeep('[\n${'- ' * 2}x\n]', limit: 5), isNull);
   });
+
+  test('an empty-key value indicator nests like a complex key marker', () {
+    expect(scanner.findTooDeep('${': ' * 20000}x'), isNotNull);
+    expect(scanner.findTooDeep('${'- : ' * 10000}x'), isNotNull);
+    expect(scanner.findTooDeep('${': - ' * 10000}x'), isNotNull);
+    expect(scanner.findTooDeep('${'? ' * 20000}x'), isNotNull);
+    expect(scanner.findTooDeep('${': ' * 3}x', limit: 5), 5);
+    expect(scanner.findTooDeep('${': ' * 2}x', limit: 5), isNull);
+  });
+
+  test('ordinary key: value lines are not nesting', () {
+    final text = List.generate(
+      5000,
+      (n) => 'k$n: v\nm$n:\n  - a: b\n    c: [1, {d: e}]\n  - : x\n',
+    ).join();
+    expect(scanner.findTooDeep(text, limit: 10), isNull);
+  });
 }

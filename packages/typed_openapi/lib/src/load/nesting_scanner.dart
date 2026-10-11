@@ -14,6 +14,9 @@
 /// (the previous line ended in plain text and this one is indented deeper
 /// than its parent) is plain text from its first character.
 ///
+/// The block markers `- `, `? ` and `: ` (the value indicator of an empty
+/// key) each nest one level, so `: : : x` counts like `- - - x`.
+///
 /// The depth is the larger of two counts. Outside flow collections it is
 /// the indentation of a line plus its leading `- ` markers. Inside
 /// `[...]` and `{...}` it is the bracket count on top of the indentation
@@ -177,10 +180,12 @@ final class NestingScanner {
     return null;
   }
 
-  /// The length of the block marker (`- `, `? ` or `---`) at [i], or 0.
+  /// The length of the block marker (`- `, `? `, `: ` or `---`) at [i], or 0.
   static int _markerLength(String text, int i) {
     final char = text[i];
-    if ((char == '-' || char == '?') && _isBlank(text, i + 1)) return 1;
+    if ((char == '-' || char == '?' || char == ':') && _isBlank(text, i + 1)) {
+      return 1;
+    }
     if (char == '-' && text.startsWith('---', i) && _isBlank(text, i + 3)) {
       return 3;
     }
