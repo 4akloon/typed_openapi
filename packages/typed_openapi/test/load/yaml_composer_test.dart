@@ -181,6 +181,24 @@ void main() {
       expect(bag.all.single.message, contains('not a valid !!int'));
     });
 
+    test('!!float reads one digit as a double, !!int as an int', () {
+      // package:yaml's own loader throws on a one-digit !!float, so the
+      // expected values are written out.
+      const floats = {'!!float 1': 1.0, '!!float "2"': 2.0, "!!float '3'": 3.0};
+      for (final MapEntry(key: scalar, value: expected) in floats.entries) {
+        final (result, bag) = compose('k: $scalar\n');
+        final value = (result!.root as Map)['k'];
+        expect(bag.all, isEmpty, reason: scalar);
+        expect(value, isA<double>(), reason: scalar);
+        expect(value, expected, reason: scalar);
+      }
+      final (result, bag) = compose('a: !!int 1\nb: !!float 0\n');
+      expect(bag.all, isEmpty);
+      expect(result!.root, {'a': 1, 'b': 0.0});
+      expect((result.root as Map)['a'], isA<int>());
+      expect((result.root as Map)['b'], isA<double>());
+    });
+
     test('a tagged key is checked like a value', () {
       final (result, bag) = compose('!!timestamp 2026-01-01: x\n');
       expect(result!.root, {'2026-01-01': 'x'});

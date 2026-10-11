@@ -653,11 +653,11 @@ final class _Composition {
   }) {
     if (text.isEmpty) return null;
     final first = text.codeUnitAt(0);
-    if (allowInt && text.length == 1) {
+    if (text.length == 1) {
       final digit = first - 0x30;
-      return digit >= 0 && digit <= 9 ? digit : null;
+      if (digit < 0 || digit > 9) return null;
+      return allowInt ? digit : digit.toDouble();
     }
-    if (text.length == 1) return null;
     final second = text.codeUnitAt(1);
     bool isDigit(int c) => c >= 0x30 && c <= 0x39;
     if (allowInt && first == 0x30) {
