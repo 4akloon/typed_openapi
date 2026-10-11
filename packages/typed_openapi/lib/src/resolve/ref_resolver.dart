@@ -32,6 +32,7 @@ final class RefResolver {
   ) {
     final parsers = <Uri, OpenApiParser>{};
     final targets = <SpecLocation, SpecLocation>{};
+    final attempted = <SpecLocation>{};
     for (var i = 0; i < index.refs.length; i++) {
       final use = index.refs[i];
       switch (RefTarget.parse(use.ref, use.site.document)) {
@@ -64,6 +65,9 @@ final class RefResolver {
               );
               continue;
             }
+            // A target that failed to parse was reported once; later refs
+            // to it are not parsed, and so not reported, again.
+            if (!attempted.add(location)) continue;
             final parser = parsers[location.document] ??= OpenApiParser(
               _diagnostics,
               file,

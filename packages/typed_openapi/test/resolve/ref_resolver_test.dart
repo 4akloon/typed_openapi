@@ -226,4 +226,21 @@ paths:
     expect(limit!.name, 'limit');
     expect(model.nodeAt(limit.location), same(limit));
   });
+
+  test('a malformed target is parsed and reported once', () {
+    dir.write('api.yaml', '''
+$info
+x-shared:
+  limit: oops
+paths:
+  /a:
+    get:
+      parameters:
+        - {\$ref: "#/x-shared/limit"}
+        - {\$ref: "#/x-shared/limit"}
+''');
+    final (_, bag) = resolve('api.yaml');
+    final reports = bag.all.where((d) => d.code == DiagnosticCode.invalidValue);
+    expect(reports.map((d) => d.pointer?.value), ['#/x-shared/limit']);
+  });
 }
