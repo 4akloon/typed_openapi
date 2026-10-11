@@ -19,6 +19,9 @@ enum DiagnosticCode {
   /// Source positions could not be recorded for a document.
   positionsUnavailable('TOA005', 'positions-unavailable', Severity.info),
 
+  /// The input file exists but cannot be read as UTF-8 text.
+  inputUnreadable('TOA006', 'input-unreadable', Severity.error),
+
   /// The document has no `openapi` field.
   missingOpenApiVersion('TOA010', 'missing-openapi-version', Severity.error),
 

@@ -31,7 +31,19 @@ SpecDocument? loadSpec(
     );
     return null;
   }
-  return parseSpec(source.readAsStringSync(), file, diagnostics);
+  final String text;
+  try {
+    text = source.readAsStringSync();
+  } on FileSystemException catch (e) {
+    diagnostics.report(
+      DiagnosticCode.inputUnreadable,
+      'Cannot read $file: ${e.message}.',
+      file: file,
+      fix: 'Save the spec as UTF-8 and check the file permissions.',
+    );
+    return null;
+  }
+  return parseSpec(text, file, diagnostics);
 }
 
 /// Parses spec [text]; [file] names it in diagnostics.

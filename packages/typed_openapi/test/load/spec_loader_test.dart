@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_bag.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
@@ -88,6 +91,15 @@ void main() {
       expect(loadSpec('/nope/api.json', bag, displayPath: 'api.json'), isNull);
       expect(bag.all.single.code, DiagnosticCode.inputNotFound);
       expect(bag.all.single.file, 'api.json');
+    });
+
+    test('reports a file that is not UTF-8', () {
+      final dir = createTempDir();
+      final path = p.join(dir.path, 'bad.json');
+      File(path).writeAsBytesSync([0xFF, 0xFE, 0x41]);
+      final bag = DiagnosticBag();
+      expect(loadSpec(path, bag), isNull);
+      expect(bag.all.single.code, DiagnosticCode.inputUnreadable);
     });
 
     test('reads a file from disk', () {
