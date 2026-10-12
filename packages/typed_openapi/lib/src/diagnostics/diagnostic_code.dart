@@ -252,6 +252,15 @@ enum DiagnosticCode {
   /// dropped, since a value could not be told apart between them.
   unionVariantDuplicate('TOA454', 'union-variant-duplicate', .info),
 
+  /// A branch of a `oneOf` or `anyOf` without a discriminator is an enum or
+  /// a `const` of a primitive type (`string`, `integer`, `number`,
+  /// `boolean`) while another branch is that type with no constraint: the
+  /// values of the first are values of the second, so the branch is dropped
+  /// and, when one branch remains, the union is that type (Stripe's
+  /// `anyOf: [string, {enum: ['']}]`). An integer enum next to a plain
+  /// `number` is dropped too; a number enum next to an `integer` is not.
+  unionBranchSubsumed('TOA455', 'union-branch-subsumed', .info),
+
   /// A variable of the path template has no path parameter; one is added.
   missingPathParameter('TOA501', 'missing-path-parameter', .warning),
 

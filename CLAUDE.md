@@ -238,7 +238,7 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   out, else at `#/paths`; then everything above). `IrJson` dumps an IR; the
   hidden `typed_openapi ir` command prints it. Naming and mapping codes use
   the second half of each area's hundred: TOA250-TOA256, TOA350-TOA351,
-  TOA450-TOA452, TOA550-TOA564. TOA552 on an enum value is an info (an
+  TOA450-TOA455, TOA550-TOA564. TOA552 on an enum value is an info (an
   override cannot name enum values; `x-enum-varnames` in the spec does), and
   `unknown` is reserved in the enum value scope (`unknown_`).
 - `emit/` - the model emitter (M8): `DartCode` (string literals,
@@ -261,7 +261,13 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   share are one variant of `JsonValue`, `UnionVariantIr.jsonKinds`, with
   TOA453) or `structural` (`union: structural`); a union where every
   variant shares its type is `JsonValue` (TOA453), duplicate variant types
-  are dropped (TOA454). A component with a discriminator that other
+  are dropped (TOA454). In a union without a discriminator an inline enum
+  or `const` of a primitive type next to an inline branch of that type
+  with no constraint (`anyOf: [string, {enum: ['']}]`) is dropped
+  (TOA455, info; `SchemaShapes.subsumedBranches`, before the dispatch is
+  decided), and a union left with one branch is that branch's type; an
+  integer enum is also covered by a plain `number`, not the other way
+  round. A component with a discriminator that other
   components extend with `allOf` (directly or deeper) is, where it is used
   as a type, a union of their flat models (`_subtypes`; a mapping to the
   base itself is TOA451 and decodes as unknown; one that nothing extends

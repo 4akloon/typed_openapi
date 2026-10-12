@@ -355,6 +355,7 @@ final class SchemaMapper {
         '',
       );
       if (single != null) {
+        _reportSubsumed(schema, collapsed: true);
         final type = _map(single, hint);
         return type.withNullable(type.nullable || _isNullable(schema));
       }
@@ -406,6 +407,7 @@ final class SchemaMapper {
   DartType _inline(SchemaObject schema, NameHint hint) {
     final single = SchemaShapes.singleOf(schema);
     if (single != null) {
+      _reportSubsumed(schema, collapsed: true);
       final type = _map(single, hint);
       return type.withNullable(type.nullable || _isNullable(schema));
     }
@@ -415,6 +417,35 @@ final class SchemaMapper {
     }
     return _structural(schema, hint);
   }
+
+  /// Reports the branches of [schema] that add no value to another branch
+  /// (TOA455), unless a custom type replaces [schema]. [collapsed] says the
+  /// union is left with one branch, which is then its type.
+  void _reportSubsumed(SchemaObject schema, {required bool collapsed}) {
+    if (_replacing) return;
+    for (final MapEntry(key: branch, value: kind)
+        in SchemaShapes.subsumedBranches(schema).entries) {
+      final values = SchemaShapes.enumValues(branch)!;
+      final shown = [
+        for (final value in values.take(3)) _valueText(value),
+        if (values.length > 3) '...',
+      ].join(', ');
+      _context.report(
+        .unionBranchSubsumed,
+        'The enum [$shown] branch adds no value to the ${kind.name} branch; '
+        '${collapsed ? 'the schema is generated as the ${kind.name} branch '
+                  'alone.' : 'it is dropped from the union.'}',
+        branch.location,
+        fix:
+            'Remove the enum branch at the source, or leave it for the '
+            'documentation.',
+      );
+    }
+  }
+
+  /// [value] of an enum as it is written in a Dart list, for a message.
+  static String _valueText(Object? value) =>
+      value is String ? "'${value.replaceAll("'", r"\'")}'" : '$value';
 
   /// The type of a declaring [schema] inside a replaced schema: `JsonValue`.
   DartType _nothingDeclared(SchemaObject schema) =>
@@ -443,14 +474,17 @@ final class SchemaMapper {
       schema.allOf.isNotEmpty;
 
   /// The kind and the non-null branches of a union: a `oneOf` (or else an
-  /// `anyOf`) with more than one branch besides `null`.
+  /// `anyOf`) with more than one branch besides `null` and the branches
+  /// that add no value to another ([SchemaShapes.subsumedBranches]).
   (UnionKind, List<Schema>)? _branches(SchemaObject schema) {
     final (kind, branches) = schema.oneOf.isNotEmpty
         ? (UnionKind.oneOf, schema.oneOf)
         : (UnionKind.anyOf, schema.anyOf);
+    final dropped = SchemaShapes.subsumedBranches(schema);
     final nonNull = [
       for (final branch in branches)
-        if (!SchemaShapes.isNullOnly(branch)) branch,
+        if (!SchemaShapes.isNullOnly(branch) && !dropped.containsKey(branch))
+          branch,
     ];
     // Branches that only add constraints (`required`, ...) or only hold one
     // value each (an enum) do not make a union.
@@ -1147,6 +1181,7 @@ final class SchemaMapper {
         fix: 'Put the shared properties into every branch at the source.',
       );
     }
+    if (!subtypes) _reportSubsumed(schema, collapsed: false);
     final discriminator = schema.discriminator;
     final property = discriminator?.propertyName;
     final (allConflicts, _) = property != null

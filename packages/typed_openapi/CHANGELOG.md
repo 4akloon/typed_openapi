@@ -25,6 +25,12 @@
   writes back the discriminator value it was decoded with, so aliases
   survive a round trip. `toString` does not print `writeOnly` and
   `format: password` fields.
+- A `oneOf` or `anyOf` without a discriminator drops an inline enum or
+  `const` of a primitive type (string, integer, number, boolean) when
+  another inline branch is that type with no constraint, as in Stripe's
+  `anyOf: [string, {enum: ['']}]` (TOA455, info); a union left with one
+  branch is that branch's type (`String`) and no longer `JsonValue`
+  (TOA453). An integer enum is also covered by a plain `number`.
 - Semantic IR (M6): `check` builds each client's IR (`IrBuilder`,
   `ClientIr`) from the normalized spec and reports naming and mapping
   problems. Types follow R6.2 (`integer` -> `int`, `number` -> `num` or
