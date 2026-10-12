@@ -327,7 +327,7 @@ enum DiagnosticCode {
 
   /// A parameter's `style` is not allowed for its `in` (path takes `simple`,
   /// `label` or `matrix`; query `form`, `spaceDelimited`, `pipeDelimited` or
-  /// `deepObject`; header `simple`; cookie `form`), so the default style of
+  /// `deepObject`; header `simple`; cookie `form` or `cookie`), so the default style of
   /// the placement is used. Also reported for an `in: querystring`
   /// parameter (OpenAPI 3.2), which the client cannot send: the parameter
   /// is not generated.

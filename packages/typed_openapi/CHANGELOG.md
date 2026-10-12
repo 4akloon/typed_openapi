@@ -84,7 +84,7 @@
   - TOA564 parameter-style-invalid (warning): a parameter `style` that its
     `in` does not allow (path: `simple`, `label`, `matrix`; query: `form`,
     `spaceDelimited`, `pipeDelimited`, `deepObject`; header: `simple`;
-    cookie: `form`) falls back to the default style of the placement; an
+    cookie: `form`, `cookie`) falls back to the default style of the placement; an
     `in: querystring` parameter (OpenAPI 3.2) is not generated.
 - An `allOf` parent that an override excludes is still merged into the flat
   child: the exclude only removes the parent's own declaration, and TOA254
