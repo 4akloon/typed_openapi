@@ -76,8 +76,61 @@ final class _Manifest {
   final Map<String, String?> hashes;
 }
 
-/// Writes the generated files of a client into its output directory, which
-/// the generator owns (decisions 15 and 17 of M8).
+/// The lock of an output: the file and what this run wrote into it.
+final class _Lock {
+  _Lock(this.file)
+    : content = jsonEncode({
+        'pid': pid,
+        'host': Platform.localHostname,
+        'id': Random.secure().nextInt(1 << 32).toRadixString(36),
+      });
+
+  /// The lock file, `.<output>.typed_openapi.lock` next to the output.
+  final File file;
+
+  /// What identifies this run in the file.
+  final String content;
+}
+
+/// What a lock file says about the run that holds it.
+final class _Held {
+  _Held(this.text) {
+    try {
+      if (jsonDecode(text) case {
+        'pid': final int pid,
+        'host': final String host,
+      }) {
+        this.pid = pid;
+        this.host = host;
+      }
+    } on FormatException {
+      // An empty or foreign file: the process stays unknown.
+    }
+  }
+
+  /// The content of the lock file.
+  final String text;
+
+  /// The process id it names, or null.
+  int? pid;
+
+  /// The host it names, or null.
+  String? host;
+
+  /// The holder, as a message says it.
+  String get describe => pid == null
+      ? 'a lock file typed_openapi did not write'
+      : 'process $pid on $host';
+
+  @override
+  bool operator ==(Object other) => other is _Held && other.text == text;
+
+  @override
+  int get hashCode => text.hashCode;
+}
+
+/// Writes the generated files of a client into its output directory (decisions
+/// 15 and 17 of M8).
 ///
 /// A run is atomic: the whole new tree and its manifest are built in a
 /// temporary directory next to the output, which is then swapped in (the old
@@ -85,28 +138,48 @@ final class _Manifest {
 /// is removed). Any failure puts the old directory back, so the output is
 /// the previous run's or the new one, never a mix, and a failed first run
 /// leaves nothing. A run that would change nothing does not touch the
-/// directory. Files the generator did not write this time are gone with the
-/// old directory. The manifest lists the generator, a hash of the inputs and
-/// every file with its hash.
+/// directory. The manifest lists the generator, its format, a hash of the
+/// inputs and every file with its hash.
 ///
-/// The directory is refused (TOA830, nothing is written) when it holds a
-/// `pubspec.yaml`, is the `lib` directory of a package, holds an input of
-/// the run (the config, the spec, the overrides or the baseline file, also
-/// through a symbolic link, a hard link or a name that differs in case),
-/// holds a symbolic link, or holds files but no manifest of this generator.
+/// The generator replaces only what it wrote: a file of the old directory
+/// that the manifest does not list, or whose hash differs from the
+/// manifest's, is foreign or modified, and the directory is refused (TOA830,
+/// nothing is written, the message names the files) unless `force` is set.
+/// A directory is refused whatever `force` says when it holds a
+/// `pubspec.yaml`, is the `lib` directory of a package, holds a symbolic
+/// link or holds an input of the run (the config, the spec, the overrides or
+/// the baseline file, also through a symbolic link, a hard link or a name
+/// that differs in case).
+///
+/// One run at a time works on an output: it holds the lock file
+/// `.<output>.typed_openapi.lock` next to it, created exclusively and naming
+/// its process. A second run gets TOA831 and changes nothing; a lock whose
+/// process is gone is taken over (TOA832), and `force` breaks any lock.
+///
 /// A process killed while it swaps leaves the backup and the new tree in
-/// sibling directories named `.<output>.typed_openapi-*`. The next run puts
-/// the backup back when the output is missing, removes those directories
-/// and says so (TOA832).
+/// sibling directories named `.<output>.typed_openapi-<8 letters or
+/// digits>`, with `-old` for the backup. Under the lock, once the output has
+/// been checked as above, the next run puts the backup back when the output
+/// is missing, removes those directories and says so (TOA832); it leaves
+/// alone a directory that holds an input of the run.
 final class OutputWriter {
   /// Creates a writer that reports to [_diagnostics]; [_paths] names
-  /// directories in diagnostics. [beforeInstall] is a test seam: it is
-  /// called between the renames of the swap, where tests make a failure.
-  const OutputWriter(
-    this._diagnostics, [
-    this._paths = const DisplayPaths(),
+  /// directories in diagnostics.
+  OutputWriter(this._diagnostics, [this._paths = const DisplayPaths()])
+    : beforeInstall = null,
+      _run = _runSystem;
+
+  /// Creates a writer for a test: [beforeInstall] is called between the
+  /// renames of the swap, and [run] starts the processes the writer needs
+  /// (`chmod`, `kill`), so a test can make either fail.
+  @visibleForTesting
+  OutputWriter.forTesting(
+    this._diagnostics, {
+    DisplayPaths paths = const DisplayPaths(),
     this.beforeInstall,
-  ]);
+    ProcessResult Function(String executable, List<String> arguments)? run,
+  }) : _paths = paths,
+       _run = run ?? _runSystem;
 
   /// The name of the manifest in the output directory.
   static const manifest = '.typed_openapi.json';
@@ -123,19 +196,29 @@ final class OutputWriter {
   /// What a manifest's `generator` starts with, whatever the version.
   static const _generatorName = 'typed_openapi';
 
-  /// A test seam: called after the old directory is renamed to its backup
-  /// and before the new one is renamed to the output, where a test makes
-  /// the failure it wants. Production code leaves it null.
-  @visibleForTesting
+  /// What a leftover of a killed run is called, after its leading dot, the
+  /// name of the output and `.typed_openapi-`: eight letters or digits, and
+  /// `-old` for a backup.
+  static final _leftover = RegExp(r'^[A-Za-z0-9]{8}(-old)?$');
+
+  /// Called after the old directory is renamed to its backup and before the
+  /// new one is renamed to the output, where a test makes the failure it
+  /// wants; null outside tests ([OutputWriter.forTesting]).
   final void Function()? beforeInstall;
 
   final DiagnosticBag _diagnostics;
   final DisplayPaths _paths;
+  final ProcessResult Function(String, List<String>) _run;
+
+  static ProcessResult _runSystem(String executable, List<String> arguments) =>
+      Process.runSync(executable, arguments);
 
   /// Writes [files] (paths relative to the output directory of [client])
   /// and the manifest with [inputs], the hash of what they were generated
   /// from; [protected] are the input files of the run, which the directory
-  /// must not hold. Returns null after reporting why nothing was written.
+  /// must not hold. With [force] a file the generator did not write, or that
+  /// changed since, and a lock another run holds do not stop the run.
+  /// Returns null after reporting why nothing was written.
   OutputChanges? write(
     ClientConfig client,
     Map<String, String> files, {
@@ -146,12 +229,32 @@ final class OutputWriter {
     final root = p.normalize(p.absolute(client.output));
     final created = <Directory>[];
     Directory? staging;
+    _Lock? lock;
     try {
-      _recover(client, root);
+      final parent = Directory(p.dirname(root));
+      for (final missing in _missing(parent)) {
+        missing.createSync();
+        created.add(missing);
+      }
+      lock = _acquire(client, root, force: force);
+      if (lock == null) return null;
       final keys = files.keys.toList()..sort();
       final hashes = {for (final path in keys) path: _hash(files[path]!)};
-      final existing = _inspect(client, root, protected, hashes, force: force);
+      // What a killed run left, found before anything is looked into, and
+      // changed only once the output (or the backup that would become it)
+      // has been checked.
+      final leftovers = _leftovers(root, protected);
+      final backup = _restorable(root, leftovers);
+      final existing = _inspect(
+        client,
+        root,
+        backup?.path ?? root,
+        protected,
+        hashes,
+        force: force,
+      );
       if (existing == null) return null;
+      _recover(client, root, leftovers, backup);
       final text = manifestOf(files, inputs: inputs);
       var written = 0;
       var unchanged = 0;
@@ -183,16 +286,13 @@ final class OutputWriter {
         forced: existing.strays.length,
       );
       if (same) return changes;
-      final parent = Directory(p.dirname(root));
-      for (final missing in _missing(parent)) {
-        missing.createSync();
-        created.add(missing);
-      }
       staging = _createStaging(parent, root);
       for (final path in keys) {
         _writeFile(p.join(staging.path, path), files[path]!);
       }
       _writeFile(p.join(staging.path, manifest), text);
+      // The mode comes last: a read-only output would refuse the files.
+      _copyMode(staging, root);
       _install(staging, root, hasOld: Directory(root).existsSync());
       staging = null;
       created.clear();
@@ -210,6 +310,7 @@ final class OutputWriter {
       return null;
     } finally {
       _discard(staging);
+      _release(lock);
       for (final directory in created.reversed) {
         try {
           directory.deleteSync();
@@ -251,52 +352,216 @@ final class OutputWriter {
     return result.reversed.toList();
   }
 
-  /// Cleans up after a run that was killed while it swapped: when [root] is
-  /// missing and an earlier run left its backup (`.<name>.typed_openapi-*-old`,
-  /// the newest if there are several), the backup becomes [root] again; every
-  /// other directory with such a name is removed, a backup only when [root]
-  /// holds a generated tree. Reports TOA832 when it did anything.
-  void _recover(ClientConfig client, String root) {
-    final parent = Directory(p.dirname(root));
-    if (!parent.existsSync()) return;
-    final name = RegExp(
-      '^${RegExp.escape('.${p.basename(root)}.typed_openapi-')}'
-      r'[A-Za-z0-9]+(-old)?$',
+  /// The lock file of the output [root]: next to it, so it is there before
+  /// the output is and is not part of it; a file system that ignores case
+  /// gets one name whatever the case of the output's.
+  static File _lockFile(String root) {
+    final resolved = RealPaths.resolve(root);
+    var name = p.basename(resolved);
+    if (RealPaths.isCaseInsensitive(resolved)) name = name.toLowerCase();
+    return File(p.join(p.dirname(resolved), '.$name.typed_openapi.lock'));
+  }
+
+  /// Takes the lock of [root] by creating its file exclusively, and returns
+  /// it; null after reporting TOA831 when another run holds it. A lock of a
+  /// process that is gone (it is on this host and no longer exists) is taken
+  /// over, and [force] breaks any other, both with TOA832.
+  _Lock? _acquire(ClientConfig client, String root, {required bool force}) {
+    final file = _lockFile(root);
+    final lock = _Lock(file);
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        file.createSync(exclusive: true);
+        file.writeAsStringSync(lock.content, flush: true);
+        return lock;
+      } on PathExistsException {
+        final held = _readLock(file);
+        if (held == null) continue; // Released in the meantime.
+        final alive = _isAlive(held);
+        if (alive != false && !force) {
+          _lockHeld(client, root, file, held, knownAlive: alive == true);
+          return null;
+        }
+        // Another process may have replaced it since: delete only what was
+        // looked at.
+        if (_readLock(file) == held) file.deleteSync();
+        _diagnostics.report(
+          .outputRecovered,
+          'Took over the lock ${_paths.of(file.path)} of client '
+          '"${client.name}", ${alive == false ? 'which ${held.describe} had '
+                    'left behind: that process is gone' : 'which ${held.describe} '
+                    'held: --force breaks it'}.',
+          file: _paths.of(root),
+        );
+      }
+    }
+    _diagnostics.report(
+      .outputNotWritten,
+      'Cannot take the lock ${_paths.of(file.path)} of client '
+      '"${client.name}": it keeps coming back.',
+      file: _paths.of(root),
+      fix: 'Check whether another generate runs on this output.',
     );
-    final leftovers = <Directory>[
-      for (final entry in parent.listSync(followLinks: false))
-        if (entry is Directory && name.hasMatch(p.basename(entry.path))) entry,
+    return null;
+  }
+
+  void _lockHeld(
+    ClientConfig client,
+    String root,
+    File file,
+    _Held held, {
+    required bool knownAlive,
+  }) {
+    _diagnostics.report(
+      .outputNotWritten,
+      'Client "${client.name}" is not generated: another typed_openapi run '
+      'holds the lock ${_paths.of(file.path)} of its output '
+      '${_paths.of(root)} (${held.describe}'
+      '${knownAlive ? ', which is running' : '; it cannot be told whether '
+                'that process still runs'}). Nothing was changed.',
+      file: _paths.of(root),
+      fix:
+          'Wait for it to finish. If no run is going, delete '
+          '${_paths.of(file.path)}, or run generate --force, which breaks '
+          'the lock.',
+    );
+  }
+
+  /// What the lock [file] says, or null when it is gone.
+  static _Held? _readLock(File file) {
+    try {
+      return _Held(file.readAsStringSync());
+    } on FileSystemException {
+      return null;
+    } on FormatException {
+      return _Held('');
+    }
+  }
+
+  /// Whether the process that wrote [held] still runs: true or false when
+  /// that can be told, null when it cannot (another host, no readable pid, a
+  /// system with no `kill`).
+  bool? _isAlive(_Held held) {
+    final process = held.pid;
+    if (process == null || held.host != Platform.localHostname) return null;
+    if (process == pid) return true;
+    if (Platform.isWindows) return null;
+    try {
+      final result = _run('kill', ['-0', '$process']);
+      if (result.exitCode == 0) return true;
+      return '${result.stderr}'.contains('No such process') ? false : null;
+    } on ProcessException {
+      return null;
+    }
+  }
+
+  /// Removes the lock of this run, unless another run broke and replaced it.
+  static void _release(_Lock? lock) {
+    if (lock == null) return;
+    try {
+      if (lock.file.readAsStringSync() == lock.content) lock.file.deleteSync();
+    } on FileSystemException {
+      // Gone already.
+    }
+  }
+
+  /// The directories next to [root] that a killed run left
+  /// (`.<name>.typed_openapi-<8 characters>[-old]`), sorted by name, except
+  /// those that hold an input of the run: such a name may be the user's own,
+  /// and an input is never deleted, restored or touched.
+  List<Directory> _leftovers(String root, List<String> protected) {
+    final parent = Directory(p.dirname(root));
+    if (!parent.existsSync()) return const [];
+    final prefix = '.${p.basename(root)}.typed_openapi-';
+    final inputs = [
+      for (final input in protected)
+        if (File(input).existsSync()) input,
     ];
-    if (leftovers.isEmpty) return;
+    return [
+      for (final entry in parent.listSync(followLinks: false))
+        if (entry is Directory &&
+            p.basename(entry.path).startsWith(prefix) &&
+            _leftover.hasMatch(
+              p.basename(entry.path).substring(prefix.length),
+            ) &&
+            !_holdsInput(entry, inputs))
+          entry,
+    ]..sort((a, b) => a.path.compareTo(b.path));
+  }
+
+  /// Whether [directory] holds, or is, one of [inputs], by location or, for
+  /// a file whose location differs (a hard link), by identity.
+  static bool _holdsInput(Directory directory, List<String> inputs) {
+    if (inputs.isEmpty) return false;
+    for (final input in inputs) {
+      if (RealPaths.equals(directory.path, input) ||
+          RealPaths.isWithin(directory.path, input)) {
+        return true;
+      }
+    }
+    final lengths = {
+      for (final input in inputs) input: File(input).lengthSync(),
+    };
+    for (final entry in directory.listSync(
+      recursive: true,
+      followLinks: false,
+    )) {
+      if (entry is! File) continue;
+      final length = entry.lengthSync();
+      for (final MapEntry(key: input, value: size) in lengths.entries) {
+        if (length == size &&
+            FileSystemEntity.identicalSync(entry.path, input)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /// The backup that becomes [root] again: [root] is missing and a run that
+  /// was killed while it swapped left backups among [leftovers]; the newest.
+  static Directory? _restorable(String root, List<Directory> leftovers) {
+    if (FileSystemEntity.typeSync(root, followLinks: false) !=
+        FileSystemEntityType.notFound) {
+      return null;
+    }
     final backups = [
       for (final directory in leftovers)
         if (p.basename(directory.path).endsWith('-old')) directory,
-    ]..sort((a, b) => a.path.compareTo(b.path));
-    Directory? restored;
-    if (FileSystemEntity.typeSync(root, followLinks: false) ==
-            FileSystemEntityType.notFound &&
-        backups.isNotEmpty) {
-      restored = backups.reduce(
-        (a, b) => b.statSync().modified.isBefore(a.statSync().modified) ? a : b,
-      );
-      restored.renameSync(root);
-    }
-    // A backup is the only copy of the old tree until the output holds a
-    // finished one (a manifest), so it is kept otherwise.
+    ];
+    if (backups.isEmpty) return null;
+    return backups.reduce(
+      (a, b) => b.statSync().modified.isBefore(a.statSync().modified) ? a : b,
+    );
+  }
+
+  /// Cleans up after a run that was killed while it swapped, once the
+  /// output has been checked: [restore], when given, becomes [root] again,
+  /// and every directory of [leftovers] is removed, a backup only when
+  /// [root] holds a finished tree (a manifest), since it is the only copy of
+  /// the old tree until then. Reports TOA832 when it did anything.
+  void _recover(
+    ClientConfig client,
+    String root,
+    List<Directory> leftovers,
+    Directory? restore,
+  ) {
+    if (leftovers.isEmpty) return;
+    restore?.renameSync(root);
     final installed = File(p.join(root, manifest)).existsSync();
     var removed = 0;
     for (final directory in leftovers) {
-      if (directory.path == restored?.path) continue;
-      if (backups.contains(directory) && !installed) continue;
-      directory.deleteSync(recursive: true);
+      if (directory.path == restore?.path) continue;
+      if (p.basename(directory.path).endsWith('-old') && !installed) continue;
+      _removeTree(directory);
       removed++;
     }
-    if (restored == null && removed == 0) return;
+    if (restore == null && removed == 0) return;
     _diagnostics.report(
       .outputRecovered,
       'An earlier run for client "${client.name}" was interrupted while it '
-      'replaced ${_paths.of(root)}. ${restored == null ? '' : 'The previous '
-                'output was restored from ${_paths.of(restored.path)}. '}'
+      'replaced ${_paths.of(root)}. ${restore == null ? '' : 'The previous '
+                'output was restored from ${_paths.of(restore.path)}. '}'
       'Removed $removed temporary '
       '${removed == 1 ? 'directory' : 'directories'} it left.',
       file: _paths.of(root),
@@ -305,9 +570,7 @@ final class OutputWriter {
 
   /// Creates the directory the new tree is built in, next to [root] (so the
   /// swap is a rename). It is made like any directory, with the mode the
-  /// umask gives (a temp directory would be private, `drwx------`), and gets
-  /// the mode of [root] when that exists, so the swap keeps the permissions
-  /// of the output. Ownership, ACLs and extended attributes are not copied.
+  /// umask gives (a temp directory would be private, `drwx------`).
   static Directory _createStaging(Directory parent, String root) {
     const letters =
         'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -324,12 +587,35 @@ final class OutputWriter {
         FileSystemEntity.typeSync(staging.path, followLinks: false) !=
             FileSystemEntityType.notFound);
     staging.createSync();
-    if (!Platform.isWindows && Directory(root).existsSync()) {
-      final mode = Directory(root).statSync().mode & 0xfff;
-      // Best effort: a directory that keeps another mode still works.
-      Process.runSync('chmod', [mode.toRadixString(8), staging.path]);
-    }
     return staging;
+  }
+
+  /// Gives [staging] the mode of [root], when that exists and differs, so
+  /// the swap keeps the permissions of the output. Ownership, ACLs and
+  /// extended attributes are not copied. There is no `dart:io` call for a
+  /// mode, so it runs `chmod`; when that is missing or fails, the run fails
+  /// (a [FileSystemException], TOA831) instead of changing the permissions.
+  void _copyMode(Directory staging, String root) {
+    if (Platform.isWindows || !Directory(root).existsSync()) return;
+    final mode = Directory(root).statSync().mode & 0xfff;
+    if (staging.statSync().mode & 0xfff == mode) return;
+    final ProcessResult result;
+    try {
+      result = _run('chmod', [mode.toRadixString(8), staging.path]);
+    } on ProcessException catch (e) {
+      throw FileSystemException(
+        'cannot give the new directory the mode of the old one, since '
+        '${e.executable} cannot be run (${e.message})',
+        root,
+      );
+    }
+    if (result.exitCode != 0) {
+      throw FileSystemException(
+        'cannot give the new directory the mode of the old one '
+        '(chmod: ${'${result.stderr}'.trim()})',
+        root,
+      );
+    }
   }
 
   /// Swaps [staging] in as [root]; the old directory, if [hasOld], goes to a
@@ -359,7 +645,7 @@ final class OutputWriter {
     }
     if (hasOld) {
       try {
-        backup.deleteSync(recursive: true);
+        _removeTree(backup);
       } on FileSystemException catch (e) {
         _diagnostics.report(
           .outputNotWritten,
@@ -373,11 +659,29 @@ final class OutputWriter {
     }
   }
 
+  /// Deletes [directory] with everything in it. A read-only directory (an
+  /// output with the mode 555) cannot lose its files, so on a failure it is
+  /// made writable, as far as `chmod` can, and deleted again.
+  void _removeTree(Directory directory) {
+    try {
+      directory.deleteSync(recursive: true);
+      return;
+    } on FileSystemException {
+      if (Platform.isWindows) rethrow;
+    }
+    try {
+      _run('chmod', ['u+rwx', directory.path]);
+    } on ProcessException {
+      // The deletion below says what is wrong.
+    }
+    directory.deleteSync(recursive: true);
+  }
+
   /// Removes the temporary directory [directory] of a failed run.
-  static void _discard(Directory? directory) {
+  void _discard(Directory? directory) {
     if (directory == null) return;
     try {
-      if (directory.existsSync()) directory.deleteSync(recursive: true);
+      if (directory.existsSync()) _removeTree(directory);
     } on FileSystemException {
       // Nothing more to do for a directory that cannot be removed.
     }
@@ -391,15 +695,19 @@ final class OutputWriter {
   _Existing? _inspect(
     ClientConfig client,
     String root,
+    String dir,
     List<String> inputs,
     Map<String, String> generated, {
     required bool force,
   }) {
+    final subject = dir == root
+        ? 'its output directory ${_paths.of(root)}'
+        : 'the backup ${_paths.of(dir)} of its output directory '
+              '${_paths.of(root)}';
     _Existing? refuse(String why, String fix) {
       _diagnostics.report(
         .outputNotOwned,
-        'Client "${client.name}" is not generated: its output directory '
-        '${_paths.of(root)} $why.',
+        'Client "${client.name}" is not generated: $subject $why.',
         file: _paths.of(root),
         fix: fix,
       );
@@ -409,7 +717,7 @@ final class OutputWriter {
     const move =
         'Point output to a directory of its own, such as '
         'lib/src/<client>.';
-    final type = FileSystemEntity.typeSync(root, followLinks: false);
+    final type = FileSystemEntity.typeSync(dir, followLinks: false);
     if (type == FileSystemEntityType.notFound) return _Existing.none;
     if (type == FileSystemEntityType.link) {
       return refuse(
@@ -420,7 +728,7 @@ final class OutputWriter {
     if (type != FileSystemEntityType.directory) {
       return refuse('is not a directory', move);
     }
-    if (File(p.join(root, 'pubspec.yaml')).existsSync()) {
+    if (File(p.join(dir, 'pubspec.yaml')).existsSync()) {
       return refuse('holds a pubspec.yaml', move);
     }
     if (p.basename(root) == 'lib' &&
@@ -432,12 +740,12 @@ final class OutputWriter {
         if (File(input).existsSync()) input,
     ];
     for (final input in protected) {
-      if (RealPaths.isWithin(root, input)) {
+      if (RealPaths.isWithin(dir, input)) {
         return refuse('holds ${_paths.of(input)}, an input of the run', move);
       }
     }
     final entries = Directory(
-      root,
+      dir,
     ).listSync(recursive: true, followLinks: false);
     final lengths = {
       for (final input in protected) input: File(input).lengthSync(),
@@ -445,7 +753,7 @@ final class OutputWriter {
     final hashes = <String, String>{};
     final directories = <String>{};
     for (final entry in entries) {
-      final path = p.posix.joinAll(p.split(p.relative(entry.path, from: root)));
+      final path = p.posix.joinAll(p.split(p.relative(entry.path, from: dir)));
       switch (entry) {
         case Link():
           return refuse(
@@ -471,7 +779,7 @@ final class OutputWriter {
       }
     }
     if (hashes.isEmpty) return _Existing(hashes, directories);
-    final written = _readManifest(File(p.join(root, manifest)));
+    final written = _readManifest(File(p.join(dir, manifest)));
     final strays = <_Stray>[];
     for (final MapEntry(key: path, value: hash)
         in hashes.entries.toList()..sort((a, b) => a.key.compareTo(b.key))) {

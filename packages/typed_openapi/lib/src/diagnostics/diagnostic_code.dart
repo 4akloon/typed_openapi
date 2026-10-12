@@ -440,19 +440,26 @@ enum DiagnosticCode {
   /// The baseline file cannot be written.
   baselineNotWritten('TOA823', 'baseline-not-written', .error),
 
-  /// `generate` refuses a client's output directory, which it would own:
-  /// it holds a `pubspec.yaml`, is the `lib` directory of a package, holds
-  /// an input of the run, or holds files but no manifest. Nothing is
-  /// written for the client.
+  /// `generate` refuses a client's output directory, which it would replace:
+  /// it holds a `pubspec.yaml`, is the `lib` directory of a package, holds a
+  /// symbolic link or an input of the run, or holds a file it did not write
+  /// or that changed since it wrote it (a file the manifest does not list or
+  /// whose hash differs, or any file when there is no manifest); the message
+  /// names the files, and `--force` replaces them, but never a package, a
+  /// link or an input. Nothing is written for the client.
   outputNotOwned('TOA830', 'output-not-owned', .error),
 
-  /// `generate` cannot write a client's output directory.
+  /// `generate` cannot write a client's output directory, or another run
+  /// holds its lock (`.<output>.typed_openapi.lock` next to the output; a
+  /// lock of a process that is gone is taken over, and `--force` breaks any).
   outputNotWritten('TOA831', 'output-not-written', .error),
 
   /// An earlier `generate` was killed while it replaced the output directory
   /// and left the previous tree or a half-built one in sibling directories
   /// named `.<output>.typed_openapi-*`. The run put the previous output
-  /// back, when the output was missing, and removed the leftovers.
+  /// back, when the output was missing, and removed the leftovers. Also
+  /// reported when a run takes over the lock of a process that is gone, or
+  /// breaks a lock with `--force`.
   outputRecovered('TOA832', 'output-recovered', .info),
 
   /// The configuration file does not exist.

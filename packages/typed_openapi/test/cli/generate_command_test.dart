@@ -451,6 +451,53 @@ void main() {
     });
   });
 
+  group('one run at a time works on an output (TOA831)', () {
+    const client = '  pets: {input: specs/pets.yaml, output: gen/pets}\n';
+
+    test(
+      'a lock held by another run stops the client, --force breaks it',
+      () async {
+        await generate(client);
+        final lock = jsonEncode({
+          'pid': pid,
+          'host': Platform.localHostname,
+          'id': 'other',
+        });
+        dir.write('gen/.pets.typed_openapi.lock', lock);
+        final before = tree('gen/pets');
+        final (code, out) = await generate(client);
+        expect(code, 1);
+        expect(out, contains('error TOA831 output-not-written'));
+        expect(out, contains('.pets.typed_openapi.lock'));
+        expect(out, contains('Skipped pets: see the error above.'));
+        expect(tree('gen/pets'), before);
+        expect(
+          File(p.join(dir.path, 'gen/.pets.typed_openapi.lock')).existsSync(),
+          isTrue,
+        );
+
+        final (forced, log) = await generate(client, args: ['--force']);
+        expect(forced, 0);
+        expect(log, contains('info TOA832 output-recovered'));
+        expect(log, contains('Generated pets in'));
+        expect(
+          File(p.join(dir.path, 'gen/.pets.typed_openapi.lock')).existsSync(),
+          isFalse,
+        );
+      },
+    );
+
+    test('a run leaves no lock behind', () async {
+      await generate(client);
+      expect(
+        Directory(
+          p.join(dir.path, 'gen'),
+        ).listSync().map((e) => p.basename(e.path)),
+        ['pets'],
+      );
+    });
+  });
+
   group('never deletes an input of the run', () {
     const manifest = '{"generator": "typed_openapi 0.0.1", "files": {}}';
 
