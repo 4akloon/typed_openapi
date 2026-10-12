@@ -421,6 +421,24 @@ enum DiagnosticCode {
   /// the client does not send.
   encodingHeadersIgnored('TOA656', 'encoding-headers-ignored', .info),
 
+  /// A key of an operation's `responses` is not an HTTP status: OpenAPI
+  /// allows a code from 100 to 599, a range (`1XX` to `5XX`, in either case)
+  /// and `default`. The response is not generated, so a key written by a
+  /// tool or by hand can never reach a name or an expression of the client.
+  /// A key that repeats another one in a different case (`2xx` and `2XX`)
+  /// is reported the same way.
+  responseStatusInvalid('TOA657', 'response-status-invalid', .warning),
+
+  /// A response documents a 1xx or 3xx status. The client has no result for
+  /// them (Dio follows redirects and the interim statuses are not
+  /// responses), so the response is not generated and the status is an
+  /// undocumented one at run time.
+  responseStatusNotGenerated(
+    'TOA658',
+    'response-status-not-generated',
+    .info,
+  ),
+
   /// A normalizer fix or an override was not applied: its file cannot be
   /// read, its target is gone, the spec kept changing after the last pass, or
   /// the change would have no effect in the spec's dialect.

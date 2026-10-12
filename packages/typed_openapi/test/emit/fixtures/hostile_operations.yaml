@@ -26,6 +26,8 @@ paths:
         "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Response'}}}}
         "4XX": {description: bad, content: {application/json: {schema: {$ref: '#/components/schemas/Options'}}}}
         "5XX": {description: down, content: {application/json: {schema: {$ref: '#/components/schemas/Headers'}}}}
+        "200'; injected(); '": {description: x, content: {application/json: {schema: {type: object, properties: {h: {type: string}}}}}}
+        "3XX": {description: moved, content: {application/json: {schema: {type: object, properties: {m: {type: string}}}}}}
   /b:
     post:
       operationId: "$dollar"
@@ -38,6 +40,7 @@ paths:
         "202": {description: y, content: {application/json: {schema: {$ref: '#/components/schemas/Node'}}}}
         "404": {description: z, content: {application/json: {schema: {$ref: '#/components/schemas/Dio'}}}}
         "500": {description: "*/ injected"}
+        "4'; injected(); '": {description: x, content: {application/json: {schema: {type: object, properties: {e: {type: string}}}}}}
   /c:
     put:
       operationId: toString

@@ -262,7 +262,14 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   field (`SchemaDefaults`: the schema's own, then the schema it stands for
   through an `allOf` of one part or a nullable `anyOf`/`oneOf`, then the
   `$ref` target; a `default` beside a `$ref` counts from 3.1); envelopes; errors, with
-  `errors.default_schema` for statuses without a body; header parameters
+  `errors.default_schema` for statuses without a body; a `responses` key is
+  generated only when it is a code 200-299 or 400-599, a range `2XX`, `4XX`
+  or `5XX` (either case, kept upper case) or `default`
+  (`ResponseStatuses`): any other key is TOA657 and its response is
+  skipped (also a key that repeats another in a different case), a 1xx or
+  3xx one is TOA658 (info) and skipped, and the name part a status gives
+  an inline type goes through `DartNames.pascal`, so no key reaches an
+  identifier raw; header parameters
   `Accept`, `Content-Type` and `Authorization` are dropped as OpenAPI says;
   a parameter style its `in` does not allow falls back to the default,
   TOA564, and an `in: querystring` parameter is skipped, TOA565; path
@@ -300,7 +307,7 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   out, else at `#/paths`; then everything above). `IrJson` dumps an IR; the
   hidden `typed_openapi ir` command prints it. Naming and mapping codes use
   the second half of each area's hundred: TOA250-TOA256, TOA350-TOA351,
-  TOA450-TOA456, TOA550-TOA565, and media types and errors TOA650-TOA656
+  TOA450-TOA456, TOA550-TOA565, and media types and errors TOA650-TOA658
   (TOA561 became TOA650 and TOA651, TOA562 TOA652, the querystring half of
   TOA564 TOA565); `generate` has TOA830 (output not owned),
   TOA831 (output not written, or its lock held) and TOA832 (an interrupted

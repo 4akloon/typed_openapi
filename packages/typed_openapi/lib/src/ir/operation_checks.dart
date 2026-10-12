@@ -4,6 +4,7 @@ import '../model/spec_node.dart';
 import 'ir.dart';
 import 'ir_context.dart';
 import 'operation_builder.dart';
+import 'response_statuses.dart';
 
 /// Reports what an operation has that the client does not generate (M9):
 /// event streams (until M10), a missing 2xx, servers of a path item or an
@@ -34,7 +35,9 @@ final class OperationChecks {
   /// Reports an operation without a 2xx response (TOA653); a 2xx response
   /// that cannot be resolved is reported already.
   void successes(Operation operation) {
-    if (operation.responses.keys.any((status) => status.startsWith('2'))) {
+    if (operation.responses.keys.any(
+      (key) => ResponseStatuses.isGenerated(key) && key.startsWith('2'),
+    )) {
       return;
     }
     _context.report(

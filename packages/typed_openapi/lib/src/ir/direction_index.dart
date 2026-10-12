@@ -3,6 +3,7 @@ import '../model/schema.dart';
 import '../model/spec_node.dart';
 import '../resolve/spec_model.dart';
 import 'ir.dart';
+import 'response_statuses.dart';
 import 'schema_shapes.dart';
 
 /// Where each schema is used, requests or responses, to split models by
@@ -55,8 +56,9 @@ final class DirectionIndex {
         _content(content, .request);
       }
     }
-    for (final written in operation.responses.values) {
-      _content(_model.resolve(written)?.content ?? const {}, .response);
+    for (final MapEntry(:key, :value) in operation.responses.entries) {
+      if (!ResponseStatuses.isGenerated(key)) continue;
+      _content(_model.resolve(value)?.content ?? const {}, .response);
     }
   }
 

@@ -9,6 +9,7 @@ import 'names.dart';
 import 'operation_checks.dart';
 import 'parts_builder.dart';
 import 'response_secrets.dart';
+import 'response_statuses.dart';
 import 'schema_defaults.dart';
 import 'schema_mapper.dart';
 import 'security_builder.dart';
@@ -47,7 +48,8 @@ final class OperationBuilder {
       _parts = PartsBuilder(_context, _mapper),
       _encoding = BodyEncoding(_context),
       _defaults = SchemaDefaults(_context),
-      _secrets = ResponseSecrets(_context);
+      _secrets = ResponseSecrets(_context),
+      _statuses = ResponseStatuses(_context);
 
   static const _names = DartNames();
 
@@ -83,6 +85,7 @@ final class OperationBuilder {
   final IrContext _context;
   final SchemaMapper _mapper;
   final ResponseSecrets _secrets;
+  final ResponseStatuses _statuses;
   final OperationChecks _checks;
   final SecurityBuilder _security;
   final PartsBuilder _parts;
@@ -404,8 +407,7 @@ final class OperationBuilder {
 
   List<ResponseIr> _responses(Operation operation, String prefix) {
     final responses = [
-      for (final MapEntry(key: status, value: written)
-          in operation.responses.entries)
+      for (final (status, written) in _statuses.of(operation))
         if (_context.model.resolve(written) case final response?)
           (
             status,
@@ -418,17 +420,18 @@ final class OperationBuilder {
     final withBody = <String, int>{};
     for (final (status, _, (_, media)) in responses) {
       if (media?.schema == null && media?.itemSchema == null) continue;
-      final base = _nameBase(status);
+      final base = ResponseStatuses.nameOf(status, shared: false);
       withBody[base] = (withBody[base] ?? 0) + 1;
     }
     final result = <ResponseIr>[];
     for (final (status, response, (contentType, media)) in responses) {
       final kind = _responseKind(contentType, response);
       final success = status.startsWith('2');
-      final base = _nameBase(status);
-      final suffix = (withBody[base] ?? 0) > 1
-          ? '$base${status == 'default' ? 'Default' : status.toUpperCase()}'
-          : base;
+      final base = ResponseStatuses.nameOf(status, shared: false);
+      final suffix = ResponseStatuses.nameOf(
+        status,
+        shared: (withBody[base] ?? 0) > 1,
+      );
       final schema = kind == .eventStream
           ? media?.itemSchema ?? media?.schema
           : media?.schema;
@@ -476,16 +479,6 @@ final class OperationBuilder {
       fix: 'Use a JSON media type at the source if the schema matters.',
     );
     return .bytes;
-  }
-
-  /// How inline types of a response with [status] are named: `Response`
-  /// for 2xx, `Error` for 4xx, 5xx and `default`, `Response` with the status
-  /// for the rest.
-  static String _nameBase(String status) {
-    if (status.startsWith('2')) return 'Response';
-    if (status.startsWith('4') || status.startsWith('5')) return 'Error';
-    if (status == 'default') return 'Error';
-    return 'Response${status.toUpperCase()}';
   }
 
   /// The schema of `data` when [schema] is an envelope `{data: T}`: an
