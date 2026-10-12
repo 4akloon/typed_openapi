@@ -28,3 +28,5 @@ export 'src/result/result.dart'
         Success,
         TransportError,
         UndocumentedStatus;
+export 'src/sse/sse_decoder.dart' show SseDecoder;
+export 'src/sse/sse_message.dart' show SseMessage;
