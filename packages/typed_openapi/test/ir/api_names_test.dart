@@ -152,12 +152,16 @@ void main() {
     );
     expect(ir.root.name, 'ApiClient2');
     final create = operation(ir, 'createPet');
-    expect(create.successType?.name, 'CreatePetResponses');
+    expect(create.successType?.name, 'CreatePetResponse2');
     expect(create.errorType?.name, 'CreatePetError2');
     expect(create.errorType?.cases.first.name, 'CreatePetError2NotFound');
     final collisions = reported(fixture, .nameCollision);
     expect(collisions.map((d) => d.message), [
       contains('the root client is named "ApiClient2"'),
+      contains(
+        'the sealed type of the successes of createPet is named '
+        '"CreatePetResponse2"',
+      ),
       contains(
         'the sealed type of the errors of createPet is named '
         '"CreatePetError2"',

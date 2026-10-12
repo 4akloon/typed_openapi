@@ -5,6 +5,7 @@ import 'dart_type.dart';
 import 'ir.dart';
 import 'ir_context.dart';
 import 'names.dart';
+import 'response_body_names.dart';
 
 /// Names the types the API emitter declares (M9) in the library scope, after
 /// the declarations, the groups and the types M8 adds, so that a model or
@@ -13,8 +14,8 @@ import 'names.dart';
 /// successes and its variants, the sealed type of its errors and its
 /// variants, and the class of its multipart parts. A sealed type is
 /// `<Operation>Response` or `<Operation>Error`, or the plural when an
-/// inline body has that name; any other change is reported (TOA550,
-/// TOA551).
+/// inline body of the operation itself has that name; any other change is
+/// reported (TOA550, TOA551).
 final class ApiNames {
   /// Creates the namer for [_context], claiming in the library scope
   /// [_types].
@@ -86,6 +87,7 @@ final class ApiNames {
     Map<String, GroupIr> groups,
   ) {
     final root = this.root();
+    final inlineBodies = ResponseBodyNames(declarations);
     // The root client's members: a field per group, then the servers.
     final members = NameScope(
       reserved: {...DartNames.reservedWords, ...DartNames.objectMembers},
@@ -98,7 +100,10 @@ final class ApiNames {
         for (final MapEntry(key: word, value: group) in groups.entries)
           GroupIr(
             group.name,
-            [for (final operation in group.operations) name(operation)],
+            [
+              for (final operation in group.operations)
+                name(operation, inlineBodies),
+            ],
             field: members
                 .claim(
                   _names.camel(word.isEmpty ? defaultGroup : word) ?? 'api',
@@ -127,14 +132,15 @@ final class ApiNames {
     );
   }
 
-  /// [operation] with the names of the types the emitter declares for it.
-  OperationIr name(OperationIr operation) {
+  /// [operation] with the names of the types the emitter declares for it;
+  /// [inlineBodies] tells which names its own inline bodies have.
+  OperationIr name(OperationIr operation, ResponseBodyNames inlineBodies) {
     final prefix = _names.pascal(operation.name) ?? 'Operation';
     final bodies = {for (final s in operation.successes) s.type};
     final successType = bodies.length > 1
         ? _statusType(
             operation,
-            '${prefix}Response',
+            _sealedName('${prefix}Response', operation, inlineBodies),
             [for (final s in operation.successes) (s.status, s.type)],
             'successes',
             {
@@ -146,7 +152,7 @@ final class ApiNames {
     final errorType = switch (operation.errors) {
       ErrorsByStatus(:final cases, :final sensitive) => _statusType(
         operation,
-        '${prefix}Error',
+        _sealedName('${prefix}Error', operation, inlineBodies),
         cases,
         'errors',
         sensitive,
@@ -168,6 +174,20 @@ final class ApiNames {
     );
   }
 
+  /// [candidate], or its plural when the inline body of [operation] has
+  /// the name and the plural is free: the documented second choice.
+  String _sealedName(
+    String candidate,
+    OperationIr operation,
+    ResponseBodyNames inlineBodies,
+  ) {
+    final plural = '${candidate}s';
+    return inlineBodies.isInlineBodyOf(operation, candidate) &&
+            !_types.isTaken(plural)
+        ? plural
+        : candidate;
+  }
+
   StatusTypeIr _statusType(
     OperationIr operation,
     String candidate,
@@ -175,13 +195,8 @@ final class ApiNames {
     String what,
     Set<String> sensitive,
   ) {
-    // The one body of the operation's successes or errors may have the
-    // name already (an inline schema of one 2xx or one error response is
-    // `GetPetResponse` or `GetPetError`): the plural is the documented
-    // second choice.
-    final plural = '${candidate}s';
     final name = _claim(
-      _types.isTaken(candidate) && !_types.isTaken(plural) ? plural : candidate,
+      candidate,
       'the sealed type of the $what of ${operation.name}',
       operation.location,
       override: operation,

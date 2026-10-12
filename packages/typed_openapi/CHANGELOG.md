@@ -209,7 +209,8 @@
   `Client`), the sealed types of successes and errors with variants named by
   the HTTP reason phrase (`CreatePetErrorNotFound`, `…ClientError` for
   `4XX`, `…Other` for `default`, `…Status499`; the plural `GetPetErrors`
-  when an inline body is `GetPetError`), the classes of multipart parts
+  when the operation's own inline body is `GetPetError`, any other name
+  taken gets a suffix, TOA551), the classes of multipart parts
   (`UploadRequest`), the group fields and the servers of the root client;
   and it keeps security requirements with their schemes.
 - An `apiKey` security scheme without `in` is TOA112, as one without `name`.

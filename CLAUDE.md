@@ -279,7 +279,9 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   client name when `naming.client` is unset; group fields and servers are
   its members), the sealed `StatusTypeIr`s of successes with different
   bodies and of `ErrorsByStatus` (variants by reason phrase, `ApiNames.
-  variantOf`; the plural when an inline body has the name) and the class of
+  variantOf`; the plural only when the operation's own inline response
+  body has the name (`ResponseBodyNames`), any other taker of the name gives
+  the suffix, TOA551) and the class of
   multipart parts (`RequestBodyIr.parts`, TOA655 when the schema is not an
   object); `OperationBuilder` keeps security requirements (an alternative
   that names a scheme `components.securitySchemes` does not define is
