@@ -1,5 +1,6 @@
 import 'package:test/test.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
+import 'package:typed_openapi/src/diagnostics/severity.dart';
 import 'package:typed_openapi/src/ir/ir.dart';
 import 'package:typed_openapi/src/ir/ir_builder.dart';
 
@@ -506,6 +507,56 @@ components:
     expect(types, {
       'QueryStyle': 'QueryStyleModel',
       'PathStyle': 'PathStyleModel',
+    });
+  });
+
+  group('enum value names (final review M5, M14)', () {
+    test('a value with no ASCII letter or digit is TOA552, an info that says '
+        'x-enum-varnames', () {
+      final fixture = IrFixture(r'''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Mode: {type: string, enum: ["*/*", "@", ok]}
+    Bad:
+      type: string
+      enum: [a, b]
+      x-enum-varnames: ["$", fine]
+''');
+      final (ir, _) = mapComponents(fixture, ['Mode', 'Bad']);
+      expect(valuesOf(ir, 'Mode'), ['value_=*/*', 'value_2=@', 'ok=ok']);
+      expect(valuesOf(ir, 'Bad'), ['a=a', 'fine=b']);
+      final found = fixture.reported
+          .where((d) => d.code == DiagnosticCode.nameUnrepresentable)
+          .toList();
+      expect(found, hasLength(3));
+      for (final d in found) {
+        expect(d.severity, Severity.info);
+        expect(d.fix, contains('x-enum-varnames'));
+      }
+      expect(found.first.message, contains('x-enum-varnames'));
+    });
+
+    test('unknown is reserved for the unknown value of an enum', () {
+      final fixture = IrFixture('''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Mode: {type: string, enum: [known, unknown, Unknown]}
+''');
+      final (ir, _) = mapComponents(fixture, ['Mode']);
+      expect(valuesOf(ir, 'Mode'), [
+        'known=known',
+        'unknown_=unknown',
+        'unknown_2=Unknown',
+      ]);
+      expect(fixture.reported.map((d) => d.code), [
+        DiagnosticCode.nameReserved,
+        DiagnosticCode.nameReserved,
+      ]);
+      expect(fixture.reported.first.message, contains('"unknown_"'));
     });
   });
 }

@@ -89,10 +89,12 @@ final class DartNames {
     'toJson',
   };
 
-  /// Members an enum's values must not shadow.
+  /// Members an enum's values must not shadow, `unknown` among them: the
+  /// emitters add an `unknown` member for a value the spec does not list
+  /// (R8.1).
   static const enumMembers = {
-    ...objectMembers, 'fromJson', 'index', 'name', 'toJson', 'value', //
-    'values',
+    ...objectMembers, 'fromJson', 'index', 'name', 'toJson', 'unknown', //
+    'value', 'values',
   };
 
   /// Names of a method's arguments that generated code uses itself: the

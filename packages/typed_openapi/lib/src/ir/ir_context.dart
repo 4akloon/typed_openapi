@@ -2,6 +2,7 @@ import '../config/generation_config.dart';
 import '../config/project_config.dart';
 import '../diagnostics/diagnostic_bag.dart';
 import '../diagnostics/diagnostic_code.dart';
+import '../diagnostics/severity.dart';
 import '../model/spec_node.dart';
 import '../normalize/normalizer.dart';
 import '../overrides/override_resolver.dart';
@@ -129,12 +130,14 @@ final class IrContext {
       custom.type,
   }.toList()..sort();
 
-  /// Reports [code] at [at]; [override] is an override to copy into the
-  /// overrides file, added to [fix].
+  /// Reports [code] at [at], with the code's own severity unless [severity]
+  /// is given; [override] is an override to copy into the overrides file,
+  /// added to [fix].
   void report(
     DiagnosticCode code,
     String message,
     SpecLocation at, {
+    Severity? severity,
     String? fix,
     String? override,
   }) {
@@ -146,6 +149,7 @@ final class IrContext {
     diagnostics.report(
       code,
       message,
+      severity: severity,
       file: documents.displayPath(at.document),
       pointer: at.pointer,
       span: documents[at.document]?.spanOf(at.pointer),

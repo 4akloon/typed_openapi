@@ -1083,13 +1083,22 @@ final class SchemaMapper {
       candidate = _names.camel(text);
     }
     final (name, change) = scope.claim(candidate ?? 'value');
-    if (candidate == null || change != null) {
+    // A fallback name for an enum value is a naming decision, not a lost
+    // type, so it is an info: an enum of a spec that is not yours can only
+    // be named at the source.
+    if (candidate == null) {
       _context.report(
-        candidate == null
-            ? .nameUnrepresentable
-            : change == .reserved
-            ? .nameReserved
-            : .nameCollision,
+        .nameUnrepresentable,
+        'Value "$value" of enum $owner has no ASCII letter or digit, so it '
+        'is named "$name". Add x-enum-varnames to the enum in the spec to '
+        'name its values.',
+        location,
+        severity: .info,
+        fix: 'Name the values with x-enum-varnames at the source.',
+      );
+    } else if (change != null) {
+      _context.report(
+        change == .reserved ? .nameReserved : .nameCollision,
         'Value "$value" of enum $owner is named "$name".',
         location,
         fix: 'Name the values with x-enum-varnames at the source.',
@@ -1101,6 +1110,7 @@ final class SchemaMapper {
         'The x-enum-varnames entry "$named" of enum $owner has no ASCII '
         'letter or digit, so the value "$value" is named "$name".',
         location,
+        severity: .info,
         fix: 'Write a name with a letter or digit in x-enum-varnames.',
       );
     }
