@@ -38,6 +38,21 @@ void main() {
     expect(a, const Patch.value(1));
     expect(a, isNot(const Patch.value(2)));
     expect(const Patch<int>.nullValue(), const PatchNull<int>());
+    // Equality ignores the type argument, in both directions.
+    const Patch<num> wide = .value(1);
+    expect(wide == a, isTrue);
+    expect(a == wide, isTrue);
+    expect(wide.hashCode, a.hashCode);
+    expect(
+      const Patch<num>.nullValue() == const Patch<int>.nullValue(),
+      isTrue,
+    );
+    expect(
+      const Patch<int>.nullValue() == const Patch<num>.nullValue(),
+      isTrue,
+    );
+    expect(const Patch<num>.nullValue() == wide, isFalse);
+    expect(wide == const Patch<num>.nullValue(), isFalse);
     expect(a.hashCode, const PatchValue(1).hashCode);
     expect(a.valueOrNull, 1);
     expect(const Patch<int>.nullValue().valueOrNull, isNull);

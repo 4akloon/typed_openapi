@@ -1,5 +1,6 @@
 import '../model/patch.dart';
 import 'json_decode_exception.dart';
+import 'json_objects.dart';
 import 'json_value.dart';
 
 /// Reads the properties of one JSON object for a generated `fromJson`.
@@ -144,10 +145,11 @@ final class JsonReader {
   }
 
   /// A JSON object.
-  static Map<String, Object?> asObject(Object? value) => switch (value) {
-    final Map<String, Object?> map => map,
-    _ => throw _mismatch('an object', value),
-  };
+  ///
+  /// A map with `dynamic` keys is accepted when every key is a string; one
+  /// with another key type is an error that names the key.
+  static Map<String, Object?> asObject(Object? value) =>
+      JsonObjects(value).require();
 
   /// A JSON array.
   static List<Object?> asList(Object? value) => switch (value) {

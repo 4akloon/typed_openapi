@@ -15,6 +15,9 @@ final class Tag {
   final String name;
 }
 
+const int maxInt64 = 9223372036854775807;
+const int minInt64 = -9223372036854775808;
+
 void main() {
   JsonDecodeException failure(void Function() body) {
     try {
@@ -98,6 +101,67 @@ void main() {
       expect(e.schema, 'Pet');
       expect(e.pointer, '');
       expect(JsonReader.of(json, schema: 'Pet').json, same(json));
+    });
+  });
+
+  group('dynamic-keyed maps', () {
+    // `Response(data: {})` and custom transformers give Map<dynamic, dynamic>.
+    final Map<dynamic, dynamic> untyped = <dynamic, dynamic>{
+      'name': 'Rex',
+      'a': [1, 'x'],
+    };
+
+    test('a map with string keys is an object', () {
+      expect(JsonReader.of(untyped, schema: 'Pet').json, {
+        'name': 'Rex',
+        'a': [1, 'x'],
+      });
+      expect(
+        JsonReader.of(untyped, schema: 'Pet').required(
+          'name',
+          JsonReader.asString,
+        ),
+        'Rex',
+      );
+      expect(JsonReader.asObject(untyped)['name'], 'Rex');
+      expect(JsonReader.asObject(<dynamic, dynamic>{}), isEmpty);
+      final typed = <String, Object?>{'k': 1};
+      expect(JsonReader.asObject(typed), same(typed));
+      final value = JsonValue(untyped);
+      expect(value.asObject?['name'], 'Rex');
+      expect(value['name'].asString, 'Rex');
+      expect(value['a'][1].asString, 'x');
+    });
+
+    test('a non-string key names the key', () {
+      final bad = <dynamic, dynamic>{'a': 1, 2: 'b'};
+      final e = failure(() => JsonReader.asObject(bad));
+      expect(e.expected, 'an object');
+      expect(e.actual, 'an object with a non-string key `2`');
+      expect(
+        failure(() => JsonReader.of(bad, schema: 'Pet')).schema,
+        'Pet',
+      );
+      final value = JsonValue(bad);
+      expect(value.asObject, isNull);
+      expect(value['a'].isNull, isTrue);
+    });
+  });
+
+  group('wrong types in other reads', () {
+    const r = JsonReader({'name': 'Rex', 'tag': null}, schema: 'Pet');
+
+    test('requiredNullable and patch report the property pointer', () {
+      final nullable = failure(
+        () => r.requiredNullable('name', JsonReader.asInt),
+      );
+      expect(nullable.pointer, '/name');
+      expect(nullable.message, 'expected an integer, got a string');
+      expect(nullable.schema, 'Pet');
+      final patch = failure(() => r.patch('name', JsonReader.asInt));
+      expect(patch.pointer, '/name');
+      expect(patch.message, 'expected an integer, got a string');
+      expect(patch.schema, 'Pet');
     });
   });
 
@@ -201,6 +265,23 @@ void main() {
       // jsonDecode turns a 30-digit integer into a double.
       final huge = jsonDecode('123456789012345678901234567890');
       expect(failure(() => JsonReader.asInt(huge)).expected, 'an integer');
+    });
+
+    test('the int64 boundary: 2^63 - 1 is an int, 2^63 is not', () {
+      expect(JsonReader.asInt(jsonDecode('9223372036854775807')), maxInt64);
+      expect(JsonReader.asInt(jsonDecode('-9223372036854775808')), minInt64);
+      expect(
+        failure(
+          () => JsonReader.asInt(jsonDecode('9223372036854775808')),
+        ).expected,
+        'an integer',
+      );
+      expect(
+        failure(
+          () => JsonReader.asInt(jsonDecode('-9223372036854775809')),
+        ).expected,
+        'an integer',
+      );
     });
 
     test('non-finite numbers are rejected', () {

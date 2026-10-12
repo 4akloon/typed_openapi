@@ -1,3 +1,5 @@
+import 'json_objects.dart';
+
 /// Any JSON value: the type of a schema without constraints (`{}`, `true`).
 ///
 /// A zero-cost wrapper over the decoded value ([raw]): `null`, [bool], [num],
@@ -15,11 +17,9 @@ extension type const JsonValue(Object? raw) {
   /// Whether the value is JSON `null` (or missing).
   bool get isNull => raw == null;
 
-  /// The value as a JSON object, or `null`.
-  Map<String, Object?>? get asObject => switch (raw) {
-    final Map<String, Object?> map => map,
-    _ => null,
-  };
+  /// The value as a JSON object, or `null`. A map with a non-string key is
+  /// not an object.
+  Map<String, Object?>? get asObject => JsonObjects(raw).view;
 
   /// The value as a JSON array, or `null`.
   List<Object?>? get asList => switch (raw) {
@@ -47,9 +47,9 @@ extension type const JsonValue(Object? raw) {
 
   /// The property [key] of an object or the item at index [key] of an
   /// array; `JsonValue(null)` when there is none.
-  JsonValue operator [](Object key) => switch ((raw, key)) {
-    (final Map<String, Object?> map, final String name) => JsonValue(map[name]),
-    (final List<Object?> list, final int index)
+  JsonValue operator [](Object key) => switch ((asObject, raw, key)) {
+    (final map?, _, final String name) => JsonValue(map[name]),
+    (_, final List<Object?> list, final int index)
         when index >= 0 && index < list.length =>
       JsonValue(list[index]),
     _ => const JsonValue(null),

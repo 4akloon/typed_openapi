@@ -40,7 +40,7 @@ final class PatchValue<T> extends Patch<T> {
 
   @override
   bool operator ==(Object other) =>
-      other is PatchValue<T> && other.value == value;
+      other is PatchValue<Object?> && other.value == value;
 
   @override
   int get hashCode => Object.hash(PatchValue, value);
@@ -61,7 +61,7 @@ final class PatchNull<T> extends Patch<T> {
   Object? toJson(Object? Function(T value) encode) => null;
 
   @override
-  bool operator ==(Object other) => other is PatchNull<T>;
+  bool operator ==(Object other) => other is PatchNull<Object?>;
 
   @override
   int get hashCode => (PatchNull).hashCode;
