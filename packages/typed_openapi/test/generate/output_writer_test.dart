@@ -5,6 +5,7 @@ import 'package:test/test.dart';
 import 'package:typed_openapi/src/config/project_config.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_bag.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
+import 'package:typed_openapi/src/diagnostics/severity.dart';
 import 'package:typed_openapi/src/generate/output_writer.dart';
 
 import '../helpers/temp_dir.dart';
@@ -121,6 +122,104 @@ void main() {
         Directory(client.output).listSync().map((e) => p.basename(e.path)),
         unorderedEquals(['.typed_openapi.json', 'a.dart', 'new.dart']),
       );
+    });
+  });
+
+  group('the leftovers of a killed run', () {
+    /// Simulates a process killed between the two renames of the swap: the
+    /// old tree is the backup, the new one is complete in its directory, and
+    /// the output does not exist.
+    void killBetweenRenames() {
+      write(old);
+      final parent = p.dirname(client.output);
+      Directory(
+        client.output,
+      ).renameSync(p.join(parent, '.pets.typed_openapi-Ab12Cd-old'));
+      dir.write('gen/.pets.typed_openapi-Ab12Cd/new.dart', '// half');
+    }
+
+    test('the backup is restored and the temp directory removed', () {
+      killBetweenRenames();
+      final changes = write(old)!;
+      expect((changes.written, changes.unchanged, changes.deleted), (0, 2, 0));
+      expect(
+        File(p.join(client.output, 'sub/b.dart')).readAsStringSync(),
+        '// b',
+      );
+      expect(
+        Directory(
+          p.dirname(client.output),
+        ).listSync().map((e) => p.basename(e.path)),
+        ['pets'],
+      );
+      final recovered = bag.all.single;
+      expect(recovered.code, DiagnosticCode.outputRecovered);
+      expect(recovered.severity, Severity.info);
+      expect(recovered.message, contains('restored'));
+    });
+
+    test('a run killed while the temp tree was written is cleaned', () {
+      write(old);
+      dir.write('gen/.pets.typed_openapi-Zz9/a.dart', '// partial');
+      write(old);
+      expect(
+        Directory(
+          p.dirname(client.output),
+        ).listSync().map((e) => p.basename(e.path)),
+        ['pets'],
+      );
+      expect(bag.all.single.code, DiagnosticCode.outputRecovered);
+      expect(bag.all.single.message, isNot(contains('restored')));
+    });
+
+    test('a backup left after the new tree was installed is removed', () {
+      write(old);
+      dir.write('gen/.pets.typed_openapi-Ab12Cd-old/a.dart', '// older');
+      write(old);
+      expect(
+        Directory(
+          p.dirname(client.output),
+        ).listSync().map((e) => p.basename(e.path)),
+        ['pets'],
+      );
+      expect(bag.all.single.code, DiagnosticCode.outputRecovered);
+    });
+
+    test('the restored tree is then updated by the run', () {
+      killBetweenRenames();
+      final changes = write({'a.dart': '// changed'})!;
+      expect((changes.written, changes.deleted), (1, 1));
+      expect(
+        File(p.join(client.output, 'a.dart')).readAsStringSync(),
+        '// changed',
+      );
+      expect(File(p.join(client.output, 'sub/b.dart')).existsSync(), isFalse);
+    });
+
+    test('directories of other outputs and clean runs are left alone', () {
+      write(old);
+      dir.write('gen/.other.typed_openapi-Ab12Cd/x.dart', '// other');
+      dir.write('gen/.pets.typed_openapi-my_notes/x.dart', '// not a leftover');
+      write(old);
+      expect(
+        File(
+          p.join(dir.path, 'gen/.other.typed_openapi-Ab12Cd/x.dart'),
+        ).existsSync(),
+        isTrue,
+      );
+      expect(
+        File(
+          p.join(dir.path, 'gen/.pets.typed_openapi-my_notes/x.dart'),
+        ).existsSync(),
+        isTrue,
+      );
+      expect(bag.all, isEmpty);
+    });
+
+    test('a clean run reports nothing', () {
+      write(old);
+      write(old);
+      expect(bag.all, isEmpty);
     });
   });
 

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
+import 'package:meta/meta.dart';
 import 'package:path/path.dart' as p;
 
 import '../config/project_config.dart';
@@ -60,12 +61,14 @@ final class _Existing {
 /// the run (the config, the spec, the overrides or the baseline file, also
 /// through a symbolic link, a hard link or a name that differs in case),
 /// holds a symbolic link, or holds files but no manifest of this generator.
-/// A process killed between the swap's two renames leaves the backup and
-/// the new tree in sibling directories named `.<output>.typed_openapi-*`.
+/// A process killed while it swaps leaves the backup and the new tree in
+/// sibling directories named `.<output>.typed_openapi-*`. The next run puts
+/// the backup back when the output is missing, removes those directories
+/// and says so (TOA832).
 final class OutputWriter {
   /// Creates a writer that reports to [_diagnostics]; [_paths] names
-  /// directories in diagnostics. [beforeInstall] is called between the
-  /// renames of the swap, where tests make a failure.
+  /// directories in diagnostics. [beforeInstall] is a test seam: it is
+  /// called between the renames of the swap, where tests make a failure.
   const OutputWriter(
     this._diagnostics, [
     this._paths = const DisplayPaths(),
@@ -81,8 +84,10 @@ final class OutputWriter {
   /// What a manifest's `generator` starts with, whatever the version.
   static const _generatorName = 'typed_openapi';
 
-  /// Called after the old directory is renamed to its backup and before the
-  /// new one is renamed to the output.
+  /// A test seam: called after the old directory is renamed to its backup
+  /// and before the new one is renamed to the output, where a test makes
+  /// the failure it wants. Production code leaves it null.
+  @visibleForTesting
   final void Function()? beforeInstall;
 
   final DiagnosticBag _diagnostics;
@@ -102,6 +107,7 @@ final class OutputWriter {
     final created = <Directory>[];
     Directory? staging;
     try {
+      _recover(client, root);
       final existing = _inspect(client, root, protected);
       if (existing == null) return null;
       final keys = files.keys.toList()..sort();
@@ -203,6 +209,53 @@ final class OutputWriter {
       current = parent;
     }
     return result.reversed.toList();
+  }
+
+  /// Cleans up after a run that was killed while it swapped: when [root] is
+  /// missing and an earlier run left its backup (`.<name>.typed_openapi-*-old`,
+  /// the newest if there are several), the backup becomes [root] again; every
+  /// other directory with such a name is removed. Reports TOA832 when it did
+  /// anything.
+  void _recover(ClientConfig client, String root) {
+    final parent = Directory(p.dirname(root));
+    if (!parent.existsSync()) return;
+    final name = RegExp(
+      '^${RegExp.escape('.${p.basename(root)}.typed_openapi-')}'
+      r'[A-Za-z0-9]+(-old)?$',
+    );
+    final leftovers = <Directory>[
+      for (final entry in parent.listSync(followLinks: false))
+        if (entry is Directory && name.hasMatch(p.basename(entry.path))) entry,
+    ];
+    if (leftovers.isEmpty) return;
+    final backups = [
+      for (final directory in leftovers)
+        if (p.basename(directory.path).endsWith('-old')) directory,
+    ]..sort((a, b) => a.path.compareTo(b.path));
+    Directory? restored;
+    if (FileSystemEntity.typeSync(root, followLinks: false) ==
+            FileSystemEntityType.notFound &&
+        backups.isNotEmpty) {
+      restored = backups.reduce(
+        (a, b) => b.statSync().modified.isBefore(a.statSync().modified) ? a : b,
+      );
+      restored.renameSync(root);
+    }
+    var removed = 0;
+    for (final directory in leftovers) {
+      if (directory.path == restored?.path) continue;
+      directory.deleteSync(recursive: true);
+      removed++;
+    }
+    _diagnostics.report(
+      .outputRecovered,
+      'An earlier run for client "${client.name}" was interrupted while it '
+      'replaced ${_paths.of(root)}. ${restored == null ? '' : 'The previous '
+                'output was restored from ${_paths.of(restored.path)}. '}'
+      'Removed $removed temporary '
+      '${removed == 1 ? 'directory' : 'directories'} it left.',
+      file: _paths.of(root),
+    );
   }
 
   /// Swaps [staging] in as [root]; the old directory, if [hasOld], goes to a

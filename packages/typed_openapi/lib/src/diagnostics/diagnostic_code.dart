@@ -433,6 +433,12 @@ enum DiagnosticCode {
   /// `generate` cannot write a client's output directory.
   outputNotWritten('TOA831', 'output-not-written', .error),
 
+  /// An earlier `generate` was killed while it replaced the output directory
+  /// and left the previous tree or a half-built one in sibling directories
+  /// named `.<output>.typed_openapi-*`. The run put the previous output
+  /// back, when the output was missing, and removed the leftovers.
+  outputRecovered('TOA832', 'output-recovered', .info),
+
   /// The configuration file does not exist.
   configNotFound('TOA901', 'config-not-found', .error),
 
@@ -478,6 +484,7 @@ enum DiagnosticCode {
     baselineNotWritten,
     outputNotOwned,
     outputNotWritten,
+    outputRecovered,
     ...configCodes,
   };
 
