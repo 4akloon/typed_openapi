@@ -101,6 +101,82 @@ void main() {
     }
   });
 
+  test('a custom type of an object schema is built from a map', () {
+    final files = emit(
+      r'''
+    Root:
+      type: object
+      properties:
+        price: {$ref: '#/components/schemas/Money'}
+        cost: {$ref: '#/components/schemas/Cost'}
+        kind: {$ref: '#/components/schemas/Kind'}
+    Money: {type: object, properties: {amount: {type: integer}}}
+    Cost: {type: object, properties: {amount: {type: integer}}}
+    Kind: {type: string, enum: [a, b]}
+''',
+      generation: const GenerationConfig(
+        schemas: {
+          'Money': DartTypeOverride(
+            type: 'Money',
+            import: 'package:app/money.dart',
+            converter: 'MoneyConverter',
+          ),
+          'Cost': DartTypeOverride(
+            type: 'Cost',
+            import: 'package:app/cost.dart',
+          ),
+          'Kind': DartTypeOverride(
+            type: 'Kind',
+            import: 'package:app/kind.dart',
+          ),
+        },
+      ),
+    );
+    final root = files['models/root.dart']!;
+    expect(
+      root,
+      contains('const MoneyConverter().fromJson(JsonReader.asObject('),
+    );
+    expect(root, contains('Cost.fromJson(JsonReader.asObject('));
+    expect(root, contains('Kind.fromJson(JsonReader.asString('));
+  });
+
+  test('a request model takes the known values of its extra properties', () {
+    final files = emit(
+      r'''
+    Root: {type: object, properties: {a: {type: string}}}
+    Color: {type: string, enum: [red, blue]}
+    Body:
+      type: object
+      properties: {name: {type: string}}
+      additionalProperties: {$ref: '#/components/schemas/Color'}
+''',
+      paths: r'''
+  /y:
+    post:
+      operationId: postY
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Body'}
+      responses:
+        '204': {description: ok}
+''',
+    );
+    final body = files['models/body.dart']!;
+    expect(
+      body,
+      contains('Map<String, ColorKnown> this.additionalProperties = const {}'),
+    );
+    expect(
+      body,
+      contains(
+        'const Body._({this.name, this.additionalProperties = const {}});',
+      ),
+    );
+    expect(body, contains('final Map<String, Color> additionalProperties;'));
+  });
+
   test('classes are not final, so users can extend and implement them', () {
     final files = emit(r'''
     Root:
@@ -330,8 +406,7 @@ void main() {
         r"dollar: r.optional('\$dollar', JsonReader.asString),",
         r"field: r.optional('ім\'я', JsonReader.asString),",
         'other.other == this.other &&',
-        r"r'$dollar'",
-      ].take(5)) {
+      ]) {
         expect(root, contains(line));
       }
       expect(root, contains('final int? int_;'));

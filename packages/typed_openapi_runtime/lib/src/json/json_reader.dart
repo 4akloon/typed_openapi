@@ -134,14 +134,15 @@ final class JsonReader {
   }
 
   /// The properties whose keys are not in [known], read by [decode]: the
-  /// `additionalProperties` of a model with properties, in JSON order.
+  /// `additionalProperties` of a model with properties, in JSON order. The
+  /// map cannot be changed, as the model that holds it is immutable.
   Map<String, T> additional<T>(
     Set<String> known,
     T Function(Object? value) decode,
-  ) => {
+  ) => Map.unmodifiable({
     for (final MapEntry(:key, :value) in json.entries)
       if (!known.contains(key)) key: _decode(key, value, decode),
-  };
+  });
 
   void _checkPresent(String key) {
     if (json.containsKey(key)) return;

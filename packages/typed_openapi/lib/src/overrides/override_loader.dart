@@ -463,7 +463,10 @@ final class _OverrideReader {
     final type = _string(value, 'type', p, required: true);
     final import = _string(value, 'import', p, required: true);
     final converter = _string(value, 'converter', p);
+    // A converter that is written but unusable was reported: the record
+    // is not applied without it.
     if (type == null || import == null) return null;
+    if (converter == null && value.containsKey('converter')) return null;
     var valid = true;
     for (final (field, written) in [
       ('type', type),

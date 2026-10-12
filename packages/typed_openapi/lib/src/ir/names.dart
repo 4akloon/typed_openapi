@@ -187,6 +187,9 @@ final class NameScope {
   /// Whether [name] is given out.
   bool isTaken(String name) => _taken.contains(name);
 
+  /// The names given out so far, as a snapshot.
+  Set<String> get taken => {..._taken};
+
   /// Gives [name] to something that is not named in this scope (a type the
   /// user's code declares), so that a later claim of it is a collision.
   void reserve(String name) => _taken.add(name);

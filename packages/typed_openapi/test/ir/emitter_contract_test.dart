@@ -6,6 +6,7 @@ import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
 import 'package:typed_openapi/src/ir/dart_type.dart';
 import 'package:typed_openapi/src/ir/ir.dart';
 import 'package:typed_openapi/src/ir/ir_builder.dart';
+import 'package:typed_openapi/src/ir/names.dart';
 import 'package:typed_openapi/src/overrides/override_loader.dart';
 import 'package:typed_openapi/src/overrides/override_set.dart';
 
@@ -226,6 +227,73 @@ components:
       );
     });
 
+    test('variants of the same kind are told apart by their element', () {
+      final fixture = IrFixture(
+        r'''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /x:
+    get:
+      operationId: getX
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Holder'}
+components:
+  schemas:
+    Pet2:
+      oneOf:
+        - {type: array, items: {type: string}}
+        - {type: array, items: {type: integer}}
+        - {type: object, additionalProperties: {type: string}}
+        - {type: object, additionalProperties: {type: boolean}}
+        - {type: string}
+    Single:
+      oneOf:
+        - {type: array, items: {type: string}}
+        - {type: string}
+    Holder:
+      type: object
+      properties:
+        a: {$ref: '#/components/schemas/Pet2'}
+        b: {$ref: '#/components/schemas/Single'}
+''',
+        generation: const GenerationConfig(union: .structural),
+      );
+      final ir = build(fixture);
+      expect(declaration<UnionDecl>(ir, 'Pet2').variants.map((v) => v.name), [
+        'Pet2ListString',
+        'Pet2ListInt',
+        'Pet2MapString',
+        'Pet2MapBool',
+        'Pet2String',
+      ]);
+      expect(declaration<UnionDecl>(ir, 'Single').variants.map((v) => v.name), [
+        'SingleList',
+        'SingleString',
+      ]);
+      expect(
+        fixture.codes.where((c) => c.$1 == DiagnosticCode.nameCollision),
+        isEmpty,
+      );
+    });
+
+    test('a helper name that is taken has no override to suggest', () {
+      final fixture = IrFixture(spec, generation: const GenerationConfig());
+      build(fixture);
+      final reports = fixture.reported.where(
+        (d) => d.code == DiagnosticCode.nameCollision,
+      );
+      expect(reports, isNotEmpty);
+      expect(
+        reports.where((d) => d.fix?.contains('Override:') ?? false),
+        isEmpty,
+      );
+    });
+
     test('a group keeps its name before helper names (no TOA551 on it)', () {
       final fixture = IrFixture(
         spec,
@@ -241,6 +309,38 @@ components:
         isEmpty,
       );
     });
+  });
+
+  test('a field is never named like its class', () {
+    final fixture = IrFixture(r'''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /x:
+    get:
+      operationId: getX
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/2fa'}
+components:
+  schemas:
+    2fa:
+      type: object
+      properties:
+        2fa: {type: string}
+        other: {type: integer}
+''');
+    final ir = build(fixture);
+    final model = ir.declarations.whereType<ModelDecl>().single;
+    expect(model.name, r'$2Fa');
+    expect(model.fields.map((f) => f.name), [r'$2Fa_', 'other']);
+    expect(
+      fixture.codes.map((c) => c.$1),
+      contains(DiagnosticCode.nameReserved),
+    );
   });
 
   test('an optional JsonValue field of a PATCH body is tri-state (R7.1)', () {
@@ -269,6 +369,86 @@ paths:
       ('name', false),
     ]);
     expect(body.fields.first.type.code(ir.nameOf), 'Patch<JsonValue>?');
+  });
+
+  test('a constant field is never tri-state', () {
+    final fixture = IrFixture(
+      '''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /pets:
+    patch:
+      operationId: patchPet
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                kind: {const: pet}
+                name: {type: string}
+                other: {const: x}
+      responses:
+        '204': {description: ok}
+''',
+      generation: const GenerationConfig(triState: .optional),
+    );
+    final ir = build(fixture);
+    final body = declaration<ModelDecl>(ir, 'PatchPetRequest');
+    expect(body.fields.map((f) => (f.name, f.constValue, f.triState)), [
+      ('kind', 'pet', false),
+      ('name', null, true),
+      ('other', 'x', false),
+    ]);
+  });
+
+  test('an override cannot make a constant field tri-state', () {
+    final fixture = IrFixture(
+      r'''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /pets:
+    patch:
+      operationId: patchPet
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Body'}
+      responses:
+        '204': {description: ok}
+components:
+  schemas:
+    Body:
+      type: object
+      properties:
+        kind: {const: pet}
+        name: {type: string}
+''',
+      overrides: '''
+schemas:
+  Body:
+    properties:
+      kind: {triState: true}
+      name: {triState: true}
+''',
+    );
+    final ir = build(fixture);
+    final bodies = ir.declarations.whereType<ModelDecl>().where(
+      (d) => d.fields.any((f) => f.jsonKey == 'kind'),
+    );
+    for (final body in bodies) {
+      final kind = body.fields.firstWhere((f) => f.jsonKey == 'kind');
+      expect(kind.triState, isFalse, reason: body.name);
+    }
+    expect(
+      ir.declarations
+          .whereType<ModelDecl>()
+          .expand((d) => d.fields)
+          .where((f) => f.jsonKey == 'name' && f.triState),
+      isNotEmpty,
+    );
   });
 
   group('custom types must be writable as code (R6.8)', () {
@@ -325,6 +505,70 @@ schemas:
         [for (final d in bag.all) (d.code, d.pointer?.value)],
         [
           (DiagnosticCode.invalidOverride, '#/schemas/Pet/dartType/type'),
+        ],
+      );
+    });
+    test('type names are checked against the words of Dart (DartNames)', () {
+      for (final word in [
+        ...DartNames.reservedWords,
+        ...DartNames.builtInIdentifiers,
+      ]) {
+        expect(
+          DartTypeOverride.problem('type', word),
+          isNotNull,
+          reason: word,
+        );
+        expect(
+          DartTypeOverride.problem('converter', word),
+          isNotNull,
+          reason: word,
+        );
+      }
+      expect(DartTypeOverride.problem('type', 'Money'), isNull);
+      expect(DartTypeOverride.problem('type', 'import'), isNotNull);
+      expect(DartTypeOverride.problem('type', 'await'), isNotNull);
+    });
+
+    test('a record with a converter that is reported is not applied', () {
+      final bag = DiagnosticBag();
+      final set = OverrideLoader(bag).parse('''
+schemas:
+  Empty:
+    dartType: {type: Money, import: 'dart:core', converter: ''}
+  Number:
+    dartType: {type: Money, import: 'dart:core', converter: 5}
+  Reserved:
+    dartType: {type: Money, import: 'dart:core', converter: abstract}
+  Fine:
+    dartType: {type: Money, import: 'dart:core', converter: MoneyConverter}
+''', 'o.yaml')!;
+      expect(set.schemas.map((s) => (s.key, s.dartType?.converter)), [
+        ('Empty', null),
+        ('Number', null),
+        ('Reserved', null),
+        ('Fine', 'MoneyConverter'),
+      ]);
+      expect(set.schemas.map((s) => s.dartType == null), [
+        true,
+        true,
+        true,
+        false,
+      ]);
+      expect(
+        [for (final d in bag.all) (d.code, d.pointer?.value)],
+        [
+          (
+            DiagnosticCode.invalidOverride,
+            '#/schemas/Empty/dartType/converter',
+          ),
+          (
+            DiagnosticCode.invalidOverride,
+            '#/schemas/Number/dartType/converter',
+          ),
+          (
+            DiagnosticCode.invalidOverride,
+            '#/schemas/Reserved/dartType/converter',
+          ),
         ],
       );
     });

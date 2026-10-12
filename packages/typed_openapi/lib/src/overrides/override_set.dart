@@ -1,6 +1,7 @@
 import 'package:source_span/source_span.dart';
 
 import '../diagnostics/json_pointer.dart';
+import '../ir/names.dart';
 import '../load/spec_document.dart';
 import '../model/operation.dart';
 
@@ -39,17 +40,11 @@ final class DartTypeOverride {
       '"import" must be a package: or dart: library, such as '
           'package:app/money.dart.',
     'type' || 'converter'
-        when !_name.hasMatch(value) || _reserved.contains(value) =>
+        when !_name.hasMatch(value) ||
+            DartNames.reservedWords.contains(value) ||
+            DartNames.builtInIdentifiers.contains(value) =>
       '"$field" must be a Dart type name, such as Money.',
     _ => null,
-  };
-
-  static const _reserved = {
-    'assert', 'break', 'case', 'catch', 'class', 'const', 'continue', //
-    'default', 'do', 'else', 'enum', 'extends', 'false', 'final',
-    'finally', 'for', 'if', 'in', 'is', 'new', 'null', 'rethrow', 'return',
-    'super', 'switch', 'this', 'throw', 'true', 'try', 'var', 'void',
-    'while', 'with', 'dynamic', 'Function',
   };
 }
 

@@ -318,4 +318,100 @@ $schemas''');
     expect(ir.declarations, isEmpty);
     expect(fixture.codes.first.$1, DiagnosticCode.unionUndiscriminated);
   });
+
+  test('two variants with the same discriminator value are TOA456', () {
+    final fixture = IrFixture('''
+$head    Pet:
+      oneOf:
+        - \$ref: '#/components/schemas/Cat'
+        - {type: object, properties: {kind: {const: Cat}}}
+        - {type: object, properties: {kind: {const: z}}}
+        - {type: object, properties: {kind: {const: z}}}
+      discriminator: {propertyName: kind}
+''');
+    final (ir, _) = mapComponents(fixture, ['Pet']);
+    expect(
+      union(ir, 'Pet').variants.map((v) => v.discriminatorValues),
+      [
+        ['Cat'],
+        ['Cat'],
+        ['z'],
+        ['z'],
+      ],
+    );
+    expect(fixture.codes, [
+      (
+        DiagnosticCode.discriminatorValueDuplicate,
+        '#/components/schemas/Pet/oneOf/1',
+      ),
+      (
+        DiagnosticCode.discriminatorValueDuplicate,
+        '#/components/schemas/Pet/oneOf/3',
+      ),
+    ]);
+    expect(fixture.reported.first.message, contains('"Cat"'));
+  });
+
+  test('a mapping that gives each variant its own value is not reported', () {
+    final fixture = IrFixture('''
+$head    Pet:
+      oneOf:
+        - \$ref: '#/components/schemas/Cat'
+        - \$ref: '#/components/schemas/Dog'
+      discriminator:
+        propertyName: kind
+        mapping: {cat: Cat, dog: Dog, doggo: Dog}
+''');
+    final (ir, _) = mapComponents(fixture, ['Pet']);
+    expect(
+      union(ir, 'Pet').variants.map((v) => v.discriminatorValues),
+      [
+        ['cat'],
+        ['dog', 'doggo'],
+      ],
+    );
+    expect(fixture.codes, isEmpty);
+  });
+
+  test('TOA453 says why a nested union conflicts, not "share a type"', () {
+    final fixture = IrFixture('''
+$head    Id: {oneOf: [{type: string}, {type: integer}]}
+    Outer:
+      oneOf: [{\$ref: '#/components/schemas/Id'}, {type: boolean}]
+    Plain:
+      oneOf: [{type: string}, {type: string, format: uuid}]
+''');
+    mapComponents(fixture, ['Outer', 'Plain']);
+    final messages = {
+      for (final d in fixture.reported)
+        if (d.code == DiagnosticCode.unionUndiscriminated)
+          d.pointer!.value: d.message,
+    };
+    expect(
+      messages['#/components/schemas/Outer'],
+      allOf(contains('several JSON types'), isNot(contains('share'))),
+    );
+    expect(
+      messages['#/components/schemas/Plain'],
+      contains('variants that share a JSON type'),
+    );
+  });
+
+  test('an override on a union whose duplicates were dropped says so', () {
+    final fixture = IrFixture(
+      '''
+$head    Pet:
+      anyOf:
+        - \$ref: '#/components/schemas/Cat'
+        - \$ref: '#/components/schemas/Cat'
+''',
+      overrides: 'schemas:\n  Pet: {union: structural}\n',
+    );
+    mapComponents(fixture, ['Pet']);
+    final report = fixture.reported.singleWhere(
+      (d) => d.code == DiagnosticCode.overrideUnchanged,
+    );
+    expect(report.message, contains('duplicate variants were dropped'));
+    expect(report.message, isNot(contains('JSON types of their own')));
+  });
 }

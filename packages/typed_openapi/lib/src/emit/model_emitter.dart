@@ -36,7 +36,8 @@ final class ModelEmitter {
     final extra = model.additionalProperties;
     final known =
         model.direction != .response &&
-        fields.any((f) => _codec.hasEnum(f.type));
+        (fields.any((f) => _codec.hasEnum(f.type)) ||
+            (extra != null && _codec.hasEnum(extra)));
     _codec.imports.fromRuntime('immutable');
     out.doc(model.description);
     if (model.deprecated) out.line(deprecation);
@@ -89,8 +90,9 @@ final class ModelEmitter {
   }) {
     final params = [
       for (final field in fields) _parameter(field, typed: typed),
-      if (model.additionalProperties != null)
-        'this.${model.additionalPropertiesName} = const {}',
+      if (model.additionalProperties case final extra?)
+        '${typed && _codec.hasEnum(extra) ? '${_codec.known(MapType(extra))} ' : ''}'
+            'this.${model.additionalPropertiesName} = const {}',
     ];
     if (params.isEmpty) {
       out.line('$head();');

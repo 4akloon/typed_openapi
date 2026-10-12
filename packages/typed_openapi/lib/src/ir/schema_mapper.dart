@@ -188,8 +188,8 @@ final class SchemaMapper {
                   '"$name".'
             : 'Another type is named "$candidate"; $what is named "$name".',
         owner.id.location,
+        // No override: naming the owner would not change a helper's name.
         fix: 'Rename the other type, or rename this one.',
-        override: _typeOverride(owner, owner.name ?? candidate),
       );
     }
     return name;
@@ -447,9 +447,19 @@ final class SchemaMapper {
   static String _valueText(Object? value) =>
       value is String ? "'${value.replaceAll("'", r"\'")}'" : '$value';
 
-  /// The type of a declaring [schema] inside a replaced schema: `JsonValue`.
+  /// The type of a declaring [schema] inside a replaced schema: nothing is
+  /// declared, so the type is that of its JSON value (a map for an object,
+  /// a scalar for an enum), which the custom type's `fromJson` takes;
+  /// `JsonValue` when the schema may hold values of several JSON types.
   DartType _nothingDeclared(SchemaObject schema) =>
-      const CoreType(.json).withNullable(_isNullable(schema));
+      switch (_jsonKind(schema, {})) {
+        .object => const MapType(CoreType(.json)),
+        .string => const CoreType(.string),
+        .integer => const CoreType(.integer),
+        .number => const CoreType(.number),
+        .boolean => const CoreType(.boolean),
+        _ => const CoreType(.json),
+      }.withNullable(_isNullable(schema));
 
   /// The JSON side of [schema], which a custom type replaces (R6.8): scalars,
   /// lists and maps; a schema that would be a declaration is `JsonValue`, so
@@ -620,11 +630,15 @@ final class SchemaMapper {
     final (conflicts, distinct) = _conflicts(branches);
     if (conflicts.length < distinct) return false;
     final kind = schema.oneOf.isNotEmpty ? 'oneOf' : 'anyOf';
+    // A variant without one JSON type conflicts with every other variant.
+    final reason = conflicts.values.contains(null)
+        ? 'a variant that can hold values of several JSON types (a union '
+              'without a discriminator, or a schema without a type)'
+        : 'variants that share a JSON type';
     _context.report(
       .unionUndiscriminated,
-      'This $kind has no discriminator and its variants share a JSON type, '
-      'so a value cannot be told apart by its type; it is generated as '
-      'JsonValue.',
+      'This $kind has no discriminator and $reason, so a value cannot be '
+      'told apart by its type; it is generated as JsonValue.',
       schema.location,
       fix:
           'Add a discriminator at the source, or generate a union that tries '
@@ -827,9 +841,16 @@ final class SchemaMapper {
         additionalSchema == null || additionalSchema is BooleanSchema
         ? null
         : _map(additionalSchema, NameHint._under(pending, 'Value'));
-    pending.build = (name, _) {
+    pending.build = (name, types) {
+      // A field named like a type of the library (its own class, or one a
+      // field has) would hide the type inside the class (`other is $2Fa`):
+      // only a name that starts with `$` is both.
       final scope = NameScope(
-        reserved: {...DartNames.reservedWords, ...DartNames.modelMembers},
+        reserved: {
+          ...DartNames.reservedWords,
+          ...DartNames.modelMembers,
+          ...types.taken,
+        },
         reservedSuffix: '_',
       );
       final named = [
@@ -864,8 +885,11 @@ final class SchemaMapper {
               valueType: field.valueType,
               location: field.location,
               required: field.required,
+              // A constant is not a parameter, so it is never tri-state,
+              // whatever the rule or the override says.
               triState:
                   direction != .response &&
+                  field.constValue == null &&
                   (field.override?.triState ?? _isTriState(field, pending)),
               readOnly: field.readOnly,
               writeOnly: field.writeOnly,
@@ -1217,6 +1241,7 @@ final class SchemaMapper {
         ? allConflicts
         : const {};
     final variants = <_Variant>[];
+    var droppedDuplicate = false;
     _Variant? shared;
     void share(JsonKind kind, Schema branch, [int? at]) {
       if (shared == null) {
@@ -1243,6 +1268,7 @@ final class SchemaMapper {
           branch.location,
           fix: 'Remove the duplicate variant at the source.',
         );
+        droppedDuplicate = true;
         continue;
       }
       variants.add(
@@ -1299,6 +1325,9 @@ final class SchemaMapper {
         schema,
         dispatch == .discriminator
             ? 'the union has a discriminator'
+            : droppedDuplicate && variants.length < 2
+            ? 'the duplicate variants were dropped (TOA454), and one variant '
+                  'is left'
             : 'the variants of the union have JSON types of their own',
       );
     }
@@ -1355,6 +1384,23 @@ final class SchemaMapper {
         if (values.containsKey(target)) continue;
         if (_componentKey(target) case final key?) values[target] = [key];
       }
+      final owners = <String, _Variant>{};
+      for (final variant in variants) {
+        final key = variant.target ?? variant.branch.location;
+        for (final value in values[key] ?? const <String>[]) {
+          if (owners.putIfAbsent(value, () => variant) == variant) continue;
+          _context.report(
+            .discriminatorValueDuplicate,
+            'Discriminator value "$value" also selects an earlier variant; '
+            'the earlier one decodes it, so this variant is never picked by '
+            'that value.',
+            variant.branch.location,
+            fix:
+                'Give each variant its own discriminator value, in the '
+                'mapping or in the const of the property.',
+          );
+        }
+      }
       if (discriminator.defaultMapping case final ref?) {
         final target = _mappingTarget(ref, schema.location.document);
         for (final variant in variants) {
@@ -1375,39 +1421,44 @@ final class SchemaMapper {
     }
     final exhaustive =
         _context.overrides.schemaAt(schema.location)?.exhaustive ?? true;
-    pending.build = (name, types) => UnionDecl(
-      id: pending.id,
-      name: name,
-      kind: kind,
-      dispatch: dispatch,
-      discriminator: property,
-      defaultVariant: fallback,
-      exhaustive: exhaustive,
-      description: schema.description,
-      deprecated: schema.deprecated,
-      variants: [
-        for (final variant in variants)
-          UnionVariantIr(
-            variant.type,
-            discriminatorValues: [
-              ...?values[variant.target ?? variant.branch.location],
-            ]..sort(),
-            name: _helperName(
-              types,
-              _variantClass(name, variant.type),
-              pending,
-              'a variant class of $name',
+    pending.build = (name, types) {
+      final classes = _variantClasses(name, [
+        for (final variant in variants) variant.type,
+      ]);
+      return UnionDecl(
+        id: pending.id,
+        name: name,
+        kind: kind,
+        dispatch: dispatch,
+        discriminator: property,
+        defaultVariant: fallback,
+        exhaustive: exhaustive,
+        description: schema.description,
+        deprecated: schema.deprecated,
+        variants: [
+          for (final (i, variant) in variants.indexed)
+            UnionVariantIr(
+              variant.type,
+              discriminatorValues: [
+                ...?values[variant.target ?? variant.branch.location],
+              ]..sort(),
+              name: _helperName(
+                types,
+                classes[i],
+                pending,
+                'a variant class of $name',
+              ),
+              jsonKinds: [...variant.kinds]..sort((a, b) => a.index - b.index),
             ),
-            jsonKinds: [...variant.kinds]..sort((a, b) => a.index - b.index),
-          ),
-      ],
-      unknownName: _helperName(
-        types,
-        '${name}Unknown',
-        pending,
-        'the unknown variant class of $name',
-      ),
-    );
+        ],
+        unknownName: _helperName(
+          types,
+          '${name}Unknown',
+          pending,
+          'the unknown variant class of $name',
+        ),
+      );
+    };
   }
 
   /// How a diagnostic names the branch [index] of a union: the schema it
@@ -1470,17 +1521,33 @@ final class SchemaMapper {
     ];
   }
 
+  /// The classes that wrap the variants of [types] in the union [union], in
+  /// order: [_variantClass] names, except that variants whose short names
+  /// are the same (a list of strings and a list of integers) are named by
+  /// their whole type (`PetListString`, `PetListInt`).
+  List<String> _variantClasses(String union, List<DartType> types) {
+    final short = [for (final type in types) _variantClass(union, type)];
+    return [
+      for (final (i, type) in types.indexed)
+        if (short.where((name) => name == short[i]).length > 1)
+          _variantClass(union, type, deep: true)
+        else
+          short[i],
+    ];
+  }
+
   /// The class that wraps a variant of [type] in the union [union]: the
   /// union's name and the variant's (`PetCat`), or the variant's name and
   /// `Case` when it starts with the union's already (`PetVariant1Case` for
   /// an inline variant, `PetCatCase` for a variant named `PetCat`). A
-  /// built-in type is named by its kind (`IdOrNameString`, `IdOrNameInt`).
-  String _variantClass(String union, DartType type) {
-    final label = switch (type) {
+  /// built-in type is named by its kind (`IdOrNameString`, `IdOrNameInt`);
+  /// with [deep], a list or a map also by its element (`IdOrNameListInt`).
+  String _variantClass(String union, DartType type, {bool deep = false}) {
+    String label(DartType type) => switch (type) {
       NamedType(:final id) => _pending[id]?.name ?? _fallbackName,
       CustomType(:final type) => type,
-      ListType() => 'List',
-      MapType() => 'Map',
+      ListType(:final item) => deep ? 'List${label(item)}' : 'List',
+      MapType(:final value) => deep ? 'Map${label(value)}' : 'Map',
       PatchType() => 'Patch',
       CoreType(:final kind) => switch (kind) {
         .integer => 'Int',
@@ -1494,7 +1561,8 @@ final class SchemaMapper {
         .json => 'Json',
       },
     };
-    return label.startsWith(union) ? '${label}Case' : '$union$label';
+    final name = label(type);
+    return name.startsWith(union) ? '${name}Case' : '$union$name';
   }
 
   /// The one value the property [name] of [schema] can hold, when it is a

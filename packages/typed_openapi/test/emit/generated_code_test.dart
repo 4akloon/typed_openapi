@@ -160,7 +160,7 @@ linter:
 
 /// Classes of another library extend generated ones, and a switch over a
 /// sealed base is still exhaustive.
-const _extendProgram = r'''
+const _extendProgram = '''
 import 'package:fixture/pets_raw/models.dart';
 
 class MyCat extends PetCat {

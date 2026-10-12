@@ -284,7 +284,8 @@ schemas:
     final cost = (ir.declarations.single as ModelDecl).fields[2].valueType;
     expect(cost, isA<CustomType>());
     expect((cost as CustomType).converter, 'MoneyConverter');
-    expect(cost.json, const CoreType(.json));
+    // An object schema: its JSON side is a map, which `fromJson` takes.
+    expect(cost.json, const MapType(CoreType(.json)));
   });
 
   test('maps a mixed type or mixed enum to JsonValue with a warning', () {
@@ -708,7 +709,7 @@ schemas:
         'plain(plain): String?',
       ]);
       final owner = (ir.declarations.single as ModelDecl).fields[2].valueType;
-      expect((owner as CustomType).json, const CoreType(.json));
+      expect((owner as CustomType).json, const MapType(CoreType(.json)));
     });
 
     test('maps a recursive structural alias with a custom type without '

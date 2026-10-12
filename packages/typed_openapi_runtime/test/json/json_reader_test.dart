@@ -454,6 +454,8 @@ void main() {
       final rest = r.additional({'id'}, JsonReader.asInt);
       expect(rest, {'b': 2, 'a': 3});
       expect(rest.keys, ['b', 'a']);
+      expect(() => rest['c'] = 4, throwsUnsupportedError);
+      expect(rest.clear, throwsUnsupportedError);
       final wrong = failure(
         () => const JsonReader({
           'x': 'no',

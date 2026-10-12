@@ -241,7 +241,8 @@ enum DiagnosticCode {
   ),
 
   /// A `oneOf` or `anyOf` without a discriminator has variants of the same
-  /// JSON type, so a value of that type cannot be told apart (R9.2): the
+  /// JSON type, or a variant that can hold several (a nested union without a
+  /// discriminator), so a value cannot be told apart (R9.2): the
   /// union keeps it as `JsonValue` in one variant (`PetJson`), or, when no
   /// variant has a JSON type of its own, is `JsonValue` itself. An override
   /// `union: structural` (or the config key `union`) generates a union that
@@ -260,6 +261,16 @@ enum DiagnosticCode {
   /// `anyOf: [string, {enum: ['']}]`). An integer enum next to a plain
   /// `number` is dropped too; a number enum next to an `integer` is not.
   unionBranchSubsumed('TOA455', 'union-branch-subsumed', .info),
+
+  /// Two variants of a union with a discriminator are selected by the same
+  /// value (a `const` of the property, a mapping entry or the implicit name):
+  /// the earlier variant decodes it, and the later one is never picked by
+  /// that value.
+  discriminatorValueDuplicate(
+    'TOA456',
+    'discriminator-value-duplicate',
+    .warning,
+  ),
 
   /// A variable of the path template has no path parameter; one is added.
   missingPathParameter('TOA501', 'missing-path-parameter', .warning),

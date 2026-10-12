@@ -72,6 +72,11 @@ components:
       anyOf:
         - {type: object, properties: {r: {type: number}}, required: [r]}
         - {type: object, properties: {w: {type: number}}, required: [w]}
+    "2fa":
+      type: object
+      properties:
+        "2fa": {type: string}
+        other: {type: integer}
     Empty: {type: object, properties: {}}
     OnlyExtra:
       type: object
@@ -88,6 +93,7 @@ components:
         meta: {}
         status: {$ref: '#/components/schemas/Status'}
         tags: {type: [array, 'null'], items: {type: string}}
+      additionalProperties: {$ref: '#/components/schemas/Level'}
     Everything:
       type: object
       description: |
@@ -128,6 +134,7 @@ components:
         idOrName: {$ref: '#/components/schemas/IdOrName'}
         shape: {$ref: '#/components/schemas/Shape'}
         empty: {$ref: '#/components/schemas/Empty'}
+        twoFactor: {$ref: '#/components/schemas/2fa'}
         onlyExtra: {$ref: '#/components/schemas/OnlyExtra'}
         node: {$ref: '#/components/schemas/Node'}
         name: {type: string, minLength: 1, maxLength: 64, pattern: '^[a-z`]+$', default: rex}

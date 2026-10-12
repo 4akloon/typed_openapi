@@ -222,8 +222,10 @@ final class CustomType extends DartType {
   ///
   /// It never names a declaration: a replaced schema is not generated, so
   /// [json] is made of scalars, lists and maps, with `JsonValue` for
-  /// whatever would have been a model, an enum or a union (`List<JsonValue>`
-  /// for an array alias of models).
+  /// whatever would have been a model, an enum or a union that may hold
+  /// several JSON types (`List<JsonValue>` for an array alias of models); a
+  /// replaced object is `Map<String, JsonValue>` and a replaced enum its
+  /// scalar.
   final DartType json;
 
   @override
