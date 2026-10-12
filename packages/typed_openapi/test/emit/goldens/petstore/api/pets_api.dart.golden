@@ -13,6 +13,7 @@ import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'
         FileUpload,
         HeaderParameter,
         JsonReader,
+        JsonValue,
         MultipartBody,
         MultipartPart,
         OperationInfo,
@@ -243,6 +244,9 @@ class PetsApi {
   ///
   /// [limit], when not sent, is `20` on the server:
   /// How many.
+  ///
+  /// [extra]:
+  /// Any JSON; optional.
   Future<Result<List<Pet>, Problem>> listPets({
     int? limit,
     List<String>? tags,
@@ -250,6 +254,7 @@ class PetsApi {
     Map<String, String>? filter,
     String? next,
     Map<String, int>? where,
+    JsonValue extra = const JsonValue(null),
     required String xTrace,
     String? session,
     CallOptions? call,
@@ -263,6 +268,7 @@ class PetsApi {
         QueryParameter('filter', filter, style: .deepObject, explode: true),
         QueryParameter('next', next, allowReserved: true),
         QueryParameter('where', where == null ? null : jsonEncode(where)),
+        QueryParameter('extra', extra),
       ],
       headers: [HeaderParameter('X-Trace', xTrace)],
       cookies: [CookieParameter('session', session)],
@@ -452,6 +458,6 @@ class UploadPhotoRequest {
     MultipartPart.file('file', file, contentType: 'image/png'),
     for (final file in [...?extra]) MultipartPart.file('extra', file),
     MultipartPart.value('caption', caption),
-    MultipartPart.value('meta', meta?.toJson()),
+    if (meta case final value?) MultipartPart.value('meta', value.toJson()),
   ];
 }

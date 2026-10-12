@@ -70,6 +70,14 @@ void main() {
       expect(code.docLines('a\x01b', 80), ['ab']);
     });
 
+    test('never breaks a code span when it wraps (corpus: ditto)', () {
+      expect(code.docLines('Both `{{ thing-json:<json-pointer> }}` work', 24), [
+        'Both',
+        '`{{ thing-json:<json-pointer> }}`',
+        'work',
+      ]);
+    });
+
     test('neutralises doc directives', () {
       expect(code.docLines('See {@link Foo} and {@template t}', 80), [
         r'See \{@link Foo} and \{@template t}',

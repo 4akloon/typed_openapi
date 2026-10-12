@@ -114,9 +114,6 @@ final class OperationEmitter {
         ], '],');
       }
       if (operation.security.isNotEmpty) {
-        _codec.imports
-          ..fromRuntime('SecurityUse')
-          ..fromRuntime('SecurityScheme');
         out.line('security: [');
         out.indented(() {
           for (final alternative in operation.security) {
@@ -130,6 +127,9 @@ final class OperationEmitter {
   }
 
   String _use(SecurityUseIr use) {
+    _codec.imports
+      ..fromRuntime('SecurityUse')
+      ..fromRuntime('SecurityScheme');
     final scheme = use.scheme;
     final arguments = [
       _code.string(scheme.name),
@@ -164,10 +164,13 @@ final class OperationEmitter {
     }
     final arguments = [
       for (final parameter in operation.parameters)
-        '${parameter.required ? 'required ' : ''}'
-            '${_codec.known(parameter.type)} ${parameter.name}',
+        _argument(
+          _codec.known(parameter.type),
+          parameter.name,
+          isRequired: parameter.required,
+        ),
       if (_request.bodyType(operation) case final body?)
-        '${operation.body!.required ? 'required ' : ''}$body body',
+        _argument(body, 'body', isRequired: operation.body!.required),
       'CallOptions? call',
     ];
     out.list(
@@ -200,6 +203,19 @@ final class OperationEmitter {
       ..line('),')
       ..line('$decoder,')
       ..line('call: call,');
+  }
+
+  /// The declaration of a named argument: `required` when it is, and
+  /// `JsonValue`, which is never nullable, defaults to JSON `null` when it
+  /// is optional.
+  static String _argument(
+    String type,
+    String name, {
+    required bool isRequired,
+  }) {
+    if (isRequired) return 'required $type $name';
+    if (type == 'JsonValue') return '$type $name = const JsonValue(null)';
+    return '$type $name';
   }
 
   /// The doc comment of a method: summary, description, method and path,

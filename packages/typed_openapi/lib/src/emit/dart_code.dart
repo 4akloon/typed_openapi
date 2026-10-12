@@ -95,7 +95,9 @@ final class DartCode {
         lines.add(line);
         continue;
       }
-      lines.addAll(_wrap(_escapeDoc(line), width < 20 ? 20 : width));
+      // A code span stays on one line: the analyzer reads the text of a
+      // span that starts on the line before as Markdown.
+      lines.addAll(proseLines(_escapeDoc(line), width));
     }
     while (lines.isNotEmpty && lines.last.isEmpty) {
       lines.removeLast();

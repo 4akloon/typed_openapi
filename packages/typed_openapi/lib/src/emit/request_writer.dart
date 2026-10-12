@@ -50,10 +50,7 @@ final class RequestWriter {
         'allowReserved: true',
     ];
     final encoded = switch (parameter.contentType) {
-      final type? when _isJson(type) => _jsonText(
-        value,
-        parameter.type.nullable,
-      ),
+      final type? when _isJson(type) => _jsonText(parameter),
       _ => value,
     };
     return '$runtime(${[_code.string(parameter.wireName), encoded, ...options].join(', ')})';
@@ -62,12 +59,24 @@ final class RequestWriter {
   /// The JSON form of [name], a value of [type].
   String _json(DartType type, String name) => _codec.encodeNullable(type, name);
 
-  String _jsonText(String value, bool nullable) {
+  /// The JSON text of a parameter with a JSON `content`; an absent value
+  /// (`null`, also `JsonValue(null)`) is not sent.
+  String _jsonText(ParameterIr parameter) {
     _codec.imports.show('dart:convert', 'jsonEncode');
-    return nullable
-        ? '$value == null ? null : jsonEncode($value)'
-        : 'jsonEncode($value)';
+    final ParameterIr(:name, :type) = parameter;
+    if (type case CoreType(kind: .json)) {
+      return '$name.isNull ? null : jsonEncode($name)';
+    }
+    if (!type.nullable) return 'jsonEncode(${_codec.encode(type, name)})';
+    return '$name == null ? null : '
+        'jsonEncode(${_codec.encode(type.withNullable(false), name)})';
   }
+
+  /// The JSON form of the body inside its null check: an optional body is
+  /// not `null` there.
+  String _bodyJson(DartType type, {required bool isOptional}) => isOptional
+      ? _codec.encode(type.withNullable(false), 'body')
+      : _json(type, 'body');
 
   /// The type of the `body` argument; null without a body.
   String? bodyType(OperationIr operation) {
@@ -111,13 +120,13 @@ final class RequestWriter {
             : 'MultipartBody(body.toParts())';
       case .multipart:
         _codec.imports.fromRuntime('MultipartBody');
-        final json = _json(type!, 'body');
+        final json = _bodyJson(type!, isOptional: optional);
         value = optional
             ? 'body == null ? null : MultipartBody.fromJson($json)'
             : 'MultipartBody.fromJson($json)';
       case .form:
         _codec.imports.fromRuntime('FormBody');
-        final json = _json(type!, 'body');
+        final json = _bodyJson(type!, isOptional: optional);
         final encoding = [
           for (final e in body.encoding)
             if (_formEncoding(e) case final code?)

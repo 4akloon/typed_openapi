@@ -358,7 +358,7 @@ final class UnionEmitter {
   /// object (the one it keeps as received may be anything), so the
   /// discriminator is added to an object only.
   String _toJson(UnionDecl decl, UnionVariantIr variant) {
-    final encoded = _codec.encode(variant.type, 'value');
+    final encoded = _codec.encodeNullable(variant.type, 'value');
     if (!_remembers(decl, variant)) return encoded;
     final key = _code.string(decl.discriminator!);
     final tag = switch (_firstValue(variant)) {

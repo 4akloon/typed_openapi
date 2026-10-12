@@ -51,8 +51,38 @@ paths:
                 "*/ injected": {type: string, format: binary}
                 toParts: {type: string}
                 hashCode: {type: integer}
+                any: {}
       responses:
         "204": {description: ok}
+  /d:
+    get:
+      operationId: anonymous
+      tags: [anon]
+      security: [{}]
+      parameters:
+        - {name: j, in: query, content: {application/json: {schema: {type: object, properties: {a: {type: string}}}}}}
+        - {name: jv, in: query, content: {application/json: {schema: {}}}}
+        - {name: jr, in: query, required: true, content: {application/json: {schema: {$ref: '#/components/schemas/Node'}}}}
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Maybe'}}}}
+    post:
+      operationId: optionalBodies
+      tags: [anon]
+      security: [{}]
+      requestBody:
+        content:
+          multipart/form-data:
+            schema: {oneOf: [{$ref: '#/components/schemas/Node'}, {type: string}]}
+      responses: {"204": {description: ok}}
+    put:
+      operationId: optionalForm
+      tags: [anon]
+      security: [{}]
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema: {type: [object, 'null'], properties: {a: {type: string}}}
+      responses: {"204": {description: ok}}
 components:
   securitySchemes:
     "k'ey": {type: apiKey, name: "X-'$k", in: header}
@@ -61,6 +91,13 @@ components:
     Options: {type: object, properties: {b: {type: string}}}
     Headers: {type: object, properties: {c: {type: string}}}
     Dio: {type: object, properties: {d: {type: string}}}
+    Maybe:
+      oneOf:
+        - $ref: '#/components/schemas/NullableNode'
+        - {type: string}
+    NullableNode:
+      type: [object, 'null']
+      properties: {a: {type: string}}
     Node:
       type: object
       properties:

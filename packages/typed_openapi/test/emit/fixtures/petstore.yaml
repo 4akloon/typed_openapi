@@ -22,6 +22,7 @@ paths:
         - {name: where, in: query, content: {application/json: {schema: {type: object, additionalProperties: {type: integer}}}}}
         - {name: X-Trace, in: header, required: true, schema: {type: string}}
         - {name: session, in: cookie, schema: {type: string}}
+        - {name: extra, in: query, schema: {}, description: Any JSON; optional.}
       responses:
         "200":
           description: The pets.

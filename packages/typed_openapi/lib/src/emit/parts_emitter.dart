@@ -35,8 +35,7 @@ final class PartsEmitter {
         out
           ..prose('Creates the parts.')
           ..list('const $name({', [
-            for (final p in parts)
-              '${p.required ? 'required ' : ''}this.${p.name}',
+            for (final part in parts) _parameter(part),
           ], '});');
         for (final part in parts) {
           out.line();
@@ -54,6 +53,16 @@ final class PartsEmitter {
         });
         out.line('];');
       });
+  }
+
+  /// The constructor parameter of [part]: `required` when it is, and a
+  /// `JsonValue`, which is never nullable, defaults to JSON `null`.
+  static String _parameter(PartIr part) {
+    if (part.required) return 'required this.${part.name}';
+    if (part.type case CoreType(kind: .json)) {
+      return 'this.${part.name} = const JsonValue(null)';
+    }
+    return 'this.${part.name}';
   }
 
   /// The Dart type of a part: a binary string is a `FileUpload`, also as
@@ -91,6 +100,12 @@ final class PartsEmitter {
       return 'for (final file in [$files]) '
           '${item.nullable ? 'if (file != null) ' : ''}'
           'MultipartPart.file($wire, file$contentType)';
+    }
+    // A field is not promoted: a nullable one is read into a local.
+    if (type.nullable && !_codec.isIdentity(type)) {
+      return 'if (${part.name} case final value?) '
+          'MultipartPart.value($wire, '
+          '${_codec.encode(type.withNullable(false), 'value')}$contentType)';
     }
     return 'MultipartPart.value($wire, '
         '${_codec.encodeNullable(type, part.name)}$contentType)';
