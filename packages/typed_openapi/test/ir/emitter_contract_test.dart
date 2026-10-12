@@ -7,6 +7,7 @@ import 'package:typed_openapi/src/ir/dart_type.dart';
 import 'package:typed_openapi/src/ir/ir.dart';
 import 'package:typed_openapi/src/ir/ir_builder.dart';
 import 'package:typed_openapi/src/overrides/override_loader.dart';
+import 'package:typed_openapi/src/overrides/override_set.dart';
 
 import '../helpers/ir_fixture.dart';
 import '../helpers/mapping.dart';
@@ -191,7 +192,10 @@ components:
     test('enums and unions get their helper class names', () {
       final fixture = IrFixture(
         spec,
-        generation: const GenerationConfig(groupTemplate: '{Tag}'),
+        generation: const GenerationConfig(
+          groupTemplate: '{Tag}',
+          union: UnionMode.structural,
+        ),
       );
       final ir = build(fixture);
       final status = declaration<EnumDecl>(ir, 'Status');
@@ -225,7 +229,10 @@ components:
     test('a group keeps its name before helper names (no TOA551 on it)', () {
       final fixture = IrFixture(
         spec,
-        generation: const GenerationConfig(groupTemplate: '{Tag}'),
+        generation: const GenerationConfig(
+          groupTemplate: '{Tag}',
+          union: UnionMode.structural,
+        ),
       );
       final ir = build(fixture);
       expect(ir.groups.single.name, 'PetUnknown');

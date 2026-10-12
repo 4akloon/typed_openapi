@@ -94,6 +94,7 @@ final class GenerationConfig {
     this.formats = const {},
     this.schemas = const {},
     this.triState = .patch,
+    this.union = .raw,
     this.defaultErrorSchema,
     this.defaultErrorSchemaPointer,
     this.defaultErrorSchemaSpan,
@@ -160,6 +161,11 @@ final class GenerationConfig {
   /// `tri_state`.
   final TriStateRule triState;
 
+  /// `union`: how a `oneOf` or `anyOf` without a discriminator whose
+  /// variants share a JSON type is generated (R9.2); a schema's override
+  /// `union` wins.
+  final UnionMode union;
+
   /// `errors.default_schema`: the `components.schemas` key of the body of
   /// error responses that document none.
   final String? defaultErrorSchema;
@@ -204,6 +210,7 @@ final class GenerationConfig {
     'formats': _sorted(formats),
     'schemas': _sorted(schemas),
     'tri_state': triState.name,
+    'union': union.name,
     'default_schema': defaultErrorSchema == null
         ? null
         : [defaultErrorSchema, defaultErrorSchemaPointer?.value],

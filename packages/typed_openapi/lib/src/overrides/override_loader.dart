@@ -160,6 +160,7 @@ final class _OverrideReader {
     'name',
     'exclude',
     'exhaustive',
+    'union',
     'dartType',
     'properties',
   };
@@ -170,6 +171,7 @@ final class _OverrideReader {
     'exclude',
     'dartType',
     'triState',
+    'union',
   };
   static const _dartTypeKeys = {'type', 'import', 'converter'};
 
@@ -347,6 +349,7 @@ final class _OverrideReader {
       name: _string(entry, 'name', at),
       exclude: _bool(entry, 'exclude', at),
       exhaustive: _bool(entry, 'exhaustive', at),
+      union: _unionMode(entry, at),
       dartType: _dartType(entry, at),
       properties: properties,
     );
@@ -367,6 +370,7 @@ final class _OverrideReader {
       exclude: _bool(entry, 'exclude', at),
       dartType: _dartType(entry, at),
       triState: _bool(entry, 'triState', at),
+      union: _unionMode(entry, at),
     );
   }
 
@@ -440,6 +444,16 @@ final class _OverrideReader {
           'must be true, false or an object, or null to remove it',
         _ => 'must be a non-empty list, or null to remove it',
       };
+
+  UnionMode? _unionMode(Map<String, Object?> entry, JsonPointer at) {
+    if (!entry.containsKey('union')) return null;
+    final value = entry['union'];
+    for (final mode in UnionMode.values) {
+      if (value == mode.name) return mode;
+    }
+    _invalid('"union" must be raw or structural.', at.child('union'));
+    return null;
+  }
 
   DartTypeOverride? _dartType(Map<String, Object?> entry, JsonPointer at) {
     final value = _map(entry, 'dartType', at);

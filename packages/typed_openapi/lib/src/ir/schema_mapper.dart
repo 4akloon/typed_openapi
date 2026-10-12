@@ -496,6 +496,14 @@ final class SchemaMapper {
       );
       return const CoreType(.json);
     }
+    if (values == null) {
+      if (_branches(schema) case (
+        _,
+        final branches,
+      ) when _isRawUnion(schema, branches)) {
+        return const CoreType(.json);
+      }
+    }
     final (names, descriptions) = values == null
         ? (null, null)
         : _enumLabels(schema, values);
@@ -533,10 +541,119 @@ final class SchemaMapper {
     return NamedType(id, nullable: nullable);
   }
 
+  /// Whether the union [schema] of [branches] is generated as `JsonValue`
+  /// (R9.2): it has no discriminator, its variants cannot be told apart by
+  /// their JSON type, and its override `union` (or else the config's) is
+  /// `raw`. Reported, with the override that changes it (TOA453).
+  bool _isRawUnion(SchemaObject schema, List<Schema> branches) {
+    if (schema.discriminator?.propertyName != null) return false;
+    if (_byJsonType(branches)) return false;
+    final overrides = _context.overrides;
+    final mode =
+        overrides.schemaAt(schema.location)?.union ??
+        overrides.propertyAt(schema.location)?.union ??
+        _context.config.union;
+    if (mode == .structural) return false;
+    final kind = schema.oneOf.isNotEmpty ? 'oneOf' : 'anyOf';
+    _context.report(
+      .unionUndiscriminated,
+      'This $kind has no discriminator and its variants share a JSON type, '
+      'so a value cannot be told apart by its type; it is generated as '
+      'JsonValue.',
+      schema.location,
+      fix:
+          'Add a discriminator at the source, or generate a union that tries '
+          'the variants with union: structural (an override of the schema, '
+          'or the config key for every such union).',
+      override: _context.schemaOverride(schema.location, {
+        'union': 'structural',
+      }),
+    );
+    return true;
+  }
+
+  /// Whether every one of [branches] has a JSON type of its own (R9.3);
+  /// `integer` and `number` are told apart by the value. A branch that is
+  /// the same schema as an earlier one is a duplicate (TOA454), not a
+  /// second variant.
+  bool _byJsonType(List<Schema> branches) {
+    final kinds = <_JsonKind>{};
+    final seen = <SpecLocation>{};
+    for (final branch in branches) {
+      final location = _resolved(branch)?.location;
+      if (location != null && !seen.add(location)) continue;
+      final kind = _jsonKind(branch, {});
+      if (kind == null || !kinds.add(kind)) return false;
+    }
+    return true;
+  }
+
+  /// The JSON type every value of [schema] has, or null when it may have
+  /// several (or any); [seen] stops a cycle.
+  _JsonKind? _jsonKind(Schema schema, Set<SpecLocation> seen) {
+    final object = _resolved(schema);
+    if (object == null || !seen.add(object.location)) return null;
+    if (SchemaShapes.enumValues(object) case final values?) {
+      return switch (_enumKind(object, values)) {
+        .string => .string,
+        .integer => .integer,
+        .number => .number,
+        .boolean => .boolean,
+        null => null,
+      };
+    }
+    if (_branches(object) case (_, final branches)) {
+      final kinds = {
+        for (final b in branches) _jsonKind(b, {...seen}),
+      };
+      return kinds.length == 1 ? kinds.single : null;
+    }
+    if (SchemaShapes.singleOf(object) case final single?) {
+      return _jsonKind(single, seen);
+    }
+    if (object.properties.isNotEmpty || object.allOf.isNotEmpty) {
+      return .object;
+    }
+    final types = [
+      for (final type in object.types)
+        if (type != SchemaType.nullType) type,
+    ];
+    if (types.length > 1) return null;
+    return switch (types.firstOrNull) {
+      .string => .string,
+      .integer => .integer,
+      .number => .number,
+      .boolean => .boolean,
+      .array => .array,
+      .object => .object,
+      null || SchemaType.nullType =>
+        object.items != null
+            ? .array
+            : object.additionalProperties != null
+            ? .object
+            : null,
+    };
+  }
+
+  /// Reports the override `union` of [schema], which has no effect on
+  /// [what].
+  void _reportUnionOverride(SchemaObject schema, String what) {
+    final entry = _context.overrides.schemaAt(schema.location);
+    if (entry == null || entry.union == null) return;
+    _context.reportAtOverride(
+      .overrideUnchanged,
+      'The union of this override has no effect: $what.',
+      entry,
+      'union',
+      fix: 'Remove it.',
+    );
+  }
+
   void _model(SchemaObject schema, _Pending pending) {
     final fields = <_Field>[];
     final (properties, required, additionalSchema) = _merged(schema);
     _reportBranchesBesideModel(schema);
+    _reportUnionOverride(schema, 'the schema is a model, not a union');
     if (_context.overrides.schemaAt(schema.location) case final entry?
         when entry.exhaustive != null) {
       _context.reportAtOverride(
@@ -961,18 +1078,43 @@ final class SchemaMapper {
         fix: 'Put the shared properties into every branch at the source.',
       );
     }
-    final variants = <(DartType, SpecLocation?, SpecLocation)>[
-      for (final (i, branch) in branches.indexed)
-        (
-          _map(branch, NameHint._under(pending, 'Variant${i + 1}')),
-          branch is SchemaObject && branch.ref != null
-              ? _resolved(branch)?.location
-              : null,
+    final variants = <(DartType, SpecLocation?, Schema)>[];
+    for (final (i, branch) in branches.indexed) {
+      final type = _map(branch, NameHint._under(pending, 'Variant${i + 1}'));
+      if (variants.any((v) => v.$1 == type)) {
+        _context.report(
+          .unionVariantDuplicate,
+          'This variant has the same Dart type as an earlier variant of the '
+          '${kind.name}; it is dropped, since a value could not be told '
+          'apart between them.',
           branch.location,
-        ),
-    ];
+          fix: 'Remove the duplicate variant at the source.',
+        );
+        continue;
+      }
+      variants.add((
+        type,
+        branch is SchemaObject && branch.ref != null
+            ? _resolved(branch)?.location
+            : null,
+        branch,
+      ));
+    }
     final discriminator = schema.discriminator;
     final property = discriminator?.propertyName;
+    final dispatch = property != null
+        ? UnionDispatch.discriminator
+        : _byJsonType([for (final (_, _, branch) in variants) branch])
+        ? UnionDispatch.jsonType
+        : UnionDispatch.structural;
+    if (dispatch != .structural) {
+      _reportUnionOverride(
+        schema,
+        dispatch == .discriminator
+            ? 'the union has a discriminator'
+            : 'the variants of the union have JSON types of their own',
+      );
+    }
     final values = <SpecLocation, List<String>>{};
     DartType? fallback;
     if (discriminator != null && property != null) {
@@ -993,13 +1135,19 @@ final class SchemaMapper {
         }
         (values[target] ??= []).add(value);
       }
-      for (final (_, target, at) in variants) {
+      for (final (_, target, branch) in variants) {
         if (target == null) {
+          // The value an inline variant's own discriminator property holds
+          // selects it: the schema allows no other.
+          if (_constantProperty(branch, property, {}) case final String v) {
+            values[branch.location] = [v];
+            continue;
+          }
           _context.report(
             .discriminatorValueMissing,
             'This variant is written inline, so no discriminator value '
             'selects it.',
-            at,
+            branch.location,
             fix: r'Make the variant a component schema and $ref it.',
           );
           continue;
@@ -1029,16 +1177,19 @@ final class SchemaMapper {
       id: pending.id,
       name: name,
       kind: kind,
+      dispatch: dispatch,
       discriminator: property,
       defaultVariant: fallback,
       exhaustive: exhaustive,
       description: schema.description,
       deprecated: schema.deprecated,
       variants: [
-        for (final (type, target, _) in variants)
+        for (final (type, target, branch) in variants)
           UnionVariantIr(
             type,
-            discriminatorValues: [...?values[target]]..sort(),
+            discriminatorValues: [
+              ...?values[target ?? branch.location],
+            ]..sort(),
             name: _helperName(
               types,
               _variantClass(name, type),
@@ -1081,6 +1232,29 @@ final class SchemaMapper {
       },
     };
     return label.startsWith(union) ? '${label}Case' : '$union$label';
+  }
+
+  /// The one value the property [name] of [schema] can hold, when it is a
+  /// `const` or a one-value enum, in the schema or one of its `allOf` parts;
+  /// [seen] stops a cycle.
+  Object? _constantProperty(
+    Schema schema,
+    String name,
+    Set<SpecLocation> seen,
+  ) {
+    final object = _resolved(schema);
+    if (object == null || !seen.add(object.location)) return null;
+    if (object.properties[name] case final property?) {
+      final resolved = _resolved(property);
+      final values = resolved == null
+          ? null
+          : SchemaShapes.enumValues(resolved);
+      return values != null && values.length == 1 ? values.single : null;
+    }
+    for (final part in object.allOf) {
+      if (_constantProperty(part, name, seen) case final value?) return value;
+    }
+    return null;
   }
 
   /// The schema a discriminator `mapping` value names: a
@@ -1207,6 +1381,7 @@ final class SchemaMapper {
   ) {
     final exhaustive =
         _context.overrides.schemaAt(schema.location)?.exhaustive ?? true;
+    _reportUnionOverride(schema, 'the schema is an enum, not a union');
     pending.build = (name, types) {
       final scope = NameScope(
         reserved: {...DartNames.reservedWords, ...DartNames.enumMembers},
@@ -1508,6 +1683,9 @@ final class SchemaMapper {
             SchemaShapes.allowsNull(part),
       );
 }
+
+/// The JSON type of a value, for telling union variants apart (R9.3).
+enum _JsonKind { string, integer, number, boolean, array, object }
 
 /// A declaration whose name is not given yet.
 final class _Pending {

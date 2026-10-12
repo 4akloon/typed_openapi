@@ -53,6 +53,18 @@ final class DartTypeOverride {
   };
 }
 
+/// How a `oneOf` or `anyOf` without a discriminator whose variants share
+/// a JSON type is generated (R9.2): the override `union` of a schema and
+/// the config key `union`.
+enum UnionMode {
+  /// As `JsonValue`, with a warning (the default).
+  raw,
+
+  /// As a union that tries its variants: a `oneOf` takes the one variant
+  /// that decodes, an `anyOf` the first.
+  structural,
+}
+
 /// What every entry of the overrides file has.
 sealed class OverrideEntry {
   /// Creates an entry.
@@ -185,6 +197,7 @@ final class SchemaOverride extends OverrideEntry {
     this.name,
     this.exclude,
     this.exhaustive,
+    this.union,
     this.dartType,
     this.properties = const [],
   });
@@ -197,6 +210,9 @@ final class SchemaOverride extends OverrideEntry {
 
   /// Whether an enum or a union is generated as exhaustive.
   final bool? exhaustive;
+
+  /// How a union without a discriminator is generated (R9.2).
+  final UnionMode? union;
 
   /// The Dart type every use of the schema gets instead of a generated one.
   final DartTypeOverride? dartType;
@@ -217,6 +233,7 @@ final class PropertyOverride extends OverrideEntry {
     this.exclude,
     this.dartType,
     this.triState,
+    this.union,
   });
 
   /// The name of the generated field.
@@ -230,6 +247,10 @@ final class PropertyOverride extends OverrideEntry {
 
   /// Whether the field tells "absent" from `null`.
   final bool? triState;
+
+  /// How the property's own union without a discriminator is generated
+  /// (R9.2), when its schema is one written inline.
+  final UnionMode? union;
 }
 
 /// The overrides of one client, read from its overrides file.

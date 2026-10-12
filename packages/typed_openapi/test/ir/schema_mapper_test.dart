@@ -440,6 +440,7 @@ components:
             - {type: object, properties: {r: {type: number}}}
             - {type: object, properties: {w: {type: number}}}
 ''',
+      generation: const GenerationConfig(union: UnionMode.structural),
       overrides: '''
 schemas:
   Id: {exhaustive: false}

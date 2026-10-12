@@ -135,7 +135,7 @@ components:
       oneOf:
         - {type: object, properties: {x: {type: string}}}
         - {type: object, properties: {y: {type: string}}}
-''');
+''', generation: const GenerationConfig(union: UnionMode.structural));
       final (ir, types) = mapComponents(fixture, ['Pick', 'Real']);
       expect(types['Pick'], 'Pick');
       expect(fieldsOf(ir, 'Pick'), ['a(a): String?', 'b(b): String?']);
@@ -255,7 +255,7 @@ components:
     U:
       properties: {kind: {type: string}}
       oneOf: [{$ref: '#/components/schemas/A'}, {$ref: '#/components/schemas/B'}]
-''');
+''', generation: const GenerationConfig(union: UnionMode.structural));
       final (ir, _) = mapComponents(fixture, ['U']);
       expect(variantsOf(ir, 'U'), ['A', 'B']);
       expect(fixture.codes, [
@@ -368,7 +368,10 @@ components:
     const head = 'openapi: 3.0.3\ninfo: {title: t, version: "1"}\n';
 
     test('is a reference to the target, nullable when a part says so', () {
-      final fixture = IrFixture('$head$specTail');
+      final fixture = IrFixture(
+        '$head$specTail',
+        generation: const GenerationConfig(union: UnionMode.structural),
+      );
       final (ir, _) = mapComponents(fixture, ['Holder']);
       expect(fixture.reported, isEmpty);
       expect(fieldsOf(ir, 'Holder'), [
@@ -527,7 +530,7 @@ components:
     P:
       allOf: [{$ref: '#/components/schemas/Base'}]
       oneOf: [{$ref: '#/components/schemas/A'}, {$ref: '#/components/schemas/B'}]
-''');
+''', generation: const GenerationConfig(union: UnionMode.structural));
       final (ir, _) = mapComponents(fixture, ['P']);
       expect(variantsOf(ir, 'P'), ['A', 'B']);
       expect(fixture.codes, [

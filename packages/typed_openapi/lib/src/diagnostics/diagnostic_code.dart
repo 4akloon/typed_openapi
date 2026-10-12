@@ -241,6 +241,17 @@ enum DiagnosticCode {
     .info,
   ),
 
+  /// A `oneOf` or `anyOf` without a discriminator has variants of the same
+  /// JSON type, so a value cannot be told apart by its type: it is generated
+  /// as `JsonValue` (R9.2). An override `union: structural` (or the config
+  /// key `union`) generates a union that tries the variants; a discriminator
+  /// at the source is better.
+  unionUndiscriminated('TOA453', 'union-undiscriminated', .warning),
+
+  /// Two variants of a union have the same Dart type; the later one is
+  /// dropped, since a value could not be told apart between them.
+  unionVariantDuplicate('TOA454', 'union-variant-duplicate', .info),
+
   /// A variable of the path template has no path parameter; one is added.
   missingPathParameter('TOA501', 'missing-path-parameter', .warning),
 

@@ -33,6 +33,7 @@ final class ConfigLoader {
     'exclude',
     'types',
     'tri_state',
+    'union',
     'errors',
   };
   static const _defaultsKeys = {
@@ -540,6 +541,7 @@ final class _GenerationReader {
       formats: _customTypes('formats'),
       schemas: _customTypes('schemas'),
       triState: _choice('tri_state', TriStateRule.values) ?? .patch,
+      union: _choice('union', UnionMode.values) ?? .raw,
       defaultErrorSchema: errorSchema?.$1,
       defaultErrorSchemaPointer: errorSchema?.$2,
       defaultErrorSchemaSpan: errorSchema == null
