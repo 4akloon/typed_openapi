@@ -265,7 +265,7 @@ void main() {
             requestOptions: o,
           ),
       DioExceptionType.unknown: (RequestOptions o) =>
-          DioException(requestOptions: o, error: StateError('adapter')),
+          DioException(requestOptions: o, error: Exception('adapter')),
     };
     for (final MapEntry(key: type, value: failure) in cases.entries) {
       final adapter = FakeAdapter((o) => throw failure(o));
@@ -276,6 +276,68 @@ void main() {
       expect(error.exception.type, type);
       expect(OperationInfo.of(error.exception.requestOptions), getPet);
     }
+  });
+
+  test('an Error thrown in an interceptor or adapter is rethrown', () async {
+    final onRequest = Dio(BaseOptions(baseUrl: 'https://api.test'))
+      ..httpClientAdapter = FakeAdapter.json(200, {'id': 7, 'name': 'Rex'})
+      ..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (o, handler) =>
+              handler.next((1 as Object) as RequestOptions),
+        ),
+      );
+    await expectLater(
+      DioRequestSender(onRequest).send(request, decodePet),
+      throwsA(isA<TypeError>()),
+    );
+    final adapter = FakeAdapter((_) => throw StateError('adapter'));
+    await expectLater(
+      DioRequestSender(dioWith(adapter)).send(request, decodePet),
+      throwsA(isA<StateError>()),
+    );
+  });
+
+  test(
+    'a FormatException that is not a JSON parse failure is transport',
+    () async {
+      final dio = Dio(BaseOptions(baseUrl: 'https://api.test'))
+        ..httpClientAdapter = FakeAdapter.json(200, {'id': 7, 'name': 'Rex'})
+        ..interceptors.add(
+          InterceptorsWrapper(
+            onRequest: (o, handler) {
+              Uri.parse('http://[bad');
+            },
+          ),
+        );
+      final result = await DioRequestSender(dio).send(request, decodePet);
+      final error = result as TransportError<Pet, Problem>;
+      expect(error.exception.error, isA<FormatException>());
+
+      // A text operation never reads JSON, whatever the body looks like.
+      final text = FakeAdapter((_) => throw const FormatException('x', [123]));
+      final textResult = await DioRequestSender(dioWith(text)).send(
+        const OperationRequest(
+          getPet,
+          path: [PathParameter('petId', 1)],
+          responseKind: .text,
+        ),
+        (r) => r.undocumented<Pet, Problem>(),
+      );
+      expect(textResult, isA<TransportError<Pet, Problem>>());
+    },
+  );
+
+  test('header entries with a null value are not sent', () async {
+    final adapter = FakeAdapter.json(200, {'id': 7, 'name': 'Rex'});
+    await DioRequestSender(dioWith(adapter)).send(
+      request,
+      decodePet,
+      call: const CallOptions(headers: {'X-A': null, 'X-B': 'b'}),
+    );
+    final headers = adapter.requests.single.headers;
+    expect(headers.containsKey('X-A'), isFalse);
+    expect(headers['X-B'], 'b');
   });
 
   test('cancellation is its own outcome', () async {

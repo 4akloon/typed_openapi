@@ -24,8 +24,12 @@ import 'call_options.dart';
 ///   response of any status, so the decoder always switches on the status.
 /// - Cancellation is [Cancelled], other Dio failures are [TransportError],
 ///   a body the decoder rejects with [JsonDecodeException] is
-///   [DecodeError]. Nothing else is caught: errors of the program
-///   (`TypeError`, `StateError`) reach the caller.
+///   [DecodeError]. Nothing else is caught: an [Error] thrown by the decoder,
+///   or thrown in a user interceptor or adapter (Dio wraps it into an
+///   `unknown` [DioException]; it is rethrown with its original stack
+///   trace), reaches the caller. Other causes (`SocketException`,
+///   `HandshakeException`, custom exceptions) are [TransportError]. A
+///   [FormatException] thrown by the decoder reaches the caller too.
 final class DioRequestSender {
   /// Sends requests through [dio].
   const DioRequestSender(this.dio);
@@ -59,7 +63,11 @@ final class DioRequestSender {
     final path = _guardQuery(request.resolvePath());
     final options = Options(
       method: request.operation.method,
-      headers: {...request.resolveHeaders(), ...?call?.headers},
+      headers: {
+        ...request.resolveHeaders(),
+        for (final MapEntry(:key, :value) in call?.headers.entries ?? const [])
+          key: ?value,
+      },
       extra: {...?call?.extra, OperationInfo.extraKey: request.operation},
       contentType: request.contentType,
       responseType: switch (request.responseKind) {
@@ -135,30 +143,44 @@ final class DioRequestSender {
     }
   }
 
-  /// A failure without a response. Dio drops the response when its JSON
-  /// parser fails (`unknown` with a [FormatException]): a decode error
-  /// without a status, whose raw body is the text the parser reported (for
-  /// a body Dio read in chunks, only the chunk that failed).
+  /// A failure without a response.
+  ///
+  /// - Cancellation is [Cancelled].
+  /// - An `unknown` failure whose cause is an [Error] (a `TypeError` or
+  ///   `StateError` thrown in a user interceptor or adapter, which Dio
+  ///   wraps) is a bug, not a transport problem: it is rethrown with its
+  ///   original stack trace.
+  /// - Dio drops the response when its JSON parser fails (`unknown` with a
+  ///   [FormatException]). That is a decode error without a status when the
+  ///   request reads JSON and the exception reports the bytes of the body
+  ///   (what Dio's default transformer does): the raw body is that text
+  ///   (for a body Dio read in chunks, only the chunk that failed). A
+  ///   [FormatException] from anywhere else (`Uri.parse` in an interceptor,
+  ///   a custom transformer that reports text) stays a [TransportError].
   static Failure<T, E> _failure<T, E>(
     DioException e,
     StackTrace stackTrace,
-  ) => switch (e) {
-    DioException(type: .cancel) => Cancelled(e, stackTrace),
-    DioException(
-      type: .unknown,
-      response: null,
-      error: FormatException(:final source),
-    ) =>
-      DecodeError(
-        JsonDecodeException(
-          expected: 'a JSON body',
-          actual: 'text that is not JSON',
-        ),
-        rawBody: switch (source) {
-          final List<int> bytes => utf8.decode(bytes, allowMalformed: true),
-          final other => other,
-        },
-      ),
-    _ => TransportError(e, stackTrace),
-  };
+  ) {
+    switch (e) {
+      case DioException(type: .cancel):
+        return Cancelled(e, stackTrace);
+      case DioException(type: .unknown, error: final Error cause):
+        Error.throwWithStackTrace(cause, e.stackTrace);
+      case DioException(
+        type: .unknown,
+        response: null,
+        requestOptions: RequestOptions(responseType: .json),
+        error: FormatException(source: final List<int> bytes),
+      ):
+        return DecodeError(
+          JsonDecodeException(
+            expected: 'a JSON body',
+            actual: 'text that is not JSON',
+          ),
+          rawBody: utf8.decode(bytes, allowMalformed: true),
+        );
+      default:
+        return TransportError(e, stackTrace);
+    }
+  }
 }
