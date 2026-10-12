@@ -289,4 +289,33 @@ clients:
       ],
     );
   });
+
+  test('nested unions that share children map in linear time', () {
+    // U_i is a oneOf of U_(i+1) and U_(i+2): the number of paths through
+    // the chain is Fibonacci, which a mapper without a memo cannot finish
+    // for 40 levels.
+    const n = 40;
+    final schemas = StringBuffer();
+    for (var i = 0; i < n; i++) {
+      schemas.writeln(
+        '    U$i: {oneOf: [{\$ref: "#/components/schemas/U${i + 1}"}, '
+        '{\$ref: "#/components/schemas/U${i + 2}"}]}',
+      );
+    }
+    schemas
+      ..writeln('    U$n: {type: object, properties: {a: {type: string}}}')
+      ..writeln(
+        '    U${n + 1}: {type: object, properties: {b: {type: string}}}',
+      );
+    final fixture = IrFixture('''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+components:
+  schemas:
+$schemas''');
+    final (ir, types) = mapComponents(fixture, ['U0']);
+    expect(types['U0'], 'JsonValue');
+    expect(ir.declarations, isEmpty);
+    expect(fixture.codes.first.$1, DiagnosticCode.unionUndiscriminated);
+  });
 }

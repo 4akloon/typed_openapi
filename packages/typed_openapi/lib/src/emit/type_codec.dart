@@ -181,7 +181,7 @@ final class TypeCodec {
   };
 
   /// The pattern a `switch` on a JSON value uses for a variant of [type],
-  /// such as `String()`; null for a type that takes any JSON.
+  /// such as `String`; null for a type that takes any JSON.
   String? jsonPattern(DartType type) => switch (type) {
     CoreType(:final kind) => switch (kind) {
       .string || .dateTime || .date || .bytes || .binary => 'String',
@@ -202,7 +202,11 @@ final class TypeCodec {
         .number => 'num',
         .boolean => 'bool',
       },
-      UnionDecl(:final variants) => jsonPattern(variants.first.type),
+      // A union without a discriminator can hold any JSON type; one with a
+      // discriminator decodes an object. The variants are not looked at:
+      // unions may refer to each other.
+      UnionDecl(:final dispatch) =>
+        dispatch == .discriminator ? 'Map<String, Object?>' : null,
     },
   };
 

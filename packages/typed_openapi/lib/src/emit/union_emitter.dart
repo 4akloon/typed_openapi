@@ -122,7 +122,11 @@ final class UnionEmitter {
           for (final variant in decl.variants)
             if (variant.jsonKinds.isEmpty)
               (
-                _codec.jsonPattern(variant.type)!,
+                _codec.jsonPattern(variant.type) ??
+                    (throw StateError(
+                      '${decl.name}.${variant.name} takes any JSON, so the '
+                      'union cannot be dispatched by JSON type.',
+                    )),
                 _wrap(variant, _decode(variant.type, 'value')),
               )
             else

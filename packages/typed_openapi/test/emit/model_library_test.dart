@@ -41,6 +41,66 @@ $schemas''',
 }
 
 void main() {
+  group('unions that refer to each other do not crash the emitter', () {
+    // Fuzz seed 2251: a union dispatched by JSON type whose first variant is
+    // a discriminator union that leads back to it (stack overflow).
+    const loop = r'''
+    Root:
+      type: object
+      properties: {a: {$ref: '#/components/schemas/A'}}
+    A:
+      anyOf:
+        - $ref: '#/components/schemas/B'
+        - {type: string, format: byte}
+    B:
+      anyOf:
+        - $ref: '#/components/schemas/A'
+        - {type: array, items: {type: string}}
+      discriminator: {propertyName: kind}
+''';
+    // Fuzz seed 510: the first variant of a nested union is not a model
+    // (null check in `_byJsonType`).
+    const nested = r'''
+    Root:
+      type: object
+      properties: {a: {$ref: '#/components/schemas/Kinds'}}
+    Kinds:
+      oneOf:
+        - {type: array, items: {type: string}}
+        - {type: number}
+        - $ref: '#/components/schemas/D'
+    D:
+      anyOf:
+        - $ref: '#/components/schemas/P'
+        - {type: string, format: date-time}
+      discriminator: {propertyName: kind}
+    P:
+      oneOf:
+        - $ref: '#/components/schemas/Kinds'
+        - {type: object, properties: {q: {type: string}}}
+''';
+
+    for (final mode in UnionMode.values) {
+      test('a loop through a discriminator union (${mode.name})', () {
+        final files = emit(loop, generation: GenerationConfig(union: mode));
+        final a = files['models/a.dart']!;
+        expect(a, contains('final Map<String, Object?> value => AB('));
+        expect(a, contains('final String value => ABytes('));
+      });
+
+      test('a first variant that is not a model (${mode.name})', () {
+        final files = emit(nested, generation: GenerationConfig(union: mode));
+        expect(files.keys, contains('models/root.dart'));
+        if (mode == UnionMode.raw) {
+          expect(
+            files['models/kinds.dart']!,
+            contains('final Map<String, Object?> value => KindsD('),
+          );
+        }
+      });
+    }
+  });
+
   test('classes are not final, so users can extend and implement them', () {
     final files = emit(r'''
     Root:
