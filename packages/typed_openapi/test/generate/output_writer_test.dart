@@ -30,11 +30,14 @@ void main() {
     Map<String, String> files, {
     List<String> protected = const [],
     void Function()? beforeInstall,
-  }) => OutputWriter(
-    bag,
-    const .new(),
-    beforeInstall,
-  ).write(client, files, inputs: 'in', protected: protected);
+    bool force = false,
+  }) => OutputWriter(bag, const .new(), beforeInstall).write(
+    client,
+    files,
+    inputs: 'in',
+    protected: protected,
+    force: force,
+  );
 
   /// Every entry under the temp directory, sorted, with file content.
   Map<String, String?> everything() => {
@@ -138,9 +141,9 @@ void main() {
 
     test('counts what changed', () {
       write(old);
-      dir.write('gen/pets/stale.dart', '// stale');
       final changes = write({'a.dart': '// changed', 'new.dart': '// n'})!;
-      expect((changes.written, changes.unchanged, changes.deleted), (2, 0, 2));
+      expect((changes.written, changes.unchanged, changes.deleted), (2, 0, 1));
+      expect(changes.forced, 0);
       expect(
         Directory(client.output).listSync().map((e) => p.basename(e.path)),
         unorderedEquals(['.typed_openapi.json', 'a.dart', 'new.dart']),

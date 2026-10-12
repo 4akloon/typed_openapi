@@ -37,14 +37,17 @@ void main() {
     dir.write('specs/pets.yaml', _spec);
   });
 
-  Future<(int, String)> generate(String clients) async {
+  Future<(int, String)> generate(
+    String clients, {
+    List<String> args = const [],
+  }) async {
     dir.write('typed_openapi.yaml', 'clients:\n$clients');
     final out = StringBuffer();
     final code = await TypedOpenApiCli(
       out: out,
       err: out,
       workingDirectory: dir.path,
-    ).run(['generate']);
+    ).run(['generate', ...args]);
     return (code, out.toString());
   }
 
@@ -94,21 +97,36 @@ void main() {
     expect(tree('gen/pets'), first);
   });
 
-  test('deletes what it no longer writes, empty directories too', () async {
+  test('deletes the files it wrote and no longer writes', () async {
     const client = '  pets: {input: specs/pets.yaml, output: gen/pets}\n';
     await generate(client);
-    dir
-      ..write('gen/pets/models/old.dart', '// old')
-      ..write('gen/pets/stale/deep/x.dart', '// x');
+    // The spec loses a model, so the files of the old run are stale.
+    dir.write(
+      'specs/pets.yaml',
+      _spec.replaceAll(
+        'status: {type: string, enum: [a, b]}',
+        'status: {type: string}',
+      ),
+    );
     final (code, out) = await generate(client);
     expect(code, 0);
-    expect(out, contains('3 files, 0 written, 2 deleted.'));
+    expect(out, contains('2 files, 2 written, 1 deleted.'));
     expect(tree('gen/pets').keys, [
       '.typed_openapi.json',
       'models.dart',
       'models/pet.dart',
-      'models/pet_status.dart',
     ]);
+  });
+
+  test('empty directories are no obstacle and go with the old tree', () async {
+    const client = '  pets: {input: specs/pets.yaml, output: gen/pets}\n';
+    await generate(client);
+    Directory(
+      p.join(dir.path, 'gen/pets/stale/deep'),
+    ).createSync(recursive: true);
+    final (code, out) = await generate(client);
+    expect(code, 0);
+    expect(out, contains('3 files, 0 written, 0 deleted.'));
     expect(Directory(p.join(dir.path, 'gen/pets/stale')).existsSync(), isFalse);
   });
 
@@ -180,6 +198,256 @@ void main() {
       dir.write('gen/pets/notes.txt', 'mine');
       await refused('gen/pets', 'holds files but no .typed_openapi.json');
       expect(tree('gen/pets').keys, ['notes.txt']);
+    });
+  });
+
+  group('deletes only what it wrote and finds unchanged (TOA830)', () {
+    const client = '  pets: {input: specs/pets.yaml, output: gen/pets}\n';
+
+    /// Runs `generate` for [client]; the output must have been refused with
+    /// a message that names [names], and [kept] must be as it was.
+    Future<void> refused(
+      List<String> names, {
+      List<String> args = const [],
+      Map<String, String> kept = const {},
+    }) async {
+      final (code, out) = await generate(client, args: args);
+      expect(code, 1);
+      expect(out, contains('error TOA830 output-not-owned'));
+      for (final name in names) {
+        expect(out, contains(name));
+      }
+      expect(out, contains('--force'));
+      expect(out, contains('Skipped pets: see the error above.'));
+      for (final MapEntry(:key, :value) in kept.entries) {
+        expect(File(p.join(dir.path, key)).readAsStringSync(), value);
+      }
+    }
+
+    test('a file of the user dropped into the output', () async {
+      await generate(client);
+      dir.write('gen/pets/notes.txt', 'mine');
+      final before = tree('gen/pets');
+      await refused(['notes.txt', 'not written by typed_openapi']);
+      expect(tree('gen/pets'), before);
+    });
+
+    test('a file in a directory of the output', () async {
+      await generate(client);
+      dir.write('gen/pets/models/mine/extra.dart', '// mine');
+      final before = tree('gen/pets');
+      await refused([p.posix.join('models', 'mine', 'extra.dart')]);
+      expect(tree('gen/pets'), before);
+    });
+
+    test('a generated file that was edited by hand', () async {
+      await generate(client);
+      dir.write('gen/pets/models/pet.dart', '// my change\n');
+      final before = tree('gen/pets');
+      await refused(['models/pet.dart', 'changed since']);
+      expect(tree('gen/pets'), before);
+    });
+
+    test(
+      'a file whose content is what the run writes is no obstacle',
+      () async {
+        // An edit that was undone, and a manifest that lost the hash.
+        await generate(client);
+        const path = 'gen/pets/.typed_openapi.json';
+        final manifest =
+            jsonDecode(File(p.join(dir.path, path)).readAsStringSync())
+                as Map<String, Object?>;
+        manifest['files'] = [
+          ...(manifest['files']! as Map<String, Object?>).keys,
+        ];
+        dir.write(path, jsonEncode(manifest));
+        final (code, out) = await generate(client);
+        expect(code, 0);
+        expect(out, isNot(contains('TOA830')));
+      },
+    );
+
+    test('a manifest without the hashes of its files, written by an older '
+        'typed_openapi, counts them as modified', () async {
+      await generate(client);
+      const path = 'gen/pets/.typed_openapi.json';
+      final manifest =
+          jsonDecode(File(p.join(dir.path, path)).readAsStringSync())
+              as Map<String, Object?>;
+      manifest
+        ..remove('format')
+        ..['files'] = [...(manifest['files']! as Map<String, Object?>).keys];
+      dir.write(path, jsonEncode(manifest));
+      // The spec changes, so the files would be different.
+      dir.write('specs/pets.yaml', _spec.replaceAll('[a, b]', '[a, b, c]'));
+      final before = tree('gen/pets');
+      await refused(
+        ['models/pet_status.dart', 'no hash', 'older typed_openapi'],
+      );
+      expect(tree('gen/pets'), before);
+      final (code, out) = await generate(client, args: ['--force']);
+      expect(code, 0);
+      expect(out, contains('Generated pets in'));
+      final manifestNow =
+          jsonDecode(tree('gen/pets')['.typed_openapi.json']!)
+              as Map<String, Object?>;
+      expect(manifestNow['format'], OutputWriter.manifestFormat);
+      expect(manifestNow['files'], isA<Map<String, Object?>>());
+      // Hashes are there now: no --force needed.
+      final (again, _) = await generate(client);
+      expect(again, 0);
+    });
+
+    test('--force replaces foreign and modified files', () async {
+      await generate(client);
+      dir
+        ..write('gen/pets/notes.txt', 'mine')
+        ..write('gen/pets/models/pet.dart', '// my change\n');
+      final (code, out) = await generate(client, args: ['--force']);
+      expect(code, 0);
+      expect(out, isNot(contains('TOA830')));
+      expect(out, contains('Generated pets in'));
+      expect(out, contains('--force replaced 2'));
+      expect(tree('gen/pets').keys, [
+        '.typed_openapi.json',
+        'models.dart',
+        'models/pet.dart',
+        'models/pet_status.dart',
+      ]);
+      expect(tree('gen/pets')['models/pet.dart'], isNot('// my change\n'));
+    });
+
+    test('--force on a clean output says nothing about replacing', () async {
+      await generate(client);
+      final before = tree('gen/pets');
+      final (code, out) = await generate(client, args: ['--force']);
+      expect(code, 0);
+      expect(out, isNot(contains('replaced')));
+      expect(out, contains('3 files, 0 written, 0 deleted.'));
+      expect(tree('gen/pets'), before);
+    });
+
+    test('--force takes a directory that has files but no manifest', () async {
+      dir.write('gen/pets/notes.txt', 'mine');
+      await refused(['notes.txt', 'no .typed_openapi.json']);
+      final (code, _) = await generate(client, args: ['--force']);
+      expect(code, 0);
+      expect(tree('gen/pets').keys, contains('models.dart'));
+      expect(tree('gen/pets').keys, isNot(contains('notes.txt')));
+    });
+
+    test('--force never takes a package, a link or an input', () async {
+      dir.write('app/pubspec.yaml', 'name: app\n');
+      final (code, out) = await generate(
+        '  pets: {input: specs/pets.yaml, output: app}\n',
+        args: ['--force'],
+      );
+      expect(code, 1);
+      expect(out, contains('holds a pubspec.yaml'));
+      expect(tree('app').keys, ['pubspec.yaml']);
+      final (code2, out2) = await generate(
+        '  pets: {input: specs/pets.yaml, output: specs}\n',
+        args: ['--force'],
+      );
+      expect(code2, 1);
+      expect(out2, contains('an input of the run'));
+      expect(tree('specs').keys, ['pets.yaml']);
+    });
+
+    group("a file another client reads, in this client's output", () {
+      const pair =
+          '  a: {input: specs/pets.yaml, output: gen/a}\n'
+          '  b: {input: specs/b.yaml, output: gen/b}\n';
+
+      /// Generates a, drops `gen/a/shared.yaml` and runs [args].
+      Future<String> run(
+        String shared, {
+        String b = 'specs/b.yaml',
+        String bText = '',
+        List<String> args = const [],
+      }) async {
+        dir.write(
+          'specs/b.yaml',
+          bText.isEmpty
+              ? _spec.replaceAll(
+                  "'#/components/schemas/Pet'",
+                  "'../gen/a/shared.yaml#/Owner'",
+                )
+              : bText,
+        );
+        await generate(pair);
+        dir.write('gen/a/shared.yaml', shared);
+        final (_, out) = await generate(pair, args: args);
+        return out;
+      }
+
+      const owner = 'Owner: {type: object, properties: {id: {type: string}}}\n';
+
+      test('only a is run, and b is not even checked', () async {
+        dir.write('specs/b.yaml', _spec);
+        await generate(pair);
+        dir.write('gen/a/shared.yaml', owner);
+        final out = StringBuffer();
+        final code = await TypedOpenApiCli(
+          out: out,
+          err: out,
+          workingDirectory: dir.path,
+        ).run(['generate', 'a']);
+        expect(code, 1);
+        expect(out.toString(), contains('error TOA830 output-not-owned'));
+        expect(out.toString(), contains('shared.yaml'));
+        expect(
+          File(p.join(dir.path, 'gen/a/shared.yaml')).existsSync(),
+          isTrue,
+        );
+      });
+
+      test('the file has a YAML syntax error', () async {
+        final out = await run('Owner: {type: object\n');
+        expect(out, contains('TOA830'));
+        expect(out, contains('shared.yaml'));
+        expect(
+          File(p.join(dir.path, 'gen/a/shared.yaml')).readAsStringSync(),
+          'Owner: {type: object\n',
+        );
+      });
+
+      test('the root spec of b has a syntax error', () async {
+        final out = await run(
+          owner,
+          bText: 'openapi: 3.1.0\ninfo: {title: t\n',
+        );
+        expect(out, contains('TOA830'));
+        expect(out, contains('shared.yaml'));
+        expect(
+          File(p.join(dir.path, 'gen/a/shared.yaml')).readAsStringSync(),
+          owner,
+        );
+      });
+
+      test('--force keeps it while another client can read it', () async {
+        final out = await run(owner, args: ['--force']);
+        expect(out, contains('an input of the run'));
+        expect(out, contains('Skipped a:'));
+        expect(
+          File(p.join(dir.path, 'gen/a/shared.yaml')).existsSync(),
+          isTrue,
+        );
+      });
+
+      test('--force replaces it when no client could read it', () async {
+        final out = await run(
+          owner,
+          bText: 'openapi: 3.1.0\ninfo: {title: t\n',
+          args: ['--force'],
+        );
+        expect(out, contains('Generated a in'));
+        expect(out, contains('--force replaced 1'));
+        expect(
+          File(p.join(dir.path, 'gen/a/shared.yaml')).existsSync(),
+          isFalse,
+        );
+      });
     });
   });
 
@@ -383,13 +651,17 @@ void main() {
       expect(tree('gen/pets').keys, ['.typed_openapi.json', 'notes.txt']);
     });
 
-    test('a file renamed only in case is replaced, not lost', () async {
+    test('a generated file renamed only in case is foreign (TOA830)', () async {
       await generate(client);
       File(
         p.join(dir.path, 'gen/pets/models/pet.dart'),
       ).renameSync(p.join(dir.path, 'gen/pets/models/Pet.dart'));
-      final (code, _) = await generate(client);
-      expect(code, 0);
+      final (code, out) = await generate(client);
+      expect(code, 1);
+      expect(out, contains('error TOA830 output-not-owned'));
+      expect(out, contains('Pet.dart'));
+      final (forced, _) = await generate(client, args: ['--force']);
+      expect(forced, 0);
       final names = Directory(
         p.join(dir.path, 'gen/pets/models'),
       ).listSync().map((e) => p.basename(e.path)).toList()..sort();

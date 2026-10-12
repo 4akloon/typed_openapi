@@ -22,19 +22,29 @@ import 'check_command.dart';
 ///
 /// A client whose check reports an error, including an overrides file that
 /// cannot be used, is skipped; so is one whose output directory the
-/// generator may not own (TOA830), which includes a directory that holds a
-/// file the config makes any client read. The report and a line per client
-/// go to stdout, and the exit code is the one `check` gives.
+/// generator may not replace (TOA830): a directory that holds a package, a
+/// file the config makes any client read, or a file the generator did not
+/// write or that changed since it did (`--force` replaces those, never the
+/// others). The report and a line per client go to stdout, and the exit code
+/// is the one `check` gives.
 final class GenerateCommand extends Command<int> {
   /// Creates the command; reports go to [_out], and files are named as
   /// [_paths] does.
   GenerateCommand(this._out, [this._paths = const DisplayPaths()]) {
-    argParser.addOption(
-      'config',
-      abbr: 'c',
-      defaultsTo: 'typed_openapi.yaml',
-      help: 'Path to the config file.',
-    );
+    argParser
+      ..addOption(
+        'config',
+        abbr: 'c',
+        defaultsTo: 'typed_openapi.yaml',
+        help: 'Path to the config file.',
+      )
+      ..addFlag(
+        'force',
+        negatable: false,
+        help:
+            'Replace files in an output directory that typed_openapi did not '
+            'write or that changed since it wrote them.',
+      );
   }
 
   final StringSink _out;
@@ -103,13 +113,17 @@ final class GenerateCommand extends Command<int> {
           files,
           inputs: inputsOf(check),
           protected: protected,
+          force: results.flag('force'),
         );
         lines.add(
           changes == null
               ? 'Skipped ${client.name}: see the error above.'
               : 'Generated ${client.name} in ${_paths.of(client.output)}: '
                     '${files.length} files, ${changes.written} written, '
-                    '${changes.deleted} deleted.',
+                    '${changes.deleted} deleted.'
+                    '${changes.forced == 0 ? '' : ' --force replaced '
+                              '${changes.forced} foreign or modified '
+                              '${changes.forced == 1 ? 'file' : 'files'}.'}',
         );
       }
     }

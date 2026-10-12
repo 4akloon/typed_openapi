@@ -18,6 +18,7 @@ final class OutputChanges {
     required this.written,
     required this.unchanged,
     required this.deleted,
+    this.forced = 0,
   });
 
   /// Files written because they are new or their content changed.
@@ -28,20 +29,51 @@ final class OutputChanges {
 
   /// Files deleted because the generator no longer writes them.
   final int deleted;
+
+  /// How many of the files written over or deleted were not the generator's
+  /// own or had changed since it wrote them, and went only because of
+  /// `force`.
+  final int forced;
+}
+
+/// A file of an output directory that the generator may not replace: it did
+/// not write it, or it differs from what the manifest says it wrote.
+final class _Stray {
+  const _Stray(this.path, this.reason);
+
+  /// The path relative to the directory, with `/` separators.
+  final String path;
+
+  /// Why the file counts as someone else's.
+  final String reason;
 }
 
 /// What an output directory holds before a run.
 final class _Existing {
-  const _Existing(this.files, this.directories);
+  const _Existing(this.hashes, this.directories, [this.strays = const []]);
 
   /// An output directory that does not exist yet.
   static const none = _Existing({}, {});
 
-  /// The files, by path relative to the directory with `/` separators.
-  final Set<String> files;
+  /// The files, by path relative to the directory with `/` separators, with
+  /// the SHA-256 of their content.
+  final Map<String, String> hashes;
 
   /// The directories, the same way.
   final Set<String> directories;
+
+  /// The files the generator did not write or that changed, sorted.
+  final List<_Stray> strays;
+}
+
+/// The manifest of a generated tree: which files the generator wrote and
+/// their hashes.
+final class _Manifest {
+  const _Manifest(this.hashes);
+
+  /// The files by relative path; a hash is null where the manifest has none
+  /// (a format before 2).
+  final Map<String, String?> hashes;
 }
 
 /// Writes the generated files of a client into its output directory, which
@@ -82,6 +114,12 @@ final class OutputWriter {
   /// The generator and its version, as the manifest names them.
   static const generator = 'typed_openapi 0.0.1';
 
+  /// The format of the manifest, which it records as `format`: 2 lists every
+  /// file with its hash, and `generate` deletes only files whose hash it
+  /// still finds. A manifest without a format has no hash to rely on for a
+  /// file where one is missing.
+  static const manifestFormat = 2;
+
   /// What a manifest's `generator` starts with, whatever the version.
   static const _generatorName = 'typed_openapi';
 
@@ -103,27 +141,28 @@ final class OutputWriter {
     Map<String, String> files, {
     required String inputs,
     List<String> protected = const [],
+    bool force = false,
   }) {
     final root = p.normalize(p.absolute(client.output));
     final created = <Directory>[];
     Directory? staging;
     try {
       _recover(client, root);
-      final existing = _inspect(client, root, protected);
-      if (existing == null) return null;
       final keys = files.keys.toList()..sort();
+      final hashes = {for (final path in keys) path: _hash(files[path]!)};
+      final existing = _inspect(client, root, protected, hashes, force: force);
+      if (existing == null) return null;
       final text = manifestOf(files, inputs: inputs);
       var written = 0;
       var unchanged = 0;
       for (final path in keys) {
-        if (existing.files.contains(path) &&
-            _holds(p.join(root, path), files[path]!)) {
+        if (existing.hashes[path] == hashes[path]) {
           unchanged++;
         } else {
           written++;
         }
       }
-      final deleted = existing.files
+      final deleted = existing.hashes.keys
           .where((f) => f != manifest && !files.containsKey(f))
           .length;
       final directories = {
@@ -134,14 +173,14 @@ final class OutputWriter {
       final same =
           written == 0 &&
           deleted == 0 &&
-          existing.files.contains(manifest) &&
-          _holds(p.join(root, manifest), text) &&
+          existing.hashes[manifest] == _hash(text) &&
           existing.directories.length == directories.length &&
           existing.directories.containsAll(directories);
       final changes = OutputChanges(
         written: written,
         unchanged: unchanged,
         deleted: deleted,
+        forced: existing.strays.length,
       );
       if (same) return changes;
       final parent = Directory(p.dirname(root));
@@ -188,11 +227,11 @@ final class OutputWriter {
     required String inputs,
   }) {
     final hashes = {
-      for (final path in files.keys.toList()..sort())
-        path: sha256.convert(utf8.encode(files[path]!)).toString(),
+      for (final path in files.keys.toList()..sort()) path: _hash(files[path]!),
     };
     return '${const JsonEncoder.withIndent('  ').convert({
       'generator': generator,
+      'format': manifestFormat,
       'inputs': inputs,
       'files': hashes,
     })}\n';
@@ -345,14 +384,22 @@ final class OutputWriter {
   }
 
   /// What [root] holds, or null after reporting why the generator may not
-  /// own it (TOA830).
-  _Existing? _inspect(ClientConfig client, String root, List<String> inputs) {
+  /// replace it (TOA830). [generated] has the hashes of the files the run
+  /// writes: a file that already holds one is never lost, so it is no stray.
+  /// With [force] strays are reported in the result instead of refused; a
+  /// package, a link or an input of the run never are.
+  _Existing? _inspect(
+    ClientConfig client,
+    String root,
+    List<String> inputs,
+    Map<String, String> generated, {
+    required bool force,
+  }) {
     _Existing? refuse(String why, String fix) {
       _diagnostics.report(
         .outputNotOwned,
         'Client "${client.name}" is not generated: its output directory '
-        '${_paths.of(root)} $why. The generator deletes every file there it '
-        'did not write.',
+        '${_paths.of(root)} $why.',
         file: _paths.of(root),
         fix: fix,
       );
@@ -392,11 +439,10 @@ final class OutputWriter {
     final entries = Directory(
       root,
     ).listSync(recursive: true, followLinks: false);
-    if (entries.isEmpty) return _Existing.none;
     final lengths = {
       for (final input in protected) input: File(input).lengthSync(),
     };
-    final files = <String>{};
+    final hashes = <String, String>{};
     final directories = <String>{};
     for (final entry in entries) {
       final path = p.posix.joinAll(p.split(p.relative(entry.path, from: root)));
@@ -421,43 +467,101 @@ final class OutputWriter {
               );
             }
           }
-          files.add(path);
+          hashes[path] = _hash(File(entry.path).readAsBytesSync());
       }
     }
-    if (!_isManifest(File(p.join(root, manifest)))) {
+    if (hashes.isEmpty) return _Existing(hashes, directories);
+    final written = _readManifest(File(p.join(root, manifest)));
+    final strays = <_Stray>[];
+    for (final MapEntry(key: path, value: hash)
+        in hashes.entries.toList()..sort((a, b) => a.key.compareTo(b.key))) {
+      if (generated[path] == hash) continue;
+      if (path == manifest) {
+        if (written == null) {
+          strays.add(_Stray(path, 'not a manifest of $_generatorName'));
+        }
+        continue;
+      }
+      final stray = _strayReason(written, path, hash);
+      if (stray != null) strays.add(_Stray(path, stray));
+    }
+    if (strays.isEmpty) return _Existing(hashes, directories);
+    if (!force) {
+      final others = [
+        for (final stray in strays)
+          if (stray.path != manifest || written != null) stray,
+      ];
+      final names = [
+        for (final stray in others.take(8)) '${stray.path} (${stray.reason})',
+        if (others.length > 8) 'and ${others.length - 8} more',
+      ].join(', ');
+      final list = names.isEmpty ? '' : ': $names';
+      final hashless = strays.any((s) => s.reason.startsWith('no hash'));
+      final why = written != null
+          ? 'holds files that the generator did not write or that changed '
+                'since it wrote them, and it would delete them$list'
+          : hashes.containsKey(manifest)
+          ? 'holds a $manifest that is not a manifest of $_generatorName, so '
+                'its files were not written by it$list'
+          : 'holds files but no $manifest, so they were not written by it'
+                '$list';
       return refuse(
-        files.contains(manifest)
-            ? 'holds a $manifest that is not a manifest of typed_openapi, so '
-                  'its files were not written by it'
-            : 'holds files but no $manifest, so they were not written by it',
-        'Empty the directory, or point output to a new one.',
+        why,
+        hashless
+            ? 'Run generate --force once: the manifest it writes has the '
+                  'hash of every file.'
+            : 'Move them out of the directory, or run generate --force to '
+                  'replace them.',
       );
     }
-    return _Existing(files, directories);
+    return _Existing(hashes, directories, strays);
   }
 
-  /// Whether [file] exists and is a manifest of this generator, of any
-  /// version.
-  static bool _isManifest(File file) {
-    if (!file.existsSync()) return false;
+  /// Why the file [path] with [hash] is not the generator's to replace
+  /// according to [written], or null when it is.
+  static String? _strayReason(_Manifest? written, String path, String hash) {
+    if (written == null || !written.hashes.containsKey(path)) {
+      return 'not written by $_generatorName';
+    }
+    final listed = written.hashes[path];
+    if (listed == null) {
+      return 'no hash in the manifest of an older $_generatorName';
+    }
+    return listed == hash ? null : 'changed since $_generatorName wrote it';
+  }
+
+  /// The manifest in [file], or null when it is missing, does not parse or
+  /// does not name this generator, in any version.
+  static _Manifest? _readManifest(File file) {
+    if (!file.existsSync()) return null;
     try {
       final json = jsonDecode(file.readAsStringSync());
-      return json is Map<String, Object?> &&
-          json['generator'] is String &&
-          (json['generator']! as String).startsWith('$_generatorName ');
+      if (json is! Map<String, Object?> ||
+          json['generator'] is! String ||
+          !(json['generator']! as String).startsWith('$_generatorName ')) {
+        return null;
+      }
+      final hash = RegExp(r'^[0-9a-f]{64}$');
+      return _Manifest(switch (json['files']) {
+        final Map<String, Object?> files => {
+          for (final MapEntry(:key, :value) in files.entries)
+            key: value is String && hash.hasMatch(value) ? value : null,
+        },
+        final List<Object?> names => {
+          for (final name in names)
+            if (name is String) name: null,
+        },
+        _ => const {},
+      });
     } on FormatException {
-      return false;
+      return null;
     }
   }
 
-  /// Whether the file at [path] holds [content].
-  static bool _holds(String path, String content) {
-    try {
-      return File(path).readAsStringSync() == content;
-    } on FormatException {
-      return false;
-    }
-  }
+  /// The SHA-256 of [content], a `String` (as UTF-8) or bytes, in hex.
+  static String _hash(Object content) => sha256
+      .convert(content is String ? utf8.encode(content) : content as List<int>)
+      .toString();
 
   /// Writes [content] to [path], creating its directory.
   static void _writeFile(String path, String content) {
