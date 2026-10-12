@@ -12,9 +12,28 @@ void main() {
       expect(code.string(r'$x ${y}'), r"'\$x \${y}'");
       expect(code.string(r'a\b'), r"'a\\b'");
       expect(code.string('a\nb\r\tc'), r"'a\nb\r\tc'");
-      expect(code.string('\x00\x1f\x7f '), r"'\u{0}\u{1f}\u{7f}\u{2028}'");
+      expect(
+        code.string('\x00\x1f\x7f\u2028\u2029'),
+        r"'\u{0}\u{1f}\u{7f}\u{2028}\u{2029}'",
+      );
       expect(code.string('\ud800'), r"'\u{d800}'");
       expect(code.string("ім'я 🐱"), r"'ім\'я 🐱'");
+    });
+
+    test('writes bidirectional controls as escapes (trojan source)', () {
+      expect(
+        code.string('a\u202eb\u2066c\u2069d\u202a'),
+        r"'a\u{202e}b\u{2066}c\u{2069}d\u{202a}'",
+      );
+      // Neighbours of the ranges stay as they are.
+      expect(code.string('\u2029\u202f\u2065\u206a'), contains('\u202f'));
+    });
+
+    test('refuses a number that has no literal', () {
+      expect(() => code.literal(double.nan), throwsStateError);
+      expect(() => code.literal(double.infinity), throwsStateError);
+      expect(() => code.literal(double.negativeInfinity), throwsStateError);
+      expect(code.literal(1e21), '1e+21');
     });
 
     test('writes JSON scalars as constants', () {
@@ -51,6 +70,51 @@ void main() {
       expect(code.docLines('a\x01b', 80), ['ab']);
     });
 
+    test('neutralises doc directives', () {
+      expect(code.docLines('See {@link Foo} and {@template t}', 80), [
+        r'See \{@link Foo} and \{@template t}',
+      ]);
+      expect(code.docLines('{ not @a directive }', 80), [
+        '{ not @a directive }',
+      ]);
+    });
+
+    test('drops bidirectional controls and fixes lone surrogates', () {
+      expect(code.docLines('a\u202eb\u2066c\u2069d', 80), ['abcd']);
+      expect(code.docLines('a\ud800b\udc00c', 80), ['a\ufffdb\ufffdc']);
+      expect(code.docLines('a\u{1F431}b', 80), ['a\u{1F431}b']);
+    });
+
+    test('a lone carriage return is a line break', () {
+      expect(code.docLines('a\rb\r\nc', 80), ['a', 'b', 'c']);
+    });
+
+    test('wrapping leaves no trailing space', () {
+      expect(
+        code.docLines('aaaaaaaaaaaaaaa   bbbbbbbbbbbbb', 20),
+        ['aaaaaaaaaaaaaaa', 'bbbbbbbbbbbbb'],
+      );
+      for (final line in code.docLines(
+        'x  ' * 40 + 'word    ' * 10,
+        24,
+      )) {
+        expect(line, isNot(endsWith(' ')));
+      }
+    });
+
+    test('a line with inline text after the backticks opens no fence', () {
+      expect(code.docLines('```a``` <b> [x]\n<c>', 80), [
+        r'```a``` \<b\> \[x\]',
+        r'\<c\>',
+      ]);
+      expect(code.docLines('```dart\n<raw>\n```  \n<c>', 80), [
+        '```dart',
+        '<raw>',
+        '```',
+        r'\<c\>',
+      ]);
+    });
+
     test('wraps long doc lines at the width, keeping the indent', () {
       expect(
         code.docLines('  one two three four five six seven', 20),
@@ -65,13 +129,27 @@ void main() {
 
   group('DartWriter', () {
     test('indents blocks and keeps empty lines empty', () {
-      final out = DartWriter(80)
-        ..block('class A', () {
-          final inner = DartWriter(80);
-          expect(inner.indent, '');
-        });
-      out.indented(() => out.line());
-      expect(out.text, 'class A {\n}\n\n');
+      final out = DartWriter(80);
+      out.block('class A', () {
+        out
+          ..line('int a;')
+          ..line()
+          ..block('void f()', () => out.line('g();'));
+      });
+      expect(
+        out.text,
+        'class A {\n'
+        '  int a;\n'
+        '\n'
+        '  void f() {\n'
+        '    g();\n'
+        '  }\n'
+        '}\n',
+      );
+    });
+
+    test('a line cannot hold a line break', () {
+      expect(() => DartWriter(80).line('a\nb'), throwsA(isA<AssertionError>()));
     });
 
     test('puts a list on one line when it fits, else one item a line', () {
@@ -146,6 +224,24 @@ void main() {
       narrow.text,
       "import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'\n"
       '    show JsonReader;\n'
+      '\n',
+    );
+  });
+
+  test('Imports wraps a long show list at the width', () {
+    final imports = Imports('a.dart');
+    for (final name in ['AVeryLongNameOne', 'AVeryLongNameTwo', 'Three']) {
+      imports.fromRuntime(name);
+    }
+    final out = DartWriter(40);
+    imports.write(out);
+    expect(
+      out.text,
+      "import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'\n"
+      '    show\n'
+      '        AVeryLongNameOne,\n'
+      '        AVeryLongNameTwo,\n'
+      '        Three;\n'
       '\n',
     );
   });

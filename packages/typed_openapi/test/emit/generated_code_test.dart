@@ -36,6 +36,35 @@ ProcessResult dart(List<String> arguments, String directory) => Process.runSync(
 );
 
 void main() {
+  test('strings from the spec cannot leave their literal or comment', () {
+    for (final mode in UnionMode.values) {
+      final files = emitFixture(
+        'hostile.yaml',
+        generation: GenerationConfig(union: mode),
+      );
+      for (final MapEntry(:key, :value) in files.entries) {
+        final lines = value.split('\n');
+        for (final line in lines) {
+          final code = line.trimLeft();
+          expect(
+            code.startsWith('injected') || code.startsWith('void injected'),
+            isFalse,
+            reason: '$key: $line',
+          );
+          expect(line, isNot(contains('\r')), reason: key);
+          if (!code.startsWith('///') && !code.startsWith('//')) {
+            expect(code, isNot(startsWith('/*')), reason: '$key: $line');
+          }
+        }
+        expect(
+          value,
+          isNot(matches(RegExp('[\u202a-\u202e\u2066-\u2069\u2028\u2029]'))),
+          reason: key,
+        );
+      }
+    }
+  });
+
   test('the pets fixture matches its goldens (R15.3)', () {
     final files = emitFixture('pets.yaml');
     final goldens = p.join('test', 'emit', 'goldens', 'pets');
@@ -100,7 +129,7 @@ linter:
     - use_key_in_widget_constructors
 ''')
         ..write('bin/decode.dart', _decodeProgram);
-      for (final fixture in ['pets', 'everything']) {
+      for (final fixture in ['pets', 'everything', 'hostile']) {
         for (final mode in UnionMode.values) {
           final files = emitFixture(
             '$fixture.yaml',

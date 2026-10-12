@@ -54,7 +54,9 @@ final class UnionEmitter {
     final property = decl.discriminator!;
     _codec.imports.fromRuntime('JsonReader');
     out
-      ..line('/// Decodes a [$name] by its `${_plain(property)}`; a value no')
+      ..line(
+        '/// Decodes a [$name] by its `${_code.docSpan(property)}`; a value no',
+      )
       ..line('/// variant has is a [${decl.unknownName}].')
       ..block('factory $name.fromJson(Object? json)', () {
         out.line(
@@ -228,7 +230,7 @@ final class UnionEmitter {
     out
       ..line(
         variant.jsonKinds.isEmpty
-            ? '/// A [${decl.name}] that is a `${_plain(type)}`.'
+            ? '/// A [${decl.name}] that is a `${_code.docSpan(type)}`.'
             : '/// A [${decl.name}] of a JSON type several variants share '
                   '(${variant.jsonKinds.map((k) => k.name).join(', ')}), '
                   'as received.',
@@ -252,14 +254,14 @@ final class UnionEmitter {
           out
             ..line()
             ..line(
-              '/// The `${_plain(property)}` [value] was decoded with; null '
+              '/// The `${_code.docSpan(property)}` [value] was decoded with; null '
               'for a',
             )
             ..line(
               first == null
                   ? '/// wrapper made in code, which writes none.'
                   : '/// wrapper made in code, which writes '
-                        '`${_plain(_code.string(first))}`.',
+                        '`${_code.docSpan(_code.string(first))}`.',
             )
             ..line('final String? discriminator;');
         }
@@ -346,7 +348,4 @@ final class UnionEmitter {
           );
       });
   }
-
-  /// [text] for a code span in a doc comment: without backticks.
-  static String _plain(String text) => text.replaceAll('`', "'");
 }

@@ -7,8 +7,9 @@ final class DartCode {
   const DartCode();
 
   /// [value] as a single-quoted Dart string literal: `\`, `'` and `$` are
-  /// escaped, and so are line breaks, tabs, control characters and lone
-  /// surrogates, which would break the line or the file's encoding.
+  /// escaped, and so are line breaks, tabs, control characters, lone
+  /// surrogates, which would break the line or the file's encoding, and the
+  /// bidirectional controls, which could reorder the code on screen.
   String string(String value) {
     final out = StringBuffer("'");
     for (final unit in value.runes) {
@@ -23,6 +24,8 @@ final class DartCode {
         0x7f ||
         0x2028 ||
         0x2029 ||
+        (>= 0x202a && <= 0x202e) ||
+        (>= 0x2066 && <= 0x2069) ||
         (>= 0xd800 && <= 0xdfff) => '\\u{${unit.toRadixString(16)}}',
         _ => String.fromCharCode(unit),
       });
@@ -32,10 +35,15 @@ final class DartCode {
   }
 
   /// [value], a JSON scalar from the spec, as a Dart constant: a string
-  /// literal, a number, `true`, `false` or `null`.
+  /// literal, a number, `true`, `false` or `null`. A number that is not
+  /// finite has no literal: JSON has none and the parser reports it, so it
+  /// is a [StateError].
   String literal(Object? value) => switch (value) {
     final String text => string(text),
     final int number => '$number',
+    final double number when !number.isFinite => throw StateError(
+      'The number $number has no Dart literal.',
+    ),
     final double number =>
       number == number.roundToDouble() ? number.toStringAsFixed(1) : '$number',
     final bool flag => '$flag',
@@ -49,18 +57,35 @@ final class DartCode {
   String interpolate(String name) =>
       name.contains(r'$') ? '\${$name}' : '\$$name';
 
+  /// [text] as the text of a code span inside one line of a doc comment
+  /// that the caller writes: line breaks become spaces, control characters
+  /// and bidirectional controls are dropped, a lone surrogate becomes
+  /// U+FFFD and a backtick becomes `'`, so the text cannot leave the line
+  /// or end the span.
+  String docSpan(String text) => _clean(
+    text,
+  ).replaceAll(_lineBreaks, ' ').replaceAll(_dropped, '').replaceAll('`', "'");
+
+  /// The JSON encoding of [value] as a code span for a doc comment; a
+  /// backtick inside is the JSON escape `\u0060`, so the span never ends
+  /// early.
+  String jsonSpan(Object? value) =>
+      '`${docSpan(jsonEncode(value).replaceAll('`', r'\u0060'))}`';
+
   /// [text] as the lines of a doc comment, without the `///`: Markdown
   /// that would be read as code or HTML is escaped (`[`, `]`, `<`, `>`,
-  /// `\`), control characters are dropped, and each line is wrapped at
-  /// [width] characters except inside fenced code blocks.
+  /// `\`, and `{` of a doc directive such as `{@link}`), control characters
+  /// and bidirectional controls are dropped, a lone surrogate becomes
+  /// U+FFFD, a lone `\r` and the Unicode line separators end a line, and each line is wrapped at [width]
+  /// characters except inside fenced code blocks.
   List<String> docLines(String text, int width) {
     final lines = <String>[];
     var fenced = false;
-    for (final raw in text.replaceAll('\r\n', '\n').split('\n')) {
-      final line = raw.trimRight().replaceAll(_control, '');
-      if (line.trimLeft().startsWith('```')) {
+    for (final raw in _clean(text).replaceAll(_lineBreak, '\n').split('\n')) {
+      final line = raw.replaceAll(_dropped, '').trimRight();
+      if (fenced ? _fenceClose.hasMatch(line) : _fenceOpen.hasMatch(line)) {
         fenced = !fenced;
-        lines.add(line);
+        lines.add(line.trim().isEmpty ? line : line.trimRight());
         continue;
       }
       if (fenced) {
@@ -79,8 +104,20 @@ final class DartCode {
     return lines;
   }
 
-  static final _control = RegExp('[\x00-\x08\x0b-\x1f\x7f]');
-  static final _special = RegExp(r'[\\\[\]<>]');
+  static String _clean(String text) =>
+      text.replaceAll(_loneSurrogate, '\uFFFD');
+
+  static final _lineBreaks = RegExp('[\r\n\u2028\u2029\u0085]+');
+  static final _lineBreak = RegExp('\r\n?|[\u2028\u2029\u0085]');
+  static final _dropped = RegExp(
+    '[\x00-\x08\x0b-\x1f\x7f\u202a-\u202e\u2066-\u2069]',
+  );
+  static final _loneSurrogate = RegExp(
+    '[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]',
+  );
+  static final _fenceOpen = RegExp(r'^\s*```[^`]*$');
+  static final _fenceClose = RegExp(r'^\s*```+\s*$');
+  static final _special = RegExp(r'[\\\[\]<>]|\{(?=@)');
 
   /// Escapes [line] outside its code spans: a span shows its text as it
   /// is, so an escape there would show too. A line with an unpaired
@@ -102,7 +139,7 @@ final class DartCode {
   static List<String> _wrap(String line, int width) {
     if (line.length <= width) return [line];
     final indent = RegExp('^ *').stringMatch(line)!;
-    final words = line.trimLeft().split(' ');
+    final words = line.trimLeft().split(' ').where((w) => w.isNotEmpty);
     final out = <String>[];
     var current = indent;
     for (final word in words) {

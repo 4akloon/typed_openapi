@@ -112,6 +112,8 @@ final class EnumEmitter {
   }
 
   void _valueDoc(DartWriter out, EnumValueIr value) {
-    out.doc(value.description ?? '`${_code.literal(value.value)}`');
+    out.doc(
+      value.description ?? '`${_code.docSpan(_code.literal(value.value))}`',
+    );
   }
 }

@@ -1,6 +1,7 @@
 import '../ir/dart_type.dart';
 import '../ir/ir.dart';
 import '../ir/names.dart';
+import 'dart_code.dart';
 import 'dart_writer.dart';
 import 'enum_emitter.dart';
 import 'imports.dart';
@@ -53,18 +54,16 @@ final class ModelLibrary {
         case final UnionDecl decl:
           UnionEmitter(codec).write(decl, body);
       }
-      final out = DartWriter(width)
-        ..line(header.trimRight())
-        ..line();
+      final out = DartWriter(width);
+      _writeHeader(out);
       imports.write(out);
       files['$directory/$file'] = '${out.text}${body.text}';
     }
-    final exports = DartWriter(width)
-      ..line(header.trimRight())
-      ..line();
+    final exports = DartWriter(width);
+    _writeHeader(exports);
     final paths = files.keys.toList()..sort();
     for (final path in paths) {
-      exports.line("export '$path';");
+      exports.line('export ${_code.string(path)};');
     }
     files[barrel] = exports.text;
     return {for (final path in files.keys.toList()..sort()) path: files[path]!};
@@ -84,5 +83,13 @@ final class ModelLibrary {
   static String _snake(String name) {
     final snake = _names.words(name).map((w) => w.toLowerCase()).join('_');
     return snake.startsWith(RegExp('[a-z]')) ? snake : 'type_$snake';
+  }
+
+  static const _code = DartCode();
+
+  /// Writes [header] and an empty line.
+  static void _writeHeader(DartWriter out) {
+    header.trimRight().split('\n').forEach(out.line);
+    out.line();
   }
 }

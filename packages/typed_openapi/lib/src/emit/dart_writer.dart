@@ -21,8 +21,9 @@ final class DartWriter {
   String get indent => '  ' * _depth;
 
   /// Writes [text] on a line of its own at the current indentation; an
-  /// empty line has no spaces.
+  /// empty line has no spaces. [text] has no line break.
   void line([String text = '']) {
+    assert(!text.contains('\n'), 'a line cannot hold a line break: $text');
     if (text.isEmpty) {
       _out.writeln();
     } else {

@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import '../ir/dart_type.dart';
 import '../ir/ir.dart';
 import 'dart_code.dart';
@@ -206,11 +204,11 @@ final class ModelEmitter {
     final parts = [
       ?field.description,
       if (constant && field.description == null)
-        'Always `${jsonEncode(field.constValue)}`.',
+        'Always ${_code.jsonSpan(field.constValue)}.',
       ?_constraints(field.constraints),
       ?_knownValues(field.knownValues),
       if (field.defaultValue case (final value,))
-        'Defaults to `${jsonEncode(value)}` on the server.',
+        'Defaults to ${_code.jsonSpan(value)} on the server.',
     ];
     if (parts.isNotEmpty) out.doc(parts.join('\n\n'));
     if (field.deprecated) out.line(deprecation);
@@ -222,7 +220,7 @@ final class ModelEmitter {
   static String? _knownValues(List<Object?> values) => values.isEmpty
       ? null
       : 'Known values: ${[
-          for (final value in values) '`${jsonEncode(value).replaceAll('`', r'\u0060')}`',
+          for (final value in values) _code.jsonSpan(value),
         ].join(', ')}.';
 
   /// The constraints of a field as a sentence (decision 12), such as
@@ -242,7 +240,7 @@ final class ModelEmitter {
       if (pattern != null && pattern.contains('`'))
         'matches ${_code.string(pattern)}'
       else if (pattern != null)
-        'matches `$pattern`',
+        'matches `${_code.docSpan(pattern)}`',
       if (c.minimum case final v?) 'at least $v',
       if (c.exclusiveMinimum case final v?) 'greater than $v',
       if (c.maximum case final v?) 'at most $v',

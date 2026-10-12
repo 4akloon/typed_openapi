@@ -1,0 +1,67 @@
+openapi: 3.1.0
+info:
+  title: &h "x\nvoid injected() {}\n// */ /* {@link Foo} {@template t} `tick` \u202E \u2066 \r \u2028 ${y} $y 'q' \\ \u0001 <b> [c]"
+  version: "1"
+  description: *h
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      summary: *h
+      description: *h
+      responses:
+        '200':
+          description: *h
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Holder'}
+components:
+  schemas:
+    Holder:
+      type: object
+      title: *h
+      description: *h
+      required: [mark, flavor]
+      properties:
+        mark: {const: *h, description: *h}
+        kind: {type: string, enum: [*h, other], description: *h}
+        flavor: {$ref: '#/components/schemas/Flavor'}
+        pet: {$ref: '#/components/schemas/Pet'}
+        mixed: {$ref: '#/components/schemas/Mixed'}
+        name: {type: string, pattern: *h, default: *h, title: *h, description: *h, minLength: 1}
+        plain: {type: string, pattern: '^[a`b]+$', default: *h, deprecated: true}
+        number: {type: integer, default: 7, minimum: 1, maximum: 9}
+        "kx\nvoid injected() {}\n// */ /* {@link Foo} {@template t} `tick` \u202E \u2066 \r \u2028 ${y} $y 'q' \\ \u0001 <b> [c]": {type: string, description: *h}
+      additionalProperties: {type: string, description: *h}
+    Flavor:
+      type: string
+      description: *h
+      enum: [*h, "a`b", x]
+      x-enum-descriptions: [*h, *h, null]
+      x-enum-varnames: ["vx\nvoid injected() {}\n// */ /* {@link Foo} {@template t} `tick` \u202E \u2066 \r \u2028 ${y} $y 'q' \\ \u0001 <b> [c]", plain, other]
+    Cat:
+      type: object
+      required: ["kx\nvoid injected() {}\n// */ /* {@link Foo} {@template t} `tick` \u202E \u2066 \r \u2028 ${y} $y 'q' \\ \u0001 <b> [c]"]
+      properties:
+        "kx\nvoid injected() {}\n// */ /* {@link Foo} {@template t} `tick` \u202E \u2066 \r \u2028 ${y} $y 'q' \\ \u0001 <b> [c]": {const: *h}
+    Dog:
+      type: object
+      properties:
+        "kx\nvoid injected() {}\n// */ /* {@link Foo} {@template t} `tick` \u202E \u2066 \r \u2028 ${y} $y 'q' \\ \u0001 <b> [c]": {type: string}
+        bark: {type: boolean, description: *h}
+    Pet:
+      description: *h
+      oneOf:
+        - $ref: '#/components/schemas/Cat'
+        - $ref: '#/components/schemas/Dog'
+      discriminator:
+        propertyName: "kx\nvoid injected() {}\n// */ /* {@link Foo} {@template t} `tick` \u202E \u2066 \r \u2028 ${y} $y 'q' \\ \u0001 <b> [c]"
+        mapping:
+          "kx\nvoid injected() {}\n// */ /* {@link Foo} {@template t} `tick` \u202E \u2066 \r \u2028 ${y} $y 'q' \\ \u0001 <b> [c]": Cat
+          other: Dog
+    Mixed:
+      description: *h
+      oneOf:
+        - {type: string, description: *h}
+        - {type: integer}
+        - $ref: '#/components/schemas/Cat'

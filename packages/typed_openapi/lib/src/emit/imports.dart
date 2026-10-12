@@ -51,13 +51,26 @@ final class Imports {
         final flat = 'import ${_code.string(uri)} show ${names.join(', ')};';
         if (flat.length <= out.width) {
           out.line(flat);
-        } else {
-          out
-            ..line('import ${_code.string(uri)}')
-            ..indented(
-              () => out.indented(() => out.line('show ${names.join(', ')};')),
-            );
+          continue;
         }
+        out.line('import ${_code.string(uri)}');
+        out.indented(
+          () => out.indented(() {
+            final shown = 'show ${names.join(', ')};';
+            if (out.indent.length + shown.length <= out.width) {
+              out.line(shown);
+              return;
+            }
+            out.line('show');
+            out.indented(
+              () => out.indented(() {
+                for (final (i, name) in names.indexed) {
+                  out.line(i == names.length - 1 ? '$name;' : '$name,');
+                }
+              }),
+            );
+          }),
+        );
       }
       out.line();
     }
