@@ -215,15 +215,43 @@ final class UnionEmitter {
   /// Whether the wrapper of [variant] writes the discriminator itself, as
   /// its model has no property for it (decision 5), and so keeps the value
   /// it was decoded with: an alias (`kitty` for `Cat`) is written back as
-  /// it came, not changed into the first value of the mapping.
+  /// it came, not changed into the first value of the mapping. A variant
+  /// that is itself a union (`Pet` -> `Dog` -> `Lab`) has no property to
+  /// carry the value either, unless it dispatches by the same property and
+  /// writes it itself.
   bool _remembers(UnionDecl decl, UnionVariantIr variant) {
     final property = decl.discriminator;
     final type = variant.type;
     if (property == null || type is! NamedType) return false;
-    final model = _codec.declaration(type.id);
-    return model is ModelDecl &&
-        !model.fields.any((f) => f.jsonKey == property);
+    return switch (_codec.declaration(type.id)) {
+      final ModelDecl model => !model.fields.any((f) => f.jsonKey == property),
+      final UnionDecl union => union.discriminator != property,
+      _ => false,
+    };
   }
+
+  /// The discriminator a wrapper of [variant] has when it was made in code:
+  /// the first value of the mapping, as a Dart string literal; null when no
+  /// value selects the variant.
+  String? _firstValue(UnionVariantIr variant) =>
+      switch (variant.discriminatorValues.firstOrNull) {
+        final first? => _code.string(first),
+        null => null,
+      };
+
+  /// The discriminator [remembered] stands for, an expression: the value a
+  /// wrapper was decoded with, else the first value of the mapping. Wrappers
+  /// are equal when this is, so a wrapper made in code equals the one
+  /// decoded from its JSON.
+  String _effective(
+    UnionVariantIr variant,
+    String remembered, {
+    bool group = true,
+  }) => switch (_firstValue(variant)) {
+    final first? when group => '($remembered ?? $first)',
+    final first? => '$remembered ?? $first',
+    null => remembered,
+  };
 
   /// Whether `fromJson` creates the wrapper of [variant] with the value it
   /// was decoded with: it is picked by a discriminator value no earlier
@@ -305,14 +333,17 @@ final class UnionEmitter {
             'const DeepEquality().equals(other.value, value)'
           else
             'other.value == value',
-          if (remembers) 'other.discriminator == discriminator',
+          if (remembers)
+            '${_effective(variant, 'other.discriminator')} == '
+                '${_effective(variant, 'discriminator')}',
         ], '&&');
         out
           ..line()
           ..line('@override')
           ..line(
             remembers
-                ? 'int get hashCode => Object.hash(value, discriminator);'
+                ? 'int get hashCode => '
+                      'Object.hash(value, ${_effective(variant, 'discriminator', group: false)});'
                 : deep
                 ? 'int get hashCode => const DeepEquality().hash(value);'
                 : 'int get hashCode => value.hashCode;',
@@ -326,19 +357,28 @@ final class UnionEmitter {
       });
   }
 
-  /// The JSON of a variant: the value's, and for a model of a union with a
-  /// discriminator that the model has no property for, the discriminator
-  /// too (decision 5): the one it was decoded with, else the first value
-  /// of the mapping.
+  /// The JSON of a variant: the value's, and for a variant of a union with a
+  /// discriminator that the variant has no property for, the discriminator
+  /// too (decision 5): the one it was decoded with, else the first value of
+  /// the mapping. When the variant is a union, its JSON is not always an
+  /// object (the one it keeps as received may be anything), so the
+  /// discriminator is added to an object only.
   String _toJson(UnionDecl decl, UnionVariantIr variant) {
     final encoded = _codec.encode(variant.type, 'value');
     if (!_remembers(decl, variant)) return encoded;
     final key = _code.string(decl.discriminator!);
-    return switch (variant.discriminatorValues.firstOrNull) {
-      final first? =>
-        '{...$encoded, $key: discriminator ?? ${_code.string(first)}}',
-      null => '{...$encoded, $key: ?discriminator}',
+    final tag = switch (_firstValue(variant)) {
+      final first? => 'discriminator ?? $first',
+      null => '?discriminator',
     };
+    final entry = '$key: $tag';
+    final type = variant.type;
+    if (type is NamedType && _codec.declaration(type.id) is UnionDecl) {
+      return 'switch ($encoded) {'
+          'final Map<String, Object?> json => {...json, $entry}, '
+          'final json => json}';
+    }
+    return '{...$encoded, $entry}';
   }
 
   void _unknown(DartWriter out, UnionDecl decl) {

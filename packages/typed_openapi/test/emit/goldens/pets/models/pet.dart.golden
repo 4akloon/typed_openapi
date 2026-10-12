@@ -67,10 +67,10 @@ class PetDog implements Pet {
   bool operator ==(Object other) =>
       other is PetDog &&
       other.value == value &&
-      other.discriminator == discriminator;
+      (other.discriminator ?? 'dog') == (discriminator ?? 'dog');
 
   @override
-  int get hashCode => Object.hash(value, discriminator);
+  int get hashCode => Object.hash(value, discriminator ?? 'dog');
 
   @override
   String toString() => 'PetDog($value)';

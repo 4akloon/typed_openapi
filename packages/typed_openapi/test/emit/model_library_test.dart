@@ -607,8 +607,8 @@ void main() {
         'const RootDog(this.value) : discriminator = null;',
         'final String? discriminator;',
         "Object? toJson() => {...value.toJson(), 'kind': discriminator ?? 'dog'};",
-        'other.discriminator == discriminator;',
-        'int get hashCode => Object.hash(value, discriminator);',
+        "(other.discriminator ?? 'dog') == (discriminator ?? 'dog');",
+        "int get hashCode => Object.hash(value, discriminator ?? 'dog');",
         'class RootUnknown implements Root {',
       ]) {
         expect(pet, contains(line));
