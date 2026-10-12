@@ -260,6 +260,22 @@ enum DiagnosticCode {
   /// and, when one branch remains, the union is that type (Stripe's
   /// `anyOf: [string, {enum: ['']}]`). An integer enum next to a plain
   /// `number` is dropped too; a number enum next to an `integer` is not.
+  ///
+  /// The other branch counts as plain when it has no `enum`, `const`,
+  /// `format`, `pattern` or keyword the rule does not model (`if`, `not`,
+  /// `dependentSchemas`, ...), and every enum value meets its length and
+  /// range constraints (`multipleOf` on the exact decimal numbers). From
+  /// OpenAPI 3.1 the keywords next to the `$ref` of a branch are the
+  /// branch's own and are held to the same rule; 3.0 ignores them. The
+  /// values of a dropped branch stay in the documentation of the field
+  /// ("Known values") when the union is a union class or collapses; a union
+  /// that stays `JsonValue` lists none.
+  ///
+  /// For a `oneOf` the collapse is looser than the spec: a value both
+  /// branches take (`''` for `oneOf: [string, {const: ''}]`) is rejected by
+  /// the `oneOf` and accepted by the type. This is accepted on purpose: the
+  /// idiom is common (Stripe), its authors mean "any of these", and the
+  /// client does not validate.
   unionBranchSubsumed('TOA455', 'union-branch-subsumed', .info),
 
   /// Two variants of a union with a discriminator are selected by the same

@@ -30,6 +30,11 @@ final class DirectionIndex {
   final Map<SpecLocation, bool> _directional = {};
   final Set<SpecLocation> _patchBodies = {};
 
+  late final RefFollower _refs = RefFollower(
+    _model.resolveSchema,
+    siblings: _model.document.version != .v30,
+  );
+
   /// Records the schemas of [operation]'s parameters and request body as
   /// used in requests and those of its responses as used in responses; the
   /// body of a [method] `patch` is a PATCH body.
@@ -85,10 +90,7 @@ final class DirectionIndex {
     final seen = <SpecLocation>{};
     var current = _model.resolveSchema(schema);
     while (current is SchemaObject && seen.add(current.location)) {
-      final single = SchemaShapes.singleOf(
-        current,
-        resolve: _model.resolveSchema,
-      );
+      final single = SchemaShapes.singleOf(current, refs: _refs);
       if (single == null) return current;
       current = _model.resolveSchema(single);
     }
@@ -169,14 +171,10 @@ final class DirectionIndex {
   /// `allOf` or in the one branch of a nullable `anyOf`/`oneOf`
   /// ([SchemaShapes.annotationSources]).
   bool _hasDirectionalProperty(SchemaObject schema) {
-    SchemaObject? resolve(Schema s) => switch (_model.resolveSchema(s)) {
-      final SchemaObject object => object,
-      _ => null,
-    };
     for (final property in _properties(schema)) {
       if (SchemaShapes.annotationSources(
         property,
-        resolve: resolve,
+        refs: _refs,
       ).any((source) => source.readOnly || source.writeOnly)) {
         return true;
       }

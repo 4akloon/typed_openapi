@@ -1,5 +1,20 @@
 import '../model/schema.dart';
+import 'decimal.dart';
 import 'ir.dart' show JsonKind;
+
+/// How a schema question follows a `$ref`: [resolve] reaches the schema a
+/// `$ref` names, and [siblings] says whether the keywords written next to a
+/// `$ref` count (OpenAPI 3.1 and later; 3.0 ignores them).
+final class RefFollower {
+  /// Creates a follower.
+  const RefFollower(this.resolve, {required this.siblings});
+
+  /// The schema a `$ref` names, or null when it cannot be followed.
+  final Schema? Function(Schema) resolve;
+
+  /// Whether keywords beside a `$ref` are keywords of the schema.
+  final bool siblings;
+}
 
 /// Questions about the shape of a schema that the schema mapper and the
 /// direction index both ask: whether it is only `null`, what enum values it
@@ -11,12 +26,9 @@ final class SchemaShapes {
   /// part of an `allOf` with one part besides parts that only annotate
   /// ([isAnnotationOnly]), or the branch of a `oneOf`/`anyOf` with one branch
   /// besides `null` and the branches that add no value to another
-  /// ([subsumedBranches]); null when there is none. A [resolve] follows the
+  /// ([subsumedBranches]); null when there is none. A [refs] follows the
   /// `$ref` of a branch.
-  static Schema? singleOf(
-    SchemaObject schema, {
-    Schema? Function(Schema)? resolve,
-  }) {
+  static Schema? singleOf(SchemaObject schema, {RefFollower? refs}) {
     if (schema.properties.isNotEmpty || enumValues(schema) != null) {
       return null;
     }
@@ -30,7 +42,7 @@ final class SchemaShapes {
       return schema.allOf.length == 1 ? schema.allOf.first : null;
     }
     if (schema.allOf.isNotEmpty) return null;
-    final dropped = subsumedBranches(schema, resolve: resolve);
+    final dropped = subsumedBranches(schema, refs: refs);
     final nonNull = [
       for (final branch in branches)
         if (!isNullOnly(branch) && !dropped.containsKey(branch)) branch,
@@ -46,15 +58,19 @@ final class SchemaShapes {
   /// branch of that type that has all its values, in a union without a
   /// discriminator (`anyOf: [string, {enum: ['']}]`). The other branch is
   /// plain: a string, integer, number or boolean written inline, or a
-  /// `$ref` that [resolve] follows to one, with no `enum`, `const`,
-  /// `format` or `pattern`; its length and range constraints (`maxLength`,
-  /// `minimum`, `multipleOf`, ...) are met by every enum value. An integer
+  /// `$ref` that [refs] follows to one, with no `enum`, `const`,
+  /// `format`, `pattern` or keyword the rule does not model (`if`, `not`,
+  /// `dependentSchemas`, ...); its length and range constraints
+  /// (`maxLength`, `minimum`, `multipleOf`, ...) are met by every enum
+  /// value. In OpenAPI 3.1 and later the keywords written next to the
+  /// `$ref` of a branch are the branch's own: the same limits apply to
+  /// them, and in 3.0 they are ignored. An integer
   /// enum is also covered by a plain `number`; a number enum is not covered
   /// by an `integer`. The enum branch is written inline; a schema that is
   /// also a model or has an `allOf` has none.
   static Map<SchemaObject, JsonKind> subsumedBranches(
     SchemaObject schema, {
-    Schema? Function(Schema)? resolve,
+    RefFollower? refs,
   }) {
     if (schema.oneOf.isNotEmpty == schema.anyOf.isNotEmpty ||
         schema.properties.isNotEmpty ||
@@ -64,7 +80,7 @@ final class SchemaShapes {
     }
     final branches = [...schema.oneOf, ...schema.anyOf];
     final plain = [
-      for (final branch in branches) ?_plain(branch, resolve),
+      for (final branch in branches) ?_plain(branch, refs),
     ];
     final dropped = <SchemaObject, JsonKind>{};
     if (plain.isEmpty) return dropped;
@@ -85,82 +101,123 @@ final class SchemaShapes {
     return dropped;
   }
 
-  /// The JSON type of [schema] and the schema whose constraints apply when
-  /// it allows every value of that type but those its length and range
-  /// constraints cut: a string, integer, number or boolean with no enum,
-  /// `const`, format, pattern or structure. A `$ref` is read through
-  /// [resolve].
-  static (JsonKind, SchemaObject)? _plain(
+  /// The JSON type of [schema] and the schemas whose length and range
+  /// constraints apply when it allows every value of that type but those
+  /// the constraints cut: a string, integer, number or boolean with no enum,
+  /// `const`, format, pattern, structure or keyword the rule does not model.
+  /// A `$ref` is read through [refs]; from 3.1 its sibling keywords are
+  /// checked like the target's and their constraints apply too.
+  static (JsonKind, List<SchemaObject>)? _plain(
     Schema schema,
-    Schema? Function(Schema)? resolve,
+    RefFollower? refs,
   ) {
     var target = schema;
+    final constraints = <SchemaObject>[];
     if (schema is SchemaObject && schema.ref != null) {
-      if (resolve == null) return null;
-      target = resolve(schema) ?? schema;
+      if (refs == null) return null;
+      target = refs.resolve(schema) ?? schema;
+      if (refs.siblings) {
+        if (!_isPlainShape(schema, allowRef: true)) return null;
+        constraints.add(schema);
+      }
     }
     if (target is! SchemaObject ||
         target.ref != null ||
-        target.enumValues != null ||
-        target.constValue != null ||
-        target.format != null ||
-        target.pattern != null ||
-        target.contentMediaType != null ||
-        target.contentEncoding != null ||
-        target.contentSchema != null ||
-        target.properties.isNotEmpty ||
-        target.items != null ||
-        target.prefixItems.isNotEmpty ||
-        target.additionalProperties != null ||
-        target.allOf.isNotEmpty ||
-        target.oneOf.isNotEmpty ||
-        target.anyOf.isNotEmpty ||
-        target.not != null ||
-        target.discriminator != null) {
+        !_isPlainShape(target)) {
       return null;
     }
-    return switch (_primitiveKind(target)) {
-      final kind? => (kind, target),
-      null => null,
-    };
+    constraints.add(target);
+    final kind = _primitiveKind(target);
+    if (kind == null) return null;
+    // A sibling `type` that names another type leaves no value at all.
+    for (final constraint in constraints) {
+      final types = [
+        for (final type in constraint.types)
+          if (type != SchemaType.nullType) type,
+      ];
+      if (types.isNotEmpty && _primitiveKind(constraint) != kind) return null;
+    }
+    return (kind, constraints);
   }
 
-  /// Whether every one of [values] (strings, numbers or booleans) meets the length and range constraints
-  /// of [schema].
-  static bool _allows(SchemaObject schema, List<Object?> values) {
-    for (final value in values) {
-      if (value is String) {
-        final length = value.runes.length;
-        if (length < (schema.minLength ?? 0) ||
-            length > (schema.maxLength ?? length)) {
-          return false;
-        }
-      } else if (value is num) {
-        final minimum = schema.minimum;
-        final maximum = schema.maximum;
-        if (minimum != null &&
-            (schema.exclusiveMinimumFlag == true
-                ? value <= minimum
-                : value < minimum)) {
-          return false;
-        }
-        if (maximum != null &&
-            (schema.exclusiveMaximumFlag == true
-                ? value >= maximum
-                : value > maximum)) {
-          return false;
-        }
-        if (schema.exclusiveMinimum case final bound? when value <= bound) {
-          return false;
-        }
-        if (schema.exclusiveMaximum case final bound? when value >= bound) {
-          return false;
-        }
-        if (schema.multipleOf case final step? when step > 0) {
-          final ratio = value / step;
-          if ((ratio - ratio.roundToDouble()).abs() > 1e-9) return false;
-        }
+  /// Keywords of [SchemaObject.otherKeywords] that only annotate or
+  /// organise a schema, so a branch that has them is still plain.
+  static const _inertKeywords = {
+    r'$comment',
+    r'$id',
+    r'$schema',
+    r'$anchor',
+    r'$dynamicAnchor',
+    r'$defs',
+    r'$vocabulary',
+  };
+
+  /// Whether [schema] has none of the keywords that make a primitive branch
+  /// more than "every value of its type, within the length and range
+  /// limits": `enum`, `const`, `format`, `pattern`, `content*`, structure,
+  /// composition, `not`, a discriminator, or a keyword the rule does not
+  /// model (`if`/`then`/`else`, `dependentSchemas`, ...). With [allowRef],
+  /// a `$ref` is not a reason (the branch is a `$ref` with siblings).
+  static bool _isPlainShape(SchemaObject schema, {bool allowRef = false}) =>
+      (allowRef || schema.ref == null) &&
+      schema.enumValues == null &&
+      schema.constValue == null &&
+      schema.format == null &&
+      schema.pattern == null &&
+      schema.contentMediaType == null &&
+      schema.contentEncoding == null &&
+      schema.contentSchema == null &&
+      schema.properties.isEmpty &&
+      schema.items == null &&
+      schema.prefixItems.isEmpty &&
+      schema.additionalProperties == null &&
+      schema.allOf.isEmpty &&
+      schema.oneOf.isEmpty &&
+      schema.anyOf.isEmpty &&
+      schema.not == null &&
+      schema.discriminator == null &&
+      schema.otherKeywords.keys.every(_inertKeywords.contains);
+
+  /// Whether every one of [values] (strings, numbers or booleans) meets the
+  /// length and range constraints of every schema in [schemas].
+  static bool _allows(List<SchemaObject> schemas, List<Object?> values) {
+    for (final schema in schemas) {
+      for (final value in values) {
+        if (!_allowsOne(schema, value)) return false;
       }
+    }
+    return true;
+  }
+
+  static bool _allowsOne(SchemaObject schema, Object? value) {
+    if (value is String) {
+      final length = value.runes.length;
+      return length >= (schema.minLength ?? 0) &&
+          length <= (schema.maxLength ?? length);
+    }
+    if (value is! num) return true;
+    final minimum = schema.minimum;
+    final maximum = schema.maximum;
+    if (minimum != null &&
+        (schema.exclusiveMinimumFlag == true
+            ? value <= minimum
+            : value < minimum)) {
+      return false;
+    }
+    if (maximum != null &&
+        (schema.exclusiveMaximumFlag == true
+            ? value >= maximum
+            : value > maximum)) {
+      return false;
+    }
+    if (schema.exclusiveMinimum case final bound? when value <= bound) {
+      return false;
+    }
+    if (schema.exclusiveMaximum case final bound? when value >= bound) {
+      return false;
+    }
+    if (schema.multipleOf case final step? when step > 0) {
+      return Decimal.of(value).isMultipleOf(Decimal.of(step));
     }
     return true;
   }
@@ -265,14 +322,14 @@ final class SchemaShapes {
   /// are met: the property, the annotation-only parts of its `allOf`
   /// ([annotationParts]), and the schema it stands for ([singleOf]: the one
   /// part of an `allOf`, or the one branch of a `oneOf`/`anyOf` besides
-  /// `null`), each followed through its `$ref` ([resolve]) and again through
+  /// `null`), each followed through its `$ref` ([refs]) and again through
   /// the one schema it stands for. `readOnly`, `writeOnly` and `format:
   /// password` are read from every one of them, so a nullable
   /// `anyOf: [{type: string, format: password}, {type: 'null'}]` (Pydantic's
   /// `Optional[SecretStr]`) is as much a secret as the plain string.
   static List<SchemaObject> annotationSources(
     Schema property, {
-    required SchemaObject? Function(Schema) resolve,
+    required RefFollower refs,
   }) {
     final sources = <SchemaObject>[];
     final seen = <Object>{};
@@ -280,11 +337,11 @@ final class SchemaShapes {
       if (schema is! SchemaObject || !seen.add(schema.location)) return;
       sources.add(schema);
       if (schema.ref != null) {
-        if (resolve(schema) case final target?) visit(target);
+        if (refs.resolve(schema) case final target?) visit(target);
         return;
       }
       sources.addAll(annotationParts(schema));
-      if (singleOf(schema, resolve: resolve) case final single?) visit(single);
+      if (singleOf(schema, refs: refs) case final single?) visit(single);
     }
 
     visit(property);
@@ -301,12 +358,12 @@ final class SchemaShapes {
   /// redacts its own.
   static bool carriesSecret(
     Schema schema, {
-    required SchemaObject? Function(Schema) resolve,
+    required RefFollower refs,
     Set<Object>? seen,
   }) {
     final visited = seen ?? <Object>{};
     if (schema is! SchemaObject || !visited.add(schema.location)) return false;
-    for (final source in annotationSources(schema, resolve: resolve)) {
+    for (final source in annotationSources(schema, refs: refs)) {
       if (source.writeOnly || source.format == 'password') return true;
       for (final inner in [
         ?source.items,
@@ -315,7 +372,7 @@ final class SchemaShapes {
         for (final branch in [...source.oneOf, ...source.anyOf])
           if (!isNullOnly(branch)) branch,
       ]) {
-        if (carriesSecret(inner, resolve: resolve, seen: visited)) return true;
+        if (carriesSecret(inner, refs: refs, seen: visited)) return true;
       }
     }
     return false;

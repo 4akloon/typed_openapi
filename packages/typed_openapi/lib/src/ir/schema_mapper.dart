@@ -321,7 +321,7 @@ final class SchemaMapper {
     final id = _idOf(schema);
     // A schema that extends a polymorphic base with `allOf` and adds nothing
     // is a subtype, not a reference to the base (which is the union).
-    final single = switch (SchemaShapes.singleOf(schema, resolve: _resolved)) {
+    final single = switch (SchemaShapes.singleOf(schema, refs: _refs)) {
       final part? when schema.allOf.contains(part) && _isBase(part) => null,
       final part => part,
     };
@@ -405,7 +405,7 @@ final class SchemaMapper {
   }
 
   DartType _inline(SchemaObject schema, NameHint hint) {
-    final single = SchemaShapes.singleOf(schema, resolve: _resolved);
+    final single = SchemaShapes.singleOf(schema, refs: _refs);
     if (single != null) {
       _reportSubsumed(schema, collapsed: true);
       final type = _map(single, hint);
@@ -424,7 +424,7 @@ final class SchemaMapper {
   void _reportSubsumed(SchemaObject schema, {required bool collapsed}) {
     if (_replacing) return;
     for (final MapEntry(key: branch, value: kind)
-        in SchemaShapes.subsumedBranches(schema, resolve: _resolved).entries) {
+        in SchemaShapes.subsumedBranches(schema, refs: _refs).entries) {
       final values = SchemaShapes.enumValues(branch)!;
       final shown = [
         for (final value in values.take(3)) _valueText(value),
@@ -490,7 +490,7 @@ final class SchemaMapper {
     final (kind, branches) = schema.oneOf.isNotEmpty
         ? (UnionKind.oneOf, schema.oneOf)
         : (UnionKind.anyOf, schema.anyOf);
-    final dropped = SchemaShapes.subsumedBranches(schema, resolve: _resolved);
+    final dropped = SchemaShapes.subsumedBranches(schema, refs: _refs);
     final nonNull = [
       for (final branch in branches)
         if (!SchemaShapes.isNullOnly(branch) && !dropped.containsKey(branch))
@@ -724,7 +724,7 @@ final class SchemaMapper {
     if (_branches(object) != null) {
       return object.discriminator?.propertyName != null ? .object : null;
     }
-    if (SchemaShapes.singleOf(object, resolve: _resolved) case final single?) {
+    if (SchemaShapes.singleOf(object, refs: _refs) case final single?) {
       return _jsonKind(single, seen);
     }
     if (object.properties.isNotEmpty || object.allOf.isNotEmpty) {
@@ -823,7 +823,11 @@ final class SchemaMapper {
           valueType: custom == null ? mapped : _custom(custom, mapped),
           constValue: constant?.$1,
           constraints: notes.constraints,
-          knownValues: notes.knownValues,
+          // A union that stays `JsonValue` accepts anything, and no TOA455
+          // says a branch was dropped: it lists no values.
+          knownValues: mapped is CoreType && mapped.kind == .json
+              ? const []
+              : notes.knownValues,
           sensitive: writeOnly || notes.secret,
           required: required.contains(json),
           readOnly: readOnly,
@@ -878,7 +882,7 @@ final class SchemaMapper {
         additionalPropertiesName: extraName ?? 'additionalProperties',
         additionalSensitive:
             additionalSchema != null &&
-            SchemaShapes.carriesSecret(additionalSchema, resolve: _resolved),
+            SchemaShapes.carriesSecret(additionalSchema, refs: _refs),
         direction: direction,
         fields: [
           for (final (field, fieldName) in named)
@@ -978,13 +982,13 @@ final class SchemaMapper {
     final written = [if (siblings) property, ...parts, ?target];
     final sources = SchemaShapes.annotationSources(
       property,
-      resolve: _resolved,
+      refs: _refs,
     );
     final known = <Object?>[];
-    for (final schema in [property, if (property.ref != null) ?target]) {
+    for (final schema in sources) {
       for (final branch in SchemaShapes.subsumedBranches(
         schema,
-        resolve: _resolved,
+        refs: _refs,
       ).keys) {
         for (final value in SchemaShapes.enumValues(branch) ?? const []) {
           if (!known.contains(value)) known.add(value);
@@ -1003,7 +1007,7 @@ final class SchemaMapper {
       deprecated: written.any((s) => s.deprecated),
       readOnly: sources.any((s) => s.readOnly),
       writeOnly: sources.any((s) => s.writeOnly),
-      secret: SchemaShapes.carriesSecret(property, resolve: _resolved),
+      secret: SchemaShapes.carriesSecret(property, refs: _refs),
     );
   }
 
@@ -1471,7 +1475,7 @@ final class SchemaMapper {
               jsonKinds: [...variant.kinds]..sort((a, b) => a.index - b.index),
               sensitive: SchemaShapes.carriesSecret(
                 variant.branch,
-                resolve: _resolved,
+                refs: _refs,
               ),
             ),
         ],
@@ -1990,6 +1994,13 @@ final class SchemaMapper {
         json: json.withNullable(false),
         nullable: json.nullable,
       );
+
+  /// How the schema questions follow a `$ref`: through [_resolved], and the
+  /// keywords next to it count from OpenAPI 3.1.
+  late final RefFollower _refs = RefFollower(
+    _resolved,
+    siblings: _context.model.document.version != .v30,
+  );
 
   SchemaObject? _resolved(Schema schema) =>
       switch (_context.model.resolveSchema(schema)) {
