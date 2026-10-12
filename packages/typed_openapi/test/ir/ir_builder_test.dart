@@ -664,23 +664,120 @@ components:
 openapi: 3.1.0
 info: {title: t, version: "1"}
 paths:
-  /pets/{kind}:
+  /pets:
     parameters:
-      - {name: kind, in: path, required: true, schema: {type: string, enum: [cat, dog]}}
+      - name: filter
+        in: query
+        schema:
+          type: object
+          properties:
+            a: {type: string, enum: [x, y]}
     get: {operationId: getPets, tags: [pets], responses: {"204": {description: ok}}}
     delete: {operationId: deletePets, tags: [pets], responses: {"204": {description: ok}}}
 ''');
     final ir = build(fixture);
     expect(fixture.reported, isEmpty);
-    expect(ir.declarations.map((d) => d.name), ['DeletePetsKind']);
+    expect(ir.declarations.map((d) => d.name), [
+      'DeletePetsFilter',
+      'DeletePetsFilterA',
+    ]);
     expect(
       [
         for (final o in ir.groups.single.operations)
           o.parameters.single.type.code(ir.nameOf),
       ],
-      ['DeletePetsKind', 'DeletePetsKind'],
+      ['DeletePetsFilter?', 'DeletePetsFilter?'],
     );
   });
+
+  test('skips a parameter without a valid location and builds the rest', () {
+    final fixture = IrFixture('''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /pets:
+    get:
+      operationId: getPets
+      tags: [pets]
+      parameters:
+        - {name: a, in: Query, schema: {type: string}}
+        - {name: b, schema: {type: string}}
+        - {name: c, in: query, schema: {type: string}}
+      responses: {"204": {description: ok}}
+''');
+    final ir = build(fixture);
+    expect(
+      [for (final p in ir.groups.single.operations.single.parameters) p.name],
+      ['c'],
+    );
+    // The parser has reported both; the IR adds nothing.
+    expect(fixture.reported, isEmpty);
+    expect(
+      fixture.diagnostics.all.where(
+        (d) =>
+            d.code == DiagnosticCode.invalidValue ||
+            d.code == DiagnosticCode.missingRequiredField,
+      ),
+      hasLength(2),
+    );
+  });
+
+  test(
+    'splits a model by direction whatever order the schemas are used in',
+    () {
+      String spec(String first, String second) =>
+          '''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /a:
+    get:
+      operationId: getA
+      tags: [t]
+      responses: {"200": {description: ok, content: {application/json: {schema: {\$ref: '#/components/schemas/$first'}}}}}
+    post:
+      operationId: postA
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {\$ref: '#/components/schemas/$first'}}}}
+      responses: {"204": {description: ok}}
+  /b:
+    get:
+      operationId: getB
+      tags: [t]
+      responses: {"200": {description: ok, content: {application/json: {schema: {\$ref: '#/components/schemas/$second'}}}}}
+    post:
+      operationId: postB
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {\$ref: '#/components/schemas/$second'}}}}
+      responses: {"204": {description: ok}}
+components:
+  schemas:
+    X:
+      type: object
+      properties:
+        y: {\$ref: '#/components/schemas/Y'}
+        c: {\$ref: '#/components/schemas/C'}
+    Y:
+      type: object
+      properties:
+        x: {\$ref: '#/components/schemas/X'}
+    C:
+      type: object
+      properties:
+        id: {type: integer, readOnly: true}
+''';
+      for (final (first, second) in [('X', 'Y'), ('Y', 'X')]) {
+        final fixture = IrFixture(spec(first, second));
+        final ir = build(fixture);
+        expect(fixture.reported, isEmpty, reason: '$first, $second');
+        expect(
+          ir.declarations.map((d) => d.name),
+          ['C', 'CInput', 'X', 'XInput', 'Y', 'YInput'],
+          reason: '$first, $second',
+        );
+      }
+    },
+  );
 
   test('names a schema a ref finds outside components.schemas', () {
     final fixture = IrFixture(r'''

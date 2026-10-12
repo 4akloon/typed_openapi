@@ -101,35 +101,53 @@ final class DirectionIndex {
         _ => null,
       };
 
-  /// Whether [schema] or a schema inside it has a `readOnly` or `writeOnly`
-  /// property.
+  /// Whether [schema] or a schema reachable from it has a `readOnly` or
+  /// `writeOnly` property.
+  ///
+  /// The answer depends on the set of schemas reachable from [schema] only,
+  /// not on the order schemas are asked in, also when they refer to each
+  /// other. A search that finds none proves that for every schema it
+  /// visited, since what they reach is inside the visited set; one that
+  /// finds one proves it for its start only.
   bool _isDirectional(SchemaObject schema) {
     final known = _directional[schema.location];
     if (known != null) return known;
-    // A cycle is not directional by itself.
-    _directional[schema.location] = false;
-    var result = false;
+    final visited = <SpecLocation>{};
+    final pending = [schema];
+    while (pending.isNotEmpty) {
+      final next = pending.removeLast();
+      if (!visited.add(next.location)) continue;
+      final cached = _directional[next.location];
+      if (cached == false) continue;
+      if (cached == true || _hasDirectionalProperty(next)) {
+        return _directional[schema.location] = true;
+      }
+      for (final child in _children(next).reversed) {
+        final resolved = _model.resolveSchema(child);
+        if (resolved is SchemaObject) pending.add(resolved);
+      }
+    }
+    for (final location in visited) {
+      _directional[location] = false;
+    }
+    return false;
+  }
+
+  /// Whether a property of [schema] is `readOnly` or `writeOnly`, as
+  /// written or through its `$ref`.
+  bool _hasDirectionalProperty(SchemaObject schema) {
     for (final property in schema.properties.values) {
       final resolved = _model.resolveSchema(property);
       if (resolved is SchemaObject &&
           (resolved.readOnly || resolved.writeOnly)) {
-        result = true;
+        return true;
       }
       if (property is SchemaObject &&
           (property.readOnly || property.writeOnly)) {
-        result = true;
+        return true;
       }
     }
-    if (!result) {
-      for (final child in _children(schema)) {
-        final resolved = _model.resolveSchema(child);
-        if (resolved is SchemaObject && _isDirectional(resolved)) {
-          result = true;
-          break;
-        }
-      }
-    }
-    return _directional[schema.location] = result;
+    return false;
   }
 
   static List<Schema> _children(SchemaObject schema) => [

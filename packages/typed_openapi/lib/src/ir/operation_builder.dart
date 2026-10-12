@@ -71,14 +71,18 @@ final class OperationBuilder {
   List<ParameterIr>? _parameters(SpecOperation entry, String prefix) {
     // Operation parameters replace path item parameters with the same name
     // and location.
-    final byKey = <(ParameterLocation?, String?), Parameter>{};
+    final byKey =
+        <(ParameterLocation, String?), (ParameterLocation, Parameter)>{};
     for (final written in [
       ...entry.item.parameters,
       ...entry.operation.parameters,
     ]) {
       final parameter = _context.model.resolve(written);
-      if (parameter == null) continue;
-      byKey[(parameter.placement, parameter.name)] = parameter;
+      // A parameter without a valid `in` is not generated; the parser has
+      // reported it (TOA111, TOA112).
+      final placement = parameter?.placement;
+      if (parameter == null || placement == null) continue;
+      byKey[(placement, parameter.name)] = (placement, parameter);
     }
     final variables = [
       for (final match in _variable.allMatches(entry.path)) match[1]!,
@@ -108,24 +112,22 @@ final class OperationBuilder {
       ParameterLocation.cookie,
     ];
     final sorted = byKey.values.toList()
-      ..sort(
-        (a, b) => order.indexOf(a.placement!) - order.indexOf(b.placement!),
-      );
+      ..sort((a, b) => order.indexOf(a.$1) - order.indexOf(b.$1));
     return [
-      for (final parameter in sorted)
+      for (final (placement, parameter) in sorted)
         if (parameter.name case final wire?)
-          _parameter(entry, parameter, wire, scope, prefix),
+          _parameter(entry, parameter, placement, wire, scope, prefix),
     ];
   }
 
   ParameterIr _parameter(
     SpecOperation entry,
     Parameter parameter,
+    ParameterLocation placement,
     String wire,
     NameScope scope,
     String prefix,
   ) {
-    final placement = parameter.placement!;
     final override = _context.overrides.parameterAt(parameter.location);
     final candidate = override?.name ?? _names.camel(wire) ?? 'param';
     final (name, change) = scope.claim(
