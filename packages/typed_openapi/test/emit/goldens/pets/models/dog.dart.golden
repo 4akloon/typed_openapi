@@ -1,0 +1,48 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND.
+// dart format off
+
+import 'dart:convert' show base64Encode;
+import 'dart:typed_data' show Uint8List;
+
+import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'
+    show DeepEquality, JsonReader, immutable;
+
+@immutable
+final class Dog {
+  /// Creates a [Dog].
+  const Dog({this.bark, this.photo});
+
+  /// Decodes a [Dog] from [json]; throws a `JsonDecodeException`
+  /// when it does not match the schema.
+  factory Dog.fromJson(Map<String, Object?> json) {
+    final r = JsonReader(json, schema: 'Dog');
+    return Dog(
+      bark: r.optional('bark', JsonReader.asBool),
+      photo: r.optional('photo', JsonReader.asBytes),
+    );
+  }
+
+  /// Defaults to `true` on the server.
+  final bool? bark;
+
+  final Uint8List? photo;
+
+  /// Encodes this [Dog]; optional fields that are not set are
+  /// not sent.
+  Map<String, Object?> toJson() => {
+    'bark': ?bark,
+    if (photo case final v?) 'photo': base64Encode(v),
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is Dog &&
+      other.bark == bark &&
+      const DeepEquality().equals(other.photo, photo);
+
+  @override
+  int get hashCode => const DeepEquality().hash([bark, photo]);
+
+  @override
+  String toString() => 'Dog(bark: $bark, photo: $photo)';
+}

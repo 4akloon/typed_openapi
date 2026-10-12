@@ -1,0 +1,10 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND.
+// dart format off
+
+export 'models/cat.dart';
+export 'models/dog.dart';
+export 'models/id_or_name.dart';
+export 'models/owner.dart';
+export 'models/patch_owner_request.dart';
+export 'models/pet.dart';
+export 'models/status.dart';

@@ -1,0 +1,77 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND.
+// dart format off
+
+import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'
+    show Date, DeepEquality, JsonReader, immutable;
+
+import 'id_or_name.dart';
+import 'pet.dart';
+import 'status.dart';
+
+@immutable
+final class Owner {
+  /// Creates a [Owner].
+  const Owner({
+    required this.id,
+    this.status,
+    this.birthday,
+    this.pets,
+    this.additionalProperties = const {},
+  });
+
+  /// Decodes a [Owner] from [json]; throws a `JsonDecodeException`
+  /// when it does not match the schema.
+  factory Owner.fromJson(Map<String, Object?> json) {
+    final r = JsonReader(json, schema: 'Owner');
+    return Owner(
+      id: r.required('id', IdOrName.fromJson),
+      status: r.optional('status', Status.fromJson),
+      birthday: r.optional('birthday', JsonReader.asDate),
+      pets: r.optional('pets', JsonReader.listOf(Pet.fromJson)),
+      additionalProperties: r.additional(const {'id', 'status', 'birthday', 'pets'}, JsonReader.asInt),
+    );
+  }
+
+  final IdOrName id;
+
+  /// Where the owner is.
+  final Status? status;
+
+  final Date? birthday;
+
+  final List<Pet>? pets;
+
+  /// The properties of the object the schema does not list (`additionalProperties`).
+  final Map<String, int> additionalProperties;
+
+  /// Encodes this [Owner]; optional fields that are not set are
+  /// not sent.
+  Map<String, Object?> toJson() => {
+    'id': id.toJson(),
+    'status': ?status?.toJson(),
+    'birthday': ?birthday?.toJson(),
+    if (pets case final v?) 'pets': [for (final e0 in v) e0.toJson()],
+    ...additionalProperties,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is Owner &&
+      other.id == id &&
+      other.status == status &&
+      other.birthday == birthday &&
+      const DeepEquality().equals(other.pets, pets) &&
+      const DeepEquality().equals(other.additionalProperties, additionalProperties);
+
+  @override
+  int get hashCode => const DeepEquality().hash([
+    id,
+    status,
+    birthday,
+    pets,
+    additionalProperties,
+  ]);
+
+  @override
+  String toString() => 'Owner(id: $id, status: $status, birthday: $birthday, pets: $pets, additionalProperties: $additionalProperties)';
+}

@@ -1,0 +1,140 @@
+openapi: 3.1.0
+info: {title: Pets, version: "1"}
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Everything'}
+    patch:
+      operationId: patchPet
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PetUpdate'}
+      responses:
+        '204': {description: ok}
+    post:
+      operationId: createPet
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '201':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Pet'}
+components:
+  schemas:
+    Status:
+      type: string
+      description: "The <status> of a [pet]; `a<b>` and */ and \\ backslash."
+      enum: [available, "0.5", "true", "2fa", unknown, values, "it's $x", int]
+    Level: {type: integer, enum: [1, 2, -3]}
+    Ratio: {type: number, enum: [0.5, 1, 2.25]}
+    Flag: {type: boolean, enum: [true, false]}
+    Cat:
+      type: object
+      required: [petType, lives]
+      properties:
+        petType: {const: cat}
+        lives: {type: integer, minimum: 0, maximum: 9}
+    Dog:
+      type: object
+      properties:
+        bark: {type: boolean, default: true}
+    Pet:
+      oneOf:
+        - $ref: '#/components/schemas/Cat'
+        - $ref: '#/components/schemas/Dog'
+        - type: object
+          properties:
+            petType: {const: fish}
+            fins: {type: integer}
+      discriminator:
+        propertyName: petType
+        mapping: {cat: Cat, doggo: Dog}
+    IdOrName:
+      oneOf:
+        - {type: string, format: date-time}
+        - {type: integer}
+        - {type: number}
+        - {type: array, items: {type: string}}
+        - $ref: '#/components/schemas/Cat'
+        - {type: boolean}
+    Shape:
+      anyOf:
+        - {type: object, properties: {r: {type: number}}, required: [r]}
+        - {type: object, properties: {w: {type: number}}, required: [w]}
+    Empty: {type: object, properties: {}}
+    OnlyExtra:
+      type: object
+      additionalProperties: {type: integer}
+    Node:
+      type: object
+      properties:
+        children: {type: array, items: {$ref: '#/components/schemas/Node'}}
+        parent: {$ref: '#/components/schemas/Node'}
+    PetUpdate:
+      type: object
+      properties:
+        name: {type: [string, 'null']}
+        meta: {}
+        status: {$ref: '#/components/schemas/Status'}
+        tags: {type: [array, 'null'], items: {type: string}}
+    Everything:
+      type: object
+      description: |
+        Every kind of field.
+
+        ```
+        code <kept> [as is]
+        ```
+      required: [id, class, other, req_nullable, json]
+      properties:
+        id: {type: integer, format: int64}
+        class: {type: string}
+        other: {type: string}
+        int: {type: integer}
+        hashCode: {type: integer}
+        req_nullable: {type: [string, 'null']}
+        json: {}
+        meta: {}
+        $dollar: {type: string}
+        "2fa": {type: boolean}
+        "ім'я": {type: string}
+        born: {type: string, format: date-time}
+        birthday: {type: string, format: date}
+        photo: {type: string, format: byte}
+        photos: {type: array, items: {type: string, format: byte}}
+        maybePhotos: {type: array, items: {type: [string, 'null'], format: byte}}
+        dates: {type: array, items: {type: string, format: date-time}}
+        dateMap: {type: object, additionalProperties: {type: string, format: date}}
+        nested: {type: array, items: {type: array, items: {$ref: '#/components/schemas/Cat'}}}
+        statusMap: {type: object, additionalProperties: {$ref: '#/components/schemas/Status'}}
+        status: {$ref: '#/components/schemas/Status'}
+        level: {$ref: '#/components/schemas/Level'}
+        ratio: {$ref: '#/components/schemas/Ratio'}
+        flag: {$ref: '#/components/schemas/Flag'}
+        pet: {$ref: '#/components/schemas/Pet'}
+        pets: {type: array, items: {$ref: '#/components/schemas/Pet'}}
+        idOrName: {$ref: '#/components/schemas/IdOrName'}
+        shape: {$ref: '#/components/schemas/Shape'}
+        empty: {$ref: '#/components/schemas/Empty'}
+        onlyExtra: {$ref: '#/components/schemas/OnlyExtra'}
+        node: {$ref: '#/components/schemas/Node'}
+        name: {type: string, minLength: 1, maxLength: 64, pattern: '^[a-z`]+$', default: rex}
+        old: {type: string, deprecated: true, description: Use name.}
+        kind: {const: everything}
+        version: {type: integer, enum: [2]}
+        inlineEnum: {type: string, enum: [x, y]}
+        number: {type: number}
+        double: {type: number, format: double}
+        any: {type: array, items: {}}
+      additionalProperties: {type: string}

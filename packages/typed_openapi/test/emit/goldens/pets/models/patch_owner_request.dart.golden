@@ -1,0 +1,44 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND.
+// dart format off
+
+import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'
+    show DeepEquality, JsonReader, JsonValue, Patch, immutable;
+
+@immutable
+final class PatchOwnerRequest {
+  /// Creates a [PatchOwnerRequest].
+  const PatchOwnerRequest({this.name, this.meta});
+
+  /// Decodes a [PatchOwnerRequest] from [json]; throws a `JsonDecodeException`
+  /// when it does not match the schema.
+  factory PatchOwnerRequest.fromJson(Map<String, Object?> json) {
+    final r = JsonReader(json, schema: 'PatchOwnerRequest');
+    return PatchOwnerRequest(
+      name: r.patch('name', JsonReader.asString),
+      meta: r.patchValue('meta'),
+    );
+  }
+
+  final Patch<String>? name;
+
+  final Patch<JsonValue>? meta;
+
+  /// Encodes this [PatchOwnerRequest]; optional fields that are not set are
+  /// not sent.
+  Map<String, Object?> toJson() => {
+    if (name case final v?) 'name': v.toJson((p0) => p0),
+    if (meta case final v?) 'meta': v.toJson((p0) => p0),
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is PatchOwnerRequest &&
+      const DeepEquality().equals(other.name, name) &&
+      const DeepEquality().equals(other.meta, meta);
+
+  @override
+  int get hashCode => const DeepEquality().hash([name, meta]);
+
+  @override
+  String toString() => 'PatchOwnerRequest(name: $name, meta: $meta)';
+}

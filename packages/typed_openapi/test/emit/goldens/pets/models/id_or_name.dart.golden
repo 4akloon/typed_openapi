@@ -1,0 +1,90 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND.
+// dart format off
+
+import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'
+    show DeepEquality, JsonReader, JsonValue, immutable;
+
+sealed class IdOrName {
+  /// Decodes a [IdOrName] by the JSON type of [json]; a value of
+  /// another type is a [IdOrNameUnknown].
+  factory IdOrName.fromJson(Object? json) => switch (json) {
+    final String value => IdOrNameString(JsonReader.asString(value)),
+    final int value => IdOrNameInt(JsonReader.asInt(value)),
+    _ => IdOrNameUnknown._(JsonValue(json)),
+  };
+
+  /// The value in JSON.
+  Object? toJson();
+}
+
+/// A [IdOrName] that is a `String`.
+@immutable
+final class IdOrNameString implements IdOrName {
+  /// Wraps [value].
+  const IdOrNameString(this.value);
+
+  /// The value of the variant.
+  final String value;
+
+  @override
+  Object? toJson() => value;
+
+  @override
+  bool operator ==(Object other) =>
+      other is IdOrNameString &&
+      other.value == value;
+
+  @override
+  int get hashCode => value.hashCode;
+
+  @override
+  String toString() => 'IdOrNameString($value)';
+}
+
+/// A [IdOrName] that is a `int`.
+@immutable
+final class IdOrNameInt implements IdOrName {
+  /// Wraps [value].
+  const IdOrNameInt(this.value);
+
+  /// The value of the variant.
+  final int value;
+
+  @override
+  Object? toJson() => value;
+
+  @override
+  bool operator ==(Object other) =>
+      other is IdOrNameInt &&
+      other.value == value;
+
+  @override
+  int get hashCode => value.hashCode;
+
+  @override
+  String toString() => 'IdOrNameInt($value)';
+}
+
+/// A [IdOrName] that no variant takes; only
+/// [IdOrName.fromJson] creates one.
+@immutable
+final class IdOrNameUnknown implements IdOrName {
+  const IdOrNameUnknown._(this.json);
+
+  /// The JSON as received.
+  final JsonValue json;
+
+  @override
+  Object? toJson() => json;
+
+  @override
+  bool operator ==(Object other) =>
+      other is IdOrNameUnknown &&
+      const DeepEquality().equals(other.json, json);
+
+  @override
+  int get hashCode => const DeepEquality().hash(json);
+
+  @override
+  String toString() => 'IdOrNameUnknown($json)';
+}

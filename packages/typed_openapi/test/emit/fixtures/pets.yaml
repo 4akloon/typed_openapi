@@ -1,0 +1,60 @@
+openapi: 3.1.0
+info: {title: Pets, version: "1"}
+paths:
+  /owners:
+    get:
+      operationId: listOwners
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Owner'}
+    patch:
+      operationId: patchOwner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: {type: [string, 'null']}
+                meta: {}
+      responses:
+        '204': {description: ok}
+components:
+  schemas:
+    Status:
+      type: string
+      description: Where the owner is.
+      enum: [active, gone]
+    Cat:
+      type: object
+      required: [kind, lives]
+      properties:
+        kind: {const: cat}
+        lives: {type: integer, minimum: 0, maximum: 9}
+        bornAt: {type: string, format: date-time}
+    Dog:
+      type: object
+      properties:
+        bark: {type: boolean, default: true}
+        photo: {type: string, format: byte}
+    Pet:
+      oneOf:
+        - $ref: '#/components/schemas/Cat'
+        - $ref: '#/components/schemas/Dog'
+      discriminator:
+        propertyName: kind
+        mapping: {cat: Cat, dog: Dog}
+    IdOrName:
+      oneOf: [{type: string}, {type: integer}]
+    Owner:
+      type: object
+      required: [id]
+      properties:
+        id: {$ref: '#/components/schemas/IdOrName'}
+        status: {$ref: '#/components/schemas/Status'}
+        birthday: {type: string, format: date}
+        pets: {type: array, items: {$ref: '#/components/schemas/Pet'}}
+      additionalProperties: {type: integer}

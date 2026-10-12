@@ -1,0 +1,69 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND.
+// dart format off
+
+import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'
+    show JsonReader;
+
+/// Where the owner is.
+sealed class Status {
+  /// Decodes a [Status]; a value the spec does not list is a
+  /// [StatusUnknown].
+  factory Status.fromJson(Object? json) {
+    final value = JsonReader.asString(json);
+    for (final known in StatusKnown.values) {
+      if (known.value == value) return known;
+    }
+    return StatusUnknown._(value);
+  }
+
+  /// `'active'`
+  static const active = StatusKnown.active;
+
+  /// `'gone'`
+  static const gone = StatusKnown.gone;
+
+  /// The value in JSON.
+  String get value;
+
+  /// The value in JSON.
+  String toJson();
+}
+
+/// The values of [Status] the spec lists.
+enum StatusKnown implements Status {
+  /// `'active'`
+  active('active'),
+
+  /// `'gone'`
+  gone('gone');
+
+  const StatusKnown(this.value);
+
+  @override
+  final String value;
+
+  @override
+  String toJson() => value;
+}
+
+/// A value of [Status] the spec does not list; only
+/// [Status.fromJson] creates one.
+final class StatusUnknown implements Status {
+  const StatusUnknown._(this.value);
+
+  @override
+  final String value;
+
+  @override
+  String toJson() => value;
+
+  @override
+  bool operator ==(Object other) =>
+      other is StatusUnknown && other.value == value;
+
+  @override
+  int get hashCode => value.hashCode;
+
+  @override
+  String toString() => 'StatusUnknown($value)';
+}

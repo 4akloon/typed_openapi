@@ -1,0 +1,92 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND.
+// dart format off
+
+import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'
+    show DeepEquality, JsonReader, JsonValue, immutable;
+
+import 'cat.dart';
+import 'dog.dart';
+
+sealed class Pet {
+  /// Decodes a [Pet] by its `kind`; a value no
+  /// variant has is a [PetUnknown].
+  factory Pet.fromJson(Object? json) {
+    final r = JsonReader.of(json, schema: 'Pet');
+    return switch (r.json['kind']) {
+      'cat' => PetCat(Cat.fromJson(JsonReader.asObject(r.json))),
+      'dog' => PetDog(Dog.fromJson(JsonReader.asObject(r.json))),
+      _ => PetUnknown._(JsonValue(r.json)),
+    };
+  }
+
+  /// The value in JSON.
+  Object? toJson();
+}
+
+/// A [Pet] that is a `Cat`.
+@immutable
+final class PetCat implements Pet {
+  /// Wraps [value].
+  const PetCat(this.value);
+
+  /// The value of the variant.
+  final Cat value;
+
+  @override
+  Object? toJson() => value.toJson();
+
+  @override
+  bool operator ==(Object other) => other is PetCat && other.value == value;
+
+  @override
+  int get hashCode => value.hashCode;
+
+  @override
+  String toString() => 'PetCat($value)';
+}
+
+/// A [Pet] that is a `Dog`.
+@immutable
+final class PetDog implements Pet {
+  /// Wraps [value].
+  const PetDog(this.value);
+
+  /// The value of the variant.
+  final Dog value;
+
+  @override
+  Object? toJson() => {...value.toJson(), 'kind': 'dog'};
+
+  @override
+  bool operator ==(Object other) => other is PetDog && other.value == value;
+
+  @override
+  int get hashCode => value.hashCode;
+
+  @override
+  String toString() => 'PetDog($value)';
+}
+
+/// A [Pet] that no variant takes; only
+/// [Pet.fromJson] creates one.
+@immutable
+final class PetUnknown implements Pet {
+  const PetUnknown._(this.json);
+
+  /// The JSON as received.
+  final JsonValue json;
+
+  @override
+  Object? toJson() => json;
+
+  @override
+  bool operator ==(Object other) =>
+      other is PetUnknown &&
+      const DeepEquality().equals(other.json, json);
+
+  @override
+  int get hashCode => const DeepEquality().hash(json);
+
+  @override
+  String toString() => 'PetUnknown($json)';
+}
