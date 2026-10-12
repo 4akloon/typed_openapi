@@ -707,6 +707,6 @@ are not, so follow them by hand:
 
 Everything is in English: documents in `docs/`, `CLAUDE.md`, READMEs, code,
 code comments, doc comments, diagnostics messages and commit messages. A new
-or edited document is written in English; a document still in Ukrainian
-(see `docs/README.md`) is translated when it is next edited. The only
-Ukrainian files are the intentional user-facing `README.ua.md` translations.
+or edited document is written in English. The only Ukrainian files are the
+intentional user-facing `README.ua.md` translations (and a few Unicode test
+strings in the M6 and M8 plans).
