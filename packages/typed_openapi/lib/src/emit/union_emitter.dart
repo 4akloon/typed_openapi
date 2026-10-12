@@ -225,6 +225,26 @@ final class UnionEmitter {
         !model.fields.any((f) => f.jsonKey == property);
   }
 
+  /// Whether `fromJson` creates the wrapper of [variant] with the value it
+  /// was decoded with: it is picked by a discriminator value no earlier
+  /// variant has, or is the default. A wrapper that is never picked has no
+  /// such constructor (it would be unused).
+  bool _decodedWithTag(UnionDecl decl, UnionVariantIr variant) {
+    if (!_remembers(decl, variant)) return false;
+    if (decl.defaultVariant != null && decl.defaultVariant == variant.type) {
+      return true;
+    }
+    final seen = <String>{};
+    for (final other in decl.variants) {
+      final fresh = [
+        for (final value in other.discriminatorValues)
+          if (seen.add(value)) value,
+      ];
+      if (identical(other, variant)) return fresh.isNotEmpty;
+    }
+    return false;
+  }
+
   void _variant(DartWriter out, UnionDecl decl, UnionVariantIr variant) {
     final type = _codec.type(variant.type);
     final name = variant.name;
@@ -243,10 +263,12 @@ final class UnionEmitter {
       ..block('class $name implements ${decl.name}', () {
         out.line('/// Wraps [value].');
         if (remembers) {
-          out
-            ..line('const $name(this.value) : discriminator = null;')
-            ..line()
-            ..line('const $name._(this.value, this.discriminator);');
+          out.line('const $name(this.value) : discriminator = null;');
+          if (_decodedWithTag(decl, variant)) {
+            out
+              ..line()
+              ..line('const $name._(this.value, this.discriminator);');
+          }
         } else {
           out.line('const $name(this.value);');
         }

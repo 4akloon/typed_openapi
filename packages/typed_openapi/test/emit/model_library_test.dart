@@ -177,6 +177,27 @@ void main() {
     expect(body, contains('final Map<String, Color> additionalProperties;'));
   });
 
+  test('a wrapper no discriminator value picks has no private constructor', () {
+    final files = emit(r'''
+    Root:
+      type: object
+      properties: {pet: {$ref: '#/components/schemas/Pet'}}
+    Cat: {type: object, properties: {lives: {type: integer}}}
+    Dog: {type: object, properties: {bark: {type: boolean}}}
+    Pet:
+      oneOf: [{$ref: '#/components/schemas/Cat'}, {$ref: '#/components/schemas/Dog'}]
+      discriminator:
+        propertyName: kind
+        mapping: {Cat: Dog}
+''');
+    final pet = files['models/pet.dart']!;
+    // `Cat` is both the implicit value of Cat and the mapped value of Dog:
+    // the earlier variant decodes it, so Dog is never picked.
+    expect(pet, contains('const PetCat._(this.value, this.discriminator);'));
+    expect(pet, isNot(contains('const PetDog._(')));
+    expect(pet, contains('const PetDog(this.value) : discriminator = null;'));
+  });
+
   test('classes are not final, so users can extend and implement them', () {
     final files = emit(r'''
     Root:

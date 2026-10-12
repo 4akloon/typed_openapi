@@ -60,6 +60,13 @@ components:
       discriminator:
         propertyName: petType
         mapping: {cat: Cat, doggo: Dog}
+    Clash:
+      oneOf:
+        - $ref: '#/components/schemas/Cat'
+        - $ref: '#/components/schemas/Dog'
+      discriminator:
+        propertyName: kind
+        mapping: {Cat: Dog}
     IdOrName:
       oneOf:
         - {type: string, format: date-time}
@@ -130,6 +137,7 @@ components:
         ratio: {$ref: '#/components/schemas/Ratio'}
         flag: {$ref: '#/components/schemas/Flag'}
         pet: {$ref: '#/components/schemas/Pet'}
+        clash: {$ref: '#/components/schemas/Clash'}
         pets: {type: array, items: {$ref: '#/components/schemas/Pet'}}
         idOrName: {$ref: '#/components/schemas/IdOrName'}
         shape: {$ref: '#/components/schemas/Shape'}

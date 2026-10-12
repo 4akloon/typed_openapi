@@ -1251,9 +1251,26 @@ final class SchemaMapper {
       if (!shared!.kinds.contains(kind)) shared!.kinds.add(kind);
     }
 
+    // A branch that is the same schema as a conflicting one is a duplicate
+    // of it, not a variant of its own.
+    final conflicting = {
+      for (final i in conflicts.keys) ?_resolved(branches[i])?.location,
+    };
     for (final (i, branch) in branches.indexed) {
       if (conflicts.containsKey(i)) {
         share(conflicts[i]!, branch);
+        continue;
+      }
+      if (conflicting.contains(_resolved(branch)?.location)) {
+        _context.report(
+          .unionVariantDuplicate,
+          'This variant is the same schema as an earlier variant of the '
+          '${kind.name}; it is dropped, since a value could not be told '
+          'apart between them.',
+          branch.location,
+          fix: 'Remove the duplicate variant at the source.',
+        );
+        droppedDuplicate = true;
         continue;
       }
       final type = subtypes

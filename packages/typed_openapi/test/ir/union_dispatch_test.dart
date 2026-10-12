@@ -414,4 +414,31 @@ $head    Pet:
     expect(report.message, contains('duplicate variants were dropped'));
     expect(report.message, isNot(contains('JSON types of their own')));
   });
+
+  test('a repeated branch of a conflicting JSON type is a duplicate', () {
+    // Fuzz seed 720: the second Cat was a variant of its own that no value
+    // could reach, as the shared variant of objects takes every object.
+    final fixture = IrFixture('''
+$head    Pet:
+      oneOf:
+        - \$ref: '#/components/schemas/Cat'
+        - {type: object, additionalProperties: {type: string}}
+        - {type: number}
+        - \$ref: '#/components/schemas/Cat'
+''');
+    final (ir, _) = mapComponents(fixture, ['Pet']);
+    expect(
+      union(ir, 'Pet').variants.map((v) => '${v.name} ${v.jsonKinds}'),
+      ['PetJson [JsonKind.object]', 'PetNum []'],
+    );
+    expect(
+      fixture.codes.where((c) => c.$1 == DiagnosticCode.unionVariantDuplicate),
+      [
+        (
+          DiagnosticCode.unionVariantDuplicate,
+          '#/components/schemas/Pet/oneOf/3',
+        ),
+      ],
+    );
+  });
 }
