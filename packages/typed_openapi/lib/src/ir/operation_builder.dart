@@ -8,6 +8,7 @@ import 'ir_context.dart';
 import 'names.dart';
 import 'operation_checks.dart';
 import 'parts_builder.dart';
+import 'response_secrets.dart';
 import 'schema_mapper.dart';
 import 'security_builder.dart';
 
@@ -43,7 +44,8 @@ final class OperationBuilder {
     : _checks = OperationChecks(_context),
       _security = SecurityBuilder(_context),
       _parts = PartsBuilder(_context, _mapper),
-      _encoding = BodyEncoding(_context);
+      _encoding = BodyEncoding(_context),
+      _secrets = ResponseSecrets(_context);
 
   static const _names = DartNames();
 
@@ -78,6 +80,7 @@ final class OperationBuilder {
 
   final IrContext _context;
   final SchemaMapper _mapper;
+  final ResponseSecrets _secrets;
   final OperationChecks _checks;
   final SecurityBuilder _security;
   final PartsBuilder _parts;
@@ -461,6 +464,7 @@ final class OperationBuilder {
           type: type,
           envelopeKey: envelope == null ? null : 'data',
           description: response.description,
+          sensitive: _secrets.isSecret(envelope ?? schema, type),
         ),
       );
     }
@@ -528,7 +532,17 @@ final class OperationBuilder {
     if (types.length == 1 && types.single != null) {
       return SingleError(types.single!, [for (final (s, _) in cases) s]);
     }
-    return ErrorsByStatus(cases);
+    return ErrorsByStatus(
+      cases,
+      sensitive: {
+        for (final response in responses)
+          if (response.isError &&
+              (response.type == null
+                  ? _secrets.isDefaultErrorSecret(fallback)
+                  : response.sensitive))
+            response.status,
+      },
+    );
   }
 
   DartType? _defaultErrorType() {

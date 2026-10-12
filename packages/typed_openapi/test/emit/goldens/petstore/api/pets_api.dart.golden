@@ -350,6 +350,9 @@ class CreatePetResponseOk extends CreatePetResponse {
 
   @override
   int get hashCode => body.hashCode;
+
+  @override
+  String toString() => 'CreatePetResponseOk($body)';
 }
 
 /// The `201` response of [PetsApi.createPet].
@@ -367,6 +370,9 @@ class CreatePetResponseCreated extends CreatePetResponse {
 
   @override
   int get hashCode => body.hashCode;
+
+  @override
+  String toString() => 'CreatePetResponseCreated($body)';
 }
 
 /// The `204` response of [PetsApi.createPet], which has no body.
@@ -379,6 +385,9 @@ class CreatePetResponseNoContent extends CreatePetResponse {
 
   @override
   int get hashCode => (CreatePetResponseNoContent).hashCode;
+
+  @override
+  String toString() => 'CreatePetResponseNoContent()';
 }
 
 /// The errors of [PetsApi.createPet], by status: a `switch` names every one.
@@ -402,6 +411,9 @@ class CreatePetErrorNotFound extends CreatePetError {
 
   @override
   int get hashCode => body.hashCode;
+
+  @override
+  String toString() => 'CreatePetErrorNotFound($body)';
 }
 
 /// The `4XX` response of [PetsApi.createPet].
@@ -419,6 +431,9 @@ class CreatePetErrorClientError extends CreatePetError {
 
   @override
   int get hashCode => body.hashCode;
+
+  @override
+  String toString() => 'CreatePetErrorClientError($body)';
 }
 
 /// The `503` response of [PetsApi.createPet], which has no body.
@@ -431,6 +446,9 @@ class CreatePetErrorServiceUnavailable extends CreatePetError {
 
   @override
   int get hashCode => (CreatePetErrorServiceUnavailable).hashCode;
+
+  @override
+  String toString() => 'CreatePetErrorServiceUnavailable()';
 }
 
 /// The parts of the `multipart/form-data` body of [PetsApi.uploadPhoto].

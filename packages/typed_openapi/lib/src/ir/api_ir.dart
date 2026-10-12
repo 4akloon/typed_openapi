@@ -88,7 +88,12 @@ final class StatusTypeIr {
 /// A variant of a [StatusTypeIr]: one status.
 final class StatusCaseIr {
   /// Creates the variant [name] of [status] with a body of [type].
-  const StatusCaseIr(this.status, this.name, this.type);
+  const StatusCaseIr(
+    this.status,
+    this.name,
+    this.type, {
+    this.sensitive = false,
+  });
 
   /// The status as in the spec: a code, a range such as `4XX`, `default`.
   final String status;
@@ -98,6 +103,10 @@ final class StatusCaseIr {
 
   /// The type of the body; null for a status without a body.
   final DartType? type;
+
+  /// Whether the body is a secret: `toString` of the variant does not print
+  /// it (see [ResponseIr.sensitive]).
+  final bool sensitive;
 }
 
 /// The root client: a field for each group and the servers (R10.9).

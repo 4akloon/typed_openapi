@@ -70,6 +70,7 @@ linter:
         'everything',
         'hostile',
         'secrets',
+        'status_bodies',
         'hierarchy',
       ]) {
         for (final mode in UnionMode.values) {
@@ -115,6 +116,10 @@ error 503 ServiceUnavailable
 undocumented 302
 decode /id an integer
 body {"id":1,"name":"Rex","status":"available"}
+CreatePetErrorNotFound(Problem(code: gone, password: <redacted>))
+CreatePetResponseCreated(Job(id: job-2))
+CreatePetResponseNoContent()
+CreatePetErrorServiceUnavailable()
 success 200 Pet 7 Tom null
 GET https://pets.example.com/v1/pets/7 [getPet; bearer]
 success 204 null

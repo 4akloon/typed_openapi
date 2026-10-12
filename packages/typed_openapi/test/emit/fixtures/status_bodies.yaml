@@ -1,0 +1,75 @@
+openapi: 3.1.0
+info: {title: Status bodies, version: "1"}
+paths:
+  /things:
+    get:
+      operationId: getThing
+      responses:
+        "200":
+          description: A model.
+          content:
+            application/json: {schema: {$ref: '#/components/schemas/Item'}}
+        "201":
+          description: Bytes.
+          content:
+            application/octet-stream: {schema: {type: string, format: binary}}
+        "202":
+          description: Raw JSON, no secret anywhere.
+          content:
+            application/json: {schema: {$ref: '#/components/schemas/Harmless'}}
+        "203":
+          description: Raw JSON with a secret behind it.
+          content:
+            application/json: {schema: {$ref: '#/components/schemas/Auth'}}
+        "204": {description: No body.}
+        "206":
+          description: A secret text.
+          content:
+            text/plain: {schema: {type: string, format: password}}
+        "207":
+          description: Base64 bytes in JSON.
+          content:
+            application/json: {schema: {type: string, format: byte}}
+        "400":
+          description: Optional base64 bytes in JSON.
+          content:
+            application/json:
+              schema: {type: [string, 'null'], format: byte}
+        "4XX":
+          description: Secrets in a list.
+          content:
+            application/json:
+              schema: {type: array, items: {type: string, format: password}}
+        "404":
+          description: A model.
+          content:
+            application/json: {schema: {$ref: '#/components/schemas/Item'}}
+        "503": {description: No body.}
+components:
+  schemas:
+    Item:
+      type: object
+      properties:
+        name: {type: string}
+        password: {type: string, format: password}
+    Secretive: {type: string, format: password}
+    Plain:
+      type: object
+      properties:
+        name: {type: string}
+    PwLogin:
+      type: object
+      properties:
+        user: {type: string}
+        password: {type: string, format: password}
+    # Two objects, no discriminator: the value stays raw JSON in raw mode.
+    Auth:
+      oneOf:
+        - {$ref: '#/components/schemas/PwLogin'}
+        - {$ref: '#/components/schemas/Plain'}
+    Harmless:
+      oneOf:
+        - {$ref: '#/components/schemas/Plain'}
+        - type: object
+          properties:
+            other: {type: string}

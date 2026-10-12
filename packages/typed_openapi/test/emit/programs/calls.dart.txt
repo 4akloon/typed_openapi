@@ -132,6 +132,22 @@ Future<void> main() async {
   }
   print('body ${adapter.bodies.last}');
 
+  // The variants print their body; a secret in it is redacted.
+  for (final answer in [
+    () => json(404, {'code': 'gone', 'password': 'hunter2'}),
+    () => json(201, {'id': 'job-2'}),
+    () => empty(204),
+    () => empty(503),
+  ]) {
+    adapter.answers.add(answer);
+    final result = await pets.createPet(body: const Pet(id: 1, name: 'Rex'));
+    print(switch (result) {
+      Success(:final data) => '$data',
+      HttpError(:final body) => '$body',
+      _ => 'unexpected',
+    });
+  }
+
   adapter.answers.add(() => json(200, {'data': {'id': 7, 'name': 'Tom'}}));
   // ignore: deprecated_member_use_from_same_package
   print(show(await pets.getPet(petId: 7)));

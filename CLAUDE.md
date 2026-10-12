@@ -402,8 +402,10 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `encoding` media types) or `MultipartBody.fromJson` (TOA655),
   `FileUpload` for binary, `String` for text; a wildcard media type is sent
   as a concrete one. It writes the sealed status types (variants extend the
-  base and wrap `body`, equal by value) and the parts classes after the
-  group class. Only `Dio` is imported from `package:dio`.
+  base and wrap `body`, equal by value, with a `toString` that prints the
+  body, `<redacted>` for a secret body (`ResponseIr.sensitive`, from
+  `ResponseSecrets`) and `Uint8List(<length>)` for bytes) and the parts
+  classes after the group class. Only `Dio` is imported from `package:dio`.
   `test/emit/generated_client_test.dart` builds a package of the clients
   of the fixtures (both `union` modes), runs `dart analyze --fatal-infos`
   on it and runs `test/emit/programs/calls.dart.txt` (`bin/calls.dart`

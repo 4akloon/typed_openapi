@@ -21,12 +21,14 @@ const Map<String, int> _fileAllowlist = {
   'lib/src/emit/model_emitter.dart': 379,
   'lib/src/emit/union_emitter.dart': 416,
   'lib/src/generate/output_writer.dart': 896,
-  // M9: the fields the API emitter reads on the operation IR classes.
-  'lib/src/ir/ir.dart': 814,
+  // M9: the fields the API emitter reads on the operation IR classes, and
+  // whether a response body is a secret.
+  'lib/src/ir/ir.dart': 824,
   // M9: event streams in the empty-client report; webhooks checked.
   'lib/src/ir/ir_builder.dart': 540,
-  // M9: the path variable pattern, parameter defaults, encodings, statuses.
-  'lib/src/ir/operation_builder.dart': 648,
+  // M9: the path variable pattern, parameter defaults, encodings, statuses,
+  // secret bodies.
+  'lib/src/ir/operation_builder.dart': 662,
   'lib/src/ir/schema_mapper.dart': 2196,
   'lib/src/ir/schema_shapes.dart': 446,
   'test/check/spec_checker_test.dart': 705,
@@ -79,7 +81,8 @@ const Map<String, int> _methodAllowlist = {
   'lib/src/ir/operation_builder.dart#OperationBuilder._parameter': 100,
   'lib/src/ir/operation_builder.dart#OperationBuilder._parameters': 74,
   'lib/src/ir/operation_builder.dart#OperationBuilder._pick': 58,
-  'lib/src/ir/operation_builder.dart#OperationBuilder._responses': 57,
+  // M9: a response knows whether its body is a secret.
+  'lib/src/ir/operation_builder.dart#OperationBuilder._responses': 58,
   'lib/src/ir/operation_selector.dart#OperationSelector.select': 42,
   'lib/src/ir/schema_mapper.dart#SchemaMapper._claim': 66,
   'lib/src/ir/schema_mapper.dart#SchemaMapper._component': 76,

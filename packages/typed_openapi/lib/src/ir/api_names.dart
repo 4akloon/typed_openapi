@@ -132,16 +132,24 @@ final class ApiNames {
     final prefix = _names.pascal(operation.name) ?? 'Operation';
     final bodies = {for (final s in operation.successes) s.type};
     final successType = bodies.length > 1
-        ? _statusType(operation, '${prefix}Response', [
-            for (final s in operation.successes) (s.status, s.type),
-          ], 'successes')
+        ? _statusType(
+            operation,
+            '${prefix}Response',
+            [for (final s in operation.successes) (s.status, s.type)],
+            'successes',
+            {
+              for (final s in operation.successes)
+                if (s.sensitive) s.status,
+            },
+          )
         : null;
     final errorType = switch (operation.errors) {
-      ErrorsByStatus(:final cases) => _statusType(
+      ErrorsByStatus(:final cases, :final sensitive) => _statusType(
         operation,
         '${prefix}Error',
         cases,
         'errors',
+        sensitive,
       ),
       _ => null,
     };
@@ -165,6 +173,7 @@ final class ApiNames {
     String candidate,
     List<(String, DartType?)> cases,
     String what,
+    Set<String> sensitive,
   ) {
     // The one body of the operation's successes or errors may have the
     // name already (an inline schema of one 2xx or one error response is
@@ -188,6 +197,7 @@ final class ApiNames {
             override: operation,
           ),
           type,
+          sensitive: sensitive.contains(status),
         ),
     ]);
   }

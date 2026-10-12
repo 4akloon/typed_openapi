@@ -124,6 +124,7 @@ final class IrJson {
           'kind': r.kind.name,
           if (r.type case final t?) 'type': type(t),
           'envelope': ?r.envelopeKey,
+          if (r.sensitive) 'sensitive': true,
         },
     ],
     'errors': switch (o.errors) {

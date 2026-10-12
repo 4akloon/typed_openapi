@@ -43,7 +43,7 @@ final class StatusTypeEmitter {
         ..block('class ${variant.name} extends ${type.name}', () {
           switch (variant.type) {
             case final body?:
-              _withBody(out, variant.name, body);
+              _withBody(out, variant, body);
             case null:
               _withoutBody(out, variant.name);
           }
@@ -60,10 +60,14 @@ final class StatusTypeEmitter {
       ..line('bool operator ==(Object other) => other is $name;')
       ..line()
       ..line('@override')
-      ..line('int get hashCode => ($name).hashCode;');
+      ..line('int get hashCode => ($name).hashCode;')
+      ..line()
+      ..line('@override')
+      ..line("String toString() => '${_escaped(name)}()';");
   }
 
-  void _withBody(DartWriter out, String name, DartType body) {
+  void _withBody(DartWriter out, StatusCaseIr variant, DartType body) {
+    final name = variant.name;
     final deep = _codec.needsDeep(body);
     if (deep) _codec.imports.fromRuntime('DeepEquality');
     out
@@ -87,6 +91,26 @@ final class StatusTypeEmitter {
         deep
             ? 'int get hashCode => const DeepEquality().hash(body);'
             : 'int get hashCode => body.hashCode;',
-      );
+      )
+      ..line()
+      ..line('@override')
+      ..line("String toString() => '${_escaped(name)}(${_shown(variant)})';");
   }
+
+  /// What `toString` of [variant] writes for its body: `<redacted>` for a
+  /// secret (the models do the same), a description for bytes, whose content
+  /// is never printed, and the body for the rest, which prints itself.
+  static String _shown(StatusCaseIr variant) {
+    if (variant.sensitive) return '<redacted>';
+    final type = variant.type;
+    if (type is CoreType && (type.kind == .bytes || type.kind == .binary)) {
+      return type.nullable
+          ? r"${body == null ? 'null' : 'Uint8List(${body?.length})'}"
+          : r'Uint8List(${body.length})';
+    }
+    return r'$body';
+  }
+
+  /// [name] as the text of a string literal.
+  static String _escaped(String name) => name.replaceAll(r'$', r'\$');
 }

@@ -747,6 +747,7 @@ final class ResponseIr {
     this.type,
     this.envelopeKey,
     this.description,
+    this.sensitive = false,
   });
 
   /// The status as in the spec: a code, a range such as `4XX`, or
@@ -771,6 +772,11 @@ final class ResponseIr {
 
   /// `description`.
   final String? description;
+
+  /// Whether the body is a secret that must not be printed: `toString` of
+  /// the variant of a status type that holds it writes `<redacted>` (see
+  /// [FieldIr.sensitive]).
+  final bool sensitive;
 
   /// Whether the status is 2xx.
   bool get isSuccess => status.startsWith('2');
@@ -807,8 +813,12 @@ final class SingleError extends ErrorsIr {
 /// Errors with different body types: `E` is a sealed type by status.
 final class ErrorsByStatus extends ErrorsIr {
   /// Creates the errors.
-  const ErrorsByStatus(this.cases);
+  const ErrorsByStatus(this.cases, {this.sensitive = const {}});
 
   /// The body type of each status; null for a body-less status.
   final List<(String, DartType?)> cases;
+
+  /// The statuses of [cases] whose body is a secret (see
+  /// [ResponseIr.sensitive]).
+  final Set<String> sensitive;
 }
