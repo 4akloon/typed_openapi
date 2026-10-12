@@ -418,7 +418,14 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   decoder switches on the status: codes, then ranges, then `default`
   (every status but 2xx), `_` is `undocumented()`; Dio reads JSON unless
   every success with a body is text (`text`) or something else is
-  (`bytes`), and then error bodies go through `RawResponse.parsedJson`.
+  (`bytes`), and then JSON bodies go through `RawResponse.parsedJson`; a
+  documented binary error (`application/octet-stream`, XML, any media type
+  that is not JSON or `text/*`) also makes the operation `bytes`, since Dio
+  would turn its bytes into text. An error body is decoded by the media
+  type of its response, as a success is: `r.bytes` for bytes, `r.text` for
+  text (an empty one is `''`), the type's decoder for JSON; errors that
+  share one body type but not a media type (`text/plain` and JSON strings)
+  get an arm each.
   Bodies: JSON (`toJson`), `FormBody` with `FormEncoding`s, the parts class
   (`toParts()`, `FileUpload` for binary strings and lists of them,
   `encoding` media types) or `MultipartBody.fromJson` (TOA655),

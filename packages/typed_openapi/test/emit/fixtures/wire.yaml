@@ -75,6 +75,38 @@ paths:
         content: {application/octet-stream: {schema: {type: string, format: binary}}}
       responses:
         "204": {description: ok}
+  /report:
+    get:
+      operationId: getReport
+      tags: [wire]
+      responses:
+        "200":
+          description: ok
+          content: {application/json: {schema: {$ref: '#/components/schemas/Report'}}}
+        "404":
+          description: A file.
+          content: {application/octet-stream: {schema: {type: string, format: binary}}}
+        "409":
+          description: A sentence.
+          content: {text/plain: {schema: {type: string}}}
+        "422":
+          description: A document.
+          content: {application/xml: {schema: {type: string}}}
+  /single:
+    get:
+      operationId: getSingle
+      tags: [wire]
+      responses:
+        "200":
+          description: ok
+          content: {application/json: {schema: {$ref: '#/components/schemas/Report'}}}
+        "400":
+          description: A sentence.
+          content: {text/plain: {schema: {type: string}}}
+        "500":
+          description: A JSON string.
+          content: {application/json: {schema: {type: string}}}
 components:
   schemas:
+    Report: {type: object, properties: {id: {type: string}}}
     Color: {type: string, enum: [red, green]}

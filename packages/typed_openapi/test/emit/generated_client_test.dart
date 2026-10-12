@@ -131,6 +131,15 @@ POST /optional null <>
 PUT /optional text/plain <plain "t">
 PUT /optional null <>
 PATCH /optional null <>
+success 200 Report r1
+error 404 NotFound bytes 1,2,3,250
+error 409 Conflict text "taken "x""
+error 409 Conflict text ""
+error 422 Unprocessable bytes 60,101,47,62
+success 200 Report r2
+error 400 text "bad "x""
+error 500 text "boom"
+error 400 text ""
 ''';
 
 /// What `bin/calls.dart` prints: each call's request and result.

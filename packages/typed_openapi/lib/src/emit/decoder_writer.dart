@@ -15,8 +15,13 @@ final class DecoderWriter {
   static const _code = DartCode();
 
   /// How Dio reads the body of every status: by the successes' media
-  /// types; errors of a text or binary operation are parsed from it.
+  /// types; errors of a text or binary operation are parsed from it. A
+  /// binary error makes the whole operation bytes, since Dio would turn the
+  /// bytes of a JSON operation into text.
   static String responseKind(OperationIr operation) {
+    if (operation.responses.any((r) => r.isError && r.kind == .bytes)) {
+      return 'bytes';
+    }
     final kinds = {
       for (final s in operation.successes)
         if (s.kind != .none) s.kind,
@@ -93,21 +98,61 @@ final class DecoderWriter {
     switch (operation.errors) {
       case NoErrors():
         return const [];
+      case SingleError(:final type, :final statuses) when statuses.isEmpty:
+        return ['>= 400 && < 600 => r.error(${_decode(type, json)}),'];
       case SingleError(:final type, :final statuses):
-        final patterns = statuses.isEmpty
-            ? ['>= 400 && < 600']
-            : [for (final s in _ordered(statuses, (s) => s)) _pattern(s)];
-        final pattern = patterns.length == 1
-            ? patterns.single
-            : patterns.map((p) => p.contains(' ') ? '($p)' : p).join(' || ');
-        return ['$pattern => r.error(${_decode(type, json)}),'];
+        return _singleErrorArms(operation, type, statuses, json);
       case ErrorsByStatus():
         final sealed = operation.errorType!;
         return [
           for (final c in _ordered(sealed.cases, (c) => c.status))
-            '${_pattern(c.status)} => r.error(${_wrap(c.name, c.type == null ? null : _decode(c.type!, json))}),',
+            '${_pattern(c.status)} => r.error(${_wrap(c.name, c.type == null ? null : _errorValue(operation, c.status, c.type!, json))}),',
         ];
     }
+  }
+
+  /// The arms of errors that share one body type: one arm for all
+  /// statuses when they decode the same way, else an arm for each (a
+  /// `text/plain` and a JSON string are both a `String`).
+  List<String> _singleErrorArms(
+    OperationIr operation,
+    DartType type,
+    List<String> statuses,
+    String json,
+  ) {
+    final ordered = _ordered(statuses, (s) => s);
+    final values = {
+      for (final s in ordered) s: _errorValue(operation, s, type, json),
+    };
+    if (values.values.toSet().length > 1) {
+      return [
+        for (final MapEntry(key: status, value: value) in values.entries)
+          '${_pattern(status)} => r.error($value),',
+      ];
+    }
+    final patterns = [for (final s in ordered) _pattern(s)];
+    final pattern = patterns.length == 1
+        ? patterns.single
+        : patterns.map((p) => p.contains(' ') ? '($p)' : p).join(' || ');
+    return ['$pattern => r.error(${values.values.first}),'];
+  }
+
+  /// The decoded body of the error [status] of [type], read by the media
+  /// type of its response: text and bytes as they are, JSON by its type.
+  String _errorValue(
+    OperationIr operation,
+    String status,
+    DartType type,
+    String json,
+  ) {
+    final response = operation.responses
+        .where((r) => r.isError && r.status == status)
+        .firstOrNull;
+    return switch (response?.kind) {
+      .text || .eventStream => 'r.text',
+      .bytes => 'r.bytes',
+      _ => _decode(type, json),
+    };
   }
 
   /// [items] by status: codes first, then ranges, then `default`, each in

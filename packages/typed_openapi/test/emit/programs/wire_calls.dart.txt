@@ -22,7 +22,11 @@ String show(Result<Object?, Object?> result) => switch (result) {
 
 String describe(Object? value) => switch (value) {
   null => 'null',
-  final Uint8List data => 'bytes ${data.length}',
+  final Uint8List data => 'bytes ${data.join(',')}',
+  final Report report => 'Report ${report.id}',
+  GetReportErrorNotFound(:final body) => 'NotFound ${describe(body)}',
+  GetReportErrorConflict(:final body) => 'Conflict ${describe(body)}',
+  GetReportErrorUnprocessableEntity(:final body) => 'Unprocessable ${describe(body)}',
   final String text => 'text "$text"',
   _ => 'json ${jsonEncode(value)}',
 };
@@ -69,5 +73,26 @@ Future<void> main() async {
     await send();
     print('${adapter.requests.last.method} ${adapter.requests.last.path} '
         '${adapter.requests.last.contentType} <${adapter.bodies.last}>');
+  }
+
+  // An error body is read by its own media type.
+  for (final answer in <ResponseBody Function()>[
+    () => json(200, {'id': 'r1'}),
+    () => bytes(404, [1, 2, 3, 250], 'application/octet-stream'),
+    () => text(409, 'taken "x"'),
+    () => text(409, ''),
+    () => bytes(422, utf8.encode('<e/>'), 'application/xml'),
+  ]) {
+    adapter.answers.add(answer);
+    print(show(await wire.getReport()));
+  }
+  for (final answer in <ResponseBody Function()>[
+    () => json(200, {'id': 'r2'}),
+    () => text(400, 'bad "x"'),
+    () => json(500, 'boom'),
+    () => text(400, ''),
+  ]) {
+    adapter.answers.add(answer);
+    print(show(await wire.getSingle()));
   }
 }
