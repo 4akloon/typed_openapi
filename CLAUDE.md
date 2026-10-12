@@ -260,7 +260,7 @@ that the API composes, including an `implements` fake of a tag class.
   `case Failure()`.
 - `params/` - `PathParameter`, `QueryParameter`, `HeaderParameter`,
   `CookieParameter` (OAS styles, RFC 6570 expansion, RFC 3986
-  percent-encoding; a path expansion that is empty or only dots throws
+  percent-encoding; a path expansion that is empty, `.` or `..` throws
   `ArgumentError`, as does a `.`/`..` value); internal `ParameterValue`,
   `PercentEncoder`.
 - `request/` - `OperationInfo` (put into `RequestOptions.extra`),

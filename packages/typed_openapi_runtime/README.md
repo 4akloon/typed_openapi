@@ -85,7 +85,7 @@ code depends on. Dependencies: `dio` and `meta`.
 - A `FormatException` thrown while decoding (your converter, `Date.parse`)
   is a data problem: a `DecodeError` in a result, an `SseDecodeError` in an
   event stream. An `Error` is a bug and is not caught.
-- A path parameter whose expansion is empty or only dots (`''`, an empty
+- A path parameter whose expansion is empty or a dot segment (`''`, an empty
   list, a `label` of `''`) throws `ArgumentError`: the client would drop the
   segment, so `/users/{id}/sessions` could become `/users/sessions`.
 - `rawBody` of a `DecodeError` and of an `UndocumentedStatus` is best-effort:

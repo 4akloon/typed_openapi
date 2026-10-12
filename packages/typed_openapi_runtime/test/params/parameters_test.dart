@@ -72,7 +72,7 @@ void main() {
       expect(path(.simple, false, 'a.b'), 'a.b');
     });
 
-    test('an empty or all-dot expansion would drop or climb a segment', () {
+    test('an empty or dot-segment expansion would drop or climb a segment', () {
       // The expansions of the OAS examples for an empty value: '' and '.'
       // are not path segments (Dio collapses `//` and drops `.`).
       final cases = <String, PathParameter>{
@@ -89,12 +89,6 @@ void main() {
           style: .label,
           explode: true,
         ),
-        'label [empty, empty, empty] exploded': const PathParameter(
-          'id',
-          ['', '', ''],
-          style: .label,
-          explode: true,
-        ),
         'label no items': const PathParameter('id', <String>[], style: .label),
         'label null': const PathParameter('id', null, style: .label),
         'matrix null': const PathParameter('id', null, style: .matrix),
@@ -103,7 +97,6 @@ void main() {
           <String>[],
           style: .matrix,
         ),
-        'simple three dots': const PathParameter('id', '...'),
       };
       for (final MapEntry(key: label, value: parameter) in cases.entries) {
         expect(
@@ -116,7 +109,7 @@ void main() {
                 contains('would change the request path'),
                 anyOf(
                   contains('cannot be empty'),
-                  contains('cannot be only dots'),
+                  contains('cannot be a dot segment'),
                 ),
               ),
             ),
@@ -130,6 +123,16 @@ void main() {
       expect(const PathParameter('id', '.a').encode(), '.a');
       expect(const PathParameter('id', 'a.').encode(), 'a.');
       expect(const PathParameter('id', 'a..b').encode(), 'a..b');
+      expect(const PathParameter('id', '...').encode(), '...');
+      expect(
+        const PathParameter(
+          'id',
+          ['', '', ''],
+          style: .label,
+          explode: true,
+        ).encode(),
+        '...',
+      );
       expect(const PathParameter('id', ' ').encode(), '%20');
       expect(const PathParameter('id', ['', '']).encode(), ',');
       expect(

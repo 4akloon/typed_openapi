@@ -63,12 +63,12 @@ final class PathParameter {
   ///
   /// - the expansion is empty (`''`, `null`, an empty list or map, or a list
   ///   of one empty string with the `simple` style);
-  /// - the expansion consists only of `.` characters (`.`, `..`: the `label`
-  ///   style of `''`, or of two empty strings with explode);
+  /// - the expansion is a dot segment, `.` or `..` (the `label` style of
+  ///   `''`, or of two empty strings with explode);
   /// - a scalar, an item, a key or a property value is exactly `.` or `..`.
   ///
-  /// Neighbours are valid: `.a`, `a..b`, `.a.b` (`label` of `a` and `b`) and
-  /// `;id` (`matrix` of `''`).
+  /// Neighbours are valid: `.a`, `a..b`, `...` (not a dot segment), `.a.b`
+  /// (`label` of `a` and `b`) and `;id` (`matrix` of `''`).
   String encode() {
     final value = ParameterValue.of(this.value, kind: style.name);
     final expansion = _expand(value);
@@ -84,8 +84,8 @@ final class PathParameter {
     final problem = switch (expansion) {
       _ when dots != null => 'cannot be a dot segment ("$dots")',
       '' => 'cannot be empty',
-      _ when _onlyDots.hasMatch(expansion) =>
-        'cannot be only dots ("$expansion")',
+      _ when _dotSegment.hasMatch(expansion) =>
+        'cannot be a dot segment ("$expansion")',
       _ => null,
     };
     if (problem != null) {
@@ -98,7 +98,7 @@ final class PathParameter {
     return expansion;
   }
 
-  static final RegExp _onlyDots = RegExp(r'^\.+$');
+  static final RegExp _dotSegment = RegExp(r'^\.{1,2}$');
 
   String _expand(ParameterValue value) => switch (style) {
     .simple => value.expand(
