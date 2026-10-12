@@ -100,6 +100,48 @@ paths:
       tags: [other]
       security: [{missing: [read]}]
       responses: {"204": {description: ok}}
+  /names/jsonEncode:
+    get:
+      operationId: jsonEncode
+      description: A method named like a function or a type the group's other methods use.
+      tags: ["Pets\n injected"]
+      responses:
+        "204": {description: ok}
+  /names/base64Encode:
+    get:
+      operationId: base64Encode
+      description: A method named like a function or a type the group's other methods use.
+      tags: ["Pets\n injected"]
+      responses:
+        "204": {description: ok}
+  /names/int:
+    get:
+      operationId: int
+      description: A method named like a function or a type the group's other methods use.
+      tags: ["Pets\n injected"]
+      responses:
+        "204": {description: ok}
+  /names/bool:
+    get:
+      operationId: bool
+      description: A method named like a function or a type the group's other methods use.
+      tags: ["Pets\n injected"]
+      responses:
+        "204": {description: ok}
+  /names/double:
+    get:
+      operationId: double
+      description: A method named like a function or a type the group's other methods use.
+      tags: ["Pets\n injected"]
+      responses:
+        "204": {description: ok}
+  /names/num:
+    get:
+      operationId: num
+      description: A method named like a function or a type the group's other methods use.
+      tags: ["Pets\n injected"]
+      responses:
+        "204": {description: ok}
 components:
   securitySchemes:
     "k'ey": {type: apiKey, name: "X-'$k", in: header}

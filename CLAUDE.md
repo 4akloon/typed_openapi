@@ -219,7 +219,9 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   splitting, case, reserved sets and the name check `NameKind`, `isValid`,
   `sanitize`, `dropsLetters`; `NameScope` gives a name, a suffix for
   reserved names and `2`, `3`... for collisions; the arguments of a method
-  and the fields of a parts class reserve `DartNames.helperFunctions`,
+  and the fields of a parts class, and the methods of a group class
+  (`DartNames.methodNames`, which adds `int`, `bool`, `double` and `num`,
+  types the class's other methods use), reserve `DartNames.helperFunctions`,
   `jsonEncode` and `base64Encode`, which the generated bodies call without
   a prefix, so `jsonEncode(jsonEncode)` is never written: the argument is
   `jsonEncode_`), `IrContext`/`IrOverrides`

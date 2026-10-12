@@ -76,7 +76,7 @@ final class IrBuilder {
     final built = <String, List<OperationIr>>{};
     for (final group in groups.keys.toList()..sort()) {
       final scope = NameScope(
-        reserved: {...DartNames.reservedWords, ...DartNames.objectMembers},
+        reserved: {...DartNames.reservedWords, ...DartNames.methodNames},
         reservedSuffix: '_',
       );
       final names = _methodNames(context, groups[group]!, scope);

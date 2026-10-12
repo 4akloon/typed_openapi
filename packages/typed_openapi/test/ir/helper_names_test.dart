@@ -89,4 +89,41 @@ void main() {
       ],
     );
   });
+
+  test('a method named like a helper function or a type is renamed', () {
+    final names = [
+      for (final name in [
+        'jsonEncode',
+        'base64Encode',
+        'int',
+        'bool',
+        'double',
+        'num',
+      ])
+        '''
+  /$name:
+    get:
+      operationId: $name
+      tags: [t]
+      responses: {"204": {description: ok}}''',
+    ].join('\n');
+    final spec = IrFixture('''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+$names
+''');
+    final ir = IrBuilder(
+      spec.diagnostics,
+    ).build(spec.context.spec, spec.context.client);
+    expect(
+      [for (final o in ir.groups.single.operations) o.name],
+      ['base64Encode_', 'bool_', 'double_', 'int_', 'jsonEncode_', 'num_'],
+    );
+    expect(
+      spec.reported.map((d) => d.code),
+      everyElement(DiagnosticCode.nameReserved),
+    );
+    expect(spec.reported, hasLength(6));
+  });
 }

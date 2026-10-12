@@ -117,6 +117,16 @@ final class DartNames {
   /// the name would hide the function (`jsonEncode(jsonEncode)`).
   static const helperFunctions = {'base64Encode', 'jsonEncode'};
 
+  /// Names a method of a group class must not have: the members of every
+  /// object, the [helperFunctions] the other methods call without a prefix
+  /// and the [lowercaseTypes] they use as types, which a method of the same
+  /// name hides inside the class.
+  static const methodNames = {
+    ...objectMembers,
+    ...helperFunctions,
+    ...lowercaseTypes,
+  };
+
   /// Names of a method's arguments that generated code uses itself: the
   /// request body and the per-call options of the runtime, and the
   /// [helperFunctions].
