@@ -327,7 +327,12 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   override names first, then
   `operationId` without the `operation_prefix`, then the path; TOA563 when
   no operation is generated, at the config client if filters left some
-  out, else at `#/paths`; then everything above). `IrJson` dumps an IR; the
+  out, else at `#/paths`; then everything above). `IrJson` dumps an IR, the operations through `IrOperationJson`: every
+  field of the operation IR (encoding, parts, security, servers, status
+  types, `sensitive`, defaults), except the locations of parameters, bodies
+  and responses and a response's text and media type; `ir_json_test.dart`
+  reads the fields of the IR classes with `dart:mirrors` and fails when one
+  is missing from the dump; the
   hidden `typed_openapi ir` command prints it. Naming and mapping codes use
   the second half of each area's hundred: TOA250-TOA256, TOA350-TOA351,
   TOA450-TOA456, TOA550-TOA565, and media types and errors TOA650-TOA660
