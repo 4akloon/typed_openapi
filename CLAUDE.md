@@ -33,14 +33,15 @@ Git commands run from the repo root. Commit messages are Conventional Commits
 All under `packages/typed_openapi/lib/src/`, one folder per stage:
 
 - `diagnostics/` - `Diagnostic` (with `RelatedLocation`s, preset `hints` as
-  `(preset, text)` and fingerprint `args`), `DiagnosticCode` (stable `TOAnnn` catalog;
-  `fixedCodes` - a file cannot be read - cannot be lowered, `configCodes`
-  not changed), `Severity`,
-  `SeverityLevels` (a client's `severity` config), `JsonPointer`,
-  `DiagnosticBag` (baselined diagnostics kept apart), `DisplayPaths` (files
-  relative to the working directory, absolute outside it), and the reporters
-  (`DiagnosticReporter`, `TextReporter`, `JsonReporter`, `SarifReporter`,
-  `GitHubActionsReporter`, `ReportFormat`).
+  `(preset, text)` and fingerprint `args`), `DiagnosticCode` (stable `TOAnnn`
+  catalog; the config codes TOA901-TOA904 cannot be changed at all, and
+  `fixedCodes` - read errors, TOA801-TOA803, TOA820/821/823 - can be raised
+  but not lowered), `Severity` (declared from most to least serious; level
+  comparison uses its order), `SeverityLevels` (a client's `severity`
+  config), `JsonPointer`, `DiagnosticBag` (baselined diagnostics kept
+  apart), `DisplayPaths` (files relative to the working directory, absolute
+  outside it), and the reporters (`DiagnosticReporter`, `TextReporter`,
+  `JsonReporter`, `SarifReporter`, `GitHubActionsReporter`, `ReportFormat`).
 - `load/` - `SpecLoader` reads JSON/YAML into a `SpecDocument` (plain tree,
   absolute file URI, source spans by JSON pointer, `valueAt(pointer)`,
   `withRoot`) through `YamlComposer`, which `ConfigLoader` uses too.
@@ -143,9 +144,10 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   one or more other branches is nullable, with or without sibling keys
   (`default`, `title`, ...): `nullable: true` on it is TOA807,
   `nullable: false` removes the null branch, unwraps a single remaining
-  branch and keeps the siblings except a `default: null`. A `nullable` override without `$ref`
-  keeps every other key of a `$ref` node (the siblings stay next to the new
-  nullable form); one with `$ref` replaces the node. `type: null` on a
+  branch and keeps the siblings except a `default: null`. A `nullable`
+  override without `$ref` keeps every other key of a `$ref` node (the
+  siblings stay next to the new nullable form); one with `$ref` replaces
+  the node. `type: null` on a
   nullable 3.1 schema also drops its nullability (TOA809, info). A field the
   spec already has is TOA807 (info), and two different edits of one node by
   different entries are TOA806. In 3.0 a field other than `nullable` (and a
@@ -175,9 +177,12 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   errors and warnings of codes that are not fixed are accepted) and
   `BaselineLoader` (TOA820, TOA821; `version` must be the integer 1). The
   `baseline` subcommands write a file atomically (temp + rename) and skip a
-  client whose spec could not be read (`ClientCheck.readErrors`: the file is
-  untouched, the error printed, exit `1`); `check` reports no stale entries
-  for it. `--strict-baseline` applies after the configured levels.
+  client whose spec could not be read (`ClientCheck.readErrors`, which
+  includes a `$ref` to a missing file, TOA004: the file is untouched, the
+  error printed, exit `1`), keep a baseline with a rejected entry and write
+  nothing for clients that share a baseline file; `check` reports no stale
+  entries for an unreadable spec. `--strict-baseline` applies after the
+  configured levels.
 - `cli/` - `TypedOpenApiCli` (`cli.dart`, owns the `CommandRunner` and maps
   usage errors to exit code 64; `workingDirectory` for tests),
   `CheckCommand` (`check_command.dart`, options `--config/-c`, `--format`

@@ -383,7 +383,7 @@ class _ConfigReader {
           span: spanAt(at),
           fix:
               'Use a code such as TOA201 or its name such as bool-required; '
-              'the README lists them.',
+              'the codes are in `DiagnosticCode` and the CHANGELOG.',
         );
         continue;
       }

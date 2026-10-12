@@ -10,8 +10,8 @@ imperfect, code-first specs (NestJS, FastAPI, Spring, ASP.NET).
 
 What sets it apart:
 
-- **Tolerant by design.** Named normalizer rules fix common spec defects; every fix
-  is reported. Diagnostics have stable codes and JSON pointers, levels can be
+- **Tolerant by design.** Named normalizer rules fix common spec defects;
+  every fix is reported. Diagnostics have stable codes and JSON pointers, levels can be
   overridden, and a baseline lets CI fail only on new problems.
 - **Overrides addressed by location.** Fix names, types, `required`/`nullable`,
   discriminators and SSE event schemas without touching the backend.

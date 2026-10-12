@@ -106,11 +106,16 @@ operation, parameter, schema or property when it has one), not by its
 message or line, so rewording a message or editing the spec elsewhere keeps
 it. An entry that no longer matches is a warning that suggests
 `baseline prune`; `check --strict-baseline` makes it an error, whatever
-level the config gives it. `baseline create` and `baseline prune` leave the
-baseline of a client whose spec cannot be read untouched and exit with `1`.
-Exit code `1`
-means at least one error that is not accepted, `64` wrong arguments or an
-unknown client, `78` the config could not be read.
+level the config gives it. `check` reports `TOA820` (a missing baseline
+file) until the first `baseline create` writes it. `baseline create` and
+`baseline prune` leave the baseline of a client whose spec cannot be read
+untouched and exit with `1`. Exit code `1` means at least one error that is
+not accepted, `64` wrong arguments or an unknown client, `78` the config
+could not be read.
+
+`--format github-actions` prints one workflow annotation per finding; GitHub
+shows only a limited number of annotations per run, so on a spec with many
+findings adopt a baseline first.
 
 Generated clients depend on
 [`typed_openapi_runtime`](../typed_openapi_runtime/README.md).
