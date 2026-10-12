@@ -28,21 +28,24 @@
 
 ## Ухвалені рішення
 
-Рішення специфікації M5 — обов'язкові. Тут — те, що специфікація лишає планові (технічні рішення); питання формату, які бачить користувач, винесено в «Відкриті питання» наприкінці і реалізовано в запропонованому вигляді.
+Рішення специфікації M5 — обов'язкові. Тут — те, що специфікація лишає планові; формат і поведінку, які бачить користувач, підтвердили користувач (рішення 5, 6) і контролер (решта) після першої версії плану.
 
 1. **Робочий каталог** (spec, рішення 7). `DisplayPaths(workingDirectory)`: файл усередині — відносний шлях, поза ним — абсолютний. Його отримують `ConfigLoader` (шлях конфігу з `--config` читається відносно нього), `SpecChecker` (специфікація, override-и, baseline) і CLI (`TypedOpenApiCli(workingDirectory:)`, за замовчуванням — каталог процесу). Файли за `$ref` іменує `SpecDocuments.displayPath` тим самим правилом без нового параметра: ім'я кореневого документа вже відносне до робочого каталогу, тож шлях, що виходить за нього (`..` на початку), стає абсолютним, а абсолютне ім'я кореня дає абсолютні імена. Повідомлення TOA804 про булеву схему більше не друкує `file:///`.
 2. **Рівні застосовуються після прогону, на клієнта** (spec, рішення 5). Ключ прогону лишається (файл, пресет, вимкнені правила, override-и): рівень не змінює того, що прогін знаходить, лише як це звітується, тож спільна специфікація не перечитується через різні рівні. `checkClients` дає кожному клієнтові діагностики його прогону з його `SeverityLevels`; `off` — діагностики немає. Два клієнти з різними рівнями одного коду дають дві діагностики (різний `severity` — різний ключ дедупу).
-3. **Незмінні коди** (`DiagnosticCode.fixedCodes`): без них документ не прочитати — TOA001, TOA003, TOA004, TOA006, TOA007, TOA008, TOA010, TOA011; файл override-ів — TOA801–TOA809; baseline — TOA820–TOA823; конфіг — TOA901–TOA904 (`configCodes`). Їх можна підняти (`TOA804: error`), але не знизити й не вимкнути — TOA902, значення ігнорується. Коди конфігу не змінюються зовсім (TOA902): конфіг читається до того, як рівні відомі. Невідомий код чи slug — TOA903 (як невідоме правило); рівень не з `error|warning|info|off` — TOA902; код, названий двічі (`TOA201` і `bool-required`), — TOA902 на другому, діє перший. Клієнт перекриває `defaults` поіменно — за кодом, а не за написанням ключа.
+3. **Незмінні коди** (`DiagnosticCode.fixedCodes`) — ті, що кажуть «файл не прочитано»: специфікація — TOA001, TOA003, TOA004, TOA006, TOA007, TOA008, TOA010, TOA011; файл override-ів — TOA801–TOA803; baseline — TOA820, TOA821 і TOA823 (файл не записано: вимкнений, він зробив би `baseline create` мовчазним). Їх можна підняти, але не знизити й не вимкнути — TOA902, значення ігнорується. Решту кодів, зокрема TOA804–TOA809 і застарілий запис TOA822, можна і підняти, і знизити, і вимкнути. Коди конфігу TOA901–TOA904 (`configCodes`) не змінюються зовсім (TOA902): конфіг читається до того, як рівні відомі. Невідомий код чи slug — TOA903 (як невідоме правило); рівень не з `error|warning|info|off` — TOA902; код, названий двічі (`TOA201` і `bool-required`), — TOA902 на другому, діє перший. Клієнт перекриває `defaults` поіменно — за кодом, а не за написанням ключа.
 4. **Fingerprint** (spec, рішення 2): перші 12 hex SHA-256 від JSON-масиву `[code, anchor, args]` — JSON замість `|`, щоб `|` в якорі чи аргументі не дав колізії. `args` — `Diagnostic.args`: значення зі специфікації, що розрізняють дві знахідки одного коду в одному місці; у M5 — ім'я відсутнього поля TOA112. Решта кодів має аргументи в pointer-і; однакові fingerprint-и рахує `count` (стеля, як в ESLint).
-5. **Якір.** `AnchorIndex` будується з моделі останнього проходу нормалізатора: операція — `operations` + `METHOD /path` (метод великими літерами; завжди однозначна, на відміну від `operationId`), параметр, який операція визначає сама, — `parameters` + `in:name`, схема — `schemas` + ключ `components.schemas` (ключ-визначення має перевагу над ключем-аліасом, як в `OverrideSnippet`), властивість — `properties` + ім'я. Діагностика бере найближчий адресовний вузол на шляху свого pointer-а, решта pointer-а — хвіст: `@/schemas/Tag/properties/name#/required`. Без адреси — `файл#pointer`, файл відносно каталогу файлу baseline у формі з `/`: `api.yaml#/info`. Параметри рівня шляху, вебхуки, `additionalOperations` адреси не мають. Pointer-и правил указують на дерево до правок; зсув індексів від правок нормалізатора не враховується (правки додають у кінець списків).
-6. **Зіставлення.** Діагностики клієнта (з його рівнями) сортуються; запис приймає до `count` діагностик зі своїм fingerprint, решта показується. Коди `fixedCodes` baseline не приймає ніколи (і `baseline create` їх не записує). Запис, що прийняв менше за `count` (зокрема 0), — TOA822 у позиції запису з підказкою `baseline prune`; рівні клієнта діють і на діагностики baseline. `prune` прибирає записи без знахідок, зменшує `count` до знайденого і нічого не додає; `create` переписує файл з нуля.
+5. **Якір** (підтвердив користувач). `AnchorIndex` будується з моделі останнього проходу нормалізатора: операція — `operations` + `METHOD /path` (метод великими літерами; завжди однозначна, на відміну від `operationId`; перейменування шляху змінює fingerprint, перейменування `operationId` — ні), параметр, який операція визначає сама, — `parameters` + `in:name`, схема — `schemas` + ключ `components.schemas` (ключ-визначення має перевагу над ключем-аліасом, як в `OverrideSnippet`), властивість — `properties` + ім'я. Діагностика бере найближчий адресовний вузол на шляху свого pointer-а, решта pointer-а — хвіст: `@/schemas/Tag/properties/name#/required`. Без адреси — `файл#pointer`, файл відносно каталогу файлу baseline у формі з `/`: `api.yaml#/info`. Параметри рівня шляху, вебхуки, `additionalOperations` адреси не мають. Pointer-и правил указують на дерево до правок; зсув індексів від правок нормалізатора не враховується (правки додають у кінець списків).
+6. **Зіставлення** (що фіксувати — рішення користувача). Діагностики клієнта (з його рівнями) сортуються; запис приймає до `count` діагностик зі своїм fingerprint, решта показується. Baseline приймає лише error і warning кодів поза `fixedCodes`: `baseline create` не записує info, а `check` info ніколи не ховає, навіть коли fingerprint збігається із записом (info не валить CI, ховати нічого). Запис, що прийняв менше за `count` (зокрема 0), — TOA822 у позиції запису з підказкою `baseline prune`; рівні клієнта діють і на діагностики baseline. `prune` прибирає записи без знахідок, зменшує `count` до знайденого і нічого не додає; `create` переписує файл з нуля.
 7. **Відсутній файл baseline — помилка TOA820**, як TOA801 для override-ів (M4, рішення 10): шлях з одруком інакше мовчки показав би все як нове, а R2.5 забороняє мовчазні здогадки. `check` тоді показує всі знахідки клієнта. Файл створює `baseline create`, якому відсутній файл не заважає. Порожній файл (лише коментарі) — baseline без записів, без діагностики. Два клієнти з одним файлом baseline — TOA902 (кожен baseline пишеться з діагностик одного клієнта).
 8. **Прийняті діагностики** зберігає `DiagnosticBag.addBaselined` окремо від `all`: `count`, `hasErrors` і код виходу їх не бачать. Звіти отримують `showBaselined`: text — `[baselined]` після slug і `, baselined: N` у рядку підсумку, коли N > 0; JSON — `"baselined": bool` у кожній діагностиці і `summary.baselined` завжди; SARIF — `suppressions: [{kind: external}]`; github-actions — `::notice` з `(baselined)` у title.
 9. **Друга позиція override-у** (`Diagnostic.related`, `RelatedLocation`). Проблема «внесена override-ом», якщо її (код, файл, pointer) не було у специфікації, як її прочитано до override-ів (діагностики читання і знахідки правил на моделі до правок), і застосований override змінив член її вузла, вузла всередині чи вузла навколо (порівнюється батьківський pointer правки: TOA205 указує на `/type`, override змінює `/format` того самого об'єкта). Повідомлення — `Introduced by this override.`, позиція — поле override-у.
-10. **Підказки пресетів** (`Diagnostic.hints`) зберігаються окремо від `fix`; `fix` — геттер `fix + hints`. `DiagnosticBag` при дублікаті додає нові підказки до наявної діагностики, а не губить їх і не дублює знахідку: одна проблема — один рядок звіту, з підказками всіх пресетів, у порядку клієнтів. Альтернатива «`fix` у ключі дедупу» дала б два однакові рядки без пояснення, якому клієнту який належить.
-11. **SARIF 2.1.0**: один `run` з `tool.driver` (`name`, `informationUri`, `rules` — лише коди, що трапились, за id, з `name` = slug і `defaultConfiguration.level`), `ruleIndex`, рівні `error`/`warning`/`note`, `message.text` = повідомлення + `\nFix: …`, `physicalLocation` (відносний URI-reference з `/` і percent-кодуванням або `file:` URI для файлу поза робочим каталогом; `region` 1-based з кінцем), `logicalLocations` з pointer-ом, `relatedLocations` з `id` від 1. Діагностика без файлу й pointer-а — `locations: []`. Перевірка схеми — тестом без мережі (обов'язкові поля, enum-и, індекси, URI).
+10. **Підказки пресетів** (`Diagnostic.hints`, пари `(preset, text)`) зберігаються окремо від `fix`; `fix` — геттер `fix + hints`. `DiagnosticBag` при дублікаті додає нові підказки до наявної діагностики, а не губить їх і не дублює знахідку: одна проблема — один рядок звіту, з підказками всіх пресетів, у порядку клієнтів. Одна підказка — як є; кілька — кожна з назвою пресету (`nestjs: …`, `fastapi: …`). Альтернатива «`fix` у ключі дедупу» дала б два однакові рядки без пояснення, якому клієнту який належить.
+11. **SARIF 2.1.0** (текст fix у повідомленні — рішення контролера: в анотаціях окремого поля немає, формати однакові): один `run` з `tool.driver` (`name`, `informationUri`, `rules` — лише коди, що трапились, за id, з `name` = slug і `defaultConfiguration.level`), `ruleIndex`, рівні `error`/`warning`/`note`, `message.text` = повідомлення + `\nFix: …`, `physicalLocation` (відносний URI-reference з `/` і percent-кодуванням або `file:` URI для файлу поза робочим каталогом; `region` 1-based з кінцем), `logicalLocations` з pointer-ом, `relatedLocations` з `id` від 1. Діагностика без файлу й pointer-а — `locations: []`. Перевірка схеми — тестом без мережі (обов'язкові поля, enum-и, індекси, URI).
 12. **github-actions**: рядок `::error|warning|notice file=…,line=…,col=…,endLine=…,endColumn=…,title=TOAnnn slug::повідомлення%0Aat pointer%0Afix: …` з екрануванням раннера (`%`, CR, LF; у властивостях ще `:` і `,`), related — окремий `::notice` з `(related)`, наприкінці — рядок підсумку тексту.
 13. **Коди TOA820–TOA823** (діапазон після override-ів; TOA9xx — конфіг).
+14. **Файл baseline**: YAML з коментарем-шапкою, `version: 1` і `entries:` — список записів `fingerprint`, `code`, `anchor`, `message`, `count` (лише коли > 1); рядки — у лапках JSON (fingerprint з самих цифр YAML інакше прочитав би числом), записи — за кодом, якорем, fingerprint.
+15. **Вивід `baseline create` / `prune`**: звіт text (незмінні коди, що лишилися, проблеми файлу baseline) і рядок на файл — `Wrote api.baseline.yaml: 2 entries accept 2 diagnostics.` / `Pruned api.baseline.yaml: removed 1 entries, 1 left.`; `--format` немає; клієнт без `baseline`, названий у команді, або жодного клієнта з `baseline` — помилка використання (`64`).
+16. **Нова залежність `crypto`** (офіційний пакет Dart) — лише в генераторі, не в runtime.
 
 **Відкладено.** `junit` і baseline для `generate` (spec, «Що не входить»). Аргументи fingerprint для інших кодів, де кілька знахідок ділять pointer, — коли знадобиться (зараз їх обмежує `count`). Адреси для параметрів рівня шляху, вебхуків і `additionalOperations` — разом з адресацією M6.
 
@@ -120,8 +123,8 @@ final class SarifReporter; final class GitHubActionsReporter;
 enum ReportFormat { text, json, sarif, githubActions; String option; static ReportFormat byOption(String); }
 
 // diagnostics, normalize (Task 6)
-List<String> Diagnostic.hints; String? get Diagnostic.fix;   // fix + hints
-Diagnostic Diagnostic.withHints(List<String>); Diagnostic Diagnostic.withRelated(List<RelatedLocation>);
+List<(String, String)> Diagnostic.hints; String? get Diagnostic.fix;   // fix + hints
+Diagnostic Diagnostic.withHints(List<(String, String)>); Diagnostic Diagnostic.withRelated(List<RelatedLocation>);
 ```
 
 Кожну задачу перевірено так: код зібрано й перевірено на окремій гілці, потім задачі 1–7 відтворено з `main` (ea04ebe) лише з блоків коду цього плану (створення файлів, `git apply` diff-ів), і після кожної задачі `dart analyze packages` чистий, `dart format` удруге змінює 0 файлів, `dart test` зелений з кількістю тестів, указаною в задачі; кінцеве дерево збігається з перевіреним. До M5 — 416 тестів.
@@ -884,7 +887,7 @@ git commit -m "feat(typed_openapi): name files relative to the working directory
 - Consumes: `DisplayPaths`, `SpecChecker(bag, paths)` (задача 1); `_ConfigReader` (`mapAt`, `invalid`, `spanAt`) і `DiagnosticCode` (M1).
 - Produces: `SeverityLevels`, `ClientConfig.severity`, `DiagnosticCode.fixedCodes`, `DiagnosticCode.configCodes`, `Diagnostic.withSeverity`; `SpecChecker` перевіряє прогін один раз і застосовує рівні кожного клієнта.
 
-Поведінка, яку закріплюють тести: `severity` у `defaults` і в клієнті за кодом або slug, клієнт перекриває `defaults` за кодом; невідомий код — TOA903, поганий рівень і повтор коду — TOA902; незмінний код можна підняти (`TOA807: warning`), а не знизити (`parse-error: warning`, `TOA804: off`), код конфігу не змінюється; `severity` не мапа — TOA902; валідний конфіг — без діагностик. Спільна специфікація з трьома клієнтами (`error`, `off`, за замовчуванням) — дві діагностики різних рівнів; `off` у `defaults` — порожній звіт; знижений до warning TOA504 дає код виходу `0`.
+Поведінка, яку закріплюють тести: `severity` у `defaults` і в клієнті за кодом або slug, клієнт перекриває `defaults` за кодом; невідомий код — TOA903, поганий рівень і повтор коду — TOA902; будь-який код, крім кодів конфігу, можна підняти (`example-type-mismatch: error`, `TOA807: warning`), TOA804 можна вимкнути, а незмінний код знизити не можна (`parse-error: warning`, `TOA801: off`), код конфігу не змінюється; `severity` не мапа — TOA902; валідний конфіг — без діагностик. Спільна специфікація з трьома клієнтами (`error`, `off`, за замовчуванням) — дві діагностики різних рівнів; `off` у `defaults` — порожній звіт; знижений до warning TOA504 дає код виходу `0`.
 
 - [ ] **Step 1: Тести, що не проходять**
 
@@ -1055,7 +1058,7 @@ index ad35235..5e9bf52 100644
 +  });
  }
 diff --git a/packages/typed_openapi/test/config/config_loader_test.dart b/packages/typed_openapi/test/config/config_loader_test.dart
-index f5a1daf..6b0125a 100644
+index f5a1daf..750ec73 100644
 --- a/packages/typed_openapi/test/config/config_loader_test.dart
 +++ b/packages/typed_openapi/test/config/config_loader_test.dart
 @@ -6,6 +6,7 @@ import 'package:typed_openapi/src/config/config_loader.dart';
@@ -1066,7 +1069,7 @@ index f5a1daf..6b0125a 100644
  
  import '../helpers/temp_dir.dart';
  
-@@ -235,4 +236,117 @@ clients:
+@@ -235,4 +236,122 @@ clients:
      );
      expect(bag.all.single.code, DiagnosticCode.configInvalid);
    });
@@ -1134,13 +1137,16 @@ index f5a1daf..6b0125a 100644
 +    ]);
 +  });
 +
-+  test('a fixed code may be raised but not lowered or turned off', () {
++  test('any code but a config code may be raised; a fixed code may not be '
++      'lowered or turned off', () {
 +    final path = TempDir().write('c.yaml', '''
 +defaults:
 +  severity:
 +    parse-error: warning
++    TOA801: off
 +    TOA804: off
 +    TOA807: warning
++    example-type-mismatch: error
 +    config-unknown-key: error
 +clients:
 +  a: {input: a.json, output: lib/a}
@@ -1148,20 +1154,22 @@ index f5a1daf..6b0125a 100644
 +    final bag = DiagnosticBag();
 +    final client = ConfigLoader(bag).load(path)!.clients.single;
 +    expect(client.severity.levels, {
++      DiagnosticCode.overrideTargetNotFound: null,
 +      DiagnosticCode.overrideUnchanged: Severity.warning,
++      DiagnosticCode.exampleTypeMismatch: Severity.error,
 +    });
 +    expect(bag.all.map((d) => (d.code, d.pointer?.value, d.message)), [
 +      (
 +        DiagnosticCode.configInvalid,
 +        '#/defaults/severity/parse-error',
 +        'TOA001 parse-error cannot be lowered or turned off: without it a '
-+            'broken spec or overrides file would pass.',
++            'file that cannot be read would pass.',
 +      ),
 +      (
 +        DiagnosticCode.configInvalid,
-+        '#/defaults/severity/TOA804',
-+        'TOA804 override-target-not-found cannot be lowered or turned off: '
-+            'without it a broken spec or overrides file would pass.',
++        '#/defaults/severity/TOA801',
++        'TOA801 overrides-not-found cannot be lowered or turned off: '
++            'without it a file that cannot be read would pass.',
 +      ),
 +      (
 +        DiagnosticCode.configInvalid,
@@ -1320,7 +1328,7 @@ index 7fabd64..f1f3232 100644
 +  }
  }
 diff --git a/packages/typed_openapi/lib/src/config/config_loader.dart b/packages/typed_openapi/lib/src/config/config_loader.dart
-index 2df85a9..e1bcf80 100644
+index 2df85a9..4de22cd 100644
 --- a/packages/typed_openapi/lib/src/config/config_loader.dart
 +++ b/packages/typed_openapi/lib/src/config/config_loader.dart
 @@ -4,8 +4,11 @@ import 'package:path/path.dart' as p;
@@ -1446,7 +1454,7 @@ index 2df85a9..e1bcf80 100644
 +          (level == null || level.index > code.defaultSeverity.index)) {
 +        invalid(
 +          '${code.id} ${code.slug} cannot be lowered or turned off: '
-+          'without it a broken spec or overrides file would pass.',
++          'without it a file that cannot be read would pass.',
 +          at,
 +        );
 +        continue;
@@ -1525,10 +1533,10 @@ index 7b16df5..f09c110 100644
    String? get location {
      final file = this.file;
 diff --git a/packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart b/packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart
-index 3286c6f..0c559b8 100644
+index 3286c6f..5027c1d 100644
 --- a/packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart
 +++ b/packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart
-@@ -255,6 +255,39 @@ enum DiagnosticCode {
+@@ -255,6 +255,34 @@ enum DiagnosticCode {
  
    const DiagnosticCode(this.id, this.slug, this.defaultSeverity);
  
@@ -1541,9 +1549,10 @@ index 3286c6f..0c559b8 100644
 +    outputOverlap,
 +  };
 +
-+  /// Codes the config may raise but not lower or turn off: without them the
-+  /// spec is not read at all, or they are about a file the user writes for
-+  /// this tool (the config and the overrides file).
++  /// Codes the config may raise but not lower or turn off: they say that the
++  /// spec, the overrides file or the baseline file cannot be read, so
++  /// without them the check would pass on a file it never read. The config
++  /// codes ([configCodes]) cannot be changed at all.
 +  static const fixedCodes = {
 +    parseError,
 +    rootNotObject,
@@ -1556,12 +1565,6 @@ index 3286c6f..0c559b8 100644
 +    overridesNotFound,
 +    invalidOverride,
 +    unknownOverrideKey,
-+    overrideTargetNotFound,
-+    overrideTargetAmbiguous,
-+    overrideConflict,
-+    overrideUnchanged,
-+    overrideSharedTarget,
-+    overrideNullabilityDropped,
 +    ...configCodes,
 +  };
 +
@@ -2127,7 +2130,7 @@ git commit -m "feat(typed_openapi): fingerprint diagnostics by code, anchor and 
 - Consumes: `AnchorIndex`, `Fingerprints` (задача 3); `SeverityLevels`, `fixedCodes` (задача 2); `DisplayPaths` (задача 1); `SpecLoader.parse` (компоновщик M3).
 - Produces: `Baseline`, `BaselineEntry`, `BaselineMatch`, `BaselineLoader`, `ClientCheck`, `SpecChecker.checkClients`, `SpecChecker.check(strictBaseline:)`, `DiagnosticBag.addBaselined` / `baselined`, `DiagnosticReporter.format(showBaselined:)`, команди `baseline create` / `baseline prune`, прапорці `--show-baselined` / `--strict-baseline`.
 
-Поведінка, яку закріплюють тести: `Baseline.of` групує однакові fingerprint-и з `count`, сортує, пропускає незмінні коди; файл, записаний `toYaml`, читається назад без діагностик і записується так само; зіставлення приймає до `count` у порядку звіту; запис без знахідок і запис з меншою кількістю — застарілі; `pruned` прибирає перші й зменшує другі; читач: порожній файл — без записів; без `version` чи з `version: 2` — помилка; поганий fingerprint, `count: 0`, не мапа — помилка й запис пропущено; невідомий ключ і повтор fingerprint — warning; синтаксична помилка, відсутній файл, каталог. `check`: прийняті сховано й пораховано, застарілий запис — warning у позиції запису (рядок 3), з `--strict-baseline` — error; baseline, що збігається з усім, — порожній звіт; зламаний файл — помилка й нічого не сховано. CLI: `create` → `check` з кодом `0` і `baselined: 2`, `--show-baselined`, нова проблема валить `check`, виправлена лишає застарілий запис, `prune` його прибирає; відсутній файл — TOA820 у `check` і `prune`; без `baseline` у конфігу — код `64`. Конфіг: два клієнти з одним файлом — TOA902. JSON: `baselined` у кожній діагностиці і в `summary`.
+Поведінка, яку закріплюють тести: `Baseline.of` групує однакові fingerprint-и з `count`, сортує, пропускає незмінні коди й info; запис з fingerprint-ом info його не ховає (info показано, запис застарілий); файл, записаний `toYaml`, читається назад без діагностик і записується так само; зіставлення приймає до `count` у порядку звіту; запис без знахідок і запис з меншою кількістю — застарілі; `pruned` прибирає перші й зменшує другі; читач: порожній файл — без записів; без `version` чи з `version: 2` — помилка; поганий fingerprint, `count: 0`, не мапа — помилка й запис пропущено; невідомий ключ і повтор fingerprint — warning; синтаксична помилка, відсутній файл, каталог. `check`: прийняті сховано й пораховано, застарілий запис — warning у позиції запису (рядок 3), з `--strict-baseline` — error; baseline, що збігається з усім, — порожній звіт; зламаний файл — помилка й нічого не сховано. CLI: `create` → `check` з кодом `0` і `baselined: 2`, `--show-baselined`, нова проблема валить `check`, виправлена лишає застарілий запис, `prune` його прибирає; відсутній файл — TOA820 у `check` і `prune`; без `baseline` у конфігу — код `64`. Конфіг: два клієнти з одним файлом — TOA902. JSON: `baselined` у кожній діагностиці і в `summary`.
 
 - [ ] **Step 1: Тести, що не проходять**
 
@@ -2206,6 +2209,24 @@ void main() {
       '    anchor: "api.yaml#/b"\n'
       '    message: "Unknown key."\n',
     );
+  });
+
+  test('of records errors and warnings, not infos', () {
+    final info = finding('a', code: DiagnosticCode.exampleScalarType);
+    final error = finding('c', code: DiagnosticCode.duplicateOperationId);
+    final baseline = Baseline.of('x.yaml', [info, b, error], fingerprints);
+    expect(baseline.entries.map((e) => e.code), ['TOA110', 'TOA504']);
+  });
+
+  test('an entry never hides an info', () {
+    final info = finding('a', code: DiagnosticCode.exampleScalarType);
+    final baseline = Baseline('x.yaml', [
+      BaselineEntry(fingerprint: fingerprints.of(info)),
+    ]);
+    final match = baseline.match([info], fingerprints);
+    expect(match.shown, [info]);
+    expect(match.baselined, isEmpty);
+    expect(match.stale.single.$2, 0);
   });
 
   test('an empty baseline is written as an empty list', () {
@@ -2632,10 +2653,10 @@ index 5e9bf52..f6a1297 100644
 +  });
  }
 diff --git a/packages/typed_openapi/test/config/config_loader_test.dart b/packages/typed_openapi/test/config/config_loader_test.dart
-index 6b0125a..953eb1e 100644
+index 750ec73..15824c6 100644
 --- a/packages/typed_openapi/test/config/config_loader_test.dart
 +++ b/packages/typed_openapi/test/config/config_loader_test.dart
-@@ -349,4 +349,22 @@ clients:
+@@ -354,4 +354,22 @@ clients:
        (DiagnosticCode.configInvalid, '#/clients/a/severity'),
      ]);
    });
@@ -2764,6 +2785,7 @@ import 'package:source_span/source_span.dart';
 import '../diagnostics/diagnostic.dart';
 import '../diagnostics/diagnostic_code.dart';
 import '../diagnostics/json_pointer.dart';
+import '../diagnostics/severity.dart';
 import '../load/spec_document.dart';
 import 'fingerprints.dart';
 
@@ -2841,8 +2863,9 @@ final class Baseline {
   const Baseline(this.file, this.entries, {SpecDocument? source})
     : _source = source;
 
-  /// A baseline that accepts every diagnostic in [diagnostics] except those
-  /// of [DiagnosticCode.fixedCodes], which a baseline never hides.
+  /// A baseline that accepts every error and warning in [diagnostics]
+  /// except those of [DiagnosticCode.fixedCodes]; a baseline never hides
+  /// those, nor an info.
   factory Baseline.of(
     String file,
     Iterable<Diagnostic> diagnostics,
@@ -2850,7 +2873,7 @@ final class Baseline {
   ) {
     final entries = <String, BaselineEntry>{};
     for (final diagnostic in diagnostics.toList()..sort()) {
-      if (DiagnosticCode.fixedCodes.contains(diagnostic.code)) continue;
+      if (!_acceptable(diagnostic)) continue;
       final fingerprint = fingerprints.of(diagnostic);
       final entry = entries[fingerprint];
       entries[fingerprint] = entry == null
@@ -2882,8 +2905,8 @@ final class Baseline {
   /// Splits [diagnostics] into those the entries accept and the rest.
   ///
   /// An entry accepts up to its count of diagnostics with its fingerprint,
-  /// in report order; a diagnostic of [DiagnosticCode.fixedCodes] is never
-  /// accepted.
+  /// in report order; an info and a diagnostic of
+  /// [DiagnosticCode.fixedCodes] are never accepted.
   BaselineMatch match(
     Iterable<Diagnostic> diagnostics,
     Fingerprints fingerprints,
@@ -2897,9 +2920,9 @@ final class Baseline {
     final shown = <Diagnostic>[];
     final baselined = <Diagnostic>[];
     for (final diagnostic in diagnostics.toList()..sort()) {
-      final fingerprint = DiagnosticCode.fixedCodes.contains(diagnostic.code)
-          ? null
-          : fingerprints.of(diagnostic);
+      final fingerprint = _acceptable(diagnostic)
+          ? fingerprints.of(diagnostic)
+          : null;
       final count = used[fingerprint] ?? 0;
       if (fingerprint != null && count < (allowed[fingerprint] ?? 0)) {
         used[fingerprint] = count + 1;
@@ -2965,6 +2988,13 @@ final class Baseline {
     }
     return out.toString();
   }
+
+  /// Whether a baseline may accept [diagnostic]: an error or a warning of a
+  /// code that is not fixed. An info does not fail a check, so it is always
+  /// shown.
+  static bool _acceptable(Diagnostic diagnostic) =>
+      diagnostic.severity != Severity.info &&
+      !DiagnosticCode.fixedCodes.contains(diagnostic.code);
 
   static List<BaselineEntry> _sorted(Iterable<BaselineEntry> entries) =>
       entries.toList()..sort((a, b) {
@@ -3696,7 +3726,7 @@ index bc5848f..374a944 100644
    final CommandRunner<int> _runner;
    final StringSink _err;
 diff --git a/packages/typed_openapi/lib/src/config/config_loader.dart b/packages/typed_openapi/lib/src/config/config_loader.dart
-index e1bcf80..a9daf76 100644
+index 4de22cd..3f36d6a 100644
 --- a/packages/typed_openapi/lib/src/config/config_loader.dart
 +++ b/packages/typed_openapi/lib/src/config/config_loader.dart
 @@ -115,6 +115,7 @@ final class ConfigLoader {
@@ -3825,7 +3855,7 @@ index f4307f7..069db63 100644
    ///
    /// [severity] defaults to the code's [DiagnosticCode.defaultSeverity].
 diff --git a/packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart b/packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart
-index 0c559b8..1be2c44 100644
+index 5027c1d..11c93c6 100644
 --- a/packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart
 +++ b/packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart
 @@ -241,6 +241,20 @@ enum DiagnosticCode {
@@ -3849,22 +3879,26 @@ index 0c559b8..1be2c44 100644
    /// The configuration file does not exist.
    configNotFound('TOA901', 'config-not-found', .error),
  
-@@ -266,7 +280,7 @@ enum DiagnosticCode {
+@@ -265,9 +279,10 @@ enum DiagnosticCode {
+   };
  
-   /// Codes the config may raise but not lower or turn off: without them the
-   /// spec is not read at all, or they are about a file the user writes for
--  /// this tool (the config and the overrides file).
-+  /// this tool (the config, the overrides file and the baseline file).
+   /// Codes the config may raise but not lower or turn off: they say that the
+-  /// spec, the overrides file or the baseline file cannot be read, so
+-  /// without them the check would pass on a file it never read. The config
+-  /// codes ([configCodes]) cannot be changed at all.
++  /// spec, the overrides file or the baseline file cannot be read (or the
++  /// baseline file written), so without them the check would pass on a file
++  /// it never read. The config codes ([configCodes]) cannot be changed at
++  /// all.
    static const fixedCodes = {
      parseError,
      rootNotObject,
-@@ -285,6 +299,10 @@ enum DiagnosticCode {
-     overrideUnchanged,
-     overrideSharedTarget,
-     overrideNullabilityDropped,
+@@ -280,6 +295,9 @@ enum DiagnosticCode {
+     overridesNotFound,
+     invalidOverride,
+     unknownOverrideKey,
 +    baselineNotFound,
 +    invalidBaseline,
-+    baselineEntryStale,
 +    baselineNotWritten,
      ...configCodes,
    };
@@ -3956,7 +3990,7 @@ index b9d58c9..e953664 100644
 - [ ] **Step 4: Перевірити**
 
 Run (з `packages/typed_openapi`): `dart test`
-Expected: PASS, 469 тестів (`+469: All tests passed!`).
+Expected: PASS, 471 тест (`+471: All tests passed!`).
 
 Run (з `packages/typed_openapi`): `dart format lib test bin` двічі
 Expected: другий запуск — `0 changed`.
@@ -4855,7 +4889,7 @@ index e953664..ed29da6 100644
 - [ ] **Step 4: Перевірити**
 
 Run (з `packages/typed_openapi`): `dart test`
-Expected: PASS, 477 тестів (`+477: All tests passed!`).
+Expected: PASS, 479 тестів (`+479: All tests passed!`).
 
 Run (з `packages/typed_openapi`): `dart format lib test bin` двічі
 Expected: другий запуск — `0 changed`.
@@ -4880,9 +4914,9 @@ git commit -m "feat(typed_openapi): SARIF and GitHub Actions report formats" \
 
 **Interfaces:**
 - Consumes: `RelatedLocation`, `Diagnostic.related` (задача 5); `OverrideEdit(edit, sources)`, `OverrideSet.file` / `spanOf`, `NormalizerRule.check` / `hint`, `RuleContext` (M3, M4).
-- Produces: `Diagnostic.hints`, `Diagnostic.withHints`, `Diagnostic.withRelated`; `fix` стає геттером `fix + hints`; `Normalizer` додає related-позицію override-у.
+- Produces: `Diagnostic.hints` (`(preset, text)`), `Diagnostic.withHints`, `Diagnostic.withRelated`; `fix` стає геттером `fix + hints`; `Normalizer` додає related-позицію override-у.
 
-Поведінка, яку закріплюють тести: `format: binary` з override-у на `type: object` дає TOA205 з related `api.overrides.yaml:2:17` `#/schemas/Pet/format`; TOA205, що вже був у специфікації, і TOA201 в іншій схемі related не отримують; дублікат з іншими підказками додає лише нові (порядок збережено, повтор не дублюється); спільна специфікація клієнтів без пресету і з `nestjs` дає одну TOA301 з підказкою NestJS (до задачі її губив дедуп); CLI друкує `related:` під знахідкою.
+Поведінка, яку закріплюють тести: `format: binary` з override-у на `type: object` дає TOA205 з related `api.overrides.yaml:2:17` `#/schemas/Pet/format`; TOA205, що вже був у специфікації, і TOA201 в іншій схемі related не отримують; дублікат з іншими підказками додає лише нові (порядок збережено, повтор не дублюється), одна підказка — без префікса, кілька — з назвою пресету; спільна специфікація клієнтів без пресету і з `nestjs` дає одну TOA301 з підказкою NestJS без префікса (до задачі її губив дедуп); клієнти `nestjs` і `fastapi` дають одну TOA504 з `nestjs: …` і `fastapi: …`; CLI друкує `related:` під знахідкою.
 
 - [ ] **Step 1: Тести, що не проходять**
 
@@ -4976,10 +5010,10 @@ Diff `packages/typed_openapi/test/check/spec_checker_test.dart`, `packages/typed
 
 ```diff
 diff --git a/packages/typed_openapi/test/check/spec_checker_test.dart b/packages/typed_openapi/test/check/spec_checker_test.dart
-index c43cf85..30d54f7 100644
+index c43cf85..ed1e30c 100644
 --- a/packages/typed_openapi/test/check/spec_checker_test.dart
 +++ b/packages/typed_openapi/test/check/spec_checker_test.dart
-@@ -485,4 +485,27 @@ entries:
+@@ -485,4 +485,59 @@ entries:
        expect(bag.baselined, isEmpty);
      });
    });
@@ -5005,6 +5039,38 @@ index c43cf85..30d54f7 100644
 +    final finding = bag.all.single;
 +    expect(finding.code, DiagnosticCode.duplicateEnumValue);
 +    expect(finding.fix, contains('In NestJS, give the enum its own schema'));
++    expect(finding.fix, isNot(contains('nestjs:')));
++  });
++
++  test('hints of several presets are named by their preset', () {
++    final dir = TempDir();
++    dir.write('api.yaml', '''
++openapi: 3.0.3
++info: {title: t, version: "1"}
++paths:
++  /a: {get: {operationId: same, responses: {'200': {description: ok}}}}
++  /b: {get: {operationId: same, responses: {'200': {description: ok}}}}
++''');
++    final path = dir.write('typed_openapi.yaml', '''
++clients:
++  a: {input: api.yaml, output: lib/a, preset: nestjs}
++  b: {input: api.yaml, output: lib/b, preset: fastapi}
++''');
++    final bag = DiagnosticBag();
++    SpecChecker(
++      bag,
++      DisplayPaths(dir.path),
++    ).check(ConfigLoader(bag).load(path)!);
++    final finding = bag.all.single;
++    expect(finding.code, DiagnosticCode.duplicateOperationId);
++    expect(
++      finding.fix,
++      'Give each operation its own operationId at the source, or override '
++      'the method name of this operation. nestjs: In NestJS, set '
++      '`operationIdFactory` in SwaggerModule.createDocument (the default is '
++      'controllerKey_methodKey). fastapi: In FastAPI, pass '
++      '`generate_unique_id_function` to FastAPI(...).',
++    );
 +  });
  }
 diff --git a/packages/typed_openapi/test/cli/cli_test.dart b/packages/typed_openapi/test/cli/cli_test.dart
@@ -5055,7 +5121,7 @@ index ad3d018..1f4149f 100644
 +  });
  }
 diff --git a/packages/typed_openapi/test/diagnostics/diagnostic_bag_test.dart b/packages/typed_openapi/test/diagnostics/diagnostic_bag_test.dart
-index 85eae27..b66f620 100644
+index 85eae27..0bed518 100644
 --- a/packages/typed_openapi/test/diagnostics/diagnostic_bag_test.dart
 +++ b/packages/typed_openapi/test/diagnostics/diagnostic_bag_test.dart
 @@ -1,6 +1,8 @@
@@ -5067,7 +5133,7 @@ index 85eae27..b66f620 100644
  import 'package:typed_openapi/src/diagnostics/json_pointer.dart';
  import 'package:typed_openapi/src/diagnostics/severity.dart';
  
-@@ -70,4 +72,24 @@ void main() {
+@@ -70,4 +72,34 @@ void main() {
      expect(bag.count(Severity.warning), 1);
      expect(bag.count(Severity.info), 0);
    });
@@ -5082,13 +5148,23 @@ index 85eae27..b66f620 100644
 +    );
 +    final bag = DiagnosticBag()
 +      ..add(base)
-+      ..add(base.withHints(['In NestJS, ...']))
-+      ..add(base.withHints(['In FastAPI, ...', 'In NestJS, ...']))
++      ..add(base.withHints([('nestjs', 'In NestJS, ...')]));
++    expect(bag.all.single.fix, 'Remove it. In NestJS, ...');
++    bag
++      ..add(
++        base.withHints([
++          ('fastapi', 'In FastAPI, ...'),
++          ('nestjs', 'In NestJS, ...'),
++        ]),
++      )
 +      ..add(base);
-+    expect(bag.all.single.hints, ['In NestJS, ...', 'In FastAPI, ...']);
++    expect(bag.all.single.hints, [
++      ('nestjs', 'In NestJS, ...'),
++      ('fastapi', 'In FastAPI, ...'),
++    ]);
 +    expect(
 +      bag.all.single.fix,
-+      'Remove it. In NestJS, ... In FastAPI, ...',
++      'Remove it. nestjs: In NestJS, ... fastapi: In FastAPI, ...',
 +    );
 +  });
  }
@@ -5105,7 +5181,7 @@ Diff `packages/typed_openapi/lib/src/diagnostics/diagnostic.dart`, `packages/typ
 
 ```diff
 diff --git a/packages/typed_openapi/lib/src/diagnostics/diagnostic.dart b/packages/typed_openapi/lib/src/diagnostics/diagnostic.dart
-index e6e59a1..a276681 100644
+index e6e59a1..a1899ce 100644
 --- a/packages/typed_openapi/lib/src/diagnostics/diagnostic.dart
 +++ b/packages/typed_openapi/lib/src/diagnostics/diagnostic.dart
 @@ -49,10 +49,11 @@ final class Diagnostic implements Comparable<Diagnostic> {
@@ -5122,7 +5198,7 @@ index e6e59a1..a276681 100644
  
    /// The stable code from the catalog.
    final DiagnosticCode code;
-@@ -72,8 +73,15 @@ final class Diagnostic implements Comparable<Diagnostic> {
+@@ -72,8 +73,22 @@ final class Diagnostic implements Comparable<Diagnostic> {
    /// The source range in [file], when positions are known.
    final SourceSpan? span;
  
@@ -5131,16 +5207,23 @@ index e6e59a1..a276681 100644
 +  final String? _fix;
 +
 +  /// What to change in the source to fix the finding, followed by the
-+  /// [hints].
-+  String? get fix => hints.isEmpty ? _fix : [?_fix, ...hints].join(' ');
++  /// [hints]: a single hint as it is, several each after its preset's name
++  /// (`nestjs: ...`).
++  String? get fix {
++    if (hints.isEmpty) return _fix;
++    final texts = hints.length == 1
++        ? [hints.single.$2]
++        : [for (final (preset, text) in hints) '$preset: $text'];
++    return [?_fix, ...texts].join(' ');
++  }
 +
-+  /// How to fix the finding in the code of a framework, one per preset of
-+  /// the clients that share the finding.
-+  final List<String> hints;
++  /// How to fix the finding in the code of a framework: the preset's name
++  /// and the hint, one per preset of the clients that share the finding.
++  final List<(String, String)> hints;
  
    /// Values from the spec that tell this finding from another of the same
    /// code at the same place, such as the name of a missing field; part of
-@@ -95,6 +103,34 @@ final class Diagnostic implements Comparable<Diagnostic> {
+@@ -95,6 +110,34 @@ final class Diagnostic implements Comparable<Diagnostic> {
      return start == null ? null : start.column + 1;
    }
  
@@ -5159,7 +5242,7 @@ index e6e59a1..a276681 100644
 +  );
 +
 +  /// This diagnostic with [hints] instead of its own.
-+  Diagnostic withHints(List<String> hints) => Diagnostic(
++  Diagnostic withHints(List<(String, String)> hints) => Diagnostic(
 +    code: code,
 +    severity: severity,
 +    message: message,
@@ -5175,7 +5258,7 @@ index e6e59a1..a276681 100644
    /// This diagnostic with [severity] instead of its own.
    Diagnostic withSeverity(Severity severity) => Diagnostic(
      code: code,
-@@ -103,7 +139,8 @@ final class Diagnostic implements Comparable<Diagnostic> {
+@@ -103,7 +146,8 @@ final class Diagnostic implements Comparable<Diagnostic> {
      file: file,
      pointer: pointer,
      span: span,
@@ -5257,7 +5340,7 @@ index 069db63..222ab66 100644
  
    static (DiagnosticCode, Severity, String, String?, String?, int?) _keyOf(
 diff --git a/packages/typed_openapi/lib/src/normalize/normalizer.dart b/packages/typed_openapi/lib/src/normalize/normalizer.dart
-index ea342e1..274d892 100644
+index ea342e1..67f8e9b 100644
 --- a/packages/typed_openapi/lib/src/normalize/normalizer.dart
 +++ b/packages/typed_openapi/lib/src/normalize/normalizer.dart
 @@ -1,6 +1,8 @@
@@ -5379,10 +5462,10 @@ index ea342e1..274d892 100644
 +    _OverrideOrigins? origins,
 +  ) {
      final d = finding.diagnostic;
-     final hint = switch (preset) {
-       final preset? => rule.hint(d.code, preset),
-       null => null,
-     };
+-    final hint = switch (preset) {
+-      final preset? => rule.hint(d.code, preset),
+-      null => null,
+-    };
 -    _diagnostics.add(
 -      hint == null
 -          ? d
@@ -5396,7 +5479,11 @@ index ea342e1..274d892 100644
 -              fix: d.fix == null ? hint : '${d.fix} $hint',
 -            ),
 -    );
-+    final hinted = hint == null ? d : d.withHints([...d.hints, hint]);
++    final preset = this.preset;
++    final hint = preset == null ? null : rule.hint(d.code, preset);
++    final hinted = preset == null || hint == null
++        ? d
++        : d.withHints([...d.hints, (preset.name, hint)]);
 +    _diagnostics.add(origins?.attach(hinted) ?? hinted);
 +  }
 +
@@ -5476,7 +5563,7 @@ index ea342e1..274d892 100644
 - [ ] **Step 4: Перевірити**
 
 Run (з `packages/typed_openapi`): `dart test`
-Expected: PASS, 483 тести (`+483: All tests passed!`).
+Expected: PASS, 486 тестів (`+486: All tests passed!`).
 
 Run (з `packages/typed_openapi`): `dart format lib test bin` двічі
 Expected: другий запуск — `0 changed`.
@@ -5507,19 +5594,20 @@ Diff `CLAUDE.md`, `packages/typed_openapi/CHANGELOG.md`, `packages/typed_openapi
 
 ````diff
 diff --git a/CLAUDE.md b/CLAUDE.md
-index 1449442..9f83d87 100644
+index 1449442..24f2108 100644
 --- a/CLAUDE.md
 +++ b/CLAUDE.md
-@@ -32,9 +32,14 @@ Git commands run from the repo root. Commit messages are Conventional Commits
+@@ -32,9 +32,15 @@ Git commands run from the repo root. Commit messages are Conventional Commits
  
  All under `packages/typed_openapi/lib/src/`, one folder per stage:
  
 -- `diagnostics/` - `Diagnostic`, `DiagnosticCode` (stable `TOAnnn` catalog),
 -  `Severity`, `JsonPointer`, `DiagnosticBag`, and the reporters
 -  (`DiagnosticReporter`, `TextReporter`, `JsonReporter`, `ReportFormat`).
-+- `diagnostics/` - `Diagnostic` (with `RelatedLocation`s, preset `hints`
-+  and fingerprint `args`), `DiagnosticCode` (stable `TOAnnn` catalog;
-+  `fixedCodes` cannot be lowered, `configCodes` not changed), `Severity`,
++- `diagnostics/` - `Diagnostic` (with `RelatedLocation`s, preset `hints` as
++  `(preset, text)` and fingerprint `args`), `DiagnosticCode` (stable `TOAnnn` catalog;
++  `fixedCodes` - a file cannot be read - cannot be lowered, `configCodes`
++  not changed), `Severity`,
 +  `SeverityLevels` (a client's `severity` config), `JsonPointer`,
 +  `DiagnosticBag` (baselined diagnostics kept apart), `DisplayPaths` (files
 +  relative to the working directory, absolute outside it), and the reporters
@@ -5528,7 +5616,7 @@ index 1449442..9f83d87 100644
  - `load/` - `SpecLoader` reads JSON/YAML into a `SpecDocument` (plain tree,
    absolute file URI, source spans by JSON pointer, `valueAt(pointer)`,
    `withRoot`) through `YamlComposer`, which `ConfigLoader` uses too.
-@@ -157,18 +162,31 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
+@@ -157,18 +163,32 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
    a value cannot be written as YAML (non-finite numbers).
  - `config/` - `ConfigLoader`, `ProjectConfig`, `ClientConfig`, `Preset`.
  - `check/` - `SpecChecker`: config -> load -> version -> overrides ->
@@ -5543,7 +5631,8 @@ index 1449442..9f83d87 100644
 +- `baseline/` - `AnchorIndex` (logical addresses of a spec's nodes:
 +  operation `METHOD /path`, `in:name` parameter, components schema,
 +  property), `Fingerprints` (anchor, `sha256([code, anchor, args])[:12]`),
-+  `Baseline`, `BaselineEntry`, `BaselineMatch` (match, prune, YAML) and
++  `Baseline`, `BaselineEntry`, `BaselineMatch` (match, prune, YAML; only
++  errors and warnings of codes that are not fixed are accepted) and
 +  `BaselineLoader` (TOA820, TOA821).
  - `cli/` - `TypedOpenApiCli` (`cli.dart`, owns the `CommandRunner` and maps
 -  usage errors to exit code 64) and `CheckCommand` (`check_command.dart`,
@@ -5569,7 +5658,7 @@ index 1449442..9f83d87 100644
    (`SpecLoader`, `SpecDocument`, `OpenApiVersion`, `OpenApiVersionDetector`),
    the whole `model/` (`SpecNode`, `SpecLocation`, `RefOr`, `Ref`, `Inline`,
    `RefKind`, `OpenApiDocument` and the other OAS objects), the entry points
-@@ -176,7 +194,7 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
+@@ -176,7 +196,7 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
    (`Normalizer`, `NormalizedSpec`, `NormalizerRule`, `RuleContext`,
    `Finding`, `SpecEdit`, `EditOperation`) and the overrides file
    (`OverrideLoader`, `OverrideSet`, `OverrideEntry` and its subclasses,
@@ -5578,7 +5667,7 @@ index 1449442..9f83d87 100644
    internals of `parse/` (`OpenApiParser`, `OperationParser`, `SchemaParser`,
    `ObjectReader`, `ParseContext`, `SpecIndex`, `DialectChecker`), `resolve/`
    (`RefTarget`, `RefResolver`), `normalize/` (`TreeEditor`, the rule
-@@ -194,11 +212,12 @@ Rules of the pipeline:
+@@ -194,11 +214,12 @@ Rules of the pipeline:
  - Reports are deterministic: diagnostics sort by file, position, pointer, code,
    message (`Diagnostic.compareTo`, `DiagnosticBag.sorted`). `DiagnosticBag`
    ignores a diagnostic equal to one it has (same code, severity, message, file,
@@ -5594,10 +5683,10 @@ index 1449442..9f83d87 100644
  ## Code rules
  
 diff --git a/packages/typed_openapi/CHANGELOG.md b/packages/typed_openapi/CHANGELOG.md
-index 9bf8fa4..6c05e70 100644
+index 9bf8fa4..1a60f54 100644
 --- a/packages/typed_openapi/CHANGELOG.md
 +++ b/packages/typed_openapi/CHANGELOG.md
-@@ -102,3 +102,35 @@
+@@ -102,3 +102,39 @@
    `ResponseOverride`, `SchemaOverride`, `PropertyOverride`,
    `DartTypeOverride`; `Normalizer.normalize` takes `overrides:` and
    `NormalizedSpec.overrides` is the set, or null without an overrides file.
@@ -5609,12 +5698,15 @@ index 9bf8fa4..6c05e70 100644
 +- Levels in the config: `severity: {<code or name>: error|warning|info|off}`
 +  in `defaults` and per client (a client overrides `defaults` code by code)
 +  changes the report and the exit code. An unknown code is TOA903; a bad
-+  level, a code named twice, lowering or turning off a code without which
-+  the spec or the overrides file would pass broken
-+  (`DiagnosticCode.fixedCodes`), and any change of a config code are TOA902.
++  level, a code named twice, lowering or turning off a code that says a
++  spec, overrides or baseline file cannot be read (`DiagnosticCode.fixedCodes`:
++  TOA001, TOA003, TOA004, TOA006-TOA008, TOA010, TOA011, TOA801-TOA803,
++  TOA820, TOA821, TOA823), and any change of a config code (TOA901-TOA904)
++  are TOA902. Any other code may be raised, lowered or turned off.
 +- Baseline (R2.3): `clients.<name>.baseline` names a YAML file written by
-+  `typed_openapi baseline create [client...]`; `check` then hides the
-+  diagnostics it accepts and counts them (`baselined: N`), lists them marked
++  `typed_openapi baseline create [client...]` from the client's errors and
++  warnings (infos are always shown); `check` then hides the diagnostics it
++  accepts and counts them (`baselined: N`), lists them marked
 +  with `--show-baselined`, and reports an entry that matches nothing (or
 +  fewer diagnostics than its `count`) as TOA822 (warning, an error with
 +  `--strict-baseline`) with a hint to run `typed_openapi baseline prune`.
@@ -5631,10 +5723,11 @@ index 9bf8fa4..6c05e70 100644
 +- A problem an override introduces has a related location: the override
 +  field (text `related:`, JSON `related`, SARIF `relatedLocations`).
 +- Preset hints are kept apart (`Diagnostic.hints`): a finding two clients
-+  share keeps the hints of both presets instead of the first one's.
++  share keeps the hints of both presets instead of the first one's; with
++  more than one, each starts with its preset's name (`nestjs: ...`).
 +- `Diagnostic.args` (part of the fingerprint): the field name of TOA112.
 diff --git a/packages/typed_openapi/README.md b/packages/typed_openapi/README.md
-index 3654aa3..cbde051 100644
+index 3654aa3..e927eae 100644
 --- a/packages/typed_openapi/README.md
 +++ b/packages/typed_openapi/README.md
 @@ -28,7 +28,7 @@ Check the specs without generating anything:
@@ -5655,8 +5748,8 @@ index 3654aa3..cbde051 100644
 -config could not be read.
 +for files the parser could position, a line and column. Paths are relative
 +to the directory you run the command in. Change the level of a code, by its
-+id or name, in `defaults` or per client; `off` drops it. Codes without which
-+a broken spec, overrides or baseline file would pass cannot be lowered:
++id or name, in `defaults` or per client; `off` drops it. Codes that say a
++spec, overrides or baseline file cannot be read cannot be lowered:
 +
 +```yaml
 +defaults:
@@ -5675,7 +5768,7 @@ index 3654aa3..cbde051 100644
 +```
 +
 +```sh
-+dart run typed_openapi baseline create   # accept today's findings
++dart run typed_openapi baseline create   # accept today's errors and warnings
 +dart run typed_openapi check             # new findings only; "baselined: N"
 +dart run typed_openapi check --show-baselined
 +dart run typed_openapi baseline prune    # drop entries that no longer match
@@ -5692,7 +5785,7 @@ index 3654aa3..cbde051 100644
  Generated clients depend on
  [`typed_openapi_runtime`](../typed_openapi_runtime/README.md).
 diff --git a/packages/typed_openapi/README.ua.md b/packages/typed_openapi/README.ua.md
-index 16cf3d2..798a4f7 100644
+index 16cf3d2..2714640 100644
 --- a/packages/typed_openapi/README.ua.md
 +++ b/packages/typed_openapi/README.ua.md
 @@ -29,7 +29,7 @@ clients:
@@ -5713,9 +5806,9 @@ index 16cf3d2..798a4f7 100644
 -невідомий клієнт, `78` — конфіг не вдалося прочитати.
 +специфікації і, якщо парсер зміг визначити позицію, рядок і колонка. Шляхи —
 +відносно каталогу, з якого запущено команду. Рівень коду (за кодом або
-+назвою) змінюється в `defaults` або в клієнті; `off` вимикає його. Коди, без
-+яких зламаний файл специфікації, override-ів чи baseline пройшов би
-+перевірку, знизити не можна:
++назвою) змінюється в `defaults` або в клієнті; `off` вимикає його. Коди про
++те, що файл специфікації, override-ів чи baseline не читається, знизити не
++можна:
 +
 +```yaml
 +defaults:
@@ -5734,7 +5827,7 @@ index 16cf3d2..798a4f7 100644
 +```
 +
 +```sh
-+dart run typed_openapi baseline create   # зафіксувати сьогоднішні знахідки
++dart run typed_openapi baseline create   # зафіксувати сьогоднішні error і warning
 +dart run typed_openapi check             # лише нові; «baselined: N»
 +dart run typed_openapi check --show-baselined
 +dart run typed_openapi baseline prune    # прибрати записи, що вже не збігаються
@@ -5795,7 +5888,7 @@ index f813174..281fdec 100644
 - [ ] **Step 2: Перевірити**
 
 Run (з `packages/typed_openapi`): `dart test`
-Expected: PASS, 483 тести (`+483: All tests passed!`).
+Expected: PASS, 486 тестів (`+486: All tests passed!`).
 
 Run (з `packages/typed_openapi`): `dart format lib test bin` двічі
 Expected: другий запуск — `0 changed`.
@@ -5820,16 +5913,3 @@ git commit -m "docs(typed_openapi): document baselines, levels and report format
 
 Run (з `packages/typed_openapi`, після коміту): `dart pub publish --dry-run`
 Expected: `Package has 0 warnings.`
-
-## Відкриті питання
-
-Специфікація лишає їх відкритими; план реалізує запропонований варіант, а користувач підтверджує або змінює його до виконання.
-
-1. **Формат файлу baseline.** YAML з коментарем-шапкою, `version: 1` і `entries:` — список записів `fingerprint`, `code`, `anchor`, `message`, `count` (лише коли > 1); рядки — у лапках JSON, записи — за кодом, якорем, fingerprint. Чи потрібні `version` і коментар; чи писати `count: 1`?
-2. **Запис якоря.** `@/<адреса override-у як JSON pointer>#<хвіст pointer-а>` (`@/schemas/Tag/properties/name#/required`, `@/operations/GET ~1pets/parameters/query:limit#/bogus`) і `<файл>#<pointer>` без адреси. Операція — завжди `METHOD /path`, а не `operationId`: перейменування шляху змінює fingerprint, перейменування `operationId` — ні. Чи прийнятно, чи віддати перевагу `operationId`?
-3. **Список незмінних кодів.** Чи всі коди файлу override-ів (TOA801–TOA809, зокрема info TOA807–TOA809 і warning TOA804) мають бути незмінними, чи лише «файл не читається» (TOA801–TOA803)? Коди конфігу не змінюються зовсім — чи дозволити підняти TOA903 до error (тоді рівні з `defaults` треба застосовувати й до діагностик конфігу)?
-4. **Що пише `baseline create`.** Усі діагностики клієнта після рівнів, зокрема info, крім незмінних кодів. Чи фіксувати info (вони не валять CI), чи лише error і warning?
-5. **Вивід `baseline create` / `prune`.** Звіт text (незмінні коди, що лишилися, і проблеми файлу baseline) і рядок `Wrote api.baseline.yaml: 2 entries accept 2 diagnostics.` / `Pruned …: removed N entries, M left.`; `--format` немає; без `baseline` у конфігу — помилка використання (`64`). Чи так?
-6. **Розмітка прийнятих у звіті.** text: `warning TOA201 bool-required [baselined]: …` і `, baselined: N` у підсумку лише коли N > 0; JSON: `baselined` у кожній діагностиці і в `summary` завжди; SARIF: `suppressions` (external); github-actions: `::notice` з `(baselined)`.
-7. **Текст у SARIF і github-actions.** Повідомлення разом із fix (`\nFix: …` у SARIF; `at <pointer>` і `fix: …` окремими рядками в анотації). Чи прибрати fix з тексту SARIF (лишивши в `properties`)?
-8. **Підказки двох пресетів** однієї знахідки йдуть у `fix` поспіль, без назви клієнта. Чи називати клієнта/пресет біля підказки?
