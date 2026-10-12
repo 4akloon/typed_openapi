@@ -177,6 +177,7 @@ paths:
   /pets:
     get:
       operationId: listPets
+      tags: [pets]
       responses:
         "200": {$ref: "common.yaml#/components/responses/Missing"}
 ''');
@@ -569,8 +570,8 @@ clients:
 openapi: 3.0.3
 info: {title: t, version: "1"}
 paths:
-  /a: {get: {operationId: same, responses: {'200': {description: ok}}}}
-  /b: {get: {operationId: same, responses: {'200': {description: ok}}}}
+  /a: {get: {operationId: same, tags: [a], responses: {'200': {description: ok}}}}
+  /b: {get: {operationId: same, tags: [b], responses: {'200': {description: ok}}}}
 ''');
     final path = dir.write('typed_openapi.yaml', '''
 clients:
@@ -591,6 +592,61 @@ clients:
       '`operationIdFactory` in SwaggerModule.createDocument (the default is '
       'controllerKey_methodKey). fastapi: In FastAPI, pass '
       '`generate_unique_id_function` to FastAPI(...).',
+    );
+  });
+
+  test('builds the IR of each client and reports its diagnostics', () {
+    final dir = TempDir();
+    dir.write('api.yaml', r'''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /lists:
+    get:
+      operationId: getLists
+      tags: [lists]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/List'}}}}
+components:
+  schemas:
+    List: {type: object, properties: {id: {type: integer}}}
+''');
+    final path = dir.write('typed_openapi.yaml', '''
+clients:
+  a: {input: api.yaml, output: lib/a}
+  b: {input: api.yaml, output: lib/b, naming: {group: '{Tag}Service'}}
+''');
+    final bag = DiagnosticBag();
+    final checks = SpecChecker(
+      bag,
+      DisplayPaths(dir.path),
+    ).checkClients(ConfigLoader(bag).load(path)!);
+    expect(bag.all, isEmpty);
+    expect(
+      checks.map((c) => c.diagnostics.map((d) => (d.code, d.pointer?.value))),
+      [
+        [(DiagnosticCode.nameReserved, '#/components/schemas/List')],
+        [(DiagnosticCode.nameReserved, '#/components/schemas/List')],
+      ],
+    );
+    expect(checks.map((c) => c.ir!.groups.single.name), [
+      'ListsApi',
+      'ListsService',
+    ]);
+    expect(checks.first.ir!.declarations.single.name, 'ListModel');
+    expect(
+      checks.first.irJson!.toJson(checks.first.ir!)['declarations'],
+      [
+        {
+          'name': 'ListModel',
+          'at': 'api.yaml#/components/schemas/List',
+          'kind': 'model',
+          'direction': 'response',
+          'fields': [
+            {'name': 'id', 'json': 'id', 'type': 'int?'},
+          ],
+        },
+      ],
     );
   });
 }

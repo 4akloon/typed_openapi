@@ -68,9 +68,30 @@ Overrides change the spec before the normalizer runs; `null` removes a field.
 An override whose target is gone is a warning, one the spec already matches
 is an info that it can be removed, and a misspelled key is an error that
 suggests the closest known one. Fields for the generator (`name`, `exclude`,
-`group`, `exhaustive`, `dartType`, `triState`) are checked now and used once
-code generation lands. Hints of rules that cannot fix a defect themselves
+`group`, `exhaustive`, `dartType`, `triState`) name, leave out, group and
+type what is generated. Hints of rules that cannot fix a defect themselves
 end with the override to copy.
+
+`check` also works out what will be generated: names, groups and Dart types.
+Name clashes get a suffix (`List` -> `ListModel`, `class` -> `class_`,
+`getPet2`) and an info with the override that pins the name. Choose what to
+generate and how in `defaults` or per client:
+
+```yaml
+defaults:
+  naming:
+    group: '{Tag}Api'            # class per tag; group_by: tag|path|single
+    patch_suffix: Patch          # PetPatch: PATCH body of a schema used elsewhere too
+    operation_prefix: '^v1_'     # removed from operationIds (nestjs: XController_)
+  include: {tags: [pets], paths: ['/store/**']}
+  exclude: {operations: [deletePet]}
+  types:
+    number: double               # number without format; default num
+    formats: {decimal: {type: Decimal, import: 'package:decimal/decimal.dart'}}
+    schemas: {Money: {type: Money, import: 'package:app/money.dart', converter: MoneyConverter}}
+  tri_state: patch               # optional nullable PATCH fields are Patch<T>?
+  errors: {default_schema: ErrorDto}
+```
 
 Every finding has a stable code (`TOA011`), a JSON pointer into the spec and,
 for files the parser could position, a line and column. Paths are relative

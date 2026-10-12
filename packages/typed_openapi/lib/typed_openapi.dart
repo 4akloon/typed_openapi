@@ -6,7 +6,10 @@
 /// client's overrides file; [Normalizer] applies its spec fields, runs the
 /// named rules over the spec and applies their fixes. [Baseline] and
 /// [BaselineLoader] read and write a client's baseline file, and
-/// [Fingerprints] computes the keys it matches diagnostics by.
+/// [Fingerprints] computes the keys it matches diagnostics by. [IrBuilder]
+/// builds a client's semantic IR ([ClientIr]: declarations with Dart names
+/// and [DartType]s, groups of operations) from the normalized spec, and
+/// [IrJson] writes it as JSON.
 library;
 
 export 'src/baseline/anchor_index.dart' show AnchorIndex;
@@ -16,6 +19,13 @@ export 'src/baseline/fingerprints.dart' show Fingerprints;
 export 'src/check/spec_checker.dart' show ClientCheck, SpecChecker;
 export 'src/cli/cli.dart' show TypedOpenApiCli;
 export 'src/config/config_loader.dart' show ConfigLoader;
+export 'src/config/generation_config.dart'
+    show
+        FilterPattern,
+        GenerationConfig,
+        GroupBy,
+        OperationFilter,
+        TriStateRule;
 export 'src/config/project_config.dart'
     show ClientConfig, Preset, ProjectConfig;
 export 'src/diagnostics/diagnostic.dart' show Diagnostic, RelatedLocation;
@@ -30,6 +40,42 @@ export 'src/diagnostics/reporters.dart'
 export 'src/diagnostics/sarif_reporter.dart' show SarifReporter;
 export 'src/diagnostics/severity.dart' show Severity;
 export 'src/diagnostics/severity_levels.dart' show SeverityLevels;
+export 'src/ir/dart_type.dart'
+    show
+        CoreKind,
+        CoreType,
+        CustomType,
+        DartType,
+        DeclId,
+        ListType,
+        MapType,
+        NamedType,
+        PatchType;
+export 'src/ir/ir.dart'
+    show
+        BodyKind,
+        ClientIr,
+        Declaration,
+        EnumDecl,
+        EnumKind,
+        EnumValueIr,
+        ErrorsByStatus,
+        ErrorsIr,
+        FieldIr,
+        GroupIr,
+        ModelDecl,
+        ModelDirection,
+        NoErrors,
+        OperationIr,
+        ParameterIr,
+        RequestBodyIr,
+        ResponseIr,
+        SingleError,
+        UnionDecl,
+        UnionKind,
+        UnionVariantIr;
+export 'src/ir/ir_builder.dart' show IrBuilder;
+export 'src/ir/ir_json.dart' show IrJson;
 export 'src/load/openapi_version.dart'
     show OpenApiVersion, OpenApiVersionDetector;
 export 'src/load/spec_document.dart' show SpecDocument;

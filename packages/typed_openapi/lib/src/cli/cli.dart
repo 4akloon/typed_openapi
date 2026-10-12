@@ -6,6 +6,7 @@ import 'package:io/io.dart' show ExitCode;
 import '../diagnostics/display_paths.dart';
 import 'baseline_command.dart';
 import 'check_command.dart';
+import 'ir_command.dart';
 
 /// The `typed_openapi` command line.
 final class TypedOpenApiCli {
@@ -24,7 +25,8 @@ final class TypedOpenApiCli {
     final paths = DisplayPaths(workingDirectory);
     _runner
       ..addCommand(CheckCommand(out ?? stdout, paths))
-      ..addCommand(BaselineCommand(out ?? stdout, paths));
+      ..addCommand(BaselineCommand(out ?? stdout, paths))
+      ..addCommand(IrCommand(out ?? stdout, paths));
   }
 
   final CommandRunner<int> _runner;

@@ -162,6 +162,7 @@ paths:
   /pets/{id}:
     get:
       operationId: getPet
+      tags: [pets]
       parameters:
         - {name: id, in: path, required: true, schema: {type: string}}
       responses: {'200': {description: ok}}
@@ -246,8 +247,8 @@ components:
 openapi: 3.0.3
 info: {title: api, version: "1"}
 paths:
-  /a: {get: {operationId: same, responses: {'200': {description: ok}}}}
-  /b: {get: {operationId: same, responses: {'200': {description: ok}}}}
+  /a: {get: {operationId: same, tags: [a], responses: {'200': {description: ok}}}}
+  /b: {get: {operationId: same, tags: [b], responses: {'200': {description: ok}}}}
 ''');
     final path = dir.write('typed_openapi.yaml', '''
 clients:
@@ -271,8 +272,8 @@ clients:
 openapi: 3.0.3
 info: {title: api, version: "1"}
 paths:
-  /a: {get: {operationId: same, responses: {'200': {description: ok}}}}
-  /b: {get: {operationId: same, responses: {'200': {description: ok}}}}
+  /a: {get: {operationId: same, tags: [a], responses: {'200': {description: ok}}}}
+  /b: {get: {operationId: same, tags: [b], responses: {'200': {description: ok}}}}
 components:
   schemas:
     Tag:
@@ -322,8 +323,9 @@ clients:
       dir.write(
         'api.yaml',
         spec.replaceFirst(
-          '/b: {get: {operationId: same',
-          '/b: {get: {operationId: same, parameters: [{name: x, in: path}]',
+          '/b: {get: {operationId: same, tags: [b]',
+          '/b: {get: {operationId: same, tags: [b], parameters: '
+              '[{name: x, in: path}]',
         ),
       );
       final (code, out, _) = await inDir(['check']);
@@ -589,5 +591,54 @@ clients:
         '    at #/schemas/Pet/format\n',
       ),
     );
+  });
+
+  test('ir prints the IR of clients as JSON and is hidden', () async {
+    final dir = TempDir();
+    dir.write('api.yaml', '''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      tags: [pets]
+      responses: {"204": {description: ok}}
+''');
+    final path = dir.write(
+      'typed_openapi.yaml',
+      'clients:\n  api: {input: api.yaml, output: lib/api}\n',
+    );
+    final (code, out, _) = await run([
+      'ir',
+      '-c',
+      path,
+    ], workingDirectory: dir.path);
+    expect(code, 0);
+    expect(jsonDecode(out), {
+      'api': {
+        'declarations': <Object?>[],
+        'groups': [
+          {
+            'name': 'PetsApi',
+            'operations': [
+              {
+                'name': 'listPets',
+                'method': 'GET',
+                'path': '/pets',
+                'at': 'api.yaml#/paths/~1pets/get',
+                'parameters': <Object?>[],
+                'responses': [
+                  {'status': '204', 'kind': 'none'},
+                ],
+                'errors': 'Never',
+              },
+            ],
+          },
+        ],
+      },
+    });
+    final (_, help, _) = await run(['help']);
+    expect(help, isNot(contains(' ir ')));
   });
 }

@@ -10,6 +10,9 @@ import '../diagnostics/diagnostic_bag.dart';
 import '../diagnostics/diagnostic_code.dart';
 import '../diagnostics/display_paths.dart';
 import '../diagnostics/severity.dart';
+import '../ir/ir.dart';
+import '../ir/ir_builder.dart';
+import '../ir/ir_json.dart';
 import '../load/openapi_version.dart';
 import '../load/spec_loader.dart';
 import '../normalize/normalizer.dart';
@@ -18,7 +21,13 @@ import '../overrides/override_loader.dart';
 /// What checking one client found.
 final class ClientCheck {
   /// Creates the result for [client].
-  const ClientCheck(this.client, this.diagnostics, this.anchors);
+  const ClientCheck(
+    this.client,
+    this.diagnostics,
+    this.anchors, {
+    this.ir,
+    this.irJson,
+  });
 
   /// The client.
   final ClientConfig client;
@@ -29,6 +38,12 @@ final class ClientCheck {
 
   /// The logical addresses of the client's spec, for baseline anchors.
   final AnchorIndex anchors;
+
+  /// The semantic IR of the client; null when its spec could not be read.
+  final ClientIr? ir;
+
+  /// Writes [ir] as JSON, naming files as the diagnostics do.
+  final IrJson? irJson;
 
   /// The errors that say the spec, or a file it is read with, could not be
   /// read (diagnostics of [DiagnosticCode.fixedCodes]). Without them the
@@ -135,7 +150,8 @@ final class SpecChecker {
   /// into the model with its `$ref`s resolved, changed by the client's
   /// overrides and normalized with the client's rules and preset. An
   /// overrides file that cannot be used is reported and the spec is checked
-  /// without it. [only] limits the run to clients with these names; empty
+  /// without it. Then the client's IR is built (M6), which reports naming,
+  /// mapping and filter problems. [only] limits the run to clients with these names; empty
   /// means all. A file shared by several clients is checked once per
   /// distinct preset, set of disabled rules and overrides file; each client
   /// then gives the diagnostics of that run its own levels
@@ -146,8 +162,9 @@ final class SpecChecker {
     ProjectConfig config, {
     Set<String> only = const {},
   }) {
-    // A run is a file with a preset, a set of disabled rules and overrides.
-    final runs = <(String, Preset?, String, String?), ClientCheck>{};
+    // A run is a file with a preset, a set of disabled rules, overrides and
+    // generation settings.
+    final runs = <(String, Preset?, String, String?, String), ClientCheck>{};
     return [
       for (final client in config.clients)
         if (only.isEmpty || only.contains(client.name))
@@ -158,6 +175,7 @@ final class SpecChecker {
               client.preset,
               (client.disabledRules.toList()..sort()).join(','),
               client.overrides,
+              client.generation.key,
             )] ??= _run(
               client,
             ),
@@ -172,10 +190,12 @@ final class SpecChecker {
         ?client.severity.apply(diagnostic),
     ],
     run.anchors,
+    ir: run.ir,
+    irJson: run.irJson,
   );
 
-  /// Checks the spec of [client]; returns what the run found, with default
-  /// levels.
+  /// Checks the spec of [client] and builds its IR; returns what the run
+  /// found, with default levels.
   ClientCheck _run(ClientConfig client) {
     final found = DiagnosticBag();
     ClientCheck result([AnchorIndex? anchors]) =>
@@ -197,6 +217,13 @@ final class SpecChecker {
       disabled: client.disabledRules,
       preset: client.preset,
     ).normalize(document, version, overrides: overrides);
-    return result(AnchorIndex(normalized.model, normalized.documents));
+    final ir = IrBuilder(found).build(normalized, client);
+    return ClientCheck(
+      client,
+      found.all,
+      AnchorIndex(normalized.model, normalized.documents),
+      ir: ir,
+      irJson: IrJson(normalized.documents.displayPath),
+    );
   }
 }

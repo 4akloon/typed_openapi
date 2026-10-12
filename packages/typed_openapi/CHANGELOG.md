@@ -1,6 +1,52 @@
 ## 0.0.1 - Unreleased
 
 ### Added
+- Semantic IR (M6): `check` builds each client's IR (`IrBuilder`,
+  `ClientIr`) from the normalized spec and reports naming and mapping
+  problems. Types follow R6.2 (`integer` -> `int`, `number` -> `num` or
+  `double` with `float`/`double`, `date-time` -> `DateTime`, `date` ->
+  `Date`, `byte` -> `Uint8List`, a schema without constraints -> `JsonValue`,
+  `additionalProperties` -> `Map<String, T>`); custom types come from
+  `types.formats`, `types.schemas` and the overrides' `dartType`. Fields
+  follow the required x nullable matrix; optional nullable properties of
+  PATCH bodies are `Patch<T>?` (`tri_state: patch|optional|extension`,
+  `x-typed-tri-state`, override `triState`). A schema with `readOnly` or
+  `writeOnly` properties used in requests and responses becomes `Pet` and
+  `PetInput` (`naming.input_suffix`); a PATCH body schema that is also used
+  elsewhere gets its own model `PetPatch` (`naming.patch_suffix`) with the
+  tri-state fields. `allOf` parts merge into one model,
+  one `$ref` (also nullable) stays a reference, `oneOf`/`anyOf` with one
+  branch besides `null` is that branch, nullable; other `oneOf`/`anyOf` are
+  unions with their discriminator mapping resolved. `{data: T}` envelopes of
+  success responses are unwrapped. Documented errors give `Never`, one
+  schema, or a schema per status (`errors.default_schema` for bodies the
+  spec does not document).
+- Names (R5): schemas keep their key in UpperCamelCase, inline schemas are
+  named `<Parent><Property>` (inline enums with the same values share one),
+  bodies `<Method>Request`, `<Method>Response` and `<Method>Error` (with the
+  status only when several responses of that kind have a body),
+  properties and methods are lowerCamelCase (`naming.operation_prefix`; the
+  `nestjs` preset removes `XController_`; without `operationId`,
+  `GET /users/{userId}/posts/{postId}` is `getUsersPostsByUserIdAndPostId`),
+  operations are grouped by first
+  tag into `{Tag}Api` (`naming.group`, `naming.default_group`, `group_by:
+  tag|path|single`, override `group`; a spec without any tag gets one
+  TOA554, otherwise each untagged operation does). Reserved and `dart:core` names get
+  `Model` (types) or `_` (members), collisions `2`, `3`... with TOA550 /
+  TOA551 and the override to pin the name; unrepresentable names are TOA552.
+- Filters (R4): `include` / `exclude` by `tags`, `operations` and path
+  globs, override `exclude` on operations, schemas and properties; only
+  schemas the selected operations reach are generated.
+- New codes: TOA250 mixed-type-schema, TOA251 recursive-alias, TOA252
+  allof-property-conflict, TOA253 allof-part-ignored, TOA254
+  excluded-schema-referenced, TOA350 enum-mixed-values, TOA450
+  discriminator-value-missing, TOA451 discriminator-mapping-not-variant,
+  TOA550 name-reserved, TOA551 name-collision, TOA552 name-unrepresentable,
+  TOA553 operation-multiple-tags, TOA554 operation-untagged, TOA555
+  tags-merged, TOA556 path-variable-unbound, TOA557 filter-matches-nothing,
+  TOA558 filter-conflict.
+- Hidden `typed_openapi ir [client...]` prints the IR as JSON for debugging;
+  its format may change in any release.
 - `typed_openapi check`: reads every client from `typed_openapi.yaml`, loads
   its spec (JSON or YAML) with source positions, detects the OpenAPI version
   and reports diagnostics with stable codes and JSON pointers, as text or JSON.

@@ -69,9 +69,30 @@ Override-и змінюють специфікацію до нормалізат�
 Override, ціль якого зникла, дає warning, той, з яким специфікація вже
 збігається, — info, що його можна прибрати, а ключ з одруком — помилку з
 підказкою найближчого відомого ключа. Поля для генератора (`name`, `exclude`,
-`group`, `exhaustive`, `dartType`, `triState`) уже перевіряються і
-запрацюють разом із генерацією коду. Підказки правил, які не можуть виправити
+`group`, `exhaustive`, `dartType`, `triState`) задають ім'я, виключення,
+групу і тип того, що генерується. Підказки правил, які не можуть виправити
 дефект самі, закінчуються override-ом, який можна скопіювати.
+
+`check` також визначає, що буде згенеровано: імена, групи і Dart-типи.
+Колізії імен отримують суфікс (`List` -> `ListModel`, `class` -> `class_`,
+`getPet2`) і info з override-ом, що закріплює ім'я. Що і як генерувати,
+задається в `defaults` або для клієнта:
+
+```yaml
+defaults:
+  naming:
+    group: '{Tag}Api'            # клас на тег; group_by: tag|path|single
+    patch_suffix: Patch          # PetPatch: тіло PATCH схеми, вжитої ще деінде
+    operation_prefix: '^v1_'     # зрізається з operationId (nestjs: XController_)
+  include: {tags: [pets], paths: ['/store/**']}
+  exclude: {operations: [deletePet]}
+  types:
+    number: double               # number без формату; за замовчуванням num
+    formats: {decimal: {type: Decimal, import: 'package:decimal/decimal.dart'}}
+    schemas: {Money: {type: Money, import: 'package:app/money.dart', converter: MoneyConverter}}
+  tri_state: patch               # optional nullable поля PATCH — Patch<T>?
+  errors: {default_schema: ErrorDto}
+```
 
 У кожної знахідки є стабільний код (`TOA011`), JSON-pointer на місце в
 специфікації і, якщо парсер зміг визначити позицію, рядок і колонка. Шляхи —

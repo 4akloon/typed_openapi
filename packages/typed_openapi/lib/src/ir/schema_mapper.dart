@@ -206,7 +206,7 @@ final class SchemaMapper {
     final id = _idOf(schema);
     final pending = _pending[id];
     if (pending != null) return NamedType(id, nullable: _isNullable(schema));
-    final key = _componentKey(schema.location);
+    final key = _referenceName(schema.location);
     final single = _single(schema);
     if (single == null && _declares(schema)) {
       return _declare(
@@ -231,7 +231,7 @@ final class SchemaMapper {
       return const CoreType(.json);
     }
     try {
-      final hint = NameHint(_names.pascal(key ?? '') ?? _fallbackName, '');
+      final hint = NameHint(_names.pascal(key) ?? _fallbackName, '');
       if (single != null) {
         final type = _map(single, hint);
         return type.withNullable(type.nullable || _isNullable(schema));
@@ -249,6 +249,12 @@ final class SchemaMapper {
       return type.withNullable(type.nullable || _isNullable(schema));
     }
     if (_declares(schema)) {
+      // An inline schema shared by several uses (a path item parameter, a
+      // `$ref`'d response) is declared once, named after its first use.
+      final id = _idOf(schema);
+      if (_pending.containsKey(id)) {
+        return NamedType(id, nullable: _isNullable(schema));
+      }
       if (_enumValues(schema) case final values?) {
         final kind = _enumKind(schema, values);
         if (kind != null) {
@@ -259,7 +265,7 @@ final class SchemaMapper {
           }
         }
       }
-      return _declare(schema, _idOf(schema), (p) => p.hint = hint);
+      return _declare(schema, id, (p) => p.hint = hint);
     }
     return _structural(schema, hint);
   }
@@ -837,6 +843,19 @@ final class SchemaMapper {
         final SchemaObject object => object,
         _ => null,
       };
+
+  /// The name of a schema a `$ref` points to: its `components.schemas` key,
+  /// else the last token of its pointer (`#/definitions/Pet`), else its file
+  /// name without the extension (`pet.yaml`).
+  static String _referenceName(SpecLocation location) {
+    final key = _componentKey(location);
+    if (key != null) return key;
+    final tokens = location.pointer.tokens;
+    if (tokens.isNotEmpty) return tokens.last;
+    final file = location.document.pathSegments.lastOrNull ?? '';
+    final dot = file.lastIndexOf('.');
+    return dot > 0 ? file.substring(0, dot) : file;
+  }
 
   /// The key of the schema at [location] in `components.schemas` of its
   /// document, if it is one.

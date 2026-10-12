@@ -1,6 +1,7 @@
 import '../config/project_config.dart';
 import '../diagnostics/diagnostic_bag.dart';
 import '../diagnostics/json_pointer.dart';
+import '../model/operation.dart';
 import '../model/spec_node.dart';
 import '../normalize/normalizer.dart';
 import 'direction_index.dart';
@@ -125,10 +126,13 @@ final class IrBuilder {
         in context.model.document.paths.entries) {
       final item = context.model.resolve(value);
       if (item == null) continue;
-      for (final MapEntry(key: method, value: operation) in [
-        ...item.operations.entries,
-        ...item.additionalOperations.entries,
-      ]) {
+      for (final MapEntry(key: method, value: operation)
+          in <MapEntry<String, Operation>>[
+            ...item.operations.entries,
+            ...item.additionalOperations.entries,
+          ]) {
+        // An operation written as a `$ref` is empty; TOA107 reports it.
+        if (operation.unknownKeys.containsKey(r'$ref')) continue;
         result.add(SpecOperation(operation, method, path, item));
       }
     }

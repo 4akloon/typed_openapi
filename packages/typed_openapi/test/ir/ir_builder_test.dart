@@ -658,4 +658,60 @@ components:
       'OwnerInput',
     ]);
   });
+
+  test('declares an inline schema shared by several operations once', () {
+    final fixture = IrFixture('''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /pets/{kind}:
+    parameters:
+      - {name: kind, in: path, required: true, schema: {type: string, enum: [cat, dog]}}
+    get: {operationId: getPets, tags: [pets], responses: {"204": {description: ok}}}
+    delete: {operationId: deletePets, tags: [pets], responses: {"204": {description: ok}}}
+''');
+    final ir = build(fixture);
+    expect(fixture.reported, isEmpty);
+    expect(ir.declarations.map((d) => d.name), ['DeletePetsKind']);
+    expect(
+      [
+        for (final o in ir.groups.single.operations)
+          o.parameters.single.type.code(ir.nameOf),
+      ],
+      ['DeletePetsKind', 'DeletePetsKind'],
+    );
+  });
+
+  test('names a schema a ref finds outside components.schemas', () {
+    final fixture = IrFixture(r'''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /pets:
+    get:
+      operationId: getPet
+      tags: [pets]
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Pet/properties/owner'}
+    post:
+      $ref: '#/components/pathItems/Other'
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        owner: {type: object, properties: {name: {type: string}}}
+''');
+    final ir = build(fixture);
+    expect(ir.declarations.map((d) => d.name), ['Owner']);
+    expect(ir.groups.single.operations.map((o) => o.name), ['getPet']);
+    expect(
+      fixture.codes.where((c) => c.$1 == DiagnosticCode.pathVariableUnbound),
+      isEmpty,
+    );
+  });
 }

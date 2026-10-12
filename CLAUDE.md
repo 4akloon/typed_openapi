@@ -163,9 +163,33 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   known), and `TextReporter` indents the lines of a multi-line fix. No
   snippet is offered when the flagged schema node has `$ref` in 3.0, or when
   a value cannot be written as YAML (non-finite numbers).
-- `config/` - `ConfigLoader`, `ProjectConfig`, `ClientConfig`, `Preset`.
+- `config/` - `ConfigLoader`, `ProjectConfig`, `ClientConfig`, `Preset`,
+  `GenerationConfig` (`naming`, `group_by`, `include`/`exclude`
+  (`OperationFilter`, `FilterPattern`), `types`, `tri_state`, `errors`; a
+  client's key wins over `defaults`, `naming`/`types`/`errors` key by key).
+- `ir/` - the semantic IR (M6): `ir.dart` (`ClientIr`, sealed `Declaration`
+  = `ModelDecl` | `EnumDecl` | `UnionDecl`, `FieldIr`, `GroupIr`,
+  `OperationIr`, `ParameterIr`, `RequestBodyIr`, `ResponseIr`, sealed
+  `ErrorsIr`), `dart_type.dart` (sealed `DartType`, `DeclId` = schema
+  location + `DeclVariant` (`base`, `input` for the request model of a
+  schema split by direction, `patch` for the PATCH body model of a schema
+  also used elsewhere); types refer to declarations by id), `names.dart` (`DartNames` word splitting and case,
+  reserved sets; `NameScope` gives a name, a suffix for reserved names and
+  `2`, `3`... for collisions), `IrContext`/`IrOverrides` (generation fields of
+  applied overrides by node location), `SchemaMapper` (types, models, enums,
+  unions, `allOf` merge, single-schema collapse, custom types; declarations
+  are created when first reached, so only reachable schemas exist, and named
+  at the end: override names, then component keys, then inline names by
+  depth), `DirectionIndex` (request/response uses for the readOnly/writeOnly
+  split), `OperationSelector` (filters, `exclude`), `OperationBuilder`
+  (parameters, bodies, responses, envelopes, errors) and `IrBuilder` (groups,
+  method names, then everything above). `IrJson` dumps an IR; the hidden
+  `typed_openapi ir` command prints it. Naming and mapping codes use the
+  second half of each area's hundred: TOA250-TOA254, TOA350, TOA450-TOA451,
+  TOA550-TOA558.
 - `check/` - `SpecChecker`: config -> load -> version -> overrides ->
-  `Normalizer` once per run (file, preset, rules, overrides file); an
+  `Normalizer` -> `IrBuilder` once per run (file, preset, rules, overrides
+  file, `GenerationConfig.key`); an
   overrides file that cannot be used is reported (an error) and the spec is
   checked without it; `generate` (M9) must skip such a client. Each client
   then applies its levels (`checkClients` -> `ClientCheck`) and its baseline
@@ -189,11 +213,15 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   (`text`, `json`, `sarif`, `github-actions`), `--show-baselined`,
   `--strict-baseline`, client names as positional arguments) and
   `BaselineCommand` (`baseline_command.dart`, subcommands `create` and
-  `prune`); `bin/typed_openapi.dart` only calls `TypedOpenApiCli().run(args)`
-  and sets `exitCode`.
+  `prune`) and the hidden `IrCommand` (`ir_command.dart`, prints the IR of
+  clients as JSON); `bin/typed_openapi.dart` only calls
+  `TypedOpenApiCli().run(args)` and sets `exitCode`.
 - `lib/typed_openapi.dart` exports the public API, each with a `show` list:
   `SpecChecker`, `ClientCheck`, `TypedOpenApiCli`, `ConfigLoader`,
-  `ClientConfig`, `Preset`, `ProjectConfig`, the diagnostics (`Diagnostic`,
+  `ClientConfig`, `Preset`, `ProjectConfig`, `GenerationConfig`, `GroupBy`,
+  `TriStateRule`, `OperationFilter`, `FilterPattern`, the IR (`IrBuilder`,
+  `IrJson`, `ClientIr` and its node classes, `DartType` and its
+  subclasses, `DeclId`), the diagnostics (`Diagnostic`,
   `RelatedLocation`, `DiagnosticBag`, `DiagnosticCode`, `DisplayPaths`,
   `JsonPointer`, `Severity`, `SeverityLevels` and the reporters), the
   baseline (`AnchorIndex`, `Baseline`, `BaselineEntry`, `BaselineMatch`,
@@ -210,10 +238,13 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `ObjectReader`, `ParseContext`, `SpecIndex`, `DialectChecker`), `resolve/`
   (`RefTarget`, `RefResolver`), `normalize/` (`TreeEditor`, the rule
   classes), `overrides/` (`OverrideResolver`, `OverrideApplier`,
-  `OverrideSnippet`), `YamlComposer` and `load/yaml/`.
+  `OverrideSnippet`), `ir/` internals (`IrContext`, `IrOverrides`,
+  `SchemaMapper`, `NameHint`, `DirectionIndex`, `OperationSelector`,
+  `OperationBuilder`, `SpecOperation`, `DartNames`, `NameScope`),
+  `IrCommand`, `YamlComposer` and `load/yaml/`.
 
-Data flows loader -> parser -> resolver -> overrides -> normalizer ->
-checker, every stage writing problems into one `DiagnosticBag`; reporters
+Data flows loader -> parser -> resolver -> overrides -> normalizer -> IR
+builder -> checker, every stage writing problems into one `DiagnosticBag`; reporters
 read the bag at the end.
 
 Rules of the pipeline:
