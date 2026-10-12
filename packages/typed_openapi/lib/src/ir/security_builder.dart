@@ -13,42 +13,63 @@ final class SecurityBuilder {
   final IrContext _context;
 
   /// The security requirements of [operation]: its own, else the
-  /// document's. A scheme `components.securitySchemes` does not have is
-  /// reported (TOA568) and left out.
+  /// document's. The metadata never says less than the spec: a scheme
+  /// `components.securitySchemes` does not define is reported (TOA568), and
+  /// an alternative that names one is left out as a whole when another
+  /// alternative can be described; when none can, every alternative stays
+  /// and the scheme has the kind [SecurityKind.unknown], so the operation
+  /// is never read as open (no alternative) or as optional (an empty one).
   List<List<SecurityUseIr>> of(Operation operation) {
     final requirements =
         operation.security ?? _context.model.document.security ?? const [];
     final schemes = _context.model.document.components?.securitySchemes;
-    return [
+    final read = [
       for (final requirement in requirements)
-        [
+        _Alternative(requirement.location, [
           for (final MapEntry(key: name, value: scopes)
               in requirement.schemes.entries)
-            if (_scheme(name, schemes, requirement.location) case final s?)
-              SecurityUseIr(s, scopes),
-        ],
+            (name: name, scopes: scopes, scheme: _scheme(name, schemes)),
+        ]),
     ];
+    final complete = [
+      for (final alternative in read)
+        if (alternative.isComplete) alternative,
+    ];
+    final isDropped = complete.isNotEmpty;
+    for (final alternative in read) {
+      _reportUnknown(alternative, isDropped: isDropped);
+    }
+    return [
+      for (final alternative in isDropped ? complete : read) alternative.uses,
+    ];
+  }
+
+  void _reportUnknown(_Alternative alternative, {required bool isDropped}) {
+    final outcome = isDropped
+        ? 'its alternative is left out of the metadata, which keeps the '
+              'alternatives that can be described'
+        : 'the metadata has it as an unknown scheme, so the operation is not '
+              'read as open';
+    for (final entry in alternative.entries) {
+      if (entry.scheme != null) continue;
+      _context.report(
+        .securitySchemeUnknown,
+        'The security requirement names "${entry.name}", which '
+        'components.securitySchemes does not define; $outcome.',
+        alternative.location,
+        fix: 'Define the scheme at the source, or fix its name.',
+      );
+    }
   }
 
   SecuritySchemeIr? _scheme(
     String name,
     Map<String, RefOr<SecurityScheme>>? schemes,
-    SpecLocation at,
   ) {
     final written = schemes?[name];
     final scheme = written == null ? null : _context.model.resolve(written);
     final type = scheme?.type;
-    if (scheme == null || type == null) {
-      _context.report(
-        .securitySchemeUnknown,
-        'The security requirement names "$name", which '
-        'components.securitySchemes does not define; it is left out of the '
-        'metadata.',
-        at,
-        fix: 'Define the scheme at the source, or fix its name.',
-      );
-      return null;
-    }
+    if (scheme == null || type == null) return null;
     return SecuritySchemeIr(
       name,
       switch (type) {
@@ -65,4 +86,23 @@ final class SecurityBuilder {
       openIdConnectUrl: type == .openIdConnect ? scheme.openIdConnectUrl : null,
     );
   }
+}
+
+/// The schemes of one security requirement (an alternative), each with its
+/// scopes and the scheme it names, null when that is not defined.
+final class _Alternative {
+  const _Alternative(this.location, this.entries);
+
+  final SpecLocation location;
+  final List<({String name, List<String> scopes, SecuritySchemeIr? scheme})>
+  entries;
+
+  /// Whether every scheme it names is defined.
+  bool get isComplete => entries.every((entry) => entry.scheme != null);
+
+  /// The schemes with their scopes; one that is not defined is unknown.
+  List<SecurityUseIr> get uses => [
+    for (final (:name, :scopes, :scheme) in entries)
+      SecurityUseIr(scheme ?? SecuritySchemeIr(name, .unknown), scopes),
+  ];
 }

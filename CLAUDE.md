@@ -281,8 +281,12 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   bodies and of `ErrorsByStatus` (variants by reason phrase, `ApiNames.
   variantOf`; the plural when an inline body has the name) and the class of
   multipart parts (`RequestBodyIr.parts`, TOA655 when the schema is not an
-  object); `OperationBuilder` keeps security requirements (TOA568 for an
-  unknown scheme), skips event-stream operations (TOA654) and reports
+  object); `OperationBuilder` keeps security requirements (an alternative
+  that names a scheme `components.securitySchemes` does not define is
+  TOA568 and left out as a whole when another alternative can be described;
+  when none can, all stay with the scheme of kind `SecurityKind.unknown`
+  (the runtime's `SecuritySchemeType.unknown`), so the metadata never says
+  less than the spec: no operation reads as open or as optional), skips event-stream operations (TOA654) and reports
   operation servers (TOA566), callbacks and webhooks (TOA567) and a missing
   2xx (TOA653) through collaborators (`SecurityBuilder`, `PartsBuilder`,
   `BodyEncoding`, `OperationChecks`); `ApiNames.client` assembles the
@@ -595,7 +599,8 @@ that the API composes, including an `implements` fake of a tag class.
   `PercentEncoder`.
 - `request/` - `OperationInfo` (put into `RequestOptions.extra`; its
   `security` lists alternatives of `SecurityUse`s of `SecurityScheme`s,
-  metadata only), `OperationRequest` (resolves the path and the query
+  metadata only; `SecuritySchemeType.unknown` is a scheme the spec names
+  but does not define), `OperationRequest` (resolves the path and the query
   itself; `pathVariable` is the one pattern of a path variable, which the
   generator copies; `streamStatuses` for event streams), `RawResponse` (what
   a generated decoder switches on; `parsedJson` parses a JSON body that Dio

@@ -88,7 +88,9 @@ components:
       expect((key.parameterName, key.placement), ('X-Key', 'header'));
       final unknown = reported(fixture, .securitySchemeUnknown).single;
       expect(unknown.pointer?.value, '#/paths/~1unknown/get/security/0');
-      expect(uses(ir, 'unknown'), [<String>[]]);
+      expect(uses(ir, 'unknown'), [
+        ['nope:unknown:'],
+      ]);
       expect(fixture.reported, hasLength(1));
     });
   });

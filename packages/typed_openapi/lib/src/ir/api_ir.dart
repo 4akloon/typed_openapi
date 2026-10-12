@@ -192,6 +192,10 @@ enum SecurityKind {
 
   /// OpenID Connect.
   openIdConnect,
+
+  /// A scheme the spec names but does not define (or defines without a
+  /// valid type): the requirement is real, but nothing can be said about it.
+  unknown,
 }
 
 /// A security scheme of `components.securitySchemes` (R10.8).

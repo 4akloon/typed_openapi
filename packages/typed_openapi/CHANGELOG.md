@@ -183,7 +183,9 @@
   - TOA567 callbacks-not-generated (info): `callbacks` of an operation and
     the document's `webhooks` are not generated.
   - TOA568 security-scheme-unknown (warning): a security requirement names
-    a scheme `components.securitySchemes` does not have.
+    a scheme `components.securitySchemes` does not have; its alternative is
+    left out of the metadata when another one can be described, else the
+    scheme has the kind `unknown`, so no operation reads as open.
   - TOA653 success-undocumented (warning): no 2xx response; any 2xx is a
     success with the body as `JsonValue`.
   - TOA654 event-stream-not-generated (warning): an operation whose success

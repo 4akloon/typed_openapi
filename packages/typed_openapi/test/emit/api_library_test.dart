@@ -123,4 +123,13 @@ void main() {
       }
     }
   });
+
+  test('a security scheme the spec does not define is emitted as unknown', () {
+    final files = emitClient('hostile_operations.yaml');
+    final api = files.entries
+        .where((e) => e.key.startsWith('api/'))
+        .map((e) => e.value)
+        .join('\n');
+    expect(api, contains("SecurityScheme('missing', .unknown), ['read']"));
+  });
 }

@@ -83,6 +83,12 @@ paths:
           application/x-www-form-urlencoded:
             schema: {type: [object, 'null'], properties: {a: {type: string}}}
       responses: {"204": {description: ok}}
+  /undefined-security:
+    get:
+      operationId: undefinedSecurity
+      tags: [other]
+      security: [{missing: [read]}]
+      responses: {"204": {description: ok}}
 components:
   securitySchemes:
     "k'ey": {type: apiKey, name: "X-'$k", in: header}

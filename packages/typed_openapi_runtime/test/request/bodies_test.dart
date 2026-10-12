@@ -125,6 +125,23 @@ void main() {
         isEmpty,
       );
     });
+
+    test('a scheme the spec does not define is an unknown requirement', () {
+      const info = OperationInfo(
+        operationId: 'getPet',
+        method: 'GET',
+        pathTemplate: '/pets',
+        security: [
+          [
+            SecurityUse(SecurityScheme('nope', .unknown), ['read']),
+          ],
+        ],
+      );
+      final alternative = info.security.single;
+      expect(alternative, isNotEmpty);
+      expect(alternative.single.scheme.type, SecuritySchemeType.unknown);
+      expect('${alternative.single.scheme}', 'SecurityScheme(nope, unknown)');
+    });
   });
 
   group('RawResponse', () {

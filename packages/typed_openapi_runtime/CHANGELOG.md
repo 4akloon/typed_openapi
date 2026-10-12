@@ -23,8 +23,8 @@
   `DioRequestSender` turns them into
   what Dio sends, so generated signatures have no Dio types.
 - Security metadata for interceptors: `OperationInfo.security` with
-  `SecurityUse`, `SecurityScheme`, `SecuritySchemeType` and
-  `SecurityLocation`.
+  `SecurityUse`, `SecurityScheme`, `SecuritySchemeType` (with `unknown` for
+  a scheme the spec names but does not define) and `SecurityLocation`.
 - `RawResponse.parsedJson` (a JSON error body of a text or binary
   operation), `RawResponse.text` of a body read as bytes, a depth check in
   `RawResponse.parse`, and `OperationRequest.pathVariable`, the one pattern

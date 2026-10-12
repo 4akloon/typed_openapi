@@ -14,6 +14,11 @@ enum SecuritySchemeType {
 
   /// OpenID Connect.
   openIdConnect,
+
+  /// A scheme the spec names but does not define: the operation needs it,
+  /// and nothing more is known, so an interceptor must not read the
+  /// operation as open.
+  unknown,
 }
 
 /// Where an API key is sent.

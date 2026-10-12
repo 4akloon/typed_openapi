@@ -376,7 +376,9 @@ enum DiagnosticCode {
   callbacksNotGenerated('TOA567', 'callbacks-not-generated', .info),
 
   /// A security requirement names a scheme that `components.securitySchemes`
-  /// does not have; the scheme is left out of the operation's metadata.
+  /// does not have (or defines without a valid type): the alternative is
+  /// left out of the operation's metadata when another one can be
+  /// described, else it stays with a scheme of the kind unknown.
   securitySchemeUnknown('TOA568', 'security-scheme-unknown', .warning),
 
   /// `*/*` is used as a media type.
