@@ -73,16 +73,24 @@ final class DoubleArray extends NormalizerRule {
       }
       final raw = context.rawObject(items.location);
       if (raw == null || raw['required'] is! bool) continue;
+      const fix =
+          'If the field is a flat list, declare it once at the source; '
+          'until then, override "items" of this schema with the inner '
+          '"items".';
       yield context.finding(
         .doubleArray,
         'The items of this array are arrays too and say "required: '
         '${raw['required']}", the shape a decorator gives a list declared '
         'twice; clients read a list of lists.',
         items.location,
-        fix:
-            'If the field is a flat list, declare it once at the source; '
-            'until then, override "items" of this schema with the inner '
-            '"items".',
+        fix: switch (raw['items']) {
+          final Map<String, Object?> inner => context.withOverride(
+            fix,
+            schema.location,
+            {'items': inner},
+          ),
+          _ => fix,
+        },
       );
     }
   }
@@ -108,6 +116,41 @@ final class FormatOnArray extends NormalizerRule {
   @override
   List<DiagnosticCode> get codes => const [.formatOnArray];
 
+  /// The element type each known format implies: the number formats of the
+  /// OpenAPI format registry and the string formats of OpenAPI and JSON
+  /// Schema. Another format gives no override, because its type is unknown.
+  static final _elementTypes = {
+    'int32': 'integer',
+    'int64': 'integer',
+    'float': 'number',
+    'double': 'number',
+    for (final format in [
+      'binary',
+      'byte',
+      'date',
+      'date-time',
+      'duration',
+      'email',
+      'hostname',
+      'idn-email',
+      'idn-hostname',
+      'ipv4',
+      'ipv6',
+      'iri',
+      'iri-reference',
+      'json-pointer',
+      'password',
+      'regex',
+      'relative-json-pointer',
+      'time',
+      'uri',
+      'uri-reference',
+      'uri-template',
+      'uuid',
+    ])
+      format: 'string',
+  };
+
   @override
   Iterable<Finding> check(RuleContext context) sync* {
     for (final schema in context.nodes<SchemaObject>()) {
@@ -118,14 +161,25 @@ final class FormatOnArray extends NormalizerRule {
           ArrayWithoutItems._hasItemsKey(context, schema)) {
         continue;
       }
+      final type = _elementTypes[format];
+      const move = 'Move it into the elements at the source; until then, ';
       yield context.finding(
         .formatOnArray,
         '"format: $format" is on the array, which has no "items", not on its '
         'elements.',
         schema.location.child('format'),
-        fix:
-            'Move it into the elements at the source; until then, override '
-            '"items" of this schema with {type: string, format: $format}.',
+        fix: type == null
+            ? '${move}override "items" of this schema with the element schema '
+                  'and remove its "format".'
+            : context.withOverride(
+                '${move}override "items" of this schema with {type: $type, '
+                'format: $format} and remove its "format".',
+                schema.location,
+                {
+                  'format': null,
+                  'items': {'type': type, 'format': format},
+                },
+              ),
       );
     }
   }
@@ -155,9 +209,12 @@ final class BinaryObject extends NormalizerRule {
         '"type: object" with "format: binary" does not describe a file; a '
         'file is "type: string, format: binary".',
         schema.location.child('type'),
-        fix:
-            'Write "type: string" at the source; until then, override "type" '
-            'of this schema with string.',
+        fix: context.withOverride(
+          'Write "type: string" at the source; until then, override "type" '
+          'of this schema with string.',
+          schema.location,
+          {'type': 'string'},
+        ),
       );
     }
   }
@@ -199,9 +256,12 @@ final class ContradictoryObjectType extends NormalizerRule {
         '"type: object" is next to "oneOf"/"anyOf" whose branches are all '
         '$names; no value matches both.',
         schema.location.child('type'),
-        fix:
-            'Remove "type: object" at the source; until then, override "type" '
-            'of this schema.',
+        fix: context.withOverride(
+          'Remove "type: object" at the source; until then, remove "type" of '
+          'this schema with an override.',
+          schema.location,
+          {'type': null},
+        ),
       );
     }
   }

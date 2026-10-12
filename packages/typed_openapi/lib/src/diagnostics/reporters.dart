@@ -26,7 +26,8 @@ final class TextReporter implements DiagnosticReporter {
       final pointer = d.pointer;
       if (pointer != null) out.writeln('  at ${pointer.value}');
       final fix = d.fix;
-      if (fix != null) out.writeln('  fix: $fix');
+      // A fix may end with an override snippet on several lines.
+      if (fix != null) out.writeln('  fix: ${fix.replaceAll('\n', '\n    ')}');
     }
     out.write(
       'errors: ${diagnostics.count(.error)}, '

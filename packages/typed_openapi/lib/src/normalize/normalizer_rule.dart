@@ -3,6 +3,7 @@ import '../diagnostics/diagnostic.dart';
 import '../diagnostics/diagnostic_code.dart';
 import '../load/openapi_version.dart';
 import '../model/spec_node.dart';
+import '../overrides/override_snippet.dart';
 import '../resolve/spec_documents.dart';
 import '../resolve/spec_model.dart';
 import 'spec_edit.dart';
@@ -33,6 +34,8 @@ final class RuleContext {
   /// The version the root document declares.
   final OpenApiVersion version;
 
+  late final OverrideSnippet _snippets = OverrideSnippet(model);
+
   /// Every node of type [T], ordered by location.
   Iterable<T> nodes<T extends SpecNode>() => model.nodes.whereType<T>();
 
@@ -47,6 +50,26 @@ final class RuleContext {
         (final Map<String, Object?> raw,) => raw,
         _ => null,
       };
+
+  /// [fix] followed by the override of the schema at [schema] that sets
+  /// [fields], to copy into the overrides file; [fix] alone when the schema
+  /// has no override address, or when it is a `$ref` with siblings in a 3.0
+  /// document, where an override of the siblings is not applied.
+  String withOverride(
+    String fix,
+    SpecLocation schema,
+    Map<String, Object?> fields,
+  ) {
+    if (version == .v30 &&
+        rawObject(schema)?.containsKey(r'$ref') == true &&
+        !fields.containsKey(r'$ref')) {
+      return fix;
+    }
+    return switch (_snippets.forSchema(schema, fields)) {
+      final snippet? => '$fix Override:\n$snippet',
+      null => fix,
+    };
+  }
 
   /// A finding of [code] at [at], with [edits] when it is a fix.
   Finding finding(

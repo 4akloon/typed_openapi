@@ -91,9 +91,12 @@ final class NullableEnumOneOf extends NormalizerRule {
         'This is a nullable reference to "$ref" written as "oneOf" with an '
         'enum of only null; generators read it as a union of two types.',
         schema.location.child('oneOf'),
-        fix:
-            'Write a nullable reference to "$ref" at the source; until then, '
-            'override this schema as a nullable "$ref".',
+        fix: context.withOverride(
+          'Write a nullable reference to "$ref" at the source; until then, '
+          'override this schema as a nullable "$ref".',
+          schema.location,
+          {r'$ref': ref, 'nullable': true},
+        ),
       );
     }
   }
