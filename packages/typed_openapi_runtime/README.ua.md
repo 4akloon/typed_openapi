@@ -41,7 +41,10 @@ Runtime для клієнтів, згенерованих
   cookie) з percent-кодуванням за RFC 3986.
 - `DioRequestSender`: надсилає запит через твій `Dio` і типізує результат.
   `CallOptions` несе токен скасування, заголовки, `extra` і колбеки прогресу
-  для одного виклику.
+  для одного виклику. Заголовки з `CallOptions.headers` мають перевагу над
+  заголовками-параметрами операції, але не над її `Content-Type`: тип вмісту
+  тіла запиту (наприклад `application/json`) завжди виграє, тож
+  `Content-Type`, заданий там, ігнорується.
 - Декодер потоку подій (`text/event-stream`) за WHATWG;
   `DioRequestSender.openEvents` повертає `Result`, у `Success` якого лежить
   потік із `SseEvent`, `SseDecodeError` (одна погана подія) і наприкінці
@@ -77,6 +80,14 @@ Runtime для клієнтів, згенерованих
   тож `DecodeError` не має `statusCode`, а його `rawBody` — текст, який
   повідомив парсер Dio: усе тіло, коли Dio прочитав його одразу, і лише
   чанк із помилкою, коли Dio його стрімив (був заголовок `Content-Length`).
+  Після компіляції в JavaScript Dio повідомляє лише текст `SyntaxError`
+  браузера, тож там `rawBody` — `null`.
+- `FormatException`, кинутий під час декодування (твій конвертер,
+  `Date.parse`), — це проблема з даними: `DecodeError` у результаті,
+  `SseDecodeError` у потоці подій. `Error` — це баг, його не ловлять.
+- Параметр шляху, чий готовий вираз порожній або складається лише з крапок
+  (`''`, порожній список, `label` від `''`), кидає `ArgumentError`: клієнт
+  прибрав би сегмент, і `/users/{id}/sessions` став би `/users/sessions`.
 - `rawBody` у `DecodeError` і `UndocumentedStatus` — за можливістю: це тіло
   в тому вигляді, в якому його повернув Dio (розібраний JSON, текст або
   байти), або `null`, коли відповідь без тіла чи Dio нічого не зберіг.
@@ -92,11 +103,28 @@ Runtime для клієнтів, згенерованих
 
 ## Web
 
-На web працює все, крім потоків подій зі стандартним браузерним адаптером
-Dio, який віддає тіло лише після закриття з'єднання. Операція з потоком
-подій тоді повертає `TransportError` з поясненням
+Пакет працює на web, зібраний у JavaScript (dart2js) або в WebAssembly
+(dart2wasm). Потокам подій там потрібен потоковий адаптер: стандартний
+браузерний адаптер Dio віддає тіло лише після закриття з'єднання, тож
+операція з потоком подій повертає `TransportError` з поясненням
 (`DioRequestSender.webStreamingMessage`). Постав у свій Dio адаптер на
 fetch, наприклад `ConversionLayerAdapter` з `dio_compatibility_layer` з
 `BrowserClient` з `package:http` або `fetch_client`.
+
+Браузер не дозволяє сторінці виставляти заголовок `Cookie`, тож
+cookie-параметри на web не працюють (браузер тримає свої cookie і надсилає
+їх сам, за своїми налаштуваннями credentials).
+
+## Розробка
+
+```sh
+dart test                                    # VM
+dart test -p chrome                          # dart2js (потрібен Chrome)
+dart test -p chrome --compiler dart2wasm     # dart2wasm
+```
+
+Файли й тести, що потребують VM (`dart:io`, літерали int64), позначені
+`@TestOn('vm')` або `testOn: 'vm'`; `test/dio/web_test.dart` працює лише в
+браузері. Якщо Chrome не знайдено, задай `CHROME_EXECUTABLE`.
 
 [English version](README.md)

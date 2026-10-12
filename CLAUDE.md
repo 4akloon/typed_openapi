@@ -21,6 +21,8 @@ Minimum SDK: Dart 3.10 (`>=3.10.0 <4.0.0`), also for generated code.
 dart pub get                                 # repo root, once and after pubspec edits
 dart analyze packages                        # repo root; must print "No issues found!"
 cd packages/typed_openapi && dart test       # also in typed_openapi_runtime
+cd packages/typed_openapi_runtime && dart test -p chrome                        # dart2js
+cd packages/typed_openapi_runtime && dart test -p chrome --compiler dart2wasm   # dart2wasm
 cd packages/typed_openapi && dart format lib test bin   # a second run must change 0 files
 cd packages/typed_openapi_runtime && dart format lib test # the same
 cd packages/<package> && dart pub publish --dry-run # before publishing
@@ -234,7 +236,10 @@ Rules of the pipeline:
 ## Runtime (`packages/typed_openapi_runtime/lib/src/`)
 
 The only package generated clients depend on (dependencies: `dio`, `meta`).
-Pure Dart, works on the web except SSE with Dio's default browser adapter.
+Pure Dart, works on the web (compiled to JS and to Wasm); SSE needs a
+streaming adapter there (Dio's default browser adapter delivers the body
+only when the connection closes), and cookie parameters do not work (browsers
+drop the `Cookie` header).
 Generated code is expected to look like `test/helpers/pets_api.dart`
 (illustrative, not a contract); `test/generated_client_test.dart` checks
 that the API composes, including an `implements` fake of a tag class.
@@ -255,7 +260,9 @@ that the API composes, including an `implements` fake of a tag class.
   `case Failure()`.
 - `params/` - `PathParameter`, `QueryParameter`, `HeaderParameter`,
   `CookieParameter` (OAS styles, RFC 6570 expansion, RFC 3986
-  percent-encoding); internal `ParameterValue`, `PercentEncoder`.
+  percent-encoding; a path expansion that is empty or only dots throws
+  `ArgumentError`, as does a `.`/`..` value); internal `ParameterValue`,
+  `PercentEncoder`.
 - `request/` - `OperationInfo` (put into `RequestOptions.extra`),
   `OperationRequest` (resolves the path and the query itself;
   `streamStatuses` for event streams), `RawResponse` (what a generated
@@ -277,7 +284,13 @@ that the API composes, including an `implements` fake of a tag class.
   `Stream<Uint8List>`.
 
 Runtime tests never touch the network: Dio gets `FakeAdapter`
-(`test/helpers/fake_adapter.dart`).
+(`test/helpers/fake_adapter.dart`). They also run in Chrome (the two
+commands above; `CHROME_EXECUTABLE` if Chrome is not found): a file that
+needs the VM (`dart:io`, int64 literals, which dart2js rejects) carries
+`@TestOn('vm')`, a single test `testOn: 'vm'`, and `test/dio/web_test.dart`
+is `@TestOn('browser')`. `test/helpers/test_platform.dart` tells the platform
+for assertions that differ. Do not write an int literal beyond 2^53 in
+`lib/`: it does not compile to JavaScript.
 
 ## Code rules
 

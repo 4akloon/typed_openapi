@@ -41,7 +41,10 @@ code depends on. Dependencies: `dio` and `meta`.
   cookies) with RFC 3986 percent-encoding.
 - `DioRequestSender`: sends a request through your `Dio` and types the
   outcome. `CallOptions` carries the per-call cancel token, headers,
-  `extra` and progress callbacks.
+  `extra` and progress callbacks. Headers in `CallOptions.headers` win over
+  the operation's header parameters, but not over its `Content-Type`: the
+  content type of the request body (`application/json`, for example) always
+  wins, so a `Content-Type` given there is ignored.
 - An event stream (`text/event-stream`) decoder following WHATWG;
   `DioRequestSender.openEvents` returns a `Result` whose `Success` holds a
   stream of `SseEvent`, `SseDecodeError` (one bad event) and, last,
@@ -77,7 +80,14 @@ code depends on. Dependencies: `dio` and `meta`.
   response, so the `DecodeError` has no `statusCode`, and its `rawBody` is
   the text Dio's parser reported: the whole body when Dio read it at once,
   only the failing chunk when Dio streamed it (a `Content-Length` header was
-  present).
+  present). When compiled to JavaScript, Dio reports only the browser's
+  `SyntaxError` message, so `rawBody` is `null` there.
+- A `FormatException` thrown while decoding (your converter, `Date.parse`)
+  is a data problem: a `DecodeError` in a result, an `SseDecodeError` in an
+  event stream. An `Error` is a bug and is not caught.
+- A path parameter whose expansion is empty or only dots (`''`, an empty
+  list, a `label` of `''`) throws `ArgumentError`: the client would drop the
+  segment, so `/users/{id}/sessions` could become `/users/sessions`.
 - `rawBody` of a `DecodeError` and of an `UndocumentedStatus` is best-effort:
   it is the body as Dio returned it (parsed JSON, text or bytes), and `null`
   when the response had no body or Dio kept nothing.
@@ -93,11 +103,28 @@ code depends on. Dependencies: `dio` and `meta`.
 
 ## Web
 
-Everything works on the web except event streams with Dio's default
-browser adapter, which delivers a body only when the connection closes. An
-event-stream operation then returns a `TransportError` that says so
+The package works on the web, compiled to JavaScript (dart2js) or to
+WebAssembly (dart2wasm). Event streams need a streaming adapter there: Dio's
+default browser adapter delivers a body only when the connection closes, so
+an event-stream operation returns a `TransportError` that says so
 (`DioRequestSender.webStreamingMessage`). Set a fetch-based adapter on your
 Dio, such as `ConversionLayerAdapter` from `dio_compatibility_layer` with
 `package:http`'s `BrowserClient` or `fetch_client`.
+
+Browsers do not let a page set the `Cookie` request header, so cookie
+parameters do not work on the web (the browser keeps its own cookies and
+sends them itself, subject to its credentials settings).
+
+## Development
+
+```sh
+dart test                                    # the VM
+dart test -p chrome                          # dart2js (needs Chrome)
+dart test -p chrome --compiler dart2wasm     # dart2wasm
+```
+
+Test files and tests that need the VM (`dart:io`, int64 literals) are marked
+`@TestOn('vm')` or `testOn: 'vm'`; `test/dio/web_test.dart` runs in a browser
+only. If Chrome is not found, set `CHROME_EXECUTABLE`.
 
 [Українська версія](README.ua.md)
