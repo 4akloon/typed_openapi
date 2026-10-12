@@ -620,7 +620,12 @@ that the API composes, including an `implements` fake of a tag class.
   read as text or bytes), and the bodies `FileUpload` (bytes or a stream),
   `FormBody`/`FormEncoding` and `MultipartBody`/`MultipartPart`, which
   `DioBody` (`dio/`) turns into form text, `FormData` and bytes or a
-  stream for `DioRequestSender`.
+  stream for `DioRequestSender`. A body sent as `application/json` or
+  `+json` is always JSON text made by `DioBody` (Dio sends a `String` as it
+  is and a `null` as no body, so `"a"` and `null` would be wrong), never a
+  value left to Dio's transformer; a `null` body with a JSON `contentType`
+  is the JSON `null` of a required nullable body, so a generated method
+  passes no `contentType` for an absent optional body.
 - `dio/` - `DioRequestSender(dio, {isWeb})` (`send`, `openEvents`; requests
   only through `dio.request`, never mutates the user's Dio, never retries;
   decoding catches only `DioException`, `JsonDecodeException` and, from the

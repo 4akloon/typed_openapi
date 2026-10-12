@@ -116,10 +116,21 @@ linter:
 }
 
 /// What `bin/wire_calls.dart` prints.
-const _wire = '''
+const _wire = r'''
 success 204 null
 https://wire.example.com/helpers?jsonEncode=%22a%5C%22b%22&base64Encode=AQID
 multipart [true, true, true]
+POST /strings application/json <"hello \"q\"">
+PUT /strings application/json <"red">
+PATCH /strings application/json <"x\"y">
+PATCH /strings application/json <null>
+POST /nullable application/json <"n">
+POST /nullable application/json <null>
+POST /optional application/json <"o">
+POST /optional null <>
+PUT /optional text/plain <plain "t">
+PUT /optional null <>
+PATCH /optional null <>
 ''';
 
 /// What `bin/calls.dart` prints: each call's request and result.

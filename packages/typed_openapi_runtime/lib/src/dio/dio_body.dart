@@ -8,8 +8,8 @@ import '../request/multipart_body.dart';
 import '../request/operation_request.dart';
 
 /// Turns the body of an `OperationRequest` into what Dio sends: form text,
-/// `FormData` built for this request, the bytes or the stream of a file, or
-/// the body as it is (JSON, text).
+/// `FormData` built for this request, the bytes or the stream of a file, JSON
+/// text, or the body as it is (text).
 final class DioBody {
   /// Creates the converter.
   const DioBody();
@@ -31,14 +31,26 @@ final class DioBody {
     _ => request.contentType,
   };
 
-  /// What Dio sends for [body].
-  Object? data(Object? body) => switch (body) {
+  /// What Dio sends for the body of [request].
+  ///
+  /// A JSON body (`application/json` or `+json`) is always sent as JSON
+  /// text made here: Dio sends a `String` as it is, so the string `a"b`
+  /// would go out unquoted, and it sends `null` as no body. A `null` body
+  /// with a JSON `Content-Type` is the JSON value `null` (a required
+  /// nullable body); with no `Content-Type` it is no body.
+  Object? data(OperationRequest request) => switch (request.body) {
     final FormBody form => form.encode(),
     final MultipartBody multipart => _formData(multipart),
     FileUpload(:final bytes?) => bytes,
     FileUpload(:final stream?) => stream,
-    _ => body,
+    final body when _isJsonBody(request) => jsonEncode(body),
+    final body => body,
   };
+
+  static bool _isJsonBody(OperationRequest request) {
+    final type = request.contentType;
+    return type != null && _isJson(type);
+  }
 
   FormData _formData(MultipartBody body) {
     final data = FormData();

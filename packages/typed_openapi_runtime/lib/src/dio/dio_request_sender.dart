@@ -203,7 +203,7 @@ final class DioRequestSender {
     // any type but String, List<int> with bytes or ResponseBody with stream.
     Future<Response<R>> send<R>() => dio.request<R>(
       _guardQuery(request.resolvePath()),
-      data: const DioBody().data(request.body),
+      data: const DioBody().data(request),
       options: options,
       cancelToken: cancelToken ?? call?.cancelToken,
       onSendProgress: call?.onSendProgress,

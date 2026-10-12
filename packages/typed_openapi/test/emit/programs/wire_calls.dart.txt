@@ -50,4 +50,24 @@ Future<void> main() async {
     multipart.contains('{"a":"x"}'),
     multipart.contains('name="base64Encode"\r\n\r\nBAUG'),
   ]}');
+
+  // A JSON body is JSON text, also a string, an enum and a null.
+  for (final send in <Future<Object?> Function()>[
+    () => wire.sendString(body: 'hello "q"'),
+    () => wire.sendEnum(body: Color.red),
+    () => wire.sendAny(body: const JsonValue('x"y')),
+    () => wire.sendAny(body: const JsonValue(null)),
+    () => wire.sendNullable(body: 'n'),
+    () => wire.sendNullable(body: null),
+    () => wire.sendOptional(body: 'o'),
+    () => wire.sendOptional(),
+    () => wire.sendOptionalText(body: 'plain "t"'),
+    () => wire.sendOptionalText(),
+    () => wire.sendOptionalBytes(),
+  ]) {
+    adapter.answers.add(() => empty(204));
+    await send();
+    print('${adapter.requests.last.method} ${adapter.requests.last.path} '
+        '${adapter.requests.last.contentType} <${adapter.bodies.last}>');
+  }
 }

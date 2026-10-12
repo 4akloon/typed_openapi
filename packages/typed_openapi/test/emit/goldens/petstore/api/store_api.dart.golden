@@ -62,7 +62,7 @@ class StoreApi {
     OperationRequest(
       _placeOrder,
       body: body == null ? null : FormBody(body.toJson(), {'meta': FormEncoding(style: .deepObject, explode: true), 'tags': FormEncoding(explode: false)}),
-      contentType: 'application/x-www-form-urlencoded',
+      contentType: body == null ? null : 'application/x-www-form-urlencoded',
     ),
     _decodePlaceOrder,
     call: call,
@@ -83,7 +83,7 @@ class StoreApi {
     OperationRequest(
       _sendNote,
       body: body,
-      contentType: 'text/plain',
+      contentType: body == null ? null : 'text/plain',
     ),
     _decodeSendNote,
     call: call,

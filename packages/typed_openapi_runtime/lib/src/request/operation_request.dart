@@ -47,12 +47,14 @@ final class OperationRequest {
   /// The cookie parameters, sent in one `Cookie` header in this order.
   final List<CookieParameter> cookies;
 
-  /// The body: a JSON value (`toJson()`), text, a [FormBody], a
-  /// [MultipartBody] or a [FileUpload]; `null` for no body. The request
-  /// sender turns the last three into what the HTTP client sends.
+  /// The body: a JSON value (`toJson()`, also a string, a number or a
+  /// boolean), text, a [FormBody], a [MultipartBody] or a [FileUpload];
+  /// `null` for no body. The request sender writes a JSON value as JSON
+  /// text and turns the other bodies into what the HTTP client sends.
   final Object? body;
 
-  /// The `Content-Type` of [body].
+  /// The `Content-Type` of [body]; `null` for no body. A `null` [body] with
+  /// a JSON content type is the JSON value `null`.
   final String? contentType;
 
   /// How the response body is read.

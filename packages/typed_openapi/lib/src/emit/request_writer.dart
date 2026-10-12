@@ -101,9 +101,16 @@ final class RequestWriter {
     if (bodyType(operation) == null) return;
     final value = _value(operation, body!);
     if (value == null) return;
+    // An absent optional body has no `Content-Type`; a `null` body with one
+    // is the JSON value `null`.
+    final type = _code.string(_contentType(body));
     out
       ..line('body: $value,')
-      ..line('contentType: ${_code.string(_contentType(body))},');
+      ..line(
+        body.required
+            ? 'contentType: $type,'
+            : 'contentType: body == null ? null : $type,',
+      );
   }
 
   /// The expression of the body sent: `null` stays `null` for an optional
