@@ -224,30 +224,7 @@ final class OverrideResolver {
     OperationOverride entry,
     _OperationIndex index,
   ) {
-    if (entry.operationId case final id?) {
-      final matches = index.byId[id] ?? const [];
-      if (matches.length > 1) {
-        final addresses = [
-          for (final (_, method, path) in matches)
-            '${method.toUpperCase()} $path',
-        ];
-        _report(
-          .overrideTargetAmbiguous,
-          entry,
-          'operationId "$id" names ${matches.length} operations; this '
-          'override is not applied.',
-          fix:
-              'Address the operation as METHOD /path: ${addresses.join(', ')}.',
-        );
-        return null;
-      }
-      if (matches.isEmpty) {
-        _notFound(entry, 'No operation has operationId "$id".');
-        return null;
-      }
-      final (operation, _, path) = matches.single;
-      return (operation, index.items[path]);
-    }
+    if (entry.operationId case final id?) return _byId(entry, id, index);
     final method = entry.method!;
     final path = entry.path!;
     final item = index.items[path];
@@ -262,6 +239,36 @@ final class OverrideResolver {
       return null;
     }
     return (operation, item);
+  }
+
+  /// The operation with the `operationId` [id], or null after a report when
+  /// there is none or several.
+  (Operation, PathItem?)? _byId(
+    OperationOverride entry,
+    String id,
+    _OperationIndex index,
+  ) {
+    final matches = index.byId[id] ?? const [];
+    if (matches.length > 1) {
+      final addresses = [
+        for (final (_, method, path) in matches)
+          '${method.toUpperCase()} $path',
+      ];
+      _report(
+        .overrideTargetAmbiguous,
+        entry,
+        'operationId "$id" names ${matches.length} operations; this '
+        'override is not applied.',
+        fix: 'Address the operation as METHOD /path: ${addresses.join(', ')}.',
+      );
+      return null;
+    }
+    if (matches.isEmpty) {
+      _notFound(entry, 'No operation has operationId "$id".');
+      return null;
+    }
+    final (operation, _, path) = matches.single;
+    return (operation, index.items[path]);
   }
 
   /// The targets inside an operation override: parameters, request body,
@@ -313,19 +320,8 @@ final class OverrideResolver {
     PathItem? item,
     SpecModel model,
   ) {
-    final own = [
-      for (final p in operation.parameters) ?model.resolve(p),
-    ];
-    final shared = [
-      for (final p in item?.parameters ?? const <RefOr<Parameter>>[])
-        if (model.resolve(p) case final resolved?)
-          if (!own.any(
-            (o) => o.name == resolved.name && o.placement == resolved.placement,
-          ))
-            resolved,
-    ];
     final matches = [
-      for (final p in [...own, ...shared])
+      for (final p in _parametersOf(operation, item, model))
         if (p.name == entry.parameterName &&
             (entry.placement == null || p.placement == entry.placement))
           p,
@@ -342,20 +338,49 @@ final class OverrideResolver {
       return null;
     }
     if (matches.length > 1) {
-      final keys = {
-        for (final p in matches)
-          '${p.placement?.name ?? '?'}:${entry.parameterName}',
-      }.toList()..sort();
-      _report(
-        .overrideTargetAmbiguous,
-        entry,
-        'Operation ${parent.key} has ${matches.length} parameters named '
-        '"${entry.parameterName}"; this override is not applied.',
-        fix: 'Write the key as in:name: ${keys.join(', ')}.',
-      );
+      _ambiguousParameter(entry, parent, matches);
       return null;
     }
     return ParameterTarget(entry, matches.single);
+  }
+
+  /// The parameters of [operation], then those of its path item that the
+  /// operation does not define again.
+  List<Parameter> _parametersOf(
+    Operation operation,
+    PathItem? item,
+    SpecModel model,
+  ) {
+    final own = [
+      for (final p in operation.parameters) ?model.resolve(p),
+    ];
+    final shared = [
+      for (final p in item?.parameters ?? const <RefOr<Parameter>>[])
+        if (model.resolve(p) case final resolved?)
+          if (!own.any(
+            (o) => o.name == resolved.name && o.placement == resolved.placement,
+          ))
+            resolved,
+    ];
+    return [...own, ...shared];
+  }
+
+  void _ambiguousParameter(
+    ParameterOverride entry,
+    OperationOverride parent,
+    List<Parameter> matches,
+  ) {
+    final keys = {
+      for (final p in matches)
+        '${p.placement?.name ?? '?'}:${entry.parameterName}',
+    }.toList()..sort();
+    _report(
+      .overrideTargetAmbiguous,
+      entry,
+      'Operation ${parent.key} has ${matches.length} parameters named '
+      '"${entry.parameterName}"; this override is not applied.',
+      fix: 'Write the key as in:name: ${keys.join(', ')}.',
+    );
   }
 
   SchemaObject? _schema(

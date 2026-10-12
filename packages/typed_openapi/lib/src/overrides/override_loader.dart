@@ -202,30 +202,16 @@ final class _OverrideReader {
     JsonPointer at,
   ) {
     _checkKeys(entry, _operationKeys, at);
-    String? method;
-    String? path;
-    if (_methodAndPath.firstMatch(key) case final match?) {
-      method = match[1]!.toLowerCase();
-      path = match[2];
-      if (!PathItem.methods.contains(method)) {
-        _invalid(
-          'The method "${match[1]}" is not an OpenAPI operation method.',
-          at,
-          fix:
-              'Write the key as an operationId, or as METHOD /path with one '
-              'of ${PathItem.methods.map((m) => m.toUpperCase()).join(', ')}.',
-        );
-        return null;
-      }
-    }
+    final address = _address(key, at);
+    if (address == null) return null;
     final body = _map(entry, 'requestBody', at);
     return OperationOverride(
       key: key,
       pointer: at,
       reason: _string(entry, 'reason', at),
-      operationId: method == null ? key : null,
-      method: method,
-      path: path,
+      operationId: address.method == null ? key : null,
+      method: address.method,
+      path: address.path,
       name: _string(entry, 'name', at),
       exclude: _bool(entry, 'exclude', at),
       group: _string(entry, 'group', at),
@@ -239,6 +225,26 @@ final class _OverrideReader {
           _response(status, value, p),
       ],
     );
+  }
+
+  /// The method and path an operation key names: both null for an
+  /// `operationId`; null itself, after a report, for a method that is not an
+  /// OpenAPI operation method.
+  ({String? method, String? path})? _address(String key, JsonPointer at) {
+    final match = _methodAndPath.firstMatch(key);
+    if (match == null) return (method: null, path: null);
+    final method = match[1]!.toLowerCase();
+    if (PathItem.methods.contains(method)) {
+      return (method: method, path: match[2]);
+    }
+    _invalid(
+      'The method "${match[1]}" is not an OpenAPI operation method.',
+      at,
+      fix:
+          'Write the key as an operationId, or as METHOD /path with one '
+          'of ${PathItem.methods.map((m) => m.toUpperCase()).join(', ')}.',
+    );
+    return null;
   }
 
   ParameterOverride? _parameter(
@@ -385,7 +391,23 @@ final class _OverrideReader {
     for (final field in _schemaFields) {
       if (!entry.containsKey(field)) continue;
       final value = entry[field];
-      final valid = switch (field) {
+      if (!_isValid(field, value, property: property)) {
+        _invalid(
+          '"$field" ${_expected(field, property: property)}.',
+          at.child(field),
+        );
+        continue;
+      }
+      spec[field] = value;
+    }
+    if (spec.containsKey(r'$ref')) {
+      _dropSiblingsOfRef(spec, at, property: property);
+    }
+    return spec;
+  }
+
+  static bool _isValid(String field, Object? value, {required bool property}) =>
+      switch (field) {
         r'$ref' => value is String && value.isNotEmpty,
         'type' =>
           value == null ||
@@ -403,28 +425,24 @@ final class _OverrideReader {
         'enum' => value == null || value is List<Object?> && value.isNotEmpty,
         _ => false,
       };
-      if (!valid) {
-        _invalid(
-          '"$field" ${_expected(field, property: property)}.',
-          at.child(field),
-        );
-        continue;
-      }
-      spec[field] = value;
+
+  /// Reports and removes the fields of [spec] that cannot go next to `$ref`:
+  /// the schema becomes the reference.
+  void _dropSiblingsOfRef(
+    Map<String, Object?> spec,
+    JsonPointer at, {
+    required bool property,
+  }) {
+    for (final field in spec.keys.toList()) {
+      if (field == r'$ref' || field == 'nullable') continue;
+      if (field == 'required' && property) continue;
+      _invalid(
+        '"$field" cannot be combined with "\$ref": the schema becomes the '
+        'reference.',
+        at.child(field),
+      );
+      spec.remove(field);
     }
-    if (spec.containsKey(r'$ref')) {
-      for (final field in spec.keys.toList()) {
-        if (field == r'$ref' || field == 'nullable') continue;
-        if (field == 'required' && property) continue;
-        _invalid(
-          '"$field" cannot be combined with "\$ref": the schema becomes the '
-          'reference.',
-          at.child(field),
-        );
-        spec.remove(field);
-      }
-    }
-    return spec;
   }
 
   static bool _isName(Object? value) => value is String && value.isNotEmpty;
