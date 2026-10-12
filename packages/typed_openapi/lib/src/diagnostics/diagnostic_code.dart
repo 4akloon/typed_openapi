@@ -202,6 +202,17 @@ enum DiagnosticCode {
   /// gone, or the spec kept changing after the last pass.
   fixNotApplied('TOA800', 'fix-not-applied', .warning),
 
+  /// The overrides file a client names does not exist.
+  overridesNotFound('TOA801', 'overrides-not-found', .error),
+
+  /// The overrides file cannot be read, or an override has a value of the
+  /// wrong type; the value is ignored.
+  invalidOverride('TOA802', 'invalid-override', .error),
+
+  /// An override has a key this tool does not know, such as a misspelled
+  /// field; it is ignored.
+  unknownOverrideKey('TOA803', 'unknown-override-key', .error),
+
   /// The configuration file does not exist.
   configNotFound('TOA901', 'config-not-found', .error),
 
