@@ -83,6 +83,7 @@ final class ModelDecl extends Declaration {
     this.direction = .both,
     this.additionalProperties,
     this.additionalPropertiesName = 'additionalProperties',
+    this.additionalSensitive = false,
     super.description,
     super.deprecated,
   });
@@ -100,6 +101,10 @@ final class ModelDecl extends Declaration {
   /// The Dart name of the field that holds [additionalProperties], given in
   /// the scope of the model's fields.
   final String additionalPropertiesName;
+
+  /// Whether the values of `additionalProperties` are secrets: `toString`
+  /// does not print them.
+  final bool additionalSensitive;
 }
 
 /// A field of a model.
@@ -166,7 +171,9 @@ final class FieldIr {
   final ConstraintsIr constraints;
 
   /// Whether the value is a secret: the property is `writeOnly` or has
-  /// `format: password`. `toString` does not print it.
+  /// `format: password`, also through a `$ref`, the one non-null branch of
+  /// a nullable `oneOf`/`anyOf`, or as the items of an array, the values of
+  /// a map or a branch of a union. `toString` does not print it.
   final bool sensitive;
 
   /// The values of the enum branches of the property's schema that a union
@@ -426,6 +433,7 @@ final class UnionVariantIr {
     this.discriminatorValues = const [],
     this.name = '',
     this.jsonKinds = const [],
+    this.sensitive = false,
   });
 
   /// The type of the variant.
@@ -442,6 +450,10 @@ final class UnionVariantIr {
 
   /// The discriminator values that select this variant, sorted.
   final List<String> discriminatorValues;
+
+  /// Whether the value of the variant is a secret: `toString` of its class
+  /// does not print it (see [FieldIr.sensitive]).
+  final bool sensitive;
 }
 
 /// An API class: the operations of a tag, a path segment or the whole spec

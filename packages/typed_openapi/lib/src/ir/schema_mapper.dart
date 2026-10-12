@@ -824,7 +824,7 @@ final class SchemaMapper {
           constValue: constant?.$1,
           constraints: notes.constraints,
           knownValues: notes.knownValues,
-          sensitive: writeOnly || notes.password,
+          sensitive: writeOnly || notes.secret,
           required: required.contains(json),
           readOnly: readOnly,
           writeOnly: writeOnly,
@@ -876,6 +876,9 @@ final class SchemaMapper {
         deprecated: schema.deprecated,
         additionalProperties: additional,
         additionalPropertiesName: extraName ?? 'additionalProperties',
+        additionalSensitive:
+            additionalSchema != null &&
+            SchemaShapes.carriesSecret(additionalSchema, resolve: _resolved),
         direction: direction,
         fields: [
           for (final (field, fieldName) in named)
@@ -973,6 +976,10 @@ final class SchemaMapper {
     final siblings =
         property.ref == null || _context.model.document.version != .v30;
     final written = [if (siblings) property, ...parts, ?target];
+    final sources = SchemaShapes.annotationSources(
+      property,
+      resolve: _resolved,
+    );
     final known = <Object?>[];
     for (final schema in [property, if (property.ref != null) ?target]) {
       for (final branch in SchemaShapes.subsumedBranches(
@@ -994,13 +1001,9 @@ final class SchemaMapper {
           .map((s) => s.defaultValue)
           .firstWhere((d) => d != null, orElse: () => null),
       deprecated: written.any((s) => s.deprecated),
-      readOnly: [property, ...parts, ?target].any((s) => s.readOnly),
-      writeOnly: [property, ...parts, ?target].any((s) => s.writeOnly),
-      password: [
-        property,
-        ...parts,
-        ?target,
-      ].any((s) => s.format == 'password'),
+      readOnly: sources.any((s) => s.readOnly),
+      writeOnly: sources.any((s) => s.writeOnly),
+      secret: SchemaShapes.carriesSecret(property, resolve: _resolved),
     );
   }
 
@@ -1466,6 +1469,10 @@ final class SchemaMapper {
                 'a variant class of $name',
               ),
               jsonKinds: [...variant.kinds]..sort((a, b) => a.index - b.index),
+              sensitive: SchemaShapes.carriesSecret(
+                variant.branch,
+                resolve: _resolved,
+              ),
             ),
         ],
         unknownName: _helperName(
@@ -2081,7 +2088,7 @@ final class _FieldNotes {
     this.deprecated = false,
     this.readOnly = false,
     this.writeOnly = false,
-    this.password = false,
+    this.secret = false,
   });
 
   final List<Object?> knownValues;
@@ -2091,7 +2098,7 @@ final class _FieldNotes {
   final bool deprecated;
   final bool readOnly;
   final bool writeOnly;
-  final bool password;
+  final bool secret;
 }
 
 /// A property of a model, before field names are given.

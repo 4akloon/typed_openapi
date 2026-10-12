@@ -261,6 +261,66 @@ final class SchemaShapes {
     ];
   }
 
+  /// The schemas that say what the property [property] is, in the order they
+  /// are met: the property, the annotation-only parts of its `allOf`
+  /// ([annotationParts]), and the schema it stands for ([singleOf]: the one
+  /// part of an `allOf`, or the one branch of a `oneOf`/`anyOf` besides
+  /// `null`), each followed through its `$ref` ([resolve]) and again through
+  /// the one schema it stands for. `readOnly`, `writeOnly` and `format:
+  /// password` are read from every one of them, so a nullable
+  /// `anyOf: [{type: string, format: password}, {type: 'null'}]` (Pydantic's
+  /// `Optional[SecretStr]`) is as much a secret as the plain string.
+  static List<SchemaObject> annotationSources(
+    Schema property, {
+    required SchemaObject? Function(Schema) resolve,
+  }) {
+    final sources = <SchemaObject>[];
+    final seen = <Object>{};
+    void visit(Schema schema) {
+      if (schema is! SchemaObject || !seen.add(schema.location)) return;
+      sources.add(schema);
+      if (schema.ref != null) {
+        if (resolve(schema) case final target?) visit(target);
+        return;
+      }
+      sources.addAll(annotationParts(schema));
+      if (singleOf(schema, resolve: resolve) case final single?) visit(single);
+    }
+
+    visit(property);
+    return sources;
+  }
+
+  /// Whether a value of [schema] is a secret that must not be printed
+  /// (`toString` writes `<redacted>`): a source of [annotationSources] is
+  /// `writeOnly` or has `format: password`, or the value holds one: an
+  /// array whose items are secrets, an object whose `additionalProperties`
+  /// are, or a `oneOf`/`anyOf` with a secret branch (a union whose value may
+  /// be the secret, also when it is not generated as a union). The
+  /// properties of an object are not looked into: the model of the object
+  /// redacts its own.
+  static bool carriesSecret(
+    Schema schema, {
+    required SchemaObject? Function(Schema) resolve,
+    Set<Object>? seen,
+  }) {
+    final visited = seen ?? <Object>{};
+    if (schema is! SchemaObject || !visited.add(schema.location)) return false;
+    for (final source in annotationSources(schema, resolve: resolve)) {
+      if (source.writeOnly || source.format == 'password') return true;
+      for (final inner in [
+        ?source.items,
+        ...source.prefixItems,
+        ?source.additionalProperties,
+        for (final branch in [...source.oneOf, ...source.anyOf])
+          if (!isNullOnly(branch)) branch,
+      ]) {
+        if (carriesSecret(inner, resolve: resolve, seen: visited)) return true;
+      }
+    }
+    return false;
+  }
+
   /// Whether [schema] is written inline and allows only `null`.
   static bool isNullOnly(Schema schema) =>
       schema is SchemaObject &&

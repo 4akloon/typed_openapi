@@ -6,27 +6,10 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:typed_openapi/src/config/generation_config.dart';
-import 'package:typed_openapi/src/emit/model_library.dart';
-import 'package:typed_openapi/src/ir/ir_builder.dart';
 import 'package:typed_openapi/src/overrides/override_set.dart';
 
-import '../helpers/ir_fixture.dart';
+import '../helpers/emit_fixture.dart';
 import '../helpers/temp_dir.dart';
-
-/// The model files of the fixture spec [name] in `test/emit/fixtures`.
-Map<String, String> emitFixture(
-  String name, {
-  GenerationConfig generation = const GenerationConfig(),
-}) {
-  final fixture = IrFixture(
-    File(p.join('test', 'emit', 'fixtures', name)).readAsStringSync(),
-    generation: generation,
-  );
-  final ir = IrBuilder(
-    fixture.diagnostics,
-  ).build(fixture.context.spec, fixture.context.client);
-  return const ModelLibrary().files(ir);
-}
 
 /// Runs `dart` with [arguments] in [directory].
 ProcessResult dart(List<String> arguments, String directory) => Process.runSync(

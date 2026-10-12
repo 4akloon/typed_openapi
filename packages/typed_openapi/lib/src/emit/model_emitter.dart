@@ -360,7 +360,7 @@ final class ModelEmitter {
     final names = [
       for (final field in fields) (field.name, field.sensitive),
       if (model.additionalProperties != null)
-        (model.additionalPropertiesName, false),
+        (model.additionalPropertiesName, model.additionalSensitive),
     ];
     final shown = [
       for (final (name, secret) in names)

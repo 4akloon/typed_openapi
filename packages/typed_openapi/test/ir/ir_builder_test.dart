@@ -495,6 +495,45 @@ components:
     });
   });
 
+  test('readOnly and writeOnly are found through a nullable branch', () {
+    final fixture = IrFixture(r"""
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /pets:
+    post:
+      operationId: createPet
+      tags: [pets]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "201": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        name: {type: string}
+        id:
+          anyOf:
+            - {type: integer, readOnly: true}
+            - {type: 'null'}
+        secret:
+          oneOf:
+            - {type: string, writeOnly: true}
+            - {type: 'null'}
+""");
+    final ir = build(fixture);
+    expect(fixture.reported, isEmpty);
+    List<String> fields(String name) => [
+      for (final f
+          in (ir.declarations.firstWhere((d) => d.name == name) as ModelDecl)
+              .fields)
+        f.name,
+    ];
+    expect(fields('Pet'), ['name', 'id']);
+    expect(fields('PetInput'), ['name', 'secret']);
+  });
+
   test('makes PATCH body fields tri-state by the configured rule (R7.2)', () {
     const spec = r'''
 openapi: 3.1.0

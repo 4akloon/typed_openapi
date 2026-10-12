@@ -321,7 +321,7 @@ final class UnionEmitter {
           ..line('@override')
           ..line(
             "String toString() => '${name.replaceAll(r'$', r'\$')}"
-            r"($value)';",
+            "(${variant.sensitive ? '<redacted>' : r'$value'})';",
           );
       });
   }
@@ -343,6 +343,9 @@ final class UnionEmitter {
 
   void _unknown(DartWriter out, UnionDecl decl) {
     final name = decl.unknownName;
+    final shown = decl.variants.any((v) => v.sensitive)
+        ? '<redacted>'
+        : r'$json';
     _codec.imports.fromRuntime('DeepEquality');
     out
       ..line('/// A [${decl.name}] that no variant takes; only')
@@ -370,7 +373,7 @@ final class UnionEmitter {
           ..line('@override')
           ..line(
             "String toString() => '${name.replaceAll(r'$', r'\$')}"
-            r"($json)';",
+            "($shown)';",
           );
       });
   }

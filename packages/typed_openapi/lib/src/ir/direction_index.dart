@@ -165,20 +165,19 @@ final class DirectionIndex {
   }
 
   /// Whether a property of [schema] is `readOnly` or `writeOnly`, as
-  /// written or through its `$ref`.
+  /// written, through its `$ref`, in an annotation-only part of its
+  /// `allOf` or in the one branch of a nullable `anyOf`/`oneOf`
+  /// ([SchemaShapes.annotationSources]).
   bool _hasDirectionalProperty(SchemaObject schema) {
+    SchemaObject? resolve(Schema s) => switch (_model.resolveSchema(s)) {
+      final SchemaObject object => object,
+      _ => null,
+    };
     for (final property in _properties(schema)) {
-      final resolved = _model.resolveSchema(property);
-      if (resolved is SchemaObject &&
-          (resolved.readOnly || resolved.writeOnly)) {
-        return true;
-      }
-      if (property is SchemaObject &&
-          (property.readOnly ||
-              property.writeOnly ||
-              SchemaShapes.annotationParts(
-                property,
-              ).any((part) => part.readOnly || part.writeOnly))) {
+      if (SchemaShapes.annotationSources(
+        property,
+        resolve: resolve,
+      ).any((source) => source.readOnly || source.writeOnly)) {
         return true;
       }
     }
