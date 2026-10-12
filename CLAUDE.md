@@ -192,8 +192,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   (parameters, bodies, responses, envelopes, errors) and `IrBuilder` (groups,
   method names, then everything above). `IrJson` dumps an IR; the hidden
   `typed_openapi ir` command prints it. Naming and mapping codes use the
-  second half of each area's hundred: TOA250-TOA254, TOA350, TOA450-TOA451,
-  TOA550-TOA558.
+  second half of each area's hundred: TOA250-TOA256, TOA350-TOA351,
+  TOA450-TOA452, TOA550-TOA560.
 - `check/` - `SpecChecker`: config -> load -> version -> overrides ->
   `Normalizer` -> `IrBuilder` once per run (file, preset, rules, overrides
   file, `GenerationConfig.key`); an
