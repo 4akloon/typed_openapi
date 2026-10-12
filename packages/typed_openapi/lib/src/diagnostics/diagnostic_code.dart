@@ -160,12 +160,25 @@ enum DiagnosticCode {
   /// A schema's `default` is not of the schema's type; it is ignored.
   invalidDefault('TOA211', 'invalid-default', .warning),
 
+  /// A schema allows several JSON types besides `null` (`type: [string,
+  /// integer]`); it is generated as `JsonValue`.
+  mixedTypeSchema('TOA250', 'mixed-type-schema', .warning),
+
+  /// A schema that is not an object, an enum or a union refers to itself
+  /// (`A: {type: array, items: {$ref: A}}`); the reference is generated as
+  /// `JsonValue`.
+  recursiveAlias('TOA251', 'recursive-alias', .warning),
+
   /// An `enum` repeats a value; the repeats are removed.
   duplicateEnumValue('TOA301', 'duplicate-enum-value', .warning),
 
   /// A nullable enum written as `oneOf` of an enum of only `null` and a
   /// `$ref`.
   nullableEnumOneOf('TOA303', 'nullable-enum-one-of', .warning),
+
+  /// An enum mixes values of several JSON types, or has objects or lists
+  /// among its values; it is generated as `JsonValue`.
+  enumMixedValues('TOA350', 'enum-mixed-values', .warning),
 
   /// The discriminator property is not required in a variant.
   discriminatorNotRequired('TOA401', 'discriminator-not-required', .info),
@@ -194,6 +207,18 @@ enum DiagnosticCode {
 
   /// Two operations share an `operationId`.
   duplicateOperationId('TOA504', 'duplicate-operation-id', .error),
+
+  /// A name from the spec is a Dart reserved word or a name Dart already
+  /// has (`class`, `List`); the generated name gets a suffix.
+  nameReserved('TOA550', 'name-reserved', .info),
+
+  /// Two generated declarations, members or arguments would have the same
+  /// name; the later one (by spec location) gets a suffix.
+  nameCollision('TOA551', 'name-collision', .info),
+
+  /// A name from the spec has no ASCII letter or digit, so no Dart name can
+  /// be made from it; a generic name is used.
+  nameUnrepresentable('TOA552', 'name-unrepresentable', .warning),
 
   /// `*/*` is used as a media type.
   wildcardMediaType('TOA601', 'wildcard-media-type', .warning),

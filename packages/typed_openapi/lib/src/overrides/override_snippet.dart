@@ -53,9 +53,16 @@ final class OverrideSnippet {
   /// a value cannot be written as YAML the overrides file reads (a number
   /// that is not finite).
   String? forSchema(SpecLocation location, Map<String, Object?> fields) {
-    if (!_isWritable(fields)) return null;
     final address = addressOf(location);
     if (address == null) return null;
+    return write(address, fields);
+  }
+
+  /// The override at the keys [address] (such as `operations`, `getPet`)
+  /// that sets [fields], as block YAML; null when a value cannot be written
+  /// as YAML the overrides file reads (a number that is not finite).
+  String? write(List<String> address, Map<String, Object?> fields) {
+    if (!_isWritable(fields)) return null;
     final lines = <String>[];
     for (final (depth, key) in address.indexed) {
       lines.add('${'  ' * depth}${_key(key)}:');
