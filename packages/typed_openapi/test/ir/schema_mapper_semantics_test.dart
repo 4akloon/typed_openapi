@@ -2,6 +2,7 @@ import 'package:test/test.dart';
 import 'package:typed_openapi/src/config/generation_config.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
 import 'package:typed_openapi/src/ir/ir.dart';
+import 'package:typed_openapi/src/ir/ir_builder.dart';
 import 'package:typed_openapi/src/overrides/override_set.dart';
 
 import '../helpers/ir_fixture.dart';
@@ -226,6 +227,55 @@ components:
         (
           DiagnosticCode.allOfBesideUnionIgnored,
           '#/components/schemas/U/properties',
+        ),
+      ]);
+      expect(
+        fixture.reported.single.message,
+        'The properties of this schema are ignored: it is generated as the '
+        'union of its oneOf branches.',
+      );
+    });
+
+    test('the discriminator property beside a union is not ignored', () {
+      final fixture = IrFixture(r'''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+components:
+  schemas:
+    A: {type: object, properties: {type: {type: string}}}
+    B: {type: object, properties: {type: {type: string}}}
+    U:
+      properties: {type: {type: string}}
+      required: [type]
+      oneOf: [{$ref: '#/components/schemas/A'}, {$ref: '#/components/schemas/B'}]
+      discriminator: {propertyName: type}
+''');
+      final (ir, _) = mapComponents(fixture, ['U']);
+      expect(variantsOf(ir, 'U'), ['A', 'B']);
+      expect(fixture.reported, isEmpty);
+    });
+
+    test('constraint branches inside an allOf part are TOA255', () {
+      final fixture = IrFixture('''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Contact:
+      allOf:
+        - type: object
+          properties: {email: {type: string}, phone: {type: string}}
+        - oneOf: [{required: [email]}, {required: [phone]}]
+''');
+      final (ir, _) = mapComponents(fixture, ['Contact']);
+      expect(fieldsOf(ir, 'Contact'), [
+        'email(email): String?',
+        'phone(phone): String?',
+      ]);
+      expect(fixture.codes, [
+        (
+          DiagnosticCode.oneOfConstraintsIgnored,
+          '#/components/schemas/Contact/allOf/1/oneOf',
         ),
       ]);
     });
@@ -506,5 +556,64 @@ components:
       'other(other): VVariant2?',
     ]);
     expect(fixture.reported, isEmpty);
+  });
+
+  test('a valid spec with plain names, allOf, unions and PATCH is silent', () {
+    final fixture = IrFixture(r'''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /pets:
+    get:
+      tags: [pets]
+      operationId: listPets
+      responses: {"200": {description: ok, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Pet'}}}}}}
+    post:
+      tags: [pets]
+      operationId: createPet
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/NewPet'}}}}
+      responses: {"201": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}}
+  /pets/{id}:
+    parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+    patch:
+      tags: [pets]
+      operationId: updatePet
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/NewPet'}}}}
+      responses: {"200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Animal'}}}}}
+components:
+  schemas:
+    NewPet:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+        tag: {type: [string, "null"]}
+        status: {type: string, enum: [available, sold, in-progress]}
+    Pet:
+      allOf:
+        - $ref: '#/components/schemas/NewPet'
+        - type: object
+          properties:
+            id: {type: integer, readOnly: true}
+    Cat: {type: object, properties: {kind: {type: string}, lives: {type: integer}}}
+    Dog: {type: object, properties: {kind: {type: string}, bark: {type: string}}}
+    Animal:
+      oneOf: [{$ref: '#/components/schemas/Cat'}, {$ref: '#/components/schemas/Dog'}]
+      discriminator: {propertyName: kind}
+    Color: {type: string, oneOf: [{const: red}, {const: green}]}
+''');
+    final ir = IrBuilder(
+      fixture.diagnostics,
+    ).build(fixture.context.spec, fixture.context.client);
+    expect(fixture.reported, isEmpty);
+    expect(ir.declarations.map((d) => d.name), [
+      'Animal',
+      'Cat',
+      'Dog',
+      'NewPet',
+      'NewPetPatch',
+      'Pet',
+      'PetStatus',
+    ]);
   });
 }

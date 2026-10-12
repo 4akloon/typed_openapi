@@ -686,6 +686,7 @@ final class SchemaMapper {
           continue;
         }
         add(resolved);
+        _reportBranchesBesideModel(resolved);
       }
       if (part.discriminator case final discriminator?) {
         _context.report(
@@ -793,16 +794,21 @@ final class SchemaMapper {
       _context.report(
         .allOfBesideUnionIgnored,
         'The allOf parts of this schema are ignored: it is generated as the '
-        'union of its $kind branches.',
+        'union of its ${kind.name} branches.',
         schema.location.child('allOf'),
         fix: 'Put the shared parts into every branch at the source.',
       );
     }
-    if (schema.properties.isNotEmpty) {
+    // The discriminator property is what the union reads from every branch.
+    final others = [
+      for (final name in schema.properties.keys)
+        if (name != schema.discriminator?.propertyName) name,
+    ];
+    if (others.isNotEmpty) {
       _context.report(
         .allOfBesideUnionIgnored,
         'The properties of this schema are ignored: it is generated as the '
-        'union of its $kind branches.',
+        'union of its ${kind.name} branches.',
         schema.location.child('properties'),
         fix: 'Put the shared properties into every branch at the source.',
       );
