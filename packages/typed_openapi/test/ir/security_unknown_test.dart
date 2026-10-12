@@ -105,6 +105,19 @@ void main() {
       ]);
     });
 
+    test('says a scheme is defined but unusable when it has no type', () {
+      final typeless = specOf(security: '[{typeless: []}]');
+      requirements(typeless);
+      expect(unknown(typeless).single.message, contains('no usable type'));
+      expect(
+        unknown(typeless).single.message,
+        isNot(contains('does not define')),
+      );
+      final missing = specOf(security: '[{nope: []}]');
+      requirements(missing);
+      expect(unknown(missing).single.message, contains('does not define'));
+    });
+
     test('is the same when the document gives the requirement', () {
       final fixture = specOf(global: '[{nope: []}]');
       expect(requirements(fixture), [

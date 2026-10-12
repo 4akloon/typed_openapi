@@ -28,7 +28,7 @@ const Map<String, int> _fileAllowlist = {
   'lib/src/ir/ir_builder.dart': 538,
   // M9: the path variable pattern, parameter defaults, encodings, statuses,
   // secret bodies.
-  'lib/src/ir/operation_builder.dart': 535,
+  'lib/src/ir/operation_builder.dart': 516,
   'lib/src/ir/schema_mapper.dart': 2196,
   'lib/src/ir/schema_shapes.dart': 446,
   'test/check/spec_checker_test.dart': 705,

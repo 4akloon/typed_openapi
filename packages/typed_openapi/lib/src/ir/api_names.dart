@@ -1,11 +1,12 @@
 import '../diagnostics/json_pointer.dart';
-import '../model/operation.dart';
 import '../model/spec_node.dart';
 import 'dart_type.dart';
 import 'ir.dart';
 import 'ir_context.dart';
 import 'names.dart';
 import 'response_body_names.dart';
+import 'root_names.dart';
+import 'type_claims.dart';
 
 /// Names the types the API emitter declares (M9) in the library scope, after
 /// the declarations, the groups and the types M8 adds, so that a model or
@@ -19,7 +20,11 @@ import 'response_body_names.dart';
 final class ApiNames {
   /// Creates the namer for [_context], claiming in the library scope
   /// [_types].
-  ApiNames(this._context, this._types);
+  ApiNames(IrContext context, NameScope types)
+    : this._(context, TypeClaims(context, types));
+
+  ApiNames._(this._context, this._claims)
+    : _root = RootNames(_context, _claims);
 
   static const _names = DartNames();
 
@@ -60,7 +65,8 @@ final class ApiNames {
   };
 
   final IrContext _context;
-  final NameScope _types;
+  final TypeClaims _claims;
+  final RootNames _root;
 
   /// The variant name of [status]: the reason phrase of a code, the name of
   /// a range (`4XX` is `ClientError`), `Other` for `default`, and `Status`
@@ -86,14 +92,8 @@ final class ApiNames {
     List<Declaration> declarations,
     Map<String, GroupIr> groups,
   ) {
-    final root = this.root();
+    final root = _root.root();
     final inlineBodies = ResponseBodyNames(declarations);
-    // The root client's members: a field per group, then the servers.
-    final members = NameScope(
-      reserved: {...DartNames.reservedWords, ...DartNames.objectMembers},
-      reservedSuffix: '_',
-    );
-    final defaultGroup = _context.config.defaultGroup;
     return ClientIr(
       declarations: declarations,
       groups: [
@@ -104,33 +104,21 @@ final class ApiNames {
               for (final operation in group.operations)
                 name(operation, inlineBodies),
             ],
-            field: members
-                .claim(
-                  _names.camel(word.isEmpty ? defaultGroup : word) ?? 'api',
-                )
-                .$1,
+            field: _root.groupField(word, group, _locationOf(group)),
           ),
       ],
-      root: RootIr(root, servers: servers(members)),
+      root: RootIr(root, servers: _root.servers()),
     );
   }
 
-  /// The root client class: `naming.client`, else the client's name in
-  /// UpperCamelCase with `Client`.
-  String root() {
-    final candidate =
-        _context.config.clientClass ??
-        '${_names.pascal(_context.client.name) ?? 'Api'}Client';
-    return _claim(
-      candidate,
-      'the root client',
+  /// Where a problem of [group] is reported: its first operation, else the
+  /// document.
+  SpecLocation _locationOf(GroupIr group) =>
+      group.operations.firstOrNull?.location ??
       SpecLocation(
         _context.model.document.location.document,
         JsonPointer.root,
-      ),
-      fix: 'Set naming.client in the config.',
-    );
-  }
+      );
 
   /// [operation] with the names of the types the emitter declares for it;
   /// [inlineBodies] tells which names its own inline bodies have.
@@ -161,7 +149,7 @@ final class ApiNames {
     };
     final partsName = operation.body?.parts == null
         ? null
-        : _claim(
+        : _claims.claim(
             '${prefix}Request',
             'the class of the parts of ${operation.name}',
             operation.location,
@@ -182,8 +170,8 @@ final class ApiNames {
     ResponseBodyNames inlineBodies,
   ) {
     final plural = '${candidate}s';
-    return _types.isTaken(candidate) &&
-            !_types.isTaken(plural) &&
+    return _claims.isTaken(candidate) &&
+            !_claims.isTaken(plural) &&
             inlineBodies.isInlineBodyOf(operation, candidate)
         ? plural
         : candidate;
@@ -196,7 +184,7 @@ final class ApiNames {
     String what,
     Set<String> sensitive,
   ) {
-    final name = _claim(
+    final name = _claims.claim(
       candidate,
       'the sealed type of the $what of ${operation.name}',
       operation.location,
@@ -206,7 +194,7 @@ final class ApiNames {
       for (final (status, type) in cases)
         StatusCaseIr(
           status,
-          _claim(
+          _claims.claim(
             '$name${variantOf(status)}',
             'the variant of $status',
             operation.location,
@@ -216,76 +204,5 @@ final class ApiNames {
           sensitive: sensitive.contains(status),
         ),
     ]);
-  }
-
-  /// Claims [candidate] for [what] in the library scope; a name that
-  /// differs is reported at [at], with an override of the operation's name
-  /// when [override] is given.
-  String _claim(
-    String candidate,
-    String what,
-    SpecLocation at, {
-    OperationIr? override,
-    String? fix,
-  }) {
-    final (name, change) = _types.claim(candidate);
-    if (change == null) return name;
-    _context.report(
-      change == .reserved ? .nameReserved : .nameCollision,
-      change == .reserved
-          ? '"$candidate" is a name Dart already has; $what is named "$name".'
-          : 'Another type is named "$candidate"; $what is named "$name".',
-      at,
-      fix:
-          fix ??
-          'Rename the other type, or name the operation explicitly: its '
-              'name starts the name of the type.',
-      override: override == null
-          ? null
-          : _context.overrideAt(
-              ['operations', override.overrideKey],
-              {'name': override.name},
-            ),
-    );
-    return name;
-  }
-
-  /// The servers of the document as members of the root client, claimed
-  /// in [members] after the group fields: `server` for one, `server1`,
-  /// `server2`, ... for several.
-  List<ServerIr> servers(NameScope members) {
-    final servers = _context.model.document.servers;
-    return [
-      for (final (i, server) in servers.indexed)
-        if (server.url case final url?)
-          ServerIr(
-            name: members
-                .claim(servers.length == 1 ? 'server' : 'server${i + 1}')
-                .$1,
-            url: url,
-            location: server.location,
-            description: server.description,
-            variables: _serverVariables(server.variables),
-          ),
-    ];
-  }
-
-  static List<ServerVariableIr> _serverVariables(
-    Map<String, ServerVariable> variables,
-  ) {
-    final scope = NameScope(
-      reserved: DartNames.reservedWords,
-      reservedSuffix: '_',
-    );
-    return [
-      for (final MapEntry(key: wire, :value) in variables.entries)
-        ServerVariableIr(
-          name: scope.claim(_names.camel(wire) ?? 'value').$1,
-          wireName: wire,
-          defaultValue: value.defaultValue,
-          values: value.enumValues ?? const [],
-          description: value.description,
-        ),
-    ];
   }
 }

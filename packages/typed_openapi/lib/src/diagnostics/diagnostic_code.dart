@@ -359,8 +359,9 @@ enum DiagnosticCode {
 
   /// A parameter's `style` is not allowed for its `in` (path takes `simple`,
   /// `label` or `matrix`; query `form`, `spaceDelimited`, `pipeDelimited` or
-  /// `deepObject`; header `simple`; cookie `form` or `cookie`), so the
-  /// default style of the placement is used.
+  /// `deepObject`; header `simple`; cookie `form` or `cookie`), or the
+  /// `style` of the `encoding` of a form property is not one a query takes,
+  /// so the default style is used.
   parameterStyleInvalid('TOA564', 'parameter-style-invalid', .warning),
 
   /// A parameter is `in: querystring` (OpenAPI 3.2), which the client cannot
@@ -417,8 +418,8 @@ enum DiagnosticCode {
   /// string is sent as base64 text, not as a file.
   multipartNotObject('TOA655', 'multipart-not-object', .warning),
 
-  /// An `encoding` entry of a multipart or form body has `headers`, which
-  /// the client does not send.
+  /// An `encoding` entry of a multipart part or of a form property has
+  /// `headers`, which the client does not send.
   encodingHeadersIgnored('TOA656', 'encoding-headers-ignored', .info),
 
   /// A key of an operation's `responses` is not an HTTP status: OpenAPI
@@ -438,6 +439,16 @@ enum DiagnosticCode {
     'response-status-not-generated',
     .info,
   ),
+
+  /// An `encoding` key of a form or multipart body names no property of the
+  /// body's schema (a misspelled name, a property the schema does not have):
+  /// the entry is ignored.
+  encodingKeyUnknown('TOA659', 'encoding-key-unknown', .warning),
+
+  /// The `default` of a parameter does not match the parameter's `enum` or
+  /// `format` (`default: other` for `enum: [a, b]`, a `format: date` default
+  /// that is not a date): it is not documented as the default.
+  defaultValueInvalid('TOA660', 'default-value-invalid', .warning),
 
   /// A normalizer fix or an override was not applied: its file cannot be
   /// read, its target is gone, the spec kept changing after the last pass, or

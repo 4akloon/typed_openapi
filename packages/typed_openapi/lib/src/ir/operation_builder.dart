@@ -90,11 +90,12 @@ final class OperationBuilder {
       unbound++;
       return null;
     }
-    final responses = _responses(operation, prefix);
-    if (_checks.isEventStream(responses)) {
+    final picked = _pickResponses(operation);
+    if (_checks.isEventStream(picked)) {
       streams++;
       return null;
     }
+    final responses = _responses(picked, prefix);
     _checks.successes(operation);
     _checks.servers(entry);
     _checks.callbacks(operation);
@@ -386,16 +387,19 @@ final class OperationBuilder {
     };
   }
 
-  List<ResponseIr> _responses(Operation operation, String prefix) {
-    final responses = [
-      for (final (status, written) in _statuses.of(operation))
-        if (_context.model.resolve(written) case final response?)
-          (
-            status,
-            response,
-            _picker.pick(response.content, response.location, 'response'),
-          ),
-    ];
+  /// The generated responses of [operation] with the media type used for
+  /// each, before any type is mapped.
+  List<PickedResponse> _pickResponses(Operation operation) => [
+    for (final (status, written) in _statuses.of(operation))
+      if (_context.model.resolve(written) case final response?)
+        (
+          status,
+          response,
+          _picker.pick(response.content, response.location, 'response'),
+        ),
+  ];
+
+  List<ResponseIr> _responses(List<PickedResponse> responses, String prefix) {
     // Inline names carry the status only when several responses of the
     // same kind (success or error) have a body.
     final withBody = <String, int>{};

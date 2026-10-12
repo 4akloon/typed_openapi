@@ -65,5 +65,28 @@ void main() {
         'aB2',
       ],
     );
+    expect(
+      fixture.reported
+          .where(
+            (d) =>
+                d.message.startsWith('Part') ||
+                d.message.startsWith('Another part'),
+          )
+          .map((d) => (d.code, d.pointer?.value)),
+      [
+        (
+          DiagnosticCode.nameReserved,
+          '#/paths/~1a/post/requestBody/content/multipart~1form-data/schema/properties/jsonEncode',
+        ),
+        (
+          DiagnosticCode.nameReserved,
+          '#/paths/~1a/post/requestBody/content/multipart~1form-data/schema/properties/base64Encode',
+        ),
+        (
+          DiagnosticCode.nameCollision,
+          '#/paths/~1a/post/requestBody/content/multipart~1form-data/schema/properties/a_b',
+        ),
+      ],
+    );
   });
 }

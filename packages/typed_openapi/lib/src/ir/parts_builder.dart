@@ -1,5 +1,6 @@
 import '../model/operation.dart';
 import '../model/schema.dart';
+import '../model/spec_node.dart';
 import 'dart_type.dart';
 import 'ir.dart';
 import 'ir_context.dart';
@@ -44,7 +45,7 @@ final class PartsBuilder {
           in resolved.properties.entries)
         if (!_isReadOnly(property))
           PartIr(
-            name: scope.claim(_names.camel(wire) ?? 'part').$1,
+            name: _claimName(scope, wire, property.location),
             wireName: wire,
             type: _partType(property, prefix, wire, resolved),
             location: property.location,
@@ -53,6 +54,42 @@ final class PartsBuilder {
             description: _description(property),
           ),
     ];
+  }
+
+  /// The field name of the part [wire]: as an argument is named, with the
+  /// same reports (TOA550, TOA551, TOA552, TOA559); a part cannot be named by
+  /// an override, so the fix is at the source.
+  String _claimName(NameScope scope, String wire, SpecLocation at) {
+    final automatic = _names.camel(wire);
+    final candidate = automatic ?? 'part';
+    final (name, change) = scope.claim(candidate);
+    const fix =
+        'Rename the property at the source; the part is still sent under '
+        'its own name.';
+    if (automatic == null) {
+      _context.report(
+        .nameUnrepresentable,
+        'Part "$wire" has no ASCII letter or digit; the field is named '
+        '"$name".',
+        at,
+        fix: fix,
+      );
+    } else if (change != null) {
+      _context.report(
+        change == .reserved ? .nameReserved : .nameCollision,
+        change == .reserved
+            ? 'Part "$wire" would be the Dart name "$candidate"; the field is '
+                  'named "$name".'
+            : 'Another part is named "$candidate"; the field of part "$wire" '
+                  'is named "$name".',
+        at,
+        fix: fix,
+      );
+    }
+    if (automatic != null) {
+      _context.checkLossyName(wire, name, at, what: 'Part', fix: fix);
+    }
+    return name;
   }
 
   void _reportNotObject(Schema schema) {

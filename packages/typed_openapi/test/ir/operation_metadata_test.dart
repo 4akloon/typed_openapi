@@ -227,7 +227,21 @@ components:
         meta: {type: object, properties: {a: {type: string}}}
 ''');
       final ir = build(fixture);
-      expect(fixture.reported, isEmpty);
+      // The parts named like a reserved word or a member are renamed, and
+      // reported as an argument would be (TOA550).
+      expect(
+        [for (final d in fixture.reported) (d.code, d.pointer?.value)],
+        [
+          (
+            DiagnosticCode.nameReserved,
+            '#/components/schemas/Upload/properties/class',
+          ),
+          (
+            DiagnosticCode.nameReserved,
+            '#/components/schemas/Upload/properties/toParts',
+          ),
+        ],
+      );
       final upload = operation(ir, 'upload');
       expect(upload.partsName, 'UploadRequest');
       expect(upload.body?.type, isNull);

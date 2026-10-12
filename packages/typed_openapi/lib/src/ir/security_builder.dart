@@ -28,7 +28,12 @@ final class SecurityBuilder {
         _Alternative(requirement.location, [
           for (final MapEntry(key: name, value: scopes)
               in requirement.schemes.entries)
-            (name: name, scopes: scopes, scheme: _scheme(name, schemes)),
+            (
+              name: name,
+              scopes: scopes,
+              scheme: _scheme(name, schemes),
+              isDefined: _isDefined(name, schemes),
+            ),
         ]),
     ];
     final complete = [
@@ -52,14 +57,23 @@ final class SecurityBuilder {
               'read as open';
     for (final entry in alternative.entries) {
       if (entry.scheme != null) continue;
+      final problem = entry.isDefined
+          ? 'whose scheme in components.securitySchemes has no usable type'
+          : 'which components.securitySchemes does not define';
       _context.report(
         .securitySchemeUnknown,
-        'The security requirement names "${entry.name}", which '
-        'components.securitySchemes does not define; $outcome.',
+        'The security requirement names "${entry.name}", $problem; $outcome.',
         alternative.location,
-        fix: 'Define the scheme at the source, or fix its name.',
+        fix: entry.isDefined
+            ? 'Give the scheme a valid type at the source.'
+            : 'Define the scheme at the source, or fix its name.',
       );
     }
+  }
+
+  bool _isDefined(String name, Map<String, RefOr<SecurityScheme>>? schemes) {
+    final written = schemes?[name];
+    return written != null && _context.model.resolve(written) != null;
   }
 
   SecuritySchemeIr? _scheme(
@@ -94,7 +108,14 @@ final class _Alternative {
   const _Alternative(this.location, this.entries);
 
   final SpecLocation location;
-  final List<({String name, List<String> scopes, SecuritySchemeIr? scheme})>
+  final List<
+    ({
+      String name,
+      List<String> scopes,
+      SecuritySchemeIr? scheme,
+      bool isDefined,
+    })
+  >
   entries;
 
   /// Whether every scheme it names is defined.
@@ -102,7 +123,7 @@ final class _Alternative {
 
   /// The schemes with their scopes; one that is not defined is unknown.
   List<SecurityUseIr> get uses => [
-    for (final (:name, :scopes, :scheme) in entries)
+    for (final (:name, :scopes, :scheme, isDefined: _) in entries)
       SecurityUseIr(scheme ?? SecuritySchemeIr(name, .unknown), scopes),
   ];
 }

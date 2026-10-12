@@ -260,14 +260,19 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   the one definition of a JSON media type, `text/json` included, as Dio
   and the runtime read it; a form or multipart response is bytes,
   TOA650; a text request body is `String`; the `encoding` of a form or
-  multipart body (`EncodingIr`, a style a query does not allow is TOA564,
-  part headers TOA656; a media type that is an unresolved `$ref` is
+  multipart body (`EncodingIr`, a key that names no property of the body
+  schema (also through `$ref`, `allOf`, `oneOf` and `anyOf`; not when the
+  schema has `additionalProperties`) is TOA659 and ignored, a style a query
+  does not allow is TOA564, headers TOA656, worded for a form property or a
+  part; a media type that is an unresolved `$ref` is
   reported by the resolver and leaves the body without schema, encoding and
   parts); a parameter keeps its schema's `default`
   (`ParameterIr.defaultValue`, documented only) by the rule of a model
   field (`SchemaDefaults`: the schema's own, then the schema it stands for
   through an `allOf` of one part or a nullable `anyOf`/`oneOf`, then the
-  `$ref` target; a `default` beside a `$ref` counts from 3.1); envelopes; errors, with
+  `$ref` target; a `default` beside a `$ref` counts from 3.1; one that does
+  not fit the `enum` or the `format` (`date`, `date-time`, `uuid`, `int32`)
+  of those schemas is TOA660 and not kept: `DefaultMatcher`); envelopes; errors, with
   `errors.default_schema` for statuses without a body; a `responses` key is
   generated only when it is a code 200-299 or 400-599, a range `2XX`, `4XX`
   or `5XX` (either case, kept upper case) or `default`
@@ -306,7 +311,16 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   2xx (TOA653) through collaborators (`SecurityBuilder`, `PartsBuilder`,
   `BodyEncoding`, `OperationChecks`, `MediaTypePicker`, which picks the media
   type of a body, response or parameter and tells its `BodyKind`); `ApiNames.client` assembles the
-  `ClientIr`; the IR types only the API emitter reads are in `api_ir.dart`,
+  `ClientIr`; `RootNames` names the root client (a client name that loses
+  letters is TOA559, one with no letters TOA552 and `ApiClient`, one that
+  starts with a digit gets `Api` in front, never `$1`), the group fields and
+  the servers, and reports a member that is renamed (TOA550, TOA551); the
+  fields of a multipart parts class are reported like arguments (TOA550,
+  TOA551, TOA552, TOA559); `TypeClaims` claims the library's type names; a
+  security scheme that is defined without a usable type has its own TOA568
+  text; the responses of an operation are picked (`MediaTypePicker`) and
+  checked for an event stream before any type is mapped, so a skipped
+  operation declares nothing; the IR types only the API emitter reads are in `api_ir.dart`,
   which `ir.dart` exports; method names,
   override names first, then
   `operationId` without the `operation_prefix`, then the path; TOA563 when
@@ -314,7 +328,7 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   out, else at `#/paths`; then everything above). `IrJson` dumps an IR; the
   hidden `typed_openapi ir` command prints it. Naming and mapping codes use
   the second half of each area's hundred: TOA250-TOA256, TOA350-TOA351,
-  TOA450-TOA456, TOA550-TOA565, and media types and errors TOA650-TOA658
+  TOA450-TOA456, TOA550-TOA565, and media types and errors TOA650-TOA660
   (TOA561 became TOA650 and TOA651, TOA562 TOA652, the querystring half of
   TOA564 TOA565); `generate` has TOA830 (output not owned),
   TOA831 (output not written, or its lock held) and TOA832 (an interrupted

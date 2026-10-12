@@ -5,6 +5,10 @@ import '../model/spec_node.dart';
 import 'ir.dart';
 import 'ir_context.dart';
 
+/// A generated response of an operation: its status, the Response Object and
+/// the media type the client uses with that media type's object.
+typedef PickedResponse = (String, Response, (String?, MediaType?));
+
 /// Picks the media type of a request body, a response or a parameter's
 /// `content`, and tells the kind of body a media type is.
 final class MediaTypePicker {

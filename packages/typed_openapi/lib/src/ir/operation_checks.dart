@@ -1,8 +1,8 @@
 import '../diagnostics/json_pointer.dart';
 import '../model/operation.dart';
 import '../model/spec_node.dart';
-import 'ir.dart';
 import 'ir_context.dart';
+import 'media_type_picker.dart';
 import 'operation_builder.dart';
 import 'response_statuses.dart';
 
@@ -15,18 +15,26 @@ final class OperationChecks {
 
   final IrContext _context;
 
-  /// Whether a success of [responses] is an event stream, which is
-  /// reported (TOA654): such an operation is generated from M10.
-  bool isEventStream(List<ResponseIr> responses) {
-    final stream = responses
-        .where((r) => r.isSuccess && r.kind == .eventStream)
+  /// Whether a success of [picked], the responses of an operation with the
+  /// media type used for each, is an event stream, which is reported
+  /// (TOA654): such an operation is generated from M10. This is asked before
+  /// any type is mapped, so an operation that is left out declares nothing.
+  bool isEventStream(Iterable<PickedResponse> picked) {
+    final stream = picked
+        .where(
+          (r) =>
+              r.$1.startsWith('2') &&
+              r.$3.$1 != null &&
+              MediaTypePicker.kindOf(r.$3.$1!) == .eventStream,
+        )
         .firstOrNull;
     if (stream == null) return false;
+    final (status, response, (contentType, _)) = stream;
     _context.report(
       .eventStreamNotGenerated,
-      'The ${stream.status} response is "${stream.contentType}": event '
-      'streams are generated from M10, so the operation is not generated.',
-      stream.location,
+      'The $status response is "$contentType": event streams are generated '
+      'from M10, so the operation is not generated.',
+      response.location,
       fix: 'Leave it out with exclude until then.',
     );
     return true;
