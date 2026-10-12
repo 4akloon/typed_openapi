@@ -1,5 +1,8 @@
 import 'package:path/path.dart' as p;
 
+import '../baseline/anchor_index.dart';
+import '../baseline/baseline_loader.dart';
+import '../baseline/fingerprints.dart';
 import '../config/project_config.dart';
 import '../diagnostics/diagnostic.dart';
 import '../diagnostics/diagnostic_bag.dart';
@@ -8,6 +11,27 @@ import '../load/openapi_version.dart';
 import '../load/spec_loader.dart';
 import '../normalize/normalizer.dart';
 import '../overrides/override_loader.dart';
+
+/// What checking one client found.
+final class ClientCheck {
+  /// Creates the result for [client].
+  const ClientCheck(this.client, this.diagnostics, this.anchors);
+
+  /// The client.
+  final ClientConfig client;
+
+  /// The diagnostics of the client's spec with the client's levels; codes
+  /// the client turns off are gone.
+  final List<Diagnostic> diagnostics;
+
+  /// The logical addresses of the client's spec, for baseline anchors.
+  final AnchorIndex anchors;
+
+  /// The fingerprints of [diagnostics] for the client's baseline file at
+  /// [baselineFile]; [paths] reads the file names of the diagnostics.
+  Fingerprints fingerprints(String baselineFile, DisplayPaths paths) =>
+      Fingerprints(anchors, baselineFile, paths);
+}
 
 /// Loads every client's spec and reports what is wrong with it.
 ///
@@ -21,7 +45,69 @@ final class SpecChecker {
   final DiagnosticBag _diagnostics;
   final DisplayPaths _paths;
 
-  /// Checks the spec of every client in [config].
+  /// Checks the spec of every client in [config] and reports what each
+  /// client's baseline does not accept.
+  ///
+  /// See [checkClients] for how specs are checked. A client with a
+  /// `baseline` reports only the diagnostics its baseline does not accept;
+  /// the accepted ones go to [DiagnosticBag.addBaselined]. An entry that
+  /// accepts more than the check finds is `baseline-entry-stale`: a warning,
+  /// or an error with [strictBaseline]. A baseline file that cannot be read
+  /// is reported, and every diagnostic of the client is shown.
+  void check(
+    ProjectConfig config, {
+    Set<String> only = const {},
+    bool strictBaseline = false,
+  }) {
+    for (final result in checkClients(config, only: only)) {
+      final client = result.client;
+      final path = client.baseline;
+      if (path == null) {
+        result.diagnostics.forEach(_diagnostics.add);
+        continue;
+      }
+      final problems = DiagnosticBag();
+      final baseline = BaselineLoader(
+        problems,
+      ).load(path, displayPath: _paths.of(path));
+      if (baseline == null) {
+        result.diagnostics.forEach(_diagnostics.add);
+      } else {
+        final match = baseline.match(
+          result.diagnostics,
+          result.fingerprints(path, _paths),
+        );
+        match.shown.forEach(_diagnostics.add);
+        match.baselined.forEach(_diagnostics.addBaselined);
+        for (final (entry, found) in match.stale) {
+          final what =
+              '${entry.code ?? 'A diagnostic'} at '
+              '${entry.anchor ?? entry.fingerprint}';
+          problems.report(
+            .baselineEntryStale,
+            found == 0
+                ? 'No diagnostic matches this entry ($what); the problem '
+                      'is gone.'
+                : 'This entry accepts ${entry.count} diagnostics ($what), '
+                      'but the check finds $found.',
+            severity: strictBaseline ? .error : null,
+            file: baseline.file,
+            pointer: entry.pointer,
+            span: baseline.spanOf(entry.pointer),
+            fix: 'Run `typed_openapi baseline prune` to update the baseline.',
+          );
+        }
+      }
+      for (final problem in problems.all) {
+        final reported = client.severity.apply(problem);
+        if (reported != null) _diagnostics.add(reported);
+      }
+    }
+  }
+
+  /// Checks the spec of every client in [config]; returns what each client
+  /// found, in client order. Only problems of the config itself go to the
+  /// bag; the rest are in the results.
   ///
   /// Each spec is loaded, its OpenAPI version detected, and then it is read
   /// into the model with its `$ref`s resolved, changed by the client's
@@ -32,50 +118,63 @@ final class SpecChecker {
   /// distinct preset, set of disabled rules and overrides file; each client
   /// then gives the diagnostics of that run its own levels
   /// ([ClientConfig.severity]), because levels change how a finding is
-  /// reported, not what a run finds. The bag reports a diagnostic the
-  /// clients share once. Diagnostics name files
-  /// relative to the working directory (see [DisplayPaths]).
-  void check(ProjectConfig config, {Set<String> only = const {}}) {
+  /// reported, not what a run finds. Diagnostics name files relative to the
+  /// working directory (see [DisplayPaths]).
+  List<ClientCheck> checkClients(
+    ProjectConfig config, {
+    Set<String> only = const {},
+  }) {
     // A run is a file with a preset, a set of disabled rules and overrides.
-    final runs = <(String, Preset?, String, String?), List<Diagnostic>>{};
-    for (final client in config.clients) {
-      if (only.isNotEmpty && !only.contains(client.name)) continue;
-      final rules = (client.disabledRules.toList()..sort()).join(',');
-      final run = (
-        p.absolute(client.input),
-        client.preset,
-        rules,
-        client.overrides,
-      );
-      final found = runs[run] ??= _run(client);
-      for (final diagnostic in found) {
-        final reported = client.severity.apply(diagnostic);
-        if (reported != null) _diagnostics.add(reported);
-      }
-    }
+    final runs = <(String, Preset?, String, String?), ClientCheck>{};
+    return [
+      for (final client in config.clients)
+        if (only.isEmpty || only.contains(client.name))
+          _withLevels(
+            client,
+            runs[(
+              p.absolute(client.input),
+              client.preset,
+              (client.disabledRules.toList()..sort()).join(','),
+              client.overrides,
+            )] ??= _run(
+              client,
+            ),
+          ),
+    ];
   }
+
+  ClientCheck _withLevels(ClientConfig client, ClientCheck run) => ClientCheck(
+    client,
+    [
+      for (final diagnostic in run.diagnostics)
+        ?client.severity.apply(diagnostic),
+    ],
+    run.anchors,
+  );
 
   /// Checks the spec of [client]; returns what the run found, with default
   /// levels.
-  List<Diagnostic> _run(ClientConfig client) {
+  ClientCheck _run(ClientConfig client) {
     final found = DiagnosticBag();
+    ClientCheck result([AnchorIndex? anchors]) =>
+        ClientCheck(client, found.all, anchors ?? AnchorIndex.none());
     final document = SpecLoader(
       found,
     ).load(client.input, displayPath: _paths.of(client.input));
-    if (document == null) return found.all;
+    if (document == null) return result();
     final version = OpenApiVersionDetector(found).detect(document);
-    if (version == null) return found.all;
+    if (version == null) return result();
     final overridesPath = client.overrides;
     final overrides = overridesPath == null
         ? null
         : OverrideLoader(
             found,
           ).load(overridesPath, displayPath: _paths.of(overridesPath));
-    Normalizer(
+    final normalized = Normalizer(
       found,
       disabled: client.disabledRules,
       preset: client.preset,
     ).normalize(document, version, overrides: overrides);
-    return found.all;
+    return result(AnchorIndex(normalized.model, normalized.documents));
   }
 }

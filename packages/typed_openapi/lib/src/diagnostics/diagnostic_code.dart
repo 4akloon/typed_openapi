@@ -241,6 +241,20 @@ enum DiagnosticCode {
     .info,
   ),
 
+  /// The baseline file a client names does not exist.
+  baselineNotFound('TOA820', 'baseline-not-found', .error),
+
+  /// The baseline file cannot be read, or an entry is malformed and is
+  /// ignored.
+  invalidBaseline('TOA821', 'invalid-baseline', .error),
+
+  /// A baseline entry accepts more diagnostics than the check finds: the
+  /// problem was fixed, and `baseline prune` can remove the entry.
+  baselineEntryStale('TOA822', 'baseline-entry-stale', .warning),
+
+  /// The baseline file cannot be written.
+  baselineNotWritten('TOA823', 'baseline-not-written', .error),
+
   /// The configuration file does not exist.
   configNotFound('TOA901', 'config-not-found', .error),
 
@@ -265,9 +279,10 @@ enum DiagnosticCode {
   };
 
   /// Codes the config may raise but not lower or turn off: they say that the
-  /// spec, the overrides file or the baseline file cannot be read, so
-  /// without them the check would pass on a file it never read. The config
-  /// codes ([configCodes]) cannot be changed at all.
+  /// spec, the overrides file or the baseline file cannot be read (or the
+  /// baseline file written), so without them the check would pass on a file
+  /// it never read. The config codes ([configCodes]) cannot be changed at
+  /// all.
   static const fixedCodes = {
     parseError,
     rootNotObject,
@@ -280,6 +295,9 @@ enum DiagnosticCode {
     overridesNotFound,
     invalidOverride,
     unknownOverrideKey,
+    baselineNotFound,
+    invalidBaseline,
+    baselineNotWritten,
     ...configCodes,
   };
 

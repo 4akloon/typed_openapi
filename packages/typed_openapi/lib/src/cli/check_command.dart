@@ -24,6 +24,18 @@ final class CheckCommand extends Command<int> {
         allowed: [for (final format in ReportFormat.values) format.name],
         defaultsTo: ReportFormat.text.name,
         help: 'Report format.',
+      )
+      ..addFlag(
+        'show-baselined',
+        negatable: false,
+        help: 'Also list the diagnostics the baseline accepts, marked.',
+      )
+      ..addFlag(
+        'strict-baseline',
+        negatable: false,
+        help:
+            'Fail on baseline entries that no longer match: run '
+            '`baseline prune` to remove them.',
       );
   }
 
@@ -60,10 +72,19 @@ final class CheckCommand extends Command<int> {
           'Unknown client: ${(unknown.toList()..sort()).join(', ')}.',
         );
       }
-      SpecChecker(diagnostics, _paths).check(config, only: only);
+      SpecChecker(diagnostics, _paths).check(
+        config,
+        only: only,
+        strictBaseline: results.flag('strict-baseline'),
+      );
     }
     final format = ReportFormat.values.byName(results.option('format')!);
-    _out.writeln(format.reporter.format(diagnostics));
+    _out.writeln(
+      format.reporter.format(
+        diagnostics,
+        showBaselined: results.flag('show-baselined'),
+      ),
+    );
     if (config == null) return ExitCode.config.code;
     return diagnostics.hasErrors ? exitHasErrors : ExitCode.success.code;
   }

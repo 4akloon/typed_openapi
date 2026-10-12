@@ -14,13 +14,22 @@ import 'severity.dart';
 /// message, file, pointer and start position) is ignored: the same region
 /// of a file read twice, for example through two `$ref`s or two clients,
 /// reports each problem once.
+///
+/// Diagnostics a baseline accepts are kept apart ([baselined]): they are
+/// not in [all], [count] or [hasErrors].
 final class DiagnosticBag {
   final List<Diagnostic> _items = [];
+  final List<Diagnostic> _baselined = [];
   final Set<(DiagnosticCode, Severity, String, String?, String?, int?)> _seen =
       {};
+  final Set<(DiagnosticCode, Severity, String, String?, String?, int?)>
+  _seenBaselined = {};
 
   /// All diagnostics in the order they were reported.
   List<Diagnostic> get all => List.unmodifiable(_items);
+
+  /// Diagnostics a baseline accepts, in report order.
+  List<Diagnostic> get baselined => _baselined.toList()..sort();
 
   /// Whether any diagnostic has [Severity.error].
   bool get hasErrors => _items.any((d) => d.severity == .error);
@@ -35,16 +44,25 @@ final class DiagnosticBag {
 
   /// Adds an already built [diagnostic], unless an equal one is present.
   void add(Diagnostic diagnostic) {
-    final key = (
-      diagnostic.code,
-      diagnostic.severity,
-      diagnostic.message,
-      diagnostic.file,
-      diagnostic.pointer?.value,
-      diagnostic.span?.start.offset,
-    );
-    if (_seen.add(key)) _items.add(diagnostic);
+    if (_seen.add(_keyOf(diagnostic))) _items.add(diagnostic);
   }
+
+  /// Adds [diagnostic], which a baseline accepts, unless an equal one is
+  /// present.
+  void addBaselined(Diagnostic diagnostic) {
+    if (_seenBaselined.add(_keyOf(diagnostic))) _baselined.add(diagnostic);
+  }
+
+  static (DiagnosticCode, Severity, String, String?, String?, int?) _keyOf(
+    Diagnostic diagnostic,
+  ) => (
+    diagnostic.code,
+    diagnostic.severity,
+    diagnostic.message,
+    diagnostic.file,
+    diagnostic.pointer?.value,
+    diagnostic.span?.start.offset,
+  );
 
   /// Reports [code] with [message].
   ///

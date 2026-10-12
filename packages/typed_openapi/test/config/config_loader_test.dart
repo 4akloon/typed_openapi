@@ -354,4 +354,22 @@ clients:
       (DiagnosticCode.configInvalid, '#/clients/a/severity'),
     ]);
   });
+
+  test('reports a baseline file two clients share', () {
+    final path = TempDir().write('c.yaml', '''
+clients:
+  a: {input: a.json, output: lib/a, baseline: shared.yaml}
+  b: {input: b.json, output: lib/b, baseline: ./shared.yaml}
+  c: {input: c.json, output: lib/c, baseline: c.yaml}
+''');
+    final bag = DiagnosticBag();
+    ConfigLoader(bag).load(path);
+    expect(bag.all.map((d) => (d.code, d.pointer?.value, d.message)), [
+      (
+        DiagnosticCode.configInvalid,
+        '#/clients/b/baseline',
+        'Clients "a" and "b" name the same baseline file.',
+      ),
+    ]);
+  });
 }

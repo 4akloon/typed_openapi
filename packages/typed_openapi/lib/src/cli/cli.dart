@@ -4,6 +4,7 @@ import 'package:args/command_runner.dart';
 import 'package:io/io.dart' show ExitCode;
 
 import '../diagnostics/display_paths.dart';
+import 'baseline_command.dart';
 import 'check_command.dart';
 
 /// The `typed_openapi` command line.
@@ -16,13 +17,15 @@ final class TypedOpenApiCli {
   /// to the current directory.
   TypedOpenApiCli({StringSink? out, StringSink? err, String? workingDirectory})
     : _err = err ?? stderr,
-      _runner =
-          CommandRunner<int>(
-            'typed_openapi',
-            'OpenAPI 3.x to Dart client generator.',
-          )..addCommand(
-            CheckCommand(out ?? stdout, DisplayPaths(workingDirectory)),
-          );
+      _runner = CommandRunner<int>(
+        'typed_openapi',
+        'OpenAPI 3.x to Dart client generator.',
+      ) {
+    final paths = DisplayPaths(workingDirectory);
+    _runner
+      ..addCommand(CheckCommand(out ?? stdout, paths))
+      ..addCommand(BaselineCommand(out ?? stdout, paths));
+  }
 
   final CommandRunner<int> _runner;
   final StringSink _err;

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
@@ -65,7 +66,12 @@ clients:
       'json',
     ]);
     final json = jsonDecode(out) as Map<String, Object?>;
-    expect(json['summary'], {'error': 1, 'warning': 0, 'info': 0});
+    expect(json['summary'], {
+      'error': 1,
+      'warning': 0,
+      'info': 0,
+      'baselined': 0,
+    });
   });
 
   test('exits 78 when the config file is missing', () async {
@@ -231,5 +237,130 @@ clients:
     expect(code, 0);
     expect(out, contains('warning TOA504 duplicate-operation-id'));
     expect(out, endsWith('errors: 0, warnings: 1, infos: 0\n'));
+  });
+
+  group('baseline', () {
+    const spec = '''
+openapi: 3.0.3
+info: {title: api, version: "1"}
+paths:
+  /a: {get: {operationId: same, responses: {'200': {description: ok}}}}
+  /b: {get: {operationId: same, responses: {'200': {description: ok}}}}
+components:
+  schemas:
+    Tag:
+      type: object
+      properties:
+        name: {type: string, required: true}
+''';
+    late TempDir dir;
+    late String config;
+
+    setUp(() {
+      dir = TempDir();
+      dir.write('api.yaml', spec);
+      config = dir.write('typed_openapi.yaml', '''
+clients:
+  api: {input: api.yaml, output: lib/api, baseline: api.baseline.yaml}
+''');
+    });
+
+    Future<(int, String, String)> inDir(List<String> args) =>
+        run([...args, '-c', config], workingDirectory: dir.path);
+
+    test('create accepts the current diagnostics; check hides them', () async {
+      final (created, createOut, _) = await inDir(['baseline', 'create']);
+      expect(created, 0);
+      expect(
+        createOut,
+        'errors: 0, warnings: 0, infos: 0\n'
+        'Wrote api.baseline.yaml: 2 entries accept 2 diagnostics.\n',
+      );
+      expect(
+        File(p.join(dir.path, 'api.baseline.yaml')).readAsStringSync(),
+        contains('code: "TOA504"'),
+      );
+      final (code, out, _) = await inDir(['check']);
+      expect(code, 0);
+      expect(out, 'errors: 0, warnings: 0, infos: 0, baselined: 2\n');
+      final (_, shown, _) = await inDir(['check', '--show-baselined']);
+      expect(
+        shown,
+        contains('error TOA504 duplicate-operation-id [baselined]: '),
+      );
+    });
+
+    test('check fails on a new problem only', () async {
+      await inDir(['baseline', 'create']);
+      dir.write(
+        'api.yaml',
+        spec.replaceFirst(
+          '/b: {get: {operationId: same',
+          '/b: {get: {operationId: same, parameters: [{name: x, in: path}]',
+        ),
+      );
+      final (code, out, _) = await inDir(['check']);
+      expect(code, 1);
+      expect(out, contains('error TOA502 path-parameter-not-in-template'));
+      expect(out, isNot(contains('TOA504')));
+      expect(out, endsWith('baselined: 2\n'));
+    });
+
+    test('a fixed problem leaves a stale entry; prune removes it', () async {
+      await inDir(['baseline', 'create']);
+      dir.write('api.yaml', spec.replaceFirst('required: true', 'x: 1'));
+      final (code, out, _) = await inDir(['check']);
+      expect(code, 0);
+      expect(
+        out,
+        contains(
+          'warning TOA822 baseline-entry-stale: No diagnostic matches this '
+          'entry (TOA201 at @/schemas/Tag/properties/name#/required); the '
+          'problem is gone.\n'
+          '  --> api.baseline.yaml:',
+        ),
+      );
+      expect(out, contains('  fix: Run `typed_openapi baseline prune`'));
+      final (strict, _, _) = await inDir(['check', '--strict-baseline']);
+      expect(strict, 1);
+      final (pruned, pruneOut, _) = await inDir(['baseline', 'prune']);
+      expect(pruned, 0);
+      expect(
+        pruneOut,
+        contains('Pruned api.baseline.yaml: removed 1 entries, 1 left.'),
+      );
+      final (after, afterOut, _) = await inDir(['check']);
+      expect(after, 0);
+      expect(afterOut, contains('baselined: 1\n'));
+      expect(afterOut, isNot(contains('TOA822')));
+    });
+
+    test('a missing baseline file is an error and hides nothing', () async {
+      final (code, out, _) = await inDir(['check']);
+      expect(code, 1);
+      expect(out, contains('error TOA820 baseline-not-found'));
+      expect(out, contains('error TOA504 duplicate-operation-id'));
+    });
+
+    test('prune reports a missing baseline file', () async {
+      final (code, out, _) = await inDir(['baseline', 'prune']);
+      expect(code, 1);
+      expect(out, contains('error TOA820 baseline-not-found'));
+    });
+
+    test('a client without a baseline is a usage error', () async {
+      final path = dir.write(
+        'other.yaml',
+        'clients:\n  api: {input: api.yaml, output: lib/api}\n',
+      );
+      final (code, _, err) = await run([
+        'baseline',
+        'create',
+        '-c',
+        path,
+      ], workingDirectory: dir.path);
+      expect(code, 64);
+      expect(err, contains('No client has a "baseline" in the config.'));
+    });
   });
 }

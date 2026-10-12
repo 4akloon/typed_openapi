@@ -2,9 +2,12 @@ import 'dart:convert';
 
 import 'package:source_span/source_span.dart';
 import 'package:test/test.dart';
+import 'package:typed_openapi/src/diagnostics/diagnostic.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_bag.dart';
+import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
 import 'package:typed_openapi/src/diagnostics/json_pointer.dart';
 import 'package:typed_openapi/src/diagnostics/reporters.dart';
+import 'package:typed_openapi/src/diagnostics/severity.dart';
 
 void main() {
   final source = SourceFile.fromString(
@@ -59,8 +62,68 @@ void main() {
       'line': 2,
       'column': 14,
       'fix': 'Emit OpenAPI 3.',
+      'baselined': false,
     });
-    expect(json['summary'], {'error': 1, 'warning': 0, 'info': 1});
+    expect(json['summary'], {
+      'error': 1,
+      'warning': 0,
+      'info': 1,
+      'baselined': 0,
+    });
+  });
+
+  group('baselined diagnostics', () {
+    DiagnosticBag withBaselined() => sample()
+      ..addBaselined(
+        Diagnostic(
+          code: DiagnosticCode.boolRequired,
+          severity: Severity.warning,
+          message: 'Accepted.',
+          file: 'api.json',
+          pointer: JsonPointer.root.child('a'),
+        ),
+      );
+
+    test('are counted in the summary, not listed', () {
+      final text = const TextReporter().format(withBaselined());
+      expect(text, isNot(contains('Accepted.')));
+      expect(text, endsWith('errors: 1, warnings: 0, infos: 1, baselined: 1'));
+      final json =
+          jsonDecode(const JsonReporter().format(withBaselined()))
+              as Map<String, Object?>;
+      expect((json['diagnostics']! as List<Object?>).length, 2);
+      expect((json['summary']! as Map<String, Object?>)['baselined'], 1);
+    });
+
+    test('are listed and marked with showBaselined', () {
+      final text = const TextReporter().format(
+        withBaselined(),
+        showBaselined: true,
+      );
+      expect(
+        text,
+        contains(
+          'warning TOA201 bool-required [baselined]: Accepted.\n'
+          '  --> api.json\n'
+          '  at #/a\n',
+        ),
+      );
+      final json =
+          jsonDecode(
+                const JsonReporter().format(
+                  withBaselined(),
+                  showBaselined: true,
+                ),
+              )
+              as Map<String, Object?>;
+      final listed = (json['diagnostics']! as List<Object?>)
+          .cast<Map<String, Object?>>();
+      expect(listed.map((d) => (d['code'], d['baselined'])), [
+        ('TOA005', false),
+        ('TOA201', true),
+        ('TOA011', false),
+      ]);
+    });
   });
 
   test('ReportFormat maps each format to its reporter', () {

@@ -115,6 +115,7 @@ final class ConfigLoader {
     final clients = <ClientConfig>[];
     final declared = <String>{};
     final outputSpans = <String, SourceSpan?>{};
+    final baselineSpans = <String, SourceSpan?>{};
     for (final MapEntry(key: name, :value) in clientNodes.entries) {
       declared.add(name);
       final pointer = clientsPointer.child(name);
@@ -139,6 +140,7 @@ final class ConfigLoader {
       };
       if (input == null || output == null) continue;
       outputSpans[name] = reader.spanAt(pointer.child('output'));
+      baselineSpans[name] = reader.spanAt(pointer.child('baseline'));
       clients.add(
         ClientConfig(
           name: name,
@@ -158,6 +160,7 @@ final class ConfigLoader {
     }
     clients.sort((a, b) => a.name.compareTo(b.name));
     _checkOutputOverlap(clients, outputSpans, file);
+    _checkSharedBaselines(clients, baselineSpans, file);
     return ProjectConfig(
       file: path,
       clients: clients,
@@ -193,6 +196,36 @@ final class ConfigLoader {
       return null;
     }
     return composed;
+  }
+
+  /// Reports a baseline file named by two clients: each client's baseline
+  /// is written from that client's diagnostics alone.
+  void _checkSharedBaselines(
+    List<ClientConfig> clients,
+    Map<String, SourceSpan?> spans,
+    String file,
+  ) {
+    final owners = <String, String>{};
+    for (final client in clients) {
+      final baseline = client.baseline;
+      if (baseline == null) continue;
+      final owner = owners[p.canonicalize(baseline)];
+      if (owner == null) {
+        owners[p.canonicalize(baseline)] = client.name;
+        continue;
+      }
+      _diagnostics.report(
+        .configInvalid,
+        'Clients "$owner" and "${client.name}" name the same baseline file.',
+        file: file,
+        pointer: JsonPointer.root
+            .child('clients')
+            .child(client.name)
+            .child('baseline'),
+        span: spans[client.name],
+        fix: 'Give each client its own baseline file.',
+      );
+    }
   }
 
   void _checkOutputOverlap(

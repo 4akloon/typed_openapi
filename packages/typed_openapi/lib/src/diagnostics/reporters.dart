@@ -6,7 +6,10 @@ import 'severity.dart';
 /// Turns collected diagnostics into the text a user or a tool reads.
 abstract interface class DiagnosticReporter {
   /// Formats [diagnostics], sorted in report order.
-  String format(DiagnosticBag diagnostics);
+  ///
+  /// Diagnostics a baseline accepts are counted; with [showBaselined] they
+  /// are listed too, marked as baselined.
+  String format(DiagnosticBag diagnostics, {bool showBaselined = false});
 }
 
 /// Formats diagnostics for a terminal, ending with a summary line.
@@ -15,11 +18,17 @@ final class TextReporter implements DiagnosticReporter {
   const TextReporter();
 
   @override
-  String format(DiagnosticBag diagnostics) {
+  String format(DiagnosticBag diagnostics, {bool showBaselined = false}) {
     final out = StringBuffer();
-    for (final d in diagnostics.sorted) {
+    final baselined = diagnostics.baselined;
+    final listed = [
+      ...diagnostics.sorted.map((d) => (d, false)),
+      if (showBaselined) ...baselined.map((d) => (d, true)),
+    ]..sort((a, b) => a.$1.compareTo(b.$1));
+    for (final (d, accepted) in listed) {
+      final mark = accepted ? ' [baselined]' : '';
       out.writeln(
-        '${d.severity.name} ${d.code.id} ${d.code.slug}: ${d.message}',
+        '${d.severity.name} ${d.code.id} ${d.code.slug}$mark: ${d.message}',
       );
       final location = d.location;
       if (location != null) out.writeln('  --> $location');
@@ -34,6 +43,7 @@ final class TextReporter implements DiagnosticReporter {
       'warnings: ${diagnostics.count(.warning)}, '
       'infos: ${diagnostics.count(.info)}',
     );
+    if (baselined.isNotEmpty) out.write(', baselined: ${baselined.length}');
     return out.toString();
   }
 }
@@ -41,15 +51,21 @@ final class TextReporter implements DiagnosticReporter {
 /// Formats diagnostics as JSON for CI and other tools.
 ///
 /// Lines and columns are 1-based; they are null when positions are unknown.
+/// `summary.baselined` counts the diagnostics a baseline accepts.
 final class JsonReporter implements DiagnosticReporter {
   /// Creates a JSON reporter.
   const JsonReporter();
 
   @override
-  String format(DiagnosticBag diagnostics) {
+  String format(DiagnosticBag diagnostics, {bool showBaselined = false}) {
+    final baselined = diagnostics.baselined;
+    final listed = [
+      ...diagnostics.sorted.map((d) => (d, false)),
+      if (showBaselined) ...baselined.map((d) => (d, true)),
+    ]..sort((a, b) => a.$1.compareTo(b.$1));
     return const JsonEncoder.withIndent('  ').convert({
       'diagnostics': [
-        for (final d in diagnostics.sorted)
+        for (final (d, accepted) in listed)
           {
             'code': d.code.id,
             'name': d.code.slug,
@@ -60,10 +76,12 @@ final class JsonReporter implements DiagnosticReporter {
             'line': d.line,
             'column': d.column,
             'fix': d.fix,
+            'baselined': accepted,
           },
       ],
       'summary': {
         for (final s in Severity.values) s.name: diagnostics.count(s),
+        'baselined': baselined.length,
       },
     });
   }
