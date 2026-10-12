@@ -140,51 +140,56 @@ final class _Composition {
   int _skipped = 0;
 
   Object? _root;
+  int _documents = 0;
   bool _failed = false;
   ({String message, SourceSpan span})? _syntaxError;
   SourceSpan? _lastSpan;
 
   ComposedYaml? run() {
     final parser = Parser(_text, sourceUrl: _uri, onWarning: _warning);
-    var documents = 0;
     while (!_failed && _syntaxError == null) {
       final event = _next(parser);
       if (event == null) break;
-      switch (event) {
-        case DocumentStartEvent():
-          if (++documents > 1) {
-            _syntaxError = (
-              message: 'Only expected one document.',
-              span: event.span,
-            );
-          }
-        case ScalarEvent():
-          _scalar(event);
-        case AliasEvent():
-          _alias(event);
-        case SequenceStartEvent():
-          _start(
-            event,
-            _tagOf(event.tag, event.span),
-            event.anchor,
-            isMapping: false,
-          );
-        case MappingStartEvent():
-          _start(
-            event,
-            _tagOf(event.tag, event.span),
-            event.anchor,
-            isMapping: true,
-          );
-        case Event(type: .sequenceEnd || .mappingEnd):
-          _end(event);
-        case Event(type: .streamEnd):
-          return ComposedYaml(root: _root, spans: _spans);
-        default:
+      if (event.type == .streamEnd) {
+        return ComposedYaml(root: _root, spans: _spans);
       }
+      _handle(event);
     }
     if (_failed) return null;
     return ComposedYaml(root: null, spans: _spans, syntaxError: _syntaxError);
+  }
+
+  void _handle(Event event) {
+    switch (event) {
+      case DocumentStartEvent():
+        if (++_documents > 1) {
+          _syntaxError = (
+            message: 'Only expected one document.',
+            span: event.span,
+          );
+        }
+      case ScalarEvent():
+        _scalar(event);
+      case AliasEvent():
+        _alias(event);
+      case SequenceStartEvent():
+        _start(
+          event,
+          _tagOf(event.tag, event.span),
+          event.anchor,
+          isMapping: false,
+        );
+      case MappingStartEvent():
+        _start(
+          event,
+          _tagOf(event.tag, event.span),
+          event.anchor,
+          isMapping: true,
+        );
+      case Event(type: .sequenceEnd || .mappingEnd):
+        _end(event);
+      default:
+    }
   }
 
   /// The next parser event, or null after recording a syntax error.
@@ -264,14 +269,22 @@ final class _Composition {
       return;
     }
     if (frame != null && frame.state == .key) {
-      if (anchor.text case final text? when !anchor.skipped) {
-        _key(frame, text, anchor.value, event.span);
-      } else {
-        _nonStringKey(frame, event.span);
-        frame.state = .skipValue;
-      }
+      _aliasAsKey(frame, anchor, event.span);
       return;
     }
+    _aliasAsValue(frame, anchor, event.span);
+  }
+
+  void _aliasAsKey(_Frame frame, _Anchor anchor, SourceSpan span) {
+    if (anchor.text case final text? when !anchor.skipped) {
+      _key(frame, text, anchor.value, span);
+    } else {
+      _nonStringKey(frame, span);
+      frame.state = .skipValue;
+    }
+  }
+
+  void _aliasAsValue(_Frame? frame, _Anchor anchor, SourceSpan span) {
     final pointer = _childPointer(frame);
     if (anchor.skipped) {
       _diagnostics.report(
@@ -280,13 +293,13 @@ final class _Composition {
         'string; it is read as null.',
         file: _file,
         pointer: pointer,
-        span: event.span,
+        span: span,
         fix: 'Anchor the node outside the key.',
       );
       _attach(frame, null);
       return;
     }
-    if (!_expand(anchor, pointer, event.span)) return;
+    if (!_expand(anchor, pointer, span)) return;
     _attach(frame, anchor.value);
   }
 
@@ -313,17 +326,35 @@ final class _Composition {
     }
     final frame = _stack.isEmpty ? null : _stack.last;
     if (frame != null && frame.state != .value) {
-      if (frame.state == .key) {
-        _nonStringKey(frame, event.span);
-        frame.state = .skippedKey;
-      } else {
-        frame.state = .skippedValue;
-      }
-      _skipped = 1;
-      _skipAnchor(anchor);
+      _skipCollection(frame, event.span, anchor);
       return;
     }
-    final pointer = _childPointer(frame);
+    _pushCollection(event, tag, anchor, level, frame, isMapping: isMapping);
+  }
+
+  /// Starts skipping a collection that is a key, or the value of a key that
+  /// was not a string.
+  void _skipCollection(_Frame frame, SourceSpan span, String? anchor) {
+    if (frame.state == .key) {
+      _nonStringKey(frame, span);
+      frame.state = .skippedKey;
+    } else {
+      frame.state = .skippedValue;
+    }
+    _skipped = 1;
+    _skipAnchor(anchor);
+  }
+
+  /// Pushes the frame of a collection that is built.
+  void _pushCollection(
+    Event event,
+    String? tag,
+    String? anchor,
+    int level,
+    _Frame? parent, {
+    required bool isMapping,
+  }) {
+    final pointer = _childPointer(parent);
     if (!_charge(pointer, event.span)) return;
     _checkTag(
       tag,
@@ -659,20 +690,34 @@ final class _Composition {
       return allowInt ? digit : digit.toDouble();
     }
     final second = text.codeUnitAt(1);
-    bool isDigit(int c) => c >= 0x30 && c <= 0x39;
     if (allowInt && first == 0x30) {
       if (second == 0x78) return int.tryParse(text);
       if (second == 0x6F) return int.tryParse(text.substring(2), radix: 8);
     }
-    if (isDigit(first) ||
-        ((first == 0x2B || first == 0x2D) && isDigit(second))) {
-      num? result;
-      if (allowInt) result = int.tryParse(text, radix: 10);
-      if (allowFloat) result ??= double.tryParse(text);
-      return result;
+    if (_isDigit(first) ||
+        ((first == 0x2B || first == 0x2D) && _isDigit(second))) {
+      return _decimal(text, allowInt: allowInt, allowFloat: allowFloat);
     }
-    if (!allowFloat) return null;
-    if ((first == 0x2E && isDigit(second)) ||
+    return allowFloat ? _dotted(text, first, second) : null;
+  }
+
+  static bool _isDigit(int codeUnit) => codeUnit >= 0x30 && codeUnit <= 0x39;
+
+  static num? _decimal(
+    String text, {
+    required bool allowInt,
+    required bool allowFloat,
+  }) {
+    num? result;
+    if (allowInt) result = int.tryParse(text, radix: 10);
+    if (allowFloat) result ??= double.tryParse(text);
+    return result;
+  }
+
+  /// A float that starts with a dot or a signed dot: `.5`, `-.5`, `.inf`,
+  /// `-.inf`, `.nan`.
+  static num? _dotted(String text, int first, int second) {
+    if ((first == 0x2E && _isDigit(second)) ||
         ((first == 0x2D || first == 0x2B) && second == 0x2E)) {
       if (text.length == 5) {
         switch (text) {
