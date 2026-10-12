@@ -529,13 +529,9 @@ final class SchemaMapper {
           fix: 'Remove it.',
         );
       }
-      final resolved = _resolved(property);
-      final readOnly =
-          (resolved?.readOnly ?? false) ||
-          (property is SchemaObject && property.readOnly);
-      final writeOnly =
-          (resolved?.writeOnly ?? false) ||
-          (property is SchemaObject && property.writeOnly);
+      final notes = _notesOf(property);
+      final readOnly = notes.readOnly;
+      final writeOnly = notes.writeOnly;
       if (direction == .request && readOnly) continue;
       if (direction == .response && writeOnly) continue;
       final suffix = _names.pascal(json) ?? 'Field';
@@ -556,9 +552,9 @@ final class SchemaMapper {
           marked:
               property is SchemaObject &&
               property.extensions[triStateExtension] == true,
-          defaultValue: resolved?.defaultValue,
-          description: resolved?.description,
-          deprecated: resolved?.deprecated ?? false,
+          defaultValue: notes.defaultValue,
+          description: notes.description,
+          deprecated: notes.deprecated,
         ),
       );
     }
@@ -606,6 +602,48 @@ final class SchemaMapper {
     };
   }
 
+  /// What the schema of a property says about its field.
+  ///
+  /// The sources are the property's own keywords, the annotation-only
+  /// `allOf` parts next to the one part it stands for
+  /// (`allOf: [{$ref: Pet}, {description: ...}]`), and the schema it refers
+  /// to, in this order: the first `description` and `default` win, and the
+  /// field is deprecated, `readOnly` or `writeOnly` when any source says so.
+  /// In OpenAPI 3.0 a `$ref` has no siblings, so only the target gives the
+  /// description, default and deprecation; 3.1 and 3.2 take the property's
+  /// own keywords before the target's (a written `deprecated: false` cannot
+  /// be told from a missing one, so it does not override a deprecated
+  /// target).
+  _FieldNotes _notesOf(Schema property) {
+    if (property is! SchemaObject) return const _FieldNotes();
+    final parts = property.ref == null
+        ? SchemaShapes.annotationParts(property)
+        : const <SchemaObject>[];
+    final target = switch (property.ref) {
+      null => switch (SchemaShapes.singleOf(property)) {
+        final single? when property.allOf.contains(single) => _resolved(
+          single,
+        ),
+        _ => null,
+      },
+      _ => _resolved(property),
+    };
+    final siblings =
+        property.ref == null || _context.model.document.version != .v30;
+    final written = [if (siblings) property, ...parts, ?target];
+    return _FieldNotes(
+      description: written
+          .map((s) => s.description)
+          .firstWhere((d) => d != null, orElse: () => null),
+      defaultValue: written
+          .map((s) => s.defaultValue)
+          .firstWhere((d) => d != null, orElse: () => null),
+      deprecated: written.any((s) => s.deprecated),
+      readOnly: [property, ...parts, ?target].any((s) => s.readOnly),
+      writeOnly: [property, ...parts, ?target].any((s) => s.writeOnly),
+    );
+  }
+
   /// Whether [field] tells "absent" from `null` by the config's rule (R7.2).
   bool _isTriState(_Field field, _Pending pending) =>
       switch (_context.config.triState) {
@@ -630,6 +668,9 @@ final class SchemaMapper {
     void add(SchemaObject part) {
       if (!seen.add(part.location)) return;
       for (final written in part.allOf) {
+        // A part that only annotates adds no property: its `nullable` and
+        // its description belong to the schema that has the `allOf`.
+        if (SchemaShapes.isAnnotationOnly(written)) continue;
         final resolved = _resolved(written);
         if (resolved == null) continue;
         if (_context.overrides.schemaAt(resolved.location)?.exclude ?? false) {
@@ -1256,14 +1297,21 @@ final class SchemaMapper {
     return null;
   }
 
-  /// Whether [schema] allows `null`: 3.0 `nullable`, `null` in `type`, or
-  /// `null` among the `enum` values.
+  /// Whether [schema] allows `null`: 3.0 `nullable`, `null` in `type`,
+  /// `null` among the `enum` values or a null branch, or an `allOf` part
+  /// that only says so (`allOf: [{$ref: Pet}, {nullable: true}]`).
   static bool _isNullable(SchemaObject schema) =>
       (schema.nullable ?? false) ||
       schema.types.contains(SchemaType.nullType) ||
       (schema.enumValues?.contains(null) ?? false) ||
       schema.oneOf.any(SchemaShapes.isNullOnly) ||
-      schema.anyOf.any(SchemaShapes.isNullOnly);
+      schema.anyOf.any(SchemaShapes.isNullOnly) ||
+      schema.allOf.any(
+        (part) =>
+            part is SchemaObject &&
+            SchemaShapes.isAnnotationOnly(part) &&
+            SchemaShapes.allowsNull(part),
+      );
 }
 
 /// A declaration whose name is not given yet.
@@ -1286,6 +1334,23 @@ final class _Pending {
       : componentKey != null
       ? 1
       : 2;
+}
+
+/// What a property's schema says about its field (`SchemaMapper._notesOf`).
+final class _FieldNotes {
+  const _FieldNotes({
+    this.description,
+    this.defaultValue,
+    this.deprecated = false,
+    this.readOnly = false,
+    this.writeOnly = false,
+  });
+
+  final String? description;
+  final (Object?,)? defaultValue;
+  final bool deprecated;
+  final bool readOnly;
+  final bool writeOnly;
 }
 
 /// A property of a model, before field names are given.

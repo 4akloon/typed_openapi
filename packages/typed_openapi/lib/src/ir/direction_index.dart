@@ -171,7 +171,11 @@ final class DirectionIndex {
         return true;
       }
       if (property is SchemaObject &&
-          (property.readOnly || property.writeOnly)) {
+          (property.readOnly ||
+              property.writeOnly ||
+              SchemaShapes.annotationParts(
+                property,
+              ).any((part) => part.readOnly || part.writeOnly))) {
         return true;
       }
     }
