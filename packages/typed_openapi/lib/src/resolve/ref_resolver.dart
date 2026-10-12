@@ -42,11 +42,16 @@ final class RefResolver {
           final file = documents[location.document];
           if (file == null) {
             final name = documents.displayPath(location.document);
+            // A file that exists but cannot be parsed was reported by the
+            // loader. One that does not exist is a read error of the spec
+            // (`input-not-found`, a fixed code): what it holds is unknown,
+            // so no baseline may be written or pruned from this run.
+            final exists = documents.exists(location.document);
             _report(
               documents,
               use,
-              .unresolvedRef,
-              documents.exists(location.document)
+              exists ? .unresolvedRef : .inputNotFound,
+              exists
                   ? '"${use.ref}" points to $name, which cannot be read or '
                         'parsed (see the diagnostics for that file).'
                   : '"${use.ref}" points to $name, which does not exist or '

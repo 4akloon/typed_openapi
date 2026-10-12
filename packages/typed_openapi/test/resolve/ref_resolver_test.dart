@@ -159,7 +159,7 @@ components:
 ''');
     final (_, bag) = resolve('api.yaml');
     expect(bag.all.map((d) => d.code), [
-      DiagnosticCode.unresolvedRef,
+      DiagnosticCode.inputNotFound,
       DiagnosticCode.remoteRef,
     ]);
     expect(

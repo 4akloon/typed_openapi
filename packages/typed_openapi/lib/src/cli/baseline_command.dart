@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:args/command_runner.dart';
 import 'package:io/io.dart' show ExitCode;
+import 'package:path/path.dart' as p;
 
 import '../baseline/baseline.dart';
 import '../baseline/baseline_loader.dart';
@@ -64,15 +65,44 @@ abstract base class _BaselineSubcommand extends Command<int> {
       _out.writeln(const TextReporter().format(diagnostics));
       return ExitCode.config.code;
     }
-    final clients = _clients(config);
-    final results = SpecChecker(
-      diagnostics,
-      _paths,
-    ).checkClients(config, only: clients);
+    final Set<String> clients;
+    try {
+      clients = _clients(config);
+    } on UsageException {
+      // Say what is wrong with the config before the usage error.
+      if (diagnostics.all.isNotEmpty) {
+        _out.writeln(const TextReporter().format(diagnostics));
+      }
+      rethrow;
+    }
+    final shared = _sharingBaseline(config);
+    final results = [
+      for (final result in SpecChecker(
+        diagnostics,
+        _paths,
+      ).checkClients(config, only: clients))
+        // The config reports clients that share a baseline file; writing it
+        // once per client would let the last one win.
+        if (!shared.contains(result.client.name)) result,
+    ];
     final lines = update(results, diagnostics);
     _out.writeln(const TextReporter().format(diagnostics));
     lines.forEach(_out.writeln);
     return diagnostics.hasErrors ? 1 : ExitCode.success.code;
+  }
+
+  /// The names of the clients whose baseline file another client names too.
+  Set<String> _sharingBaseline(ProjectConfig config) {
+    final owners = <String, List<String>>{};
+    for (final client in config.clients) {
+      final baseline = client.baseline;
+      if (baseline == null) continue;
+      (owners[p.canonicalize(baseline)] ??= []).add(client.name);
+    }
+    return {
+      for (final names in owners.values)
+        if (names.length > 1) ...names,
+    };
   }
 
   /// The names of the clients to update: those named on the command line,
@@ -196,10 +226,13 @@ final class BaselinePruneCommand extends _BaselineSubcommand {
         result.readErrors.forEach(diagnostics.add);
         continue;
       }
+      final problems = DiagnosticBag();
       final baseline = BaselineLoader(
-        diagnostics,
+        problems,
       ).load(path, displayPath: _paths.of(path));
-      if (baseline == null) continue;
+      problems.all.forEach(diagnostics.add);
+      // A rejected entry would be lost by the rewrite.
+      if (baseline == null || problems.hasErrors) continue;
       final pruned = baseline.pruned(
         baseline.match(result.diagnostics, result.fingerprints(path, _paths)),
       );

@@ -13,7 +13,7 @@ enum DiagnosticCode {
   /// The document root is not an object.
   rootNotObject('TOA003', 'root-not-object', .error),
 
-  /// The input file does not exist.
+  /// The input file, or a file a `$ref` points to, does not exist.
   inputNotFound('TOA004', 'input-not-found', .error),
 
   /// Source positions could not be recorded for a document.
