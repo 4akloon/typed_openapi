@@ -7,7 +7,8 @@ final class DartCode {
   const DartCode();
 
   /// [value] as a single-quoted Dart string literal: `\`, `'` and `$` are
-  /// escaped, and so are line breaks, tabs, control characters, lone
+  /// escaped, and so are line breaks (also U+0085, U+2028 and U+2029, which
+  /// other tools read as such), tabs, control characters, lone
   /// surrogates, which would break the line or the file's encoding, and the
   /// bidirectional controls, which could reorder the code on screen.
   String string(String value) {
@@ -22,6 +23,7 @@ final class DartCode {
         0x09 => r'\t',
         < 0x20 ||
         0x7f ||
+        0x85 ||
         0x2028 ||
         0x2029 ||
         (>= 0x202a && <= 0x202e) ||

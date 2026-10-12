@@ -13,8 +13,8 @@ void main() {
       expect(code.string(r'a\b'), r"'a\\b'");
       expect(code.string('a\nb\r\tc'), r"'a\nb\r\tc'");
       expect(
-        code.string('\x00\x1f\x7f\u2028\u2029'),
-        r"'\u{0}\u{1f}\u{7f}\u{2028}\u{2029}'",
+        code.string('\x00\x1f\x7f\x85\u2028\u2029'),
+        r"'\u{0}\u{1f}\u{7f}\u{85}\u{2028}\u{2029}'",
       );
       expect(code.string('\ud800'), r"'\u{d800}'");
       expect(code.string("ім'я 🐱"), r"'ім\'я 🐱'");
