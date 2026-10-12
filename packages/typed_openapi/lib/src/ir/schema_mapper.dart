@@ -1503,7 +1503,8 @@ final class SchemaMapper {
   };
 
   /// The schemas that extend [base] with `allOf`, directly or through
-  /// another subtype, in the order of `components.schemas`, when [base]
+  /// another subtype, in the order of `components.schemas` and then of the
+  /// other files the spec reads, when [base]
   /// has a discriminator and is not a union or an enum: a polymorphic base
   /// (user decision for M8). A subtype an override excludes is left out.
   List<SchemaObject> _subtypes(SchemaObject base) {
@@ -1515,12 +1516,27 @@ final class SchemaMapper {
     return _subtypesOf[base.location] ??= _findSubtypes(base);
   }
 
+  /// The schemas of the other files the spec reads that a `$ref` can name:
+  /// the root of a file and the entries of its `components.schemas`, in the
+  /// order of their locations. A file nothing refers to is not read, so a
+  /// subtype that only it has is not found.
+  late final List<SchemaObject> _foreignSchemas = [
+    for (final node in _context.model.nodes)
+      if (node is SchemaObject &&
+          node.ref == null &&
+          node.location.document != _context.model.document.location.document &&
+          (node.location.pointer.tokens.isEmpty ||
+              _componentKey(node.location) != null))
+        node,
+  ];
+
   List<SchemaObject> _findSubtypes(SchemaObject base) {
     final components = [
       for (final schema
           in _context.model.document.components?.schemas.values ??
               const <Schema>[])
         if (schema is SchemaObject && schema.ref == null) schema,
+      ..._foreignSchemas,
     ];
     final found = {base.location};
     var grew = true;

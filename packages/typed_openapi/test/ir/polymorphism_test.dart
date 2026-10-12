@@ -1,9 +1,13 @@
 import 'package:test/test.dart';
+import 'package:typed_openapi/src/check/spec_checker.dart';
+import 'package:typed_openapi/src/config/config_loader.dart';
+import 'package:typed_openapi/src/diagnostics/diagnostic_bag.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
 import 'package:typed_openapi/src/ir/ir.dart';
 
 import '../helpers/ir_fixture.dart';
 import '../helpers/mapping.dart';
+import '../helpers/temp_dir.dart';
 
 T declaration<T extends Declaration>(ClientIr ir, String name) =>
     ir.declarations.firstWhere((d) => d.name == name) as T;
@@ -261,6 +265,93 @@ components:
       expect(fixture.codes, [
         (DiagnosticCode.unionUndiscriminated, '#/components/schemas/Loose'),
       ]);
+    });
+  });
+
+  group('subtypes in another file', () {
+    ClientIr build(TempDir dir) {
+      final bag = DiagnosticBag();
+      final config =
+          ConfigLoader(
+            bag,
+          ).load(
+            dir.write(
+              'c.yaml',
+              'clients:\n  a: {input: api.yaml, output: out}\n',
+            ),
+          )!;
+      final check = SpecChecker(bag).check(config).single;
+      expect(
+        [for (final d in bag.all) d.code.id],
+        isNot(contains(startsWith('TOA0'))),
+        reason: bag.all.map((d) => d.message).join('\n'),
+      );
+      return check.ir!;
+    }
+
+    const api = r'''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: 'cat.yaml'}
+  /base:
+    get:
+      operationId: getPet
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Pet'}
+  /dogs:
+    get:
+      operationId: listDogs
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: 'models.yaml#/components/schemas/Dog'}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties: {petType: {type: string}, name: {type: string}}
+      discriminator: {propertyName: petType}
+    Fish:
+      allOf:
+        - $ref: '#/components/schemas/Pet'
+''';
+
+    test('are found in the root of a file and in its components', () {
+      final dir = TempDir()
+        ..write('api.yaml', api)
+        ..write('cat.yaml', r'''
+allOf:
+  - $ref: 'api.yaml#/components/schemas/Pet'
+  - properties: {lives: {type: integer}}
+''')
+        ..write('models.yaml', r'''
+components:
+  schemas:
+    Dog:
+      allOf:
+        - $ref: 'api.yaml#/components/schemas/Pet'
+        - properties: {bark: {type: boolean}}
+''');
+      final ir = build(dir);
+      expect(
+        declaration<UnionDecl>(ir, 'Pet').variants.map((v) => v.name),
+        ['PetFish', 'PetCat', 'PetDog'],
+      );
     });
   });
 }
