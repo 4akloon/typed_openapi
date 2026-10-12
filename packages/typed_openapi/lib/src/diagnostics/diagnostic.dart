@@ -53,6 +53,17 @@ final class Diagnostic implements Comparable<Diagnostic> {
     return start == null ? null : start.column + 1;
   }
 
+  /// This diagnostic with [severity] instead of its own.
+  Diagnostic withSeverity(Severity severity) => Diagnostic(
+    code: code,
+    severity: severity,
+    message: message,
+    file: file,
+    pointer: pointer,
+    span: span,
+    fix: fix,
+  );
+
   /// `file:line:column`, `file` when only the file is known, or null.
   String? get location {
     final file = this.file;

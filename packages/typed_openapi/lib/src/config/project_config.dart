@@ -1,3 +1,5 @@
+import '../diagnostics/severity_levels.dart';
+
 /// Normalizer presets a client may name in the config.
 enum Preset {
   /// No framework-specific fixes.
@@ -28,6 +30,7 @@ final class ClientConfig {
     this.overrides,
     this.baseline,
     this.disabledRules = const {},
+    this.severity = const SeverityLevels(),
   });
 
   /// Line width of generated code when the config does not set one.
@@ -56,6 +59,10 @@ final class ClientConfig {
 
   /// Normalizer rules the config turns off for this client, by name.
   final Set<String> disabledRules;
+
+  /// The levels the config gives diagnostic codes for this client:
+  /// `defaults.severity` with the client's `severity` on top.
+  final SeverityLevels severity;
 }
 
 /// The parsed `typed_openapi.yaml`.

@@ -255,6 +255,34 @@ enum DiagnosticCode {
 
   const DiagnosticCode(this.id, this.slug, this.defaultSeverity);
 
+  /// Codes of the config file: it is read before any level applies, so the
+  /// config cannot change them.
+  static const configCodes = {
+    configNotFound,
+    configInvalid,
+    configUnknownKey,
+    outputOverlap,
+  };
+
+  /// Codes the config may raise but not lower or turn off: they say that the
+  /// spec, the overrides file or the baseline file cannot be read, so
+  /// without them the check would pass on a file it never read. The config
+  /// codes ([configCodes]) cannot be changed at all.
+  static const fixedCodes = {
+    parseError,
+    rootNotObject,
+    inputNotFound,
+    inputUnreadable,
+    nestingTooDeep,
+    aliasExpansionTooLarge,
+    missingOpenApiVersion,
+    unsupportedOpenApiVersion,
+    overridesNotFound,
+    invalidOverride,
+    unknownOverrideKey,
+    ...configCodes,
+  };
+
   /// The stable id, such as `TOA001`.
   final String id;
 

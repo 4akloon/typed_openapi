@@ -6,6 +6,7 @@ import 'package:typed_openapi/src/config/config_loader.dart';
 import 'package:typed_openapi/src/config/project_config.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_bag.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
+import 'package:typed_openapi/src/diagnostics/severity.dart';
 
 import '../helpers/temp_dir.dart';
 
@@ -234,5 +235,123 @@ clients:
       isNull,
     );
     expect(bag.all.single.code, DiagnosticCode.configInvalid);
+  });
+
+  test('reads levels by code or name; a client overrides defaults per '
+      'code', () {
+    final path = TempDir().write('c.yaml', '''
+defaults:
+  severity: {TOA201: off, example-scalar-type: warning}
+clients:
+  a: {input: a.json, output: lib/a}
+  b:
+    input: b.json
+    output: lib/b
+    severity: {bool-required: error, TOA804: error}
+''');
+    final bag = DiagnosticBag();
+    final clients = ConfigLoader(bag).load(path)!.clients;
+    expect(bag.all, isEmpty);
+    expect(clients.first.severity.levels, {
+      DiagnosticCode.boolRequired: null,
+      DiagnosticCode.exampleScalarType: Severity.warning,
+    });
+    expect(clients.last.severity.levels, {
+      DiagnosticCode.boolRequired: Severity.error,
+      DiagnosticCode.exampleScalarType: Severity.warning,
+      DiagnosticCode.overrideTargetNotFound: Severity.error,
+    });
+  });
+
+  test('reports unknown codes, bad levels and codes named twice', () {
+    final path = TempDir().write('c.yaml', '''
+clients:
+  a:
+    input: a.json
+    output: lib/a
+    severity:
+      TOA999: off
+      bool-required: fatal
+      TOA111: info
+      invalid-value: off
+''');
+    final bag = DiagnosticBag();
+    final client = ConfigLoader(bag).load(path)!.clients.single;
+    expect(client.severity.levels, {
+      DiagnosticCode.invalidValue: Severity.info,
+    });
+    expect(bag.all.map((d) => (d.code, d.pointer?.value, d.message)), [
+      (
+        DiagnosticCode.configUnknownKey,
+        '#/clients/a/severity/TOA999',
+        'Unknown diagnostic code "TOA999".',
+      ),
+      (
+        DiagnosticCode.configInvalid,
+        '#/clients/a/severity/bool-required',
+        'The level of "bool-required" must be error, warning, info or off.',
+      ),
+      (
+        DiagnosticCode.configInvalid,
+        '#/clients/a/severity/invalid-value',
+        '"invalid-value" names the same code as "TOA111" (TOA111); only the '
+            'first is used.',
+      ),
+    ]);
+  });
+
+  test('any code but a config code may be raised; a fixed code may not be '
+      'lowered or turned off', () {
+    final path = TempDir().write('c.yaml', '''
+defaults:
+  severity:
+    parse-error: warning
+    TOA801: off
+    TOA804: off
+    TOA807: warning
+    example-type-mismatch: error
+    config-unknown-key: error
+clients:
+  a: {input: a.json, output: lib/a}
+''');
+    final bag = DiagnosticBag();
+    final client = ConfigLoader(bag).load(path)!.clients.single;
+    expect(client.severity.levels, {
+      DiagnosticCode.overrideTargetNotFound: null,
+      DiagnosticCode.overrideUnchanged: Severity.warning,
+      DiagnosticCode.exampleTypeMismatch: Severity.error,
+    });
+    expect(bag.all.map((d) => (d.code, d.pointer?.value, d.message)), [
+      (
+        DiagnosticCode.configInvalid,
+        '#/defaults/severity/parse-error',
+        'TOA001 parse-error cannot be lowered or turned off: without it a '
+            'file that cannot be read would pass.',
+      ),
+      (
+        DiagnosticCode.configInvalid,
+        '#/defaults/severity/TOA801',
+        'TOA801 overrides-not-found cannot be lowered or turned off: '
+            'without it a file that cannot be read would pass.',
+      ),
+      (
+        DiagnosticCode.configInvalid,
+        '#/defaults/severity/config-unknown-key',
+        'The level of TOA903 config-unknown-key cannot be changed: the '
+            'config is read before levels apply.',
+      ),
+    ]);
+  });
+
+  test('severity must be a mapping', () {
+    final path = TempDir().write('c.yaml', '''
+clients:
+  a: {input: a.json, output: lib/a, severity: [TOA201]}
+''');
+    final bag = DiagnosticBag();
+    expect(ConfigLoader(bag).load(path)!.clients.single.severity.levels, {});
+    expect(bag.all.map((d) => (d.code, d.pointer?.value)), [
+      (DiagnosticCode.configInvalid, '#/clients/a/severity'),
+    ]);
   });
 }

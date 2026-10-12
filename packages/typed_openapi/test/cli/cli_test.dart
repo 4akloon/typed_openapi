@@ -206,4 +206,30 @@ components:
       contains(r'  at #/components/schemas/Owner/properties/pet/$ref'),
     );
   });
+
+  test('a level from the config changes the exit code', () async {
+    final dir = TempDir();
+    dir.write('api.yaml', '''
+openapi: 3.0.3
+info: {title: api, version: "1"}
+paths:
+  /a: {get: {operationId: same, responses: {'200': {description: ok}}}}
+  /b: {get: {operationId: same, responses: {'200': {description: ok}}}}
+''');
+    final path = dir.write('typed_openapi.yaml', '''
+clients:
+  api:
+    input: api.yaml
+    output: lib/api
+    severity: {duplicate-operation-id: warning}
+''');
+    final (code, out, _) = await run([
+      'check',
+      '-c',
+      path,
+    ], workingDirectory: dir.path);
+    expect(code, 0);
+    expect(out, contains('warning TOA504 duplicate-operation-id'));
+    expect(out, endsWith('errors: 0, warnings: 1, infos: 0\n'));
+  });
 }

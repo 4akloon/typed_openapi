@@ -4,8 +4,11 @@ import 'package:path/path.dart' as p;
 import 'package:source_span/source_span.dart';
 
 import '../diagnostics/diagnostic_bag.dart';
+import '../diagnostics/diagnostic_code.dart';
 import '../diagnostics/display_paths.dart';
 import '../diagnostics/json_pointer.dart';
+import '../diagnostics/severity.dart';
+import '../diagnostics/severity_levels.dart';
 import '../load/yaml_composer.dart';
 import '../normalize/normalizer.dart';
 import 'project_config.dart';
@@ -20,7 +23,7 @@ final class ConfigLoader {
   const ConfigLoader(this._diagnostics, [this._paths = const DisplayPaths()]);
 
   static const _topLevelKeys = {'defaults', 'clients'};
-  static const _defaultsKeys = {'preset', 'line_width', 'rules'};
+  static const _defaultsKeys = {'preset', 'line_width', 'rules', 'severity'};
   static const _clientKeys = {
     'input',
     'output',
@@ -29,6 +32,7 @@ final class ConfigLoader {
     'baseline',
     'line_width',
     'rules',
+    'severity',
   };
 
   final DiagnosticBag _diagnostics;
@@ -88,11 +92,13 @@ final class ConfigLoader {
     Preset? defaultPreset;
     int? defaultWidth;
     var defaultRules = const <String, bool>{};
+    var defaultLevels = const <DiagnosticCode, Severity?>{};
     if (defaults != null) {
       reader.checkKeys(defaults, _defaultsKeys, defaultsPointer);
       defaultPreset = reader.presetAt(defaults, defaultsPointer);
       defaultWidth = reader.intAt(defaults, 'line_width', defaultsPointer);
       defaultRules = reader.rulesAt(defaults, defaultsPointer);
+      defaultLevels = reader.severityAt(defaults, defaultsPointer);
     }
 
     final clientsPointer = JsonPointer.root.child('clients');
@@ -127,6 +133,10 @@ final class ConfigLoader {
       final overrides = reader.stringAt(value, 'overrides', pointer);
       final baseline = reader.stringAt(value, 'baseline', pointer);
       final rules = {...defaultRules, ...reader.rulesAt(value, pointer)};
+      final levels = {
+        ...defaultLevels,
+        ...reader.severityAt(value, pointer),
+      };
       if (input == null || output == null) continue;
       outputSpans[name] = reader.spanAt(pointer.child('output'));
       clients.add(
@@ -142,6 +152,7 @@ final class ConfigLoader {
             for (final MapEntry(:key, :value) in rules.entries)
               if (!value) key,
           },
+          severity: SeverityLevels(levels),
         ),
       );
     }
@@ -314,6 +325,87 @@ class _ConfigReader {
     }
     return result;
   }
+
+  /// `severity` of [parent]: diagnostic codes, by id or slug, mapped to
+  /// their level; `null` is `off`. Unknown codes are a warning, bad levels
+  /// and levels a code cannot have are errors; all of them are skipped.
+  Map<DiagnosticCode, Severity?> severityAt(
+    Map<String, Object?> parent,
+    JsonPointer at,
+  ) {
+    final entries = mapAt(parent, 'severity', at);
+    if (entries == null) return const {};
+    final pointer = at.child('severity');
+    final result = <DiagnosticCode, Severity?>{};
+    final names = <DiagnosticCode, String>{};
+    for (final MapEntry(key: name, :value) in entries.entries) {
+      final at = pointer.child(name);
+      final code = _codes[name];
+      if (code == null) {
+        diagnostics.report(
+          .configUnknownKey,
+          'Unknown diagnostic code "$name".',
+          file: file,
+          pointer: at,
+          span: spanAt(at),
+          fix:
+              'Use a code such as TOA201 or its name such as bool-required; '
+              'the README lists them.',
+        );
+        continue;
+      }
+      if (names[code] case final first?) {
+        invalid(
+          '"$name" names the same code as "$first" (${code.id}); '
+          'only the first is used.',
+          at,
+        );
+        continue;
+      }
+      names[code] = name;
+      if (value is! String || !_levels.containsKey(value)) {
+        invalid(
+          'The level of "$name" must be error, warning, info or off.',
+          at,
+        );
+        continue;
+      }
+      final level = _levels[value];
+      if (DiagnosticCode.configCodes.contains(code)) {
+        invalid(
+          'The level of ${code.id} ${code.slug} cannot be changed: the '
+          'config is read before levels apply.',
+          at,
+        );
+        continue;
+      }
+      if (DiagnosticCode.fixedCodes.contains(code) &&
+          (level == null || level.index > code.defaultSeverity.index)) {
+        invalid(
+          '${code.id} ${code.slug} cannot be lowered or turned off: '
+          'without it a file that cannot be read would pass.',
+          at,
+        );
+        continue;
+      }
+      result[code] = level;
+    }
+    return result;
+  }
+
+  static final _codes = {
+    for (final code in DiagnosticCode.values) ...{
+      code.id: code,
+      code.slug: code,
+    },
+  };
+
+  static const _levels = <String, Severity?>{
+    'error': .error,
+    'warning': .warning,
+    'info': .info,
+    'off': null,
+  };
 
   Preset? presetAt(Map<String, Object?> parent, JsonPointer at) {
     final name = stringAt(parent, 'preset', at);
