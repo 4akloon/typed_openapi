@@ -62,6 +62,41 @@ clients:
     ]);
   });
 
+  test("applies each client's overrides before the rules", () {
+    final dir = TempDir();
+    const spec = '''
+openapi: 3.0.3
+info: {title: t, version: "1"}
+paths: {}
+components:
+  schemas:
+    File: {type: object, format: binary}
+''';
+    dir.write('specs/api.yaml', spec);
+    dir.write('specs/api.overrides.yaml', 'schemas: {File: {type: string}}\n');
+    final path = dir.write('typed_openapi.yaml', '''
+clients:
+  fixed:
+    input: specs/api.yaml
+    output: lib/fixed
+    overrides: specs/api.overrides.yaml
+  plain: {input: specs/api.yaml, output: lib/plain}
+  broken:
+    input: specs/api.yaml
+    output: lib/broken
+    overrides: specs/missing.yaml
+''');
+    final bag = DiagnosticBag();
+    SpecChecker(bag).check(ConfigLoader(bag).load(path)!);
+    expect(
+      bag.all.map((d) => (d.code, d.file)),
+      unorderedEquals([
+        (DiagnosticCode.overridesNotFound, 'specs/missing.yaml'),
+        (DiagnosticCode.binaryObject, 'specs/api.yaml'),
+      ]),
+    );
+  });
+
   test('only checks the named clients', () {
     final dir = TempDir();
     final path = dir.write('typed_openapi.yaml', '''

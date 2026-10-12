@@ -224,6 +224,9 @@ enum DiagnosticCode {
   /// Two overrides change the same node; neither is applied.
   overrideConflict('TOA806', 'override-conflict', .error),
 
+  /// An override sets a value the spec already has; it can be removed.
+  overrideUnchanged('TOA807', 'override-unchanged', .info),
+
   /// An override addressed through an operation changes a node other
   /// operations may share: a path-level parameter, a `$ref`'d component or
   /// a node in another file.

@@ -4,6 +4,9 @@ import '../diagnostics/diagnostic_bag.dart';
 import '../load/openapi_version.dart';
 import '../load/spec_document.dart';
 import '../load/spec_loader.dart';
+import '../overrides/override_applier.dart';
+import '../overrides/override_resolver.dart';
+import '../overrides/override_set.dart';
 import '../resolve/spec_documents.dart';
 import '../resolve/spec_model.dart';
 import '../resolve/spec_reader.dart';
@@ -20,18 +23,23 @@ import 'spec_edit.dart';
 /// The result of normalizing a spec.
 final class NormalizedSpec {
   /// Creates a result.
-  const NormalizedSpec(this.model, this.documents);
+  const NormalizedSpec(this.model, this.documents, {this.overrides});
 
   /// The model of the last pass.
   final SpecModel model;
 
   /// The files of the last pass, with every fix applied.
   final SpecDocuments documents;
+
+  /// The client's overrides, whose spec fields are applied; their
+  /// generation fields are for the generator.
+  final OverrideSet? overrides;
 }
 
-/// Reads a spec into the model, runs the rules over it, applies their fixes
-/// to the plain trees and reads it again, until no rule has a fix or
-/// [maxPasses] passes have run.
+/// Reads a spec into the model, applies the spec fields of the client's
+/// overrides, then runs the rules over it, applies their fixes to the plain
+/// trees and reads it again, until no rule has a fix or [maxPasses] passes
+/// have run.
 ///
 /// The report holds what the parser and resolver say about the last pass,
 /// every finding of a rule that fixed something in a pass, and the findings
@@ -89,11 +97,38 @@ final class Normalizer {
   /// The framework whose hints the findings carry.
   final Preset? preset;
 
-  /// Normalizes [document], which declares [version].
-  NormalizedSpec normalize(SpecDocument document, OpenApiVersion version) {
+  /// Normalizes [document], which declares [version], after applying the
+  /// spec fields of [overrides].
+  NormalizedSpec normalize(
+    SpecDocument document,
+    OpenApiVersion version, {
+    OverrideSet? overrides,
+  }) {
     final loader = SpecLoader(_diagnostics);
     var root = document;
     var others = const <SpecDocument>[];
+    if (overrides != null && !overrides.isEmpty) {
+      final documents = SpecDocuments(loader, root);
+      final model = SpecReader(
+        DiagnosticBag(),
+      ).read(root, version, documents: documents);
+      final targets = OverrideResolver(
+        _diagnostics,
+        overrides,
+      ).resolve(model, documents);
+      final edits = OverrideApplier(
+        _diagnostics,
+        overrides,
+        documents,
+        version,
+      ).edits(targets);
+      final edited = _applyOverrides(documents, overrides, edits);
+      root = edited[root.uri] ?? root;
+      others = [
+        for (final loaded in documents.loaded)
+          if (loaded.uri != root.uri) edited[loaded.uri] ?? loaded,
+      ];
+    }
     for (var pass = 1; ; pass++) {
       final scratch = DiagnosticBag();
       final documents = SpecDocuments(loader, root, others: others);
@@ -126,7 +161,7 @@ final class Normalizer {
             );
           }
         }
-        return NormalizedSpec(model, documents);
+        return NormalizedSpec(model, documents, overrides: overrides);
       }
       // Every finding of a rule that fixes something in this pass is part of
       // that fix (a rule may put one edit on the first of several
@@ -177,6 +212,37 @@ final class Normalizer {
           continue;
         }
         accepted.add(edit);
+      }
+    }
+    return {
+      for (final MapEntry(key: uri, value: editor) in editors.entries)
+        uri: documents[uri]!.withRoot(editor.root),
+    };
+  }
+
+  /// Applies the override [edits] in order; returns the edited documents by
+  /// URI. An edit that cannot be applied is reported at its override.
+  Map<Uri, SpecDocument> _applyOverrides(
+    SpecDocuments documents,
+    OverrideSet overrides,
+    List<OverrideEdit> edits,
+  ) {
+    final editors = <Uri, TreeEditor>{};
+    for (final OverrideEdit(:edit, :sources) in edits) {
+      final uri = edit.location.document;
+      final document = documents[uri]!;
+      final editor = editors[uri] ??= TreeEditor(document.root);
+      final problem = editor.apply(edit);
+      if (problem == null) continue;
+      for (final (entry, field) in sources) {
+        final at = entry.pointer.child(field);
+        _diagnostics.report(
+          .fixNotApplied,
+          'This override was not applied: $problem.',
+          file: overrides.file,
+          pointer: at,
+          span: overrides.spanOf(at),
+        );
       }
     }
     return {
