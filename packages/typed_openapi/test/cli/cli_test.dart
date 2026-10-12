@@ -8,9 +8,11 @@ import '../helpers/temp_dir.dart';
 
 void main() {
   late String configPath;
+  late String workingDirectory;
 
   setUp(() {
     final dir = TempDir();
+    workingDirectory = dir.path;
     dir.write(
       'specs/ok.yaml',
       'openapi: 3.1.0\ninfo: {title: ok, version: "1"}\n',
@@ -23,10 +25,17 @@ clients:
 ''');
   });
 
-  Future<(int, String, String)> run(List<String> args) async {
+  Future<(int, String, String)> run(
+    List<String> args, {
+    String? workingDirectory,
+  }) async {
     final out = StringBuffer();
     final err = StringBuffer();
-    final code = await TypedOpenApiCli(out: out, err: err).run(args);
+    final code = await TypedOpenApiCli(
+      out: out,
+      err: err,
+      workingDirectory: workingDirectory,
+    ).run(args);
     return (code, out.toString(), err.toString());
   }
 
@@ -37,7 +46,11 @@ clients:
   });
 
   test('exits 1 and prints the location when a spec has errors', () async {
-    final (code, out, _) = await run(['check', '--config', configPath]);
+    final (code, out, _) = await run([
+      'check',
+      '--config',
+      configPath,
+    ], workingDirectory: workingDirectory);
     expect(code, 1);
     expect(out, contains('error TOA011 unsupported-openapi-version'));
     expect(out, contains('  --> ${p.join('specs', 'old.json')}:2:14'));
@@ -63,6 +76,28 @@ clients:
     ]);
     expect(code, 78);
     expect(out, contains('TOA901 config-not-found'));
+  });
+
+  test('reads a relative config path from the working directory', () async {
+    final (code, out, _) = await run([
+      'check',
+      '-c',
+      'typed_openapi.yaml',
+      'ok',
+    ], workingDirectory: workingDirectory);
+    expect(code, 0);
+    expect(out.trim(), 'errors: 0, warnings: 0, infos: 0');
+  });
+
+  test('names the missing config relative to the working directory', () async {
+    final (code, out, _) = await run([
+      'check',
+      '-c',
+      'nope.yaml',
+    ], workingDirectory: workingDirectory);
+    expect(code, 78);
+    expect(out, contains('Config file nope.yaml does not exist.'));
+    expect(out, contains('  --> nope.yaml\n'));
   });
 
   test('exits 64 on an unknown client', () async {
@@ -115,7 +150,11 @@ schemas:
 clients:
   api: {input: api.yaml, output: lib/api, overrides: api.overrides.yaml}
 ''');
-    final (code, out, _) = await run(['check', '-c', path]);
+    final (code, out, _) = await run([
+      'check',
+      '-c',
+      path,
+    ], workingDirectory: dir.path);
     expect(code, 1);
     expect(
       out,

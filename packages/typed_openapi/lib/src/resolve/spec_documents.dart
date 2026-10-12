@@ -59,14 +59,21 @@ final class SpecDocuments {
         FileSystemEntity.typeSync(path) == FileSystemEntityType.file;
   }
 
-  /// How diagnostics name the file at [uri].
+  /// How diagnostics name the file at [uri]: like the root document, whose
+  /// name is relative to the working directory or absolute.
+  ///
+  /// A file outside the directory the root's relative name starts from is
+  /// named by its absolute path, as is every file when the root's name is
+  /// absolute.
   String displayPath(Uri uri) {
     if (uri == root.uri) return root.file;
     final path = _pathOf(uri);
     final rootPath = _pathOf(root.uri);
     if (path == null || rootPath == null) return '$uri';
+    if (p.isAbsolute(root.file)) return p.normalize(path);
     final relative = p.relative(path, from: p.dirname(rootPath));
-    return p.normalize(p.join(p.dirname(root.file), relative));
+    final name = p.normalize(p.join(p.dirname(root.file), relative));
+    return p.split(name).first == '..' ? p.normalize(path) : name;
   }
 
   static String? _pathOf(Uri uri) {

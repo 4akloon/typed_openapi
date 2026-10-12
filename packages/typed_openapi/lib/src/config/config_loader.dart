@@ -4,6 +4,7 @@ import 'package:path/path.dart' as p;
 import 'package:source_span/source_span.dart';
 
 import '../diagnostics/diagnostic_bag.dart';
+import '../diagnostics/display_paths.dart';
 import '../diagnostics/json_pointer.dart';
 import '../load/yaml_composer.dart';
 import '../normalize/normalizer.dart';
@@ -14,8 +15,9 @@ import 'project_config.dart';
 /// Problems go to the [DiagnosticBag] given to the constructor instead of
 /// being thrown.
 final class ConfigLoader {
-  /// Creates a loader that reports to [_diagnostics].
-  const ConfigLoader(this._diagnostics);
+  /// Creates a loader that reports to [_diagnostics]; [_paths] names the
+  /// config file in diagnostics.
+  const ConfigLoader(this._diagnostics, [this._paths = const DisplayPaths()]);
 
   static const _topLevelKeys = {'defaults', 'clients'};
   static const _defaultsKeys = {'preset', 'line_width', 'rules'};
@@ -30,19 +32,23 @@ final class ConfigLoader {
   };
 
   final DiagnosticBag _diagnostics;
+  final DisplayPaths _paths;
 
-  /// Reads the config file at [path].
+  /// Reads the config file at [path], relative to the working directory of
+  /// the [DisplayPaths] given to the constructor.
   ///
   /// Relative paths inside it are resolved against its directory. Returns
   /// null when the file is missing or unusable; otherwise returns every
   /// client that is valid.
   ProjectConfig? load(String path) {
-    final type = FileSystemEntity.typeSync(path);
+    final full = _paths.absolute(path);
+    final file = _paths.of(path);
+    final type = FileSystemEntity.typeSync(full);
     if (type == FileSystemEntityType.notFound) {
       _diagnostics.report(
         .configNotFound,
-        'Config file $path does not exist.',
-        file: path,
+        'Config file $file does not exist.',
+        file: file,
         fix: 'Create typed_openapi.yaml, or pass its path with --config.',
       );
       return null;
@@ -50,26 +56,26 @@ final class ConfigLoader {
     if (type == FileSystemEntityType.directory) {
       _diagnostics.report(
         .configInvalid,
-        'Config path $path is a directory, not a file.',
-        file: path,
+        'Config path $file is a directory, not a file.',
+        file: file,
         fix: 'Pass the path of typed_openapi.yaml itself with --config.',
       );
       return null;
     }
     final String text;
     try {
-      text = File(path).readAsStringSync();
+      text = File(full).readAsStringSync();
     } on FileSystemException catch (e) {
       _diagnostics.report(
         .configInvalid,
-        'Cannot read $path: ${e.message}.',
-        file: path,
+        'Cannot read $file: ${e.message}.',
+        file: file,
       );
       return null;
     }
-    final composed = _compose(text, path);
+    final composed = _compose(text, file, full);
     if (composed == null) return null;
-    final reader = _ConfigReader(path, _diagnostics, composed.spans);
+    final reader = _ConfigReader(file, _diagnostics, composed.spans);
     final root = composed.root;
     if (root is! Map<String, Object?>) {
       reader.invalid('The config must be a mapping.', .root);
@@ -97,7 +103,7 @@ final class ConfigLoader {
       return null;
     }
 
-    final baseDir = p.dirname(p.absolute(path));
+    final baseDir = p.dirname(full);
     String resolve(String value) => p.normalize(p.join(baseDir, value));
 
     final clients = <ClientConfig>[];
@@ -140,7 +146,7 @@ final class ConfigLoader {
       );
     }
     clients.sort((a, b) => a.name.compareTo(b.name));
-    _checkOutputOverlap(clients, outputSpans, path);
+    _checkOutputOverlap(clients, outputSpans, file);
     return ProjectConfig(
       file: path,
       clients: clients,
@@ -150,17 +156,17 @@ final class ConfigLoader {
 
   /// Reads [text] into plain values; null after reporting why it cannot be
   /// used. Every problem of the YAML itself is a config error.
-  ComposedYaml? _compose(String text, String path) {
+  ComposedYaml? _compose(String text, String file, String path) {
     final yaml = DiagnosticBag();
     final composed = YamlComposer(
       yaml,
-    ).compose(text, file: path, uri: p.toUri(p.absolute(path)));
+    ).compose(text, file: file, uri: p.toUri(path));
     for (final d in yaml.all) {
       _diagnostics.report(
         .configInvalid,
         d.message,
         severity: d.severity,
-        file: path,
+        file: file,
         pointer: d.pointer,
         span: d.span,
         fix: d.fix,
@@ -170,7 +176,7 @@ final class ConfigLoader {
       _diagnostics.report(
         .configInvalid,
         error.message,
-        file: path,
+        file: file,
         span: error.span,
       );
       return null;

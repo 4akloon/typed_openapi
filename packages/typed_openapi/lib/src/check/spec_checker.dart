@@ -2,6 +2,7 @@ import 'package:path/path.dart' as p;
 
 import '../config/project_config.dart';
 import '../diagnostics/diagnostic_bag.dart';
+import '../diagnostics/display_paths.dart';
 import '../load/openapi_version.dart';
 import '../load/spec_loader.dart';
 import '../normalize/normalizer.dart';
@@ -12,10 +13,12 @@ import '../overrides/override_loader.dart';
 /// Nothing is generated. Problems go to the [DiagnosticBag] given to the
 /// constructor.
 final class SpecChecker {
-  /// Creates a checker that reports to [_diagnostics].
-  const SpecChecker(this._diagnostics);
+  /// Creates a checker that reports to [_diagnostics]; [_paths] names files
+  /// in diagnostics.
+  const SpecChecker(this._diagnostics, [this._paths = const DisplayPaths()]);
 
   final DiagnosticBag _diagnostics;
+  final DisplayPaths _paths;
 
   /// Checks the spec of every client in [config].
   ///
@@ -26,12 +29,11 @@ final class SpecChecker {
   /// without it. [only] limits the run to clients with these names; empty
   /// means all. A file shared by several clients is checked once per
   /// distinct preset, set of disabled rules and overrides file; the bag
-  /// reports a diagnostic the runs share once. Spec and overrides paths in
-  /// diagnostics are relative to the config file's directory.
+  /// reports a diagnostic the runs share once. Diagnostics name files
+  /// relative to the working directory (see [DisplayPaths]).
   void check(ProjectConfig config, {Set<String> only = const {}}) {
     final loader = SpecLoader(_diagnostics);
     final detector = OpenApiVersionDetector(_diagnostics);
-    final configDir = p.dirname(p.absolute(config.file));
     // A run is a file with a preset, a set of disabled rules and overrides.
     final checked = <(String, Preset?, String, String?)>{};
     for (final client in config.clients) {
@@ -47,7 +49,7 @@ final class SpecChecker {
       if (!checked.add(run)) continue;
       final document = loader.load(
         client.input,
-        displayPath: p.relative(client.input, from: configDir),
+        displayPath: _paths.of(client.input),
       );
       if (document == null) continue;
       final version = detector.detect(document);
@@ -56,7 +58,7 @@ final class SpecChecker {
           ? null
           : OverrideLoader(_diagnostics).load(
               overridesPath,
-              displayPath: p.relative(overridesPath, from: configDir),
+              displayPath: _paths.of(overridesPath),
             );
       Normalizer(
         _diagnostics,

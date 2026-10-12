@@ -4,12 +4,14 @@ import 'package:io/io.dart' show ExitCode;
 import '../check/spec_checker.dart';
 import '../config/config_loader.dart';
 import '../diagnostics/diagnostic_bag.dart';
+import '../diagnostics/display_paths.dart';
 import '../diagnostics/reporters.dart';
 
 /// `typed_openapi check`: analyzes specs without generating code.
 final class CheckCommand extends Command<int> {
-  /// Creates the command; reports are written to [_out].
-  CheckCommand(this._out) {
+  /// Creates the command; reports are written to [_out] and name files as
+  /// [_paths] does.
+  CheckCommand(this._out, [this._paths = const DisplayPaths()]) {
     argParser
       ..addOption(
         'config',
@@ -29,6 +31,7 @@ final class CheckCommand extends Command<int> {
   static const exitHasErrors = 1;
 
   final StringSink _out;
+  final DisplayPaths _paths;
 
   @override
   String get name => 'check';
@@ -45,7 +48,10 @@ final class CheckCommand extends Command<int> {
   Future<int> run() async {
     final results = argResults!;
     final diagnostics = DiagnosticBag();
-    final config = ConfigLoader(diagnostics).load(results.option('config')!);
+    final config = ConfigLoader(
+      diagnostics,
+      _paths,
+    ).load(results.option('config')!);
     if (config != null) {
       final only = results.rest.toSet();
       final unknown = only.difference(config.declaredClients);
@@ -54,7 +60,7 @@ final class CheckCommand extends Command<int> {
           'Unknown client: ${(unknown.toList()..sort()).join(', ')}.',
         );
       }
-      SpecChecker(diagnostics).check(config, only: only);
+      SpecChecker(diagnostics, _paths).check(config, only: only);
     }
     final format = ReportFormat.values.byName(results.option('format')!);
     _out.writeln(format.reporter.format(diagnostics));

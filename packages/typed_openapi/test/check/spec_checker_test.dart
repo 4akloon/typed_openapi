@@ -1,13 +1,16 @@
+import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:typed_openapi/src/check/spec_checker.dart';
 import 'package:typed_openapi/src/config/config_loader.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_bag.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
+import 'package:typed_openapi/src/diagnostics/display_paths.dart';
 
 import '../helpers/temp_dir.dart';
 
 void main() {
-  test('checks every client and names files relative to the config', () {
+  test('checks every client and names files relative to the working '
+      'directory', () {
     final dir = TempDir();
     dir.write(
       'specs/ok.yaml',
@@ -22,7 +25,7 @@ clients:
 ''');
     final bag = DiagnosticBag();
     final config = ConfigLoader(bag).load(path)!;
-    SpecChecker(bag).check(config);
+    SpecChecker(bag, DisplayPaths(dir.path)).check(config);
     expect(
       bag.all.map((d) => (d.code, d.file)),
       unorderedEquals([
@@ -55,7 +58,10 @@ clients:
     rules: {bool-required-to-array: false}
 ''');
     final bag = DiagnosticBag();
-    SpecChecker(bag).check(ConfigLoader(bag).load(path)!);
+    SpecChecker(
+      bag,
+      DisplayPaths(dir.path),
+    ).check(ConfigLoader(bag).load(path)!);
     expect(bag.all.map((d) => (d.code, d.file)), [
       (DiagnosticCode.boolRequired, 'a.yaml'),
       (DiagnosticCode.invalidValue, 'b.yaml'),
@@ -87,7 +93,10 @@ clients:
     overrides: specs/missing.yaml
 ''');
     final bag = DiagnosticBag();
-    SpecChecker(bag).check(ConfigLoader(bag).load(path)!);
+    SpecChecker(
+      bag,
+      DisplayPaths(dir.path),
+    ).check(ConfigLoader(bag).load(path)!);
     expect(
       bag.all.map((d) => (d.code, d.file)),
       unorderedEquals([
@@ -106,7 +115,7 @@ clients:
 ''');
     final bag = DiagnosticBag();
     final config = ConfigLoader(bag).load(path)!;
-    SpecChecker(bag).check(config, only: {'a'});
+    SpecChecker(bag, DisplayPaths(dir.path)).check(config, only: {'a'});
     expect(bag.all.single.file, 'a.yaml');
   });
 
@@ -120,7 +129,7 @@ clients:
 ''');
     final bag = DiagnosticBag();
     final config = ConfigLoader(bag).load(path)!;
-    SpecChecker(bag).check(config);
+    SpecChecker(bag, DisplayPaths(dir.path)).check(config);
     expect(bag.all.single.code, DiagnosticCode.unsupportedOpenApiVersion);
   });
 
@@ -146,7 +155,10 @@ clients:
   c: {input: shared.yaml, output: lib/c}
 ''');
     final bag = DiagnosticBag();
-    SpecChecker(bag).check(ConfigLoader(bag).load(path)!);
+    SpecChecker(
+      bag,
+      DisplayPaths(dir.path),
+    ).check(ConfigLoader(bag).load(path)!);
     // a and c share one run (TOA201); b runs without the fix (TOA111).
     expect(bag.all.map((d) => d.code), [
       DiagnosticCode.boolRequired,
@@ -173,7 +185,7 @@ clients:
 ''');
     final bag = DiagnosticBag();
     final config = ConfigLoader(bag).load(path)!;
-    SpecChecker(bag).check(config);
+    SpecChecker(bag, DisplayPaths(dir.path)).check(config);
     expect(
       bag.sorted.map((d) => (d.code, d.file, d.pointer?.value)),
       [
@@ -203,7 +215,10 @@ clients:
   b: {input: b.yaml, output: lib/b}
 ''');
     final bag = DiagnosticBag();
-    SpecChecker(bag).check(ConfigLoader(bag).load(path)!);
+    SpecChecker(
+      bag,
+      DisplayPaths(dir.path),
+    ).check(ConfigLoader(bag).load(path)!);
     expect(bag.all.map((d) => (d.code, d.file, d.pointer?.value)), [
       (DiagnosticCode.unknownKey, 'common.yaml', '#/Err/bogus'),
     ]);
@@ -223,7 +238,10 @@ clients:
       'clients:\n  api: {input: api.json, output: lib/api}\n',
     );
     final bag = DiagnosticBag();
-    SpecChecker(bag).check(ConfigLoader(bag).load(path)!);
+    SpecChecker(
+      bag,
+      DisplayPaths(dir.path),
+    ).check(ConfigLoader(bag).load(path)!);
     expect(bag.all.single.code, DiagnosticCode.nullableAfterOpenApi30);
   });
 
@@ -235,7 +253,57 @@ clients:
       'clients:\n  api: {input: api.yaml, output: lib/api}\n',
     );
     final bag = DiagnosticBag();
-    SpecChecker(bag).check(ConfigLoader(bag).load(path)!);
+    SpecChecker(
+      bag,
+      DisplayPaths(dir.path),
+    ).check(ConfigLoader(bag).load(path)!);
     expect(bag.all.single.code, DiagnosticCode.missingOpenApiVersion);
+  });
+
+  test('names files by the working directory, not the config', () {
+    final dir = TempDir();
+    dir.write('specs/api.yaml', r'''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+components: {schemas: {E: {$ref: "common.yaml#/Err"}}}
+''');
+    dir.write('specs/common.yaml', 'Err: {type: object, bogus: 1}\n');
+    final path = dir.write('config/typed_openapi.yaml', '''
+clients:
+  api: {input: ../specs/api.yaml, output: ../lib/api}
+''');
+    final bag = DiagnosticBag();
+    SpecChecker(
+      bag,
+      DisplayPaths(dir.path),
+    ).check(ConfigLoader(bag).load(path)!);
+    expect(bag.all.map((d) => (d.code, d.file)), [
+      (DiagnosticCode.unknownKey, p.join('specs', 'common.yaml')),
+    ]);
+  });
+
+  test('names a file outside the working directory by its absolute path', () {
+    final dir = TempDir();
+    dir.write('project/api.yaml', r'''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+components: {schemas: {E: {$ref: "../shared/common.yaml#/Err"}}}
+''');
+    dir.write('shared/common.yaml', 'Err: {type: object, bogus: 1}\n');
+    final path = dir.write('project/typed_openapi.yaml', '''
+clients:
+  api: {input: api.yaml, output: lib/api}
+''');
+    final bag = DiagnosticBag();
+    SpecChecker(
+      bag,
+      DisplayPaths(p.join(dir.path, 'project')),
+    ).check(ConfigLoader(bag).load(path)!);
+    expect(bag.all.map((d) => (d.code, d.file)), [
+      (
+        DiagnosticCode.unknownKey,
+        p.normalize(p.join(dir.path, 'shared', 'common.yaml')),
+      ),
+    ]);
   });
 }

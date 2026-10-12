@@ -129,7 +129,7 @@ final class OverrideResolver {
     }
     final schemas = <(SchemaTarget, List<OverrideTarget>)>[];
     for (final entry in _overrides.schemas) {
-      final schema = _schema(entry, model);
+      final schema = _schema(entry, model, documents);
       if (schema == null) continue;
       schemas.add((
         SchemaTarget(entry, schema),
@@ -358,7 +358,11 @@ final class OverrideResolver {
     return ParameterTarget(entry, matches.single);
   }
 
-  SchemaObject? _schema(SchemaOverride entry, SpecModel model) {
+  SchemaObject? _schema(
+    SchemaOverride entry,
+    SpecModel model,
+    SpecDocuments documents,
+  ) {
     final written = model.document.components?.schemas[entry.key];
     if (written == null) {
       _notFound(entry, 'No schema "${entry.key}" in components.schemas.');
@@ -370,7 +374,9 @@ final class OverrideResolver {
       entry,
       schema == null
           ? 'The \$ref of schema "${entry.key}" cannot be followed.'
-          : 'Schema "${entry.key}" is the boolean schema ${schema.location}; '
+          : 'Schema "${entry.key}" is the boolean schema '
+                '${documents.displayPath(schema.location.document)}'
+                '${schema.pointer.value}; '
                 'it has no fields to change.',
     );
     return null;
