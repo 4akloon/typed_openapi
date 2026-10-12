@@ -25,4 +25,29 @@ final class TempDir {
       ..writeAsStringSync(content);
     return file.path;
   }
+
+  /// Creates a symbolic link at [relativePath] to [target], a path relative
+  /// to [directory]; returns the link's path.
+  String link(String relativePath, String target) {
+    final link = Link(p.join(path, relativePath))
+      ..parent.createSync(recursive: true)
+      ..createSync(p.join(path, target));
+    return link.path;
+  }
+
+  /// Creates a hard link at [relativePath] to the file at [target], a path
+  /// relative to [directory]; returns the link's path.
+  String hardLink(String relativePath, String target) {
+    final link = p.join(path, relativePath);
+    Directory(p.dirname(link)).createSync(recursive: true);
+    final result = Process.runSync('ln', [p.join(path, target), link]);
+    if (result.exitCode != 0) throw StateError('ln failed: ${result.stderr}');
+    return link;
+  }
+
+  /// Whether the file system of [directory] ignores the case of names.
+  bool get isCaseInsensitive {
+    write('.case_probe', '');
+    return File(p.join(path, '.CASE_PROBE')).existsSync();
+  }
 }

@@ -9,6 +9,7 @@ import '../diagnostics/display_paths.dart';
 import '../diagnostics/json_pointer.dart';
 import '../diagnostics/severity.dart';
 import '../diagnostics/severity_levels.dart';
+import '../generate/real_paths.dart';
 import '../ir/names.dart';
 import '../load/yaml_composer.dart';
 import '../normalize/normalizer.dart';
@@ -262,11 +263,7 @@ final class ConfigLoader {
       for (var j = i + 1; j < clients.length; j++) {
         final a = clients[i];
         final b = clients[j];
-        final overlap =
-            p.equals(a.output, b.output) ||
-            p.isWithin(a.output, b.output) ||
-            p.isWithin(b.output, a.output);
-        if (!overlap) continue;
+        if (!RealPaths.overlap(a.output, b.output)) continue;
         _diagnostics.report(
           .outputOverlap,
           'Clients "${a.name}" and "${b.name}" write to overlapping '

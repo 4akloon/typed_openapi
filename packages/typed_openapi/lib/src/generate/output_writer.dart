@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 import '../config/project_config.dart';
 import '../diagnostics/diagnostic_bag.dart';
 import '../diagnostics/display_paths.dart';
+import 'real_paths.dart';
 
 /// What [OutputWriter.write] did to an output directory.
 final class OutputChanges {
@@ -27,23 +28,49 @@ final class OutputChanges {
   final int deleted;
 }
 
+/// What an output directory holds before a run.
+final class _Existing {
+  const _Existing(this.files, this.directories);
+
+  /// An output directory that does not exist yet.
+  static const none = _Existing({}, {});
+
+  /// The files, by path relative to the directory with `/` separators.
+  final Set<String> files;
+
+  /// The directories, the same way.
+  final Set<String> directories;
+}
+
 /// Writes the generated files of a client into its output directory, which
 /// the generator owns (decisions 15 and 17 of M8).
 ///
-/// A file is written only when its content changes, through a temporary
-/// file that is renamed over it, so a reader never sees half a file; every
-/// file the generator did not write this time is deleted, and so are
-/// directories left empty. The manifest [manifest] lists the generator, a
-/// hash of the inputs and every file with its hash; it is written last.
+/// A run is atomic: the whole new tree and its manifest are built in a
+/// temporary directory next to the output, which is then swapped in (the old
+/// directory is renamed to a backup, the new one to the output, the backup
+/// is removed). Any failure puts the old directory back, so the output is
+/// the previous run's or the new one, never a mix, and a failed first run
+/// leaves nothing. A run that would change nothing does not touch the
+/// directory. Files the generator did not write this time are gone with the
+/// old directory. The manifest lists the generator, a hash of the inputs and
+/// every file with its hash.
 ///
 /// The directory is refused (TOA830, nothing is written) when it holds a
 /// `pubspec.yaml`, is the `lib` directory of a package, holds an input of
-/// the run (the config, the spec, the overrides or the baseline file), or
-/// holds files but no manifest: files the generator did not write.
+/// the run (the config, the spec, the overrides or the baseline file, also
+/// through a symbolic link, a hard link or a name that differs in case),
+/// holds a symbolic link, or holds files but no manifest of this generator.
+/// A process killed between the swap's two renames leaves the backup and
+/// the new tree in sibling directories named `.<output>.typed_openapi-*`.
 final class OutputWriter {
   /// Creates a writer that reports to [_diagnostics]; [_paths] names
-  /// directories in diagnostics.
-  const OutputWriter(this._diagnostics, [this._paths = const DisplayPaths()]);
+  /// directories in diagnostics. [beforeInstall] is called between the
+  /// renames of the swap, where tests make a failure.
+  const OutputWriter(
+    this._diagnostics, [
+    this._paths = const DisplayPaths(),
+    this.beforeInstall,
+  ]);
 
   /// The name of the manifest in the output directory.
   static const manifest = '.typed_openapi.json';
@@ -51,14 +78,20 @@ final class OutputWriter {
   /// The generator and its version, as the manifest names them.
   static const generator = 'typed_openapi 0.0.1';
 
+  /// What a manifest's `generator` starts with, whatever the version.
+  static const _generatorName = 'typed_openapi';
+
+  /// Called after the old directory is renamed to its backup and before the
+  /// new one is renamed to the output.
+  final void Function()? beforeInstall;
+
   final DiagnosticBag _diagnostics;
   final DisplayPaths _paths;
 
   /// Writes [files] (paths relative to the output directory of [client])
   /// and the manifest with [inputs], the hash of what they were generated
   /// from; [protected] are the input files of the run, which the directory
-  /// must not hold. Returns null after reporting why nothing, or not
-  /// everything, was written.
+  /// must not hold. Returns null after reporting why nothing was written.
   OutputChanges? write(
     ClientConfig client,
     Map<String, String> files, {
@@ -66,35 +99,58 @@ final class OutputWriter {
     List<String> protected = const [],
   }) {
     final root = p.normalize(p.absolute(client.output));
-    if (!_owned(client, root, protected)) return null;
-    final sorted = files.keys.toList()..sort();
-    var written = 0;
-    var unchanged = 0;
-    var deleted = 0;
+    final created = <Directory>[];
+    Directory? staging;
     try {
-      for (final path in sorted) {
-        if (_writeFile(p.join(root, path), files[path]!)) {
-          written++;
-        } else {
+      final existing = _inspect(client, root, protected);
+      if (existing == null) return null;
+      final keys = files.keys.toList()..sort();
+      final text = manifestOf(files, inputs: inputs);
+      var written = 0;
+      var unchanged = 0;
+      for (final path in keys) {
+        if (existing.files.contains(path) &&
+            _holds(p.join(root, path), files[path]!)) {
           unchanged++;
+        } else {
+          written++;
         }
       }
-      final keep = {
-        ...sorted.map((f) => p.join(root, f)),
-        p.join(root, manifest),
+      final deleted = existing.files
+          .where((f) => f != manifest && !files.containsKey(f))
+          .length;
+      final directories = {
+        for (final path in keys)
+          for (var d = p.posix.dirname(path); d != '.'; d = p.posix.dirname(d))
+            d,
       };
-      final directory = Directory(root);
-      final entries = directory.listSync(recursive: true, followLinks: false)
-        ..sort((a, b) => b.path.compareTo(a.path));
-      for (final entry in entries) {
-        if (entry is Directory) {
-          if (entry.listSync().isEmpty) entry.deleteSync();
-        } else if (!keep.contains(entry.path)) {
-          entry.deleteSync();
-          deleted++;
-        }
+      final same =
+          written == 0 &&
+          deleted == 0 &&
+          existing.files.contains(manifest) &&
+          _holds(p.join(root, manifest), text) &&
+          existing.directories.length == directories.length &&
+          existing.directories.containsAll(directories);
+      final changes = OutputChanges(
+        written: written,
+        unchanged: unchanged,
+        deleted: deleted,
+      );
+      if (same) return changes;
+      final parent = Directory(p.dirname(root));
+      for (final missing in _missing(parent)) {
+        missing.createSync();
+        created.add(missing);
       }
-      _writeFile(p.join(root, manifest), manifestOf(files, inputs: inputs));
+      staging = parent.createTempSync('.${p.basename(root)}.typed_openapi-');
+      for (final path in keys) {
+        _writeFile(p.join(staging.path, path), files[path]!);
+      }
+      _writeFile(p.join(staging.path, manifest), text);
+      _install(staging, root, hasOld: Directory(root).existsSync());
+      staging = null;
+      created.clear();
+      return changes;
     } on FileSystemException catch (e) {
       _diagnostics.report(
         .outputNotWritten,
@@ -106,12 +162,16 @@ final class OutputWriter {
             'again.',
       );
       return null;
+    } finally {
+      _discard(staging);
+      for (final directory in created.reversed) {
+        try {
+          directory.deleteSync();
+        } on FileSystemException {
+          // Not empty or not ours any more: it stays.
+        }
+      }
     }
-    return OutputChanges(
-      written: written,
-      unchanged: unchanged,
-      deleted: deleted,
-    );
   }
 
   /// The manifest of [files] generated from [inputs]: JSON with sorted
@@ -131,65 +191,179 @@ final class OutputWriter {
     })}\n';
   }
 
-  /// Whether the generator may own [root]; reports why not.
-  bool _owned(ClientConfig client, String root, List<String> protected) {
-    void refuse(String why, String fix) => _diagnostics.report(
-      .outputNotOwned,
-      'Client "${client.name}" is not generated: its output directory '
-      '${_paths.of(root)} $why. The generator deletes every file there it '
-      'did not write.',
-      file: _paths.of(root),
-      fix: fix,
-    );
+  /// The directories above [directory] that do not exist, outermost first,
+  /// then [directory] itself if it does not exist.
+  static List<Directory> _missing(Directory directory) {
+    final result = <Directory>[];
+    var current = directory.absolute;
+    while (!current.existsSync()) {
+      result.add(current);
+      final parent = current.parent;
+      if (parent.path == current.path) break;
+      current = parent;
+    }
+    return result.reversed.toList();
+  }
+
+  /// Swaps [staging] in as [root]; the old directory, if [hasOld], goes to a
+  /// backup first, comes back when the swap fails and is removed when it
+  /// works.
+  void _install(Directory staging, String root, {required bool hasOld}) {
+    final backup = Directory('${staging.path}-old');
+    final output = Directory(root);
+    if (hasOld) output.renameSync(backup.path);
+    try {
+      beforeInstall?.call();
+      staging.renameSync(root);
+    } on Object {
+      if (hasOld) backup.renameSync(root);
+      rethrow;
+    }
+    if (hasOld) {
+      try {
+        backup.deleteSync(recursive: true);
+      } on FileSystemException catch (e) {
+        _diagnostics.report(
+          .outputNotWritten,
+          'The new output in ${_paths.of(root)} is in place, but the old '
+          'one, moved to ${_paths.of(backup.path)}, could not be removed: '
+          '${e.message}.',
+          file: _paths.of(root),
+          fix: 'Remove ${_paths.of(backup.path)} by hand.',
+        );
+      }
+    }
+  }
+
+  /// Removes the temporary directory [directory] of a failed run.
+  static void _discard(Directory? directory) {
+    if (directory == null) return;
+    try {
+      if (directory.existsSync()) directory.deleteSync(recursive: true);
+    } on FileSystemException {
+      // Nothing more to do for a directory that cannot be removed.
+    }
+  }
+
+  /// What [root] holds, or null after reporting why the generator may not
+  /// own it (TOA830).
+  _Existing? _inspect(ClientConfig client, String root, List<String> inputs) {
+    _Existing? refuse(String why, String fix) {
+      _diagnostics.report(
+        .outputNotOwned,
+        'Client "${client.name}" is not generated: its output directory '
+        '${_paths.of(root)} $why. The generator deletes every file there it '
+        'did not write.',
+        file: _paths.of(root),
+        fix: fix,
+      );
+      return null;
+    }
+
     const move =
         'Point output to a directory of its own, such as '
         'lib/src/<client>.';
     final type = FileSystemEntity.typeSync(root, followLinks: false);
-    if (type == FileSystemEntityType.notFound) return true;
+    if (type == FileSystemEntityType.notFound) return _Existing.none;
+    if (type == FileSystemEntityType.link) {
+      return refuse(
+        'is a symbolic link, which the generator does not follow',
+        move,
+      );
+    }
     if (type != FileSystemEntityType.directory) {
-      refuse('is not a directory', move);
-      return false;
+      return refuse('is not a directory', move);
     }
     if (File(p.join(root, 'pubspec.yaml')).existsSync()) {
-      refuse('holds a pubspec.yaml', move);
-      return false;
+      return refuse('holds a pubspec.yaml', move);
     }
     if (p.basename(root) == 'lib' &&
         File(p.join(p.dirname(root), 'pubspec.yaml')).existsSync()) {
-      refuse('is the lib directory of a package', move);
-      return false;
+      return refuse('is the lib directory of a package', move);
     }
+    final protected = [
+      for (final input in inputs)
+        if (File(input).existsSync()) input,
+    ];
     for (final input in protected) {
-      final path = p.normalize(p.absolute(input));
-      if (p.isWithin(root, path)) {
-        refuse('holds ${_paths.of(path)}, an input of the run', move);
-        return false;
+      if (RealPaths.isWithin(root, input)) {
+        return refuse('holds ${_paths.of(input)}, an input of the run', move);
       }
     }
-    final entries = Directory(root).listSync();
-    if (entries.isNotEmpty && !File(p.join(root, manifest)).existsSync()) {
-      refuse(
-        'holds files but no $manifest, so they were not written by it',
+    final entries = Directory(
+      root,
+    ).listSync(recursive: true, followLinks: false);
+    if (entries.isEmpty) return _Existing.none;
+    final lengths = {
+      for (final input in protected) input: File(input).lengthSync(),
+    };
+    final files = <String>{};
+    final directories = <String>{};
+    for (final entry in entries) {
+      final path = p.posix.joinAll(p.split(p.relative(entry.path, from: root)));
+      switch (entry) {
+        case Link():
+          return refuse(
+            'holds a symbolic link, $path, which the generator does not '
+                'follow',
+            'Remove the link, or point output to a new directory.',
+          );
+        case Directory():
+          directories.add(path);
+        case _:
+          // Whatever the path, never delete a file that is an input.
+          for (final MapEntry(key: input, value: length) in lengths.entries) {
+            if (File(entry.path).lengthSync() == length &&
+                FileSystemEntity.identicalSync(entry.path, input)) {
+              return refuse(
+                'holds ${_paths.of(entry.path)}, which is the input '
+                '${_paths.of(input)} of the run',
+                move,
+              );
+            }
+          }
+          files.add(path);
+      }
+    }
+    if (!_isManifest(File(p.join(root, manifest)))) {
+      return refuse(
+        files.contains(manifest)
+            ? 'holds a $manifest that is not a manifest of typed_openapi, so '
+                  'its files were not written by it'
+            : 'holds files but no $manifest, so they were not written by it',
         'Empty the directory, or point output to a new one.',
       );
-      return false;
     }
-    return true;
+    return _Existing(files, directories);
   }
 
-  /// Writes [content] to [path] through a temporary file, unless the file
-  /// has it already; returns whether it was written.
-  static bool _writeFile(String path, String content) {
-    final file = File(path);
-    if (file.existsSync() && file.readAsStringSync() == content) return false;
-    file.parent.createSync(recursive: true);
-    final temp = File('$path.typed_openapi.tmp');
+  /// Whether [file] exists and is a manifest of this generator, of any
+  /// version.
+  static bool _isManifest(File file) {
+    if (!file.existsSync()) return false;
     try {
-      temp.writeAsStringSync(content, flush: true);
-      temp.renameSync(path);
-    } finally {
-      if (temp.existsSync()) temp.deleteSync();
+      final json = jsonDecode(file.readAsStringSync());
+      return json is Map<String, Object?> &&
+          json['generator'] is String &&
+          (json['generator']! as String).startsWith('$_generatorName ');
+    } on FormatException {
+      return false;
     }
-    return true;
+  }
+
+  /// Whether the file at [path] holds [content].
+  static bool _holds(String path, String content) {
+    try {
+      return File(path).readAsStringSync() == content;
+    } on FormatException {
+      return false;
+    }
+  }
+
+  /// Writes [content] to [path], creating its directory.
+  static void _writeFile(String path, String content) {
+    File(path)
+      ..parent.createSync(recursive: true)
+      ..writeAsStringSync(content, flush: true);
   }
 }

@@ -279,11 +279,21 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   was decoded with (`discriminator`); one made in code writes the first
   mapping value. `toString` prints `<redacted>` for `FieldIr.sensitive`
   (`writeOnly` or `format: password`).
-- `generate/` - `OutputWriter` (writes changed files through a temp file
-  and rename, deletes what it did not write and empty directories, writes
-  the manifest `.typed_openapi.json` last; refuses an output that holds a
-  `pubspec.yaml`, is a package's `lib`, holds an input of the run, or holds
-  files without a manifest: TOA830; I/O errors are TOA831).
+- `generate/` - `OutputWriter` (atomic per run: the whole tree and the
+  manifest `.typed_openapi.json` are built in a temp sibling directory,
+  then the old directory is renamed to a backup, the new one to the output,
+  the backup removed; a failure restores the backup, a failed first run
+  leaves nothing, a run that changes nothing does not swap; refuses with
+  TOA830 an output that holds a `pubspec.yaml`, is a package's `lib`, holds
+  a symbolic link, holds an input of the run, or holds files without a
+  manifest that parses as JSON and names `typed_openapi` as its generator;
+  I/O errors, also an unreadable directory, are TOA831) and `RealPaths`
+  (paths compared with symbolic links resolved and case ignored where the
+  file system ignores it, found by a probe; `ConfigLoader` uses it for
+  TOA904 too). An input of the run is also found by file identity
+  (`FileSystemEntity.identical`) among the files about to be deleted, so a
+  hard link or a case-different name never gets an input deleted. A client
+  whose output overlaps another's (TOA904) is skipped by `generate`.
 - `check/` - `SpecChecker`: config -> load -> version -> overrides ->
   `Normalizer` -> `IrBuilder` once per run (file, preset, rules, overrides
   file, `GenerationConfig.key`); an overrides file that cannot be used is

@@ -7,11 +7,13 @@ import 'package:io/io.dart' show ExitCode;
 
 import '../check/spec_checker.dart';
 import '../config/config_loader.dart';
+import '../config/project_config.dart';
 import '../diagnostics/diagnostic_bag.dart';
 import '../diagnostics/display_paths.dart';
 import '../diagnostics/reporters.dart';
 import '../emit/model_library.dart';
 import '../generate/output_writer.dart';
+import '../generate/real_paths.dart';
 import 'check_command.dart';
 
 /// `typed_openapi generate`: checks every client as `check` does and
@@ -65,6 +67,7 @@ final class GenerateCommand extends Command<int> {
       }
       final checks = SpecChecker(diagnostics, _paths).check(config, only: only);
       final writer = OutputWriter(diagnostics, _paths);
+      final overlapping = _overlapping(config.clients);
       for (final check in checks) {
         final client = check.client;
         final ir = check.ir;
@@ -72,6 +75,13 @@ final class GenerateCommand extends Command<int> {
           lines.add(
             'Skipped ${client.name}: its check reports errors; fix them and '
             'run generate again.',
+          );
+          continue;
+        }
+        if (overlapping.contains(client.name)) {
+          lines.add(
+            'Skipped ${client.name}: its output overlaps the output of '
+            'another client (TOA904).',
           );
           continue;
         }
@@ -102,6 +112,17 @@ final class GenerateCommand extends Command<int> {
         ? CheckCommand.exitHasErrors
         : ExitCode.success.code;
   }
+
+  /// The names of the clients whose output directory is, or is inside, that
+  /// of another client, also through symbolic links or a different case.
+  static Set<String> _overlapping(List<ClientConfig> clients) => {
+    for (var i = 0; i < clients.length; i++)
+      for (var j = i + 1; j < clients.length; j++)
+        if (RealPaths.overlap(clients[i].output, clients[j].output)) ...[
+          clients[i].name,
+          clients[j].name,
+        ],
+  };
 
   /// The hash of what the code of [check]'s client is generated from: the
   /// content of every file the run read, the client's settings that change

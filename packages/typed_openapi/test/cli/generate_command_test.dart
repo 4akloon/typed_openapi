@@ -182,4 +182,183 @@ void main() {
       expect(tree('gen/pets').keys, ['notes.txt']);
     });
   });
+
+  group('never deletes an input of the run', () {
+    const manifest = '{"generator": "typed_openapi 0.0.1", "files": {}}';
+
+    test('reached through a symbolic link', () async {
+      dir
+        ..link('alias', 'specs')
+        ..write('specs/.typed_openapi.json', manifest);
+      final (code, out) = await generate(
+        '  pets: {input: alias/pets.yaml, output: specs}\n',
+      );
+      expect(code, 1);
+      expect(out, contains('error TOA830 output-not-owned'));
+      expect(out, contains('an input of the run'));
+      expect(tree('specs').keys, ['.typed_openapi.json', 'pets.yaml']);
+    });
+
+    test('named with another case', () async {
+      if (!dir.isCaseInsensitive) {
+        markTestSkipped('the file system is case-sensitive');
+        return;
+      }
+      dir.write('specs/.typed_openapi.json', manifest);
+      final (code, out) = await generate(
+        '  pets: {input: Specs/pets.yaml, output: SPECS}\n',
+      );
+      expect(code, 1);
+      expect(out, contains('error TOA830 output-not-owned'));
+      expect(tree('specs').keys, ['.typed_openapi.json', 'pets.yaml']);
+    });
+
+    test('the config file, found through a link', () async {
+      dir
+        ..write('gen/.typed_openapi.json', manifest)
+        ..link('alias', 'gen');
+      // The config sits in the output directory.
+      final out = StringBuffer();
+      dir.write(
+        'gen/typed_openapi.yaml',
+        'clients:\n  pets: {input: ../specs/pets.yaml, output: ../gen}\n',
+      );
+      final code = await TypedOpenApiCli(
+        out: out,
+        err: out,
+        workingDirectory: dir.path,
+      ).run(['generate', '--config', 'alias/typed_openapi.yaml']);
+      expect(code, 1);
+      expect(out.toString(), contains('error TOA830 output-not-owned'));
+      expect(out.toString(), contains('an input of the run'));
+      expect(
+        File(p.join(dir.path, 'gen/typed_openapi.yaml')).existsSync(),
+        isTrue,
+      );
+    });
+  });
+
+  group('clients with overlapping outputs are all skipped (TOA904)', () {
+    Future<void> skipped(String clients) async {
+      final (code, out) = await generate(clients);
+      expect(code, 1);
+      expect(out, contains('error TOA904 output-overlap'));
+      expect(out, contains('Skipped a: its output overlaps'));
+      expect(out, contains('Skipped b: its output overlaps'));
+      expect(tree('gen'), isEmpty);
+    }
+
+    test('the same directory', () async {
+      await skipped(
+        '  a: {input: specs/pets.yaml, output: gen/x}\n'
+        '  b: {input: specs/pets.yaml, output: gen/x}\n',
+      );
+    });
+
+    test('one inside the other', () async {
+      await skipped(
+        '  a: {input: specs/pets.yaml, output: gen/x}\n'
+        '  b: {input: specs/pets.yaml, output: gen/x/y}\n',
+      );
+    });
+
+    test('the same directory through a link', () async {
+      Directory(p.join(dir.path, 'gen')).createSync();
+      dir.link('alias', 'gen');
+      await skipped(
+        '  a: {input: specs/pets.yaml, output: gen/x}\n'
+        '  b: {input: specs/pets.yaml, output: alias/x}\n',
+      );
+    });
+
+    test('a client that does not overlap is generated', () async {
+      final (code, out) = await generate(
+        '  a: {input: specs/pets.yaml, output: gen/x}\n'
+        '  b: {input: specs/pets.yaml, output: gen/x/y}\n'
+        '  c: {input: specs/pets.yaml, output: gen/z}\n',
+      );
+      expect(code, 1);
+      expect(out, contains('Generated c in ${p.join('gen', 'z')}'));
+      expect(tree('gen/x'), isEmpty);
+    });
+  });
+
+  group('an output directory that is not what it seems', () {
+    const client = '  pets: {input: specs/pets.yaml, output: gen/pets}\n';
+
+    test('a symbolic link inside is foreign (TOA830)', () async {
+      await generate(client);
+      dir.write('outside/keep.txt', 'mine');
+      dir.link('gen/pets/models/link', 'outside');
+      final before = tree('gen/pets');
+      final (code, out) = await generate(client);
+      expect(code, 1);
+      expect(out, contains('error TOA830 output-not-owned'));
+      expect(out, contains('symbolic link'));
+      expect(tree('outside').keys, ['keep.txt']);
+      expect(tree('gen/pets'), before);
+    });
+
+    test('an unreadable directory is TOA831, not a crash', () async {
+      await generate(client);
+      final output = Directory(p.join(dir.path, 'gen/pets'));
+      Process.runSync('chmod', ['000', output.path]);
+      addTearDown(() => Process.runSync('chmod', ['755', output.path]));
+      if (Directory(output.path).statSync().mode & 0x1ff != 0) {
+        markTestSkipped('permissions are not enforced here');
+        return;
+      }
+      final (code, out) = await generate(client);
+      expect(code, 1);
+      expect(out, contains('error TOA831 output-not-written'));
+    });
+
+    test('a manifest that is not JSON means foreign files (TOA830)', () async {
+      dir
+        ..write('gen/pets/.typed_openapi.json', 'not json')
+        ..write('gen/pets/notes.txt', 'mine');
+      final (code, out) = await generate(client);
+      expect(code, 1);
+      expect(out, contains('error TOA830 output-not-owned'));
+      expect(out, contains('is not a manifest of typed_openapi'));
+      expect(tree('gen/pets').keys, ['.typed_openapi.json', 'notes.txt']);
+    });
+
+    test('a manifest of another generator means foreign files', () async {
+      dir
+        ..write('gen/pets/.typed_openapi.json', '{"generator": "other 1"}')
+        ..write('gen/pets/notes.txt', 'mine');
+      final (code, out) = await generate(client);
+      expect(code, 1);
+      expect(out, contains('is not a manifest of typed_openapi'));
+      expect(tree('gen/pets').keys, ['.typed_openapi.json', 'notes.txt']);
+    });
+
+    test('a file renamed only in case is replaced, not lost', () async {
+      await generate(client);
+      File(
+        p.join(dir.path, 'gen/pets/models/pet.dart'),
+      ).renameSync(p.join(dir.path, 'gen/pets/models/Pet.dart'));
+      final (code, _) = await generate(client);
+      expect(code, 0);
+      final names = Directory(
+        p.join(dir.path, 'gen/pets/models'),
+      ).listSync().map((e) => p.basename(e.path)).toList()..sort();
+      expect(names, ['pet.dart', 'pet_status.dart']);
+    });
+
+    test('a second run leaves the files and the directory alone', () async {
+      await generate(client);
+      final output = p.join(dir.path, 'gen/pets');
+      final before = [
+        Directory(output).statSync().changed,
+        File(p.join(output, 'models/pet.dart')).statSync().changed,
+      ];
+      await generate(client);
+      expect([
+        Directory(output).statSync().changed,
+        File(p.join(output, 'models/pet.dart')).statSync().changed,
+      ], before);
+    });
+  });
 }

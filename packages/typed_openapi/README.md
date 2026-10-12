@@ -32,6 +32,16 @@ dart run typed_openapi check --format json   # also: sarif, github-actions
 dart run typed_openapi generate          # models of every client without errors
 ```
 
+`generate` owns each output directory: it writes the whole new tree and a
+manifest (`.typed_openapi.json`) next to it and swaps it in, so a failed run
+leaves the previous output (or nothing) and never a half tree, and it deletes
+every file there it did not write. It refuses a directory (TOA830) that holds
+a `pubspec.yaml`, is a package's `lib`, holds an input of the run (the config,
+the spec, its `$ref`'d files, the overrides or the baseline; also through
+symbolic links or another letter case), holds a symbolic link, or holds files
+but no manifest of its own. Clients whose output directories overlap are all
+skipped (TOA904). TOA830, TOA831 and TOA904 cannot be lowered.
+
 `check` reads the whole spec, follows its `$ref`s (also into other local
 files) and reports unknown keys, wrong value types, broken or looping
 references and constructs that the declared OpenAPI version does not have.
