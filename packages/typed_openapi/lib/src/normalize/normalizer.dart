@@ -1,18 +1,16 @@
 import '../config/project_config.dart';
-import '../diagnostics/diagnostic.dart';
 import '../diagnostics/diagnostic_bag.dart';
-import '../diagnostics/diagnostic_code.dart';
-import '../diagnostics/json_pointer.dart';
 import '../load/openapi_version.dart';
 import '../load/spec_document.dart';
 import '../load/spec_loader.dart';
-import '../overrides/override_applier.dart';
-import '../overrides/override_resolver.dart';
 import '../overrides/override_set.dart';
 import '../resolve/spec_documents.dart';
-import '../resolve/spec_model.dart';
 import '../resolve/spec_reader.dart';
+import 'normalized_spec.dart';
 import 'normalizer_rule.dart';
+import 'override_origins.dart';
+import 'override_stage.dart';
+import 'rule_edit_applier.dart';
 import 'rules/bool_required_to_array.dart';
 import 'rules/drop_invalid_default.dart';
 import 'rules/enum_rules.dart';
@@ -21,22 +19,9 @@ import 'rules/path_param_rules.dart';
 import 'rules/reference_shape_rules.dart';
 import 'rules/schema_shape_rules.dart';
 import 'spec_edit.dart';
+import 'spec_sources.dart';
 
-/// The result of normalizing a spec.
-final class NormalizedSpec {
-  /// Creates a result.
-  const NormalizedSpec(this.model, this.documents, {this.overrides});
-
-  /// The model of the last pass.
-  final SpecModel model;
-
-  /// The files of the last pass, with every fix applied.
-  final SpecDocuments documents;
-
-  /// The client's overrides, whose spec fields are applied; their
-  /// generation fields are for the generator.
-  final OverrideSet? overrides;
-}
+export 'normalized_spec.dart';
 
 /// Reads a spec into the model, applies the spec fields of the client's
 /// overrides, then runs the rules over it, applies their fixes to the plain
@@ -60,7 +45,8 @@ final class Normalizer {
   }) : _rules = [
          for (final rule in rules ?? Normalizer.rules)
            if (!disabled.contains(rule.name)) rule,
-       ];
+       ],
+       _edits = RuleEditApplier(_diagnostics);
 
   /// How many times the model is read at most.
   static const maxPasses = 3;
@@ -95,6 +81,7 @@ final class Normalizer {
 
   final DiagnosticBag _diagnostics;
   final List<NormalizerRule> _rules;
+  final RuleEditApplier _edits;
 
   /// The framework whose hints the findings carry.
   final Preset? preset;
@@ -107,187 +94,102 @@ final class Normalizer {
     OverrideSet? overrides,
   }) {
     final loader = SpecLoader(_diagnostics);
-    var root = document;
-    var others = const <SpecDocument>[];
-    _OverrideOrigins? origins;
+    var sources = SpecSources(document, const []);
+    OverrideOrigins? origins;
     if (overrides != null && !overrides.isEmpty) {
-      final documents = SpecDocuments(loader, root);
-      final read = DiagnosticBag();
-      final model = SpecReader(
-        read,
-      ).read(root, version, documents: documents);
-      final targets = OverrideResolver(
+      final staged = OverrideStage(
         _diagnostics,
-        overrides,
-      ).resolve(model, documents);
-      final edits = OverrideApplier(
-        _diagnostics,
-        overrides,
-        documents,
-        version,
-      ).edits(targets);
-      final applied = <OverrideEdit>[];
-      final edited = _applyOverrides(documents, overrides, edits, applied);
-      origins = _OverrideOrigins(
-        overrides,
-        before: [
-          ...read.all,
-          for (final rule in _rules)
-            for (final finding in rule.check(
-              RuleContext(model, documents, version),
-            ))
-              finding.diagnostic,
-        ],
-        changes: [
-          for (final OverrideEdit(:edit, :sources) in applied)
-            for (final (entry, field) in sources)
-              (
-                documents.displayPath(edit.location.document),
-                _parentOf(edit.location.pointer),
-                entry.pointer.child(field),
-              ),
-        ],
-      );
-      root = edited[root.uri] ?? root;
-      others = [
-        for (final loaded in documents.loaded)
-          if (loaded.uri != root.uri) edited[loaded.uri] ?? loaded,
-      ];
+        _rules,
+        loader,
+      ).apply(document, version, overrides);
+      sources = staged.sources;
+      origins = staged.origins;
     }
     for (var pass = 1; ; pass++) {
       final scratch = DiagnosticBag();
-      final documents = SpecDocuments(loader, root, others: others);
+      final documents = SpecDocuments(
+        loader,
+        sources.root,
+        others: sources.others,
+      );
       final model = SpecReader(scratch).read(
-        root,
+        sources.root,
         version,
         documents: documents,
       );
-      final context = RuleContext(model, documents, version);
-      final found = [
-        for (final rule in _rules)
-          for (final finding in rule.check(context)) (rule, finding),
-      ];
+      final found = _check(RuleContext(model, documents, version));
       final hasEdits = found.any((f) => f.$2.edits.isNotEmpty);
       if (!hasEdits || pass == maxPasses) {
-        for (final diagnostic in scratch.all) {
-          _diagnostics.add(origins?.attach(diagnostic) ?? diagnostic);
-        }
-        final reported = <SpecEdit>[];
-        for (final (rule, finding) in found) {
-          _report(rule, finding, origins);
-          for (final edit in finding.edits) {
-            // An edit proposed twice (a path item shared by several paths)
-            // is one fix.
-            if (reported.any(edit.sameAs)) continue;
-            reported.add(edit);
-            _notApplied(
-              documents,
-              rule,
-              edit,
-              'the spec still changed after $maxPasses passes',
-            );
-          }
-        }
+        _reportLastPass(documents, scratch, found, origins);
         return NormalizedSpec(model, documents, overrides: overrides);
       }
-      // Every finding of a rule that fixes something in this pass is part of
-      // that fix (a rule may put one edit on the first of several
-      // findings); the other rules' findings come again in the last pass.
-      final fixing = {
-        for (final (rule, finding) in found)
-          if (finding.edits.isNotEmpty) rule,
-      };
-      for (final (rule, finding) in found) {
-        if (fixing.contains(rule)) _report(rule, finding, origins);
-      }
-      final edited = _apply(documents, found);
-      root = edited[root.uri] ?? root;
-      others = [
-        for (final loaded in documents.loaded)
-          if (loaded.uri != root.uri) edited[loaded.uri] ?? loaded,
-      ];
+      _reportFixing(found, origins);
+      sources = SpecSources.edited(
+        sources.root,
+        documents,
+        _edits.apply(documents, found),
+      );
     }
   }
 
-  /// Applies the edits of [found] in order; returns the edited documents by
-  /// URI.
-  ///
-  /// An edit equal to an applied one is skipped. An edit that overlaps an
-  /// applied one waits: it is not reported, because its rule proposes it
-  /// again in the next pass if it is still needed (and the last pass
-  /// reports every edit that is still proposed).
-  Map<Uri, SpecDocument> _apply(
+  /// Every finding of every rule, in rule order.
+  List<(NormalizerRule, Finding)> _check(RuleContext context) => [
+    for (final rule in _rules)
+      for (final finding in rule.check(context)) (rule, finding),
+  ];
+
+  /// Reports what the last pass found: the parser's and resolver's problems
+  /// of [scratch], every finding, and every edit that is still proposed.
+  void _reportLastPass(
     SpecDocuments documents,
+    DiagnosticBag scratch,
     List<(NormalizerRule, Finding)> found,
+    OverrideOrigins? origins,
   ) {
-    final accepted = <SpecEdit>[];
-    final editors = <Uri, TreeEditor>{};
-    for (final (rule, finding) in found) {
-      for (final edit in finding.edits) {
-        if (accepted.any(edit.sameAs)) continue;
-        if (accepted.any((a) => a.overlaps(edit))) continue;
-        final uri = edit.location.document;
-        final document = documents[uri];
-        if (document == null) {
-          _notApplied(documents, rule, edit, 'its file cannot be read');
-          continue;
-        }
-        final editor = editors[uri] ??= TreeEditor(document.root);
-        final problem = editor.apply(edit);
-        if (problem != null) {
-          _notApplied(documents, rule, edit, problem);
-          continue;
-        }
-        accepted.add(edit);
-      }
+    for (final diagnostic in scratch.all) {
+      _diagnostics.add(origins?.attach(diagnostic) ?? diagnostic);
     }
-    return {
-      for (final MapEntry(key: uri, value: editor) in editors.entries)
-        uri: documents[uri]!.withRoot(editor.root),
-    };
-  }
-
-  /// Applies the override [edits] in order and adds the applied ones to
-  /// [applied]; returns the edited documents by URI. An edit that cannot be
-  /// applied is reported at its override.
-  Map<Uri, SpecDocument> _applyOverrides(
-    SpecDocuments documents,
-    OverrideSet overrides,
-    List<OverrideEdit> edits,
-    List<OverrideEdit> applied,
-  ) {
-    final editors = <Uri, TreeEditor>{};
-    for (final override in edits) {
-      final OverrideEdit(:edit, :sources) = override;
-      final uri = edit.location.document;
-      final document = documents[uri]!;
-      final editor = editors[uri] ??= TreeEditor(document.root);
-      final problem = editor.apply(edit);
-      if (problem == null) {
-        applied.add(override);
-        continue;
-      }
-      for (final (entry, field) in sources) {
-        final at = entry.pointer.child(field);
-        _diagnostics.report(
-          .fixNotApplied,
-          'This override was not applied: $problem.',
-          file: overrides.file,
-          pointer: at,
-          span: overrides.spanOf(at),
+    final reported = <SpecEdit>[];
+    for (final (rule, finding) in found) {
+      _report(rule, finding, origins);
+      for (final edit in finding.edits) {
+        // An edit proposed twice (a path item shared by several paths)
+        // is one fix.
+        if (reported.any(edit.sameAs)) continue;
+        reported.add(edit);
+        _edits.reportNotApplied(
+          documents,
+          rule,
+          edit,
+          'the spec still changed after $maxPasses passes',
         );
       }
     }
-    return {
-      for (final MapEntry(key: uri, value: editor) in editors.entries)
-        uri: documents[uri]!.withRoot(editor.root),
+  }
+
+  /// Reports the findings of the rules that fix something in a pass that is
+  /// not the last.
+  ///
+  /// Every finding of such a rule is part of that fix (a rule may put one
+  /// edit on the first of several findings); the other rules' findings come
+  /// again in the last pass.
+  void _reportFixing(
+    List<(NormalizerRule, Finding)> found,
+    OverrideOrigins? origins,
+  ) {
+    final fixing = {
+      for (final (rule, finding) in found)
+        if (finding.edits.isNotEmpty) rule,
     };
+    for (final (rule, finding) in found) {
+      if (fixing.contains(rule)) _report(rule, finding, origins);
+    }
   }
 
   void _report(
     NormalizerRule rule,
     Finding finding,
-    _OverrideOrigins? origins,
+    OverrideOrigins? origins,
   ) {
     final d = finding.diagnostic;
     final preset = this.preset;
@@ -296,88 +198,5 @@ final class Normalizer {
         ? d
         : d.withHints([...d.hints, (preset.name, hint)]);
     _diagnostics.add(origins?.attach(hinted) ?? hinted);
-  }
-
-  /// The node an edit at [pointer] changes: the object or list it sets a
-  /// member of.
-  static JsonPointer _parentOf(JsonPointer pointer) {
-    final tokens = pointer.tokens;
-    return tokens
-        .take(tokens.isEmpty ? 0 : tokens.length - 1)
-        .fold(JsonPointer.root, (at, token) => at.child(token));
-  }
-
-  void _notApplied(
-    SpecDocuments documents,
-    NormalizerRule rule,
-    SpecEdit edit,
-    String reason,
-  ) {
-    final uri = edit.location.document;
-    final pointer = edit.location.pointer;
-    _diagnostics.report(
-      .fixNotApplied,
-      'A fix of rule "${rule.name}" was not applied: $reason.',
-      file: documents.displayPath(uri),
-      pointer: pointer,
-      span: documents[uri]?.spanOf(pointer),
-    );
-  }
-}
-
-/// Which problems of a spec its overrides introduced.
-///
-/// A problem is introduced when the spec as read, before the overrides,
-/// did not have it (same code, file and pointer), and an applied override
-/// changed a member of its node, of a node inside it or of a node around
-/// it.
-final class _OverrideOrigins {
-  _OverrideOrigins(
-    this._overrides, {
-    required List<Diagnostic> before,
-    required this.changes,
-  }) : _before = {for (final d in before) _keyOf(d)};
-
-  final OverrideSet _overrides;
-  final Set<(DiagnosticCode, String?, String?)> _before;
-
-  /// The changed nodes: the file as diagnostics name it, the pointer of the
-  /// node an override set a member of, and the pointer of the override field
-  /// that did.
-  final List<(String, JsonPointer, JsonPointer)> changes;
-
-  /// [diagnostic] with the overrides that introduced it as related
-  /// locations.
-  Diagnostic attach(Diagnostic diagnostic) {
-    final pointer = diagnostic.pointer;
-    if (pointer == null || _before.contains(_keyOf(diagnostic))) {
-      return diagnostic;
-    }
-    final related = [
-      for (final (file, at, field) in changes)
-        if (file == diagnostic.file && _nested(pointer, at))
-          RelatedLocation(
-            message: 'Introduced by this override.',
-            file: _overrides.file,
-            pointer: field,
-            span: _overrides.spanOf(field),
-          ),
-    ];
-    if (related.isEmpty) return diagnostic;
-    return diagnostic.withRelated([...diagnostic.related, ...related]);
-  }
-
-  static (DiagnosticCode, String?, String?) _keyOf(Diagnostic d) =>
-      (d.code, d.file, d.pointer?.value);
-
-  /// Whether one of [a] and [b] is the other or inside it.
-  static bool _nested(JsonPointer a, JsonPointer b) {
-    final x = a.tokens;
-    final y = b.tokens;
-    final length = x.length < y.length ? x.length : y.length;
-    for (var i = 0; i < length; i++) {
-      if (x[i] != y[i]) return false;
-    }
-    return true;
   }
 }

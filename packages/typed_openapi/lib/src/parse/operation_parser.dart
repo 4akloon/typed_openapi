@@ -5,6 +5,7 @@ import '../model/spec_node.dart';
 import 'object_reader.dart';
 import 'parse_context.dart';
 import 'schema_parser.dart';
+import 'server_parser.dart';
 
 /// Reads path items, operations and everything they contain: parameters,
 /// request bodies, responses, headers, media types, encodings, examples,
@@ -12,10 +13,12 @@ import 'schema_parser.dart';
 final class OperationParser {
   /// Creates a parser that reads from [_context] and reads schemas with
   /// [_schemas].
-  const OperationParser(this._context, this._schemas);
+  OperationParser(this._context, this._schemas)
+    : _servers = ServerParser(_context);
 
   final ParseContext _context;
   final SchemaParser _schemas;
+  final ServerParser _servers;
 
   /// Reads the path item [raw] at [pointer].
   RefOr<PathItem>? pathItem(Object? raw, JsonPointer pointer) =>
@@ -47,26 +50,11 @@ final class OperationParser {
 
   /// Reads the server [raw] at [pointer].
   Server? server(Object? raw, JsonPointer pointer) =>
-      _context.node(raw, pointer, 'A server', _server);
+      _servers.server(raw, pointer);
 
   /// Reads the security requirement [raw] at [pointer].
   SecurityRequirement? securityRequirement(Object? raw, JsonPointer pointer) =>
       _context.node(raw, pointer, 'A security requirement', _requirement);
-
-  Server _server(ObjectReader r) {
-    if (r.has('name')) _context.note(.serverName, r.pointer.child('name'));
-    return _context.register(
-      Server(
-        location: r.location,
-        url: r.requiredString('url'),
-        name: r.string('name'),
-        description: r.string('description'),
-        variables: r.map('variables', _serverVariable) ?? const {},
-        extensions: r.extensions,
-        unknownKeys: r.unknownKeys(),
-      ),
-    );
-  }
 
   SecurityRequirement _requirement(ObjectReader r) => _context.register(
     SecurityRequirement(
@@ -286,20 +274,6 @@ final class OperationParser {
       ),
     );
   }
-
-  ServerVariable? _serverVariable(Object? raw, JsonPointer pointer) =>
-      _context.node(raw, pointer, 'A server variable', _serverVariableNode);
-
-  ServerVariable _serverVariableNode(ObjectReader r) => _context.register(
-    ServerVariable(
-      location: r.location,
-      enumValues: r.strings('enum'),
-      defaultValue: r.requiredString('default'),
-      description: r.string('description'),
-      extensions: r.extensions,
-      unknownKeys: r.unknownKeys(),
-    ),
-  );
 
   ParameterStyle? _style(ObjectReader r) {
     final style = r.choice('style', ParameterStyle.values.asNameMap());

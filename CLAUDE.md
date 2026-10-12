@@ -70,7 +70,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `SpecNode` (every node has a `SpecLocation` = file URI + pointer, `x-`
   `extensions` and reported `unknownKeys`), `RefOr<T>` = `Ref<T>` | `Inline<T>`,
   `Schema` = `BooleanSchema` | `SchemaObject` (`$ref` is a keyword there),
-  `OpenApiDocument` and the other OAS objects.
+  `OpenApiDocument` and the other OAS objects, one file per object family
+  (`operation.dart` keeps `Operation` and re-exports the others).
 - `parse/` - `OpenApiParser` (document, components, fragments for `$ref`
   targets), `OperationParser`, `SchemaParser`, all on `ObjectReader` (typed
   field access; wrong types and non-finite numbers -> TOA111, missing required
@@ -81,7 +82,9 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   also remembers every location a parser has read (`visited`): a location is
   read once, so a later read (a `$ref` into a region and then one to its
   parent) gets the first node and reports nothing again;
-  `DialectChecker` turns the constructs into TOA020-TOA022.
+  `DialectChecker` turns the constructs into TOA020-TOA022. `ObjectReader`
+  reports `$ref` objects, commented-out `$ref`s and merge keys through
+  `BundlerConstructs`; `OperationParser` reads servers through `ServerParser`.
 - `resolve/` - `RefTarget` reads a `$ref` value (a query, a bad fragment or a
   file name that is not UTF-8 after percent-decoding -> TOA100, a host ->
   TOA102), `SpecDocuments` loads other local files once by
@@ -94,7 +97,10 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `RuleContext` and returns `Finding`s (a diagnostic and, for a fix,
   `SpecEdit`s: document URI + pointer + add/replace/remove); `TreeEditor`
   applies edits copy-on-write to the plain trees and the model is read
-  again. Parser diagnostics of intermediate passes go to a scratch bag; the
+  again (`Normalizer` runs the passes; `OverrideStage` applies the overrides
+  once, `OverrideOrigins` attributes their problems, `RuleEditApplier`
+  applies rule edits and reports TOA800, `SpecSources` carries the edited
+  files; `rules/` has one rule per file). Parser diagnostics of intermediate passes go to a scratch bag; the
   report has the last pass's, every finding of a rule that fixed something,
   and the last pass's findings. An edit still proposed after 3 passes, or
   whose file cannot be read or whose target is gone, is TOA800. An edit equal
