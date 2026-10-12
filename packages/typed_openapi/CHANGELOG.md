@@ -1,6 +1,23 @@
 ## 0.0.1 - Unreleased
 
 ### Added
+- Models (M8): `generate` writes the models of every client without check
+  errors into its `output` directory: a file per model, enum and union in
+  `models/` and the barrel `models.dart`, all starting with
+  `// dart format off` and clean under `package:lints/recommended` and
+  `flutter_lints`. Models are `final` and `@immutable`, with `fromJson`,
+  `toJson`, deep `==`/`hashCode` and `toString`; a `const` property is a
+  constant getter, `additionalProperties` a map field, constraints, defaults
+  and descriptions doc comments, `deprecated` `@Deprecated`. Enums are open
+  (`Status`, `StatusKnown`, `StatusUnknown`); request models take only known
+  values. Unions wrap their variants (`PetCat(Cat value)`) and pick one by
+  the discriminator, by the JSON type, or, with `union: structural` (config
+  key or schema override), by trying them; a union whose variants cannot be
+  told apart is `JsonValue` (TOA453). The output directory is owned by the
+  generator: files it did not write are deleted, a directory that holds a
+  package, an input or foreign files is refused (TOA830), and
+  `.typed_openapi.json` lists the generator, a hash of the inputs and the
+  files.
 - Semantic IR (M6): `check` builds each client's IR (`IrBuilder`,
   `ClientIr`) from the normalized spec and reports naming and mapping
   problems. Types follow R6.2 (`integer` -> `int`, `number` -> `num` or

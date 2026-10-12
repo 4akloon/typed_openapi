@@ -96,7 +96,7 @@ components:
         ```
         code <kept> [as is]
         ```
-      required: [id, class, other, req_nullable, json]
+      required: [id, class, other, req_nullable, json, req_dates]
       properties:
         id: {type: integer, format: int64}
         class: {type: string}
@@ -104,6 +104,7 @@ components:
         int: {type: integer}
         hashCode: {type: integer}
         req_nullable: {type: [string, 'null']}
+        req_dates: {type: [array, 'null'], items: {type: string, format: date-time}}
         json: {}
         meta: {}
         $dollar: {type: string}

@@ -241,6 +241,30 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   TOA450-TOA452, TOA550-TOA564. TOA552 on an enum value is an info (an
   override cannot name enum values; `x-enum-varnames` in the spec does), and
   `unknown` is reserved in the enum value scope (`unknown_`).
+- `emit/` - the model emitter (M8): `DartCode` (string literals,
+  constants, interpolation, doc comment text: `[`, `]`, `<`, `>`, `\`
+  escaped outside code spans, wrapped at the width), `DartWriter` (own
+  layout: indentation, one-line-or-one-item-a-line lists, `&&` chains),
+  `Imports` (`dart:`, `package:` with sorted `show` lists, relative files),
+  `TypeCodec` (type names, known-enum types for request constructors,
+  decoders, encoders, `DeepEquality` need, JSON patterns of union
+  variants), `ModelEmitter`, `EnumEmitter`, `UnionEmitter` and
+  `ModelLibrary` (`models/<snake>.dart` per declaration, names that clash
+  get `2`, `3`...; the barrel `models.dart`; header
+  `// GENERATED CODE - DO NOT MODIFY BY HAND.` + `// dart format off`).
+  The IR is the only input: constants (`FieldIr.constValue`), constraints
+  (`ConstraintsIr`), the name of the additional properties field and the
+  helper types (`EnumDecl.knownName`/`unknownName`,
+  `UnionVariantIr.name`, `UnionDecl.unknownName`, named after the groups)
+  come from `SchemaMapper`. `UnionDispatch` is `discriminator`, `jsonType`
+  (every variant has its own JSON type; `int` before `num`) or
+  `structural` (`union: structural`); other unions without a discriminator
+  are `JsonValue` (TOA453), duplicate variant types are dropped (TOA454).
+- `generate/` - `OutputWriter` (writes changed files through a temp file
+  and rename, deletes what it did not write and empty directories, writes
+  the manifest `.typed_openapi.json` last; refuses an output that holds a
+  `pubspec.yaml`, is a package's `lib`, holds an input of the run, or holds
+  files without a manifest: TOA830; I/O errors are TOA831).
 - `check/` - `SpecChecker`: config -> load -> version -> overrides ->
   `Normalizer` -> `IrBuilder` once per run (file, preset, rules, overrides
   file, `GenerationConfig.key`); an overrides file that cannot be used is
@@ -267,7 +291,11 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   (`text`, `json`, `sarif`, `github-actions`), `--show-baselined`,
   `--strict-baseline`, client names as positional arguments) and
   `BaselineCommand` (`baseline_command.dart`, subcommands `create` and
-  `prune`) and the hidden `IrCommand` (`ir_command.dart`, prints the IR of
+  `prune`), `GenerateCommand` (`generate_command.dart`: checks like
+  `check`, skips a client with errors (`ClientCheck.errors`), writes the
+  models with `ModelLibrary` and `OutputWriter`, the inputs hash from
+  `ClientCheck.sources` and the client's settings; text report, then a
+  line per client; exit code as `check`) and the hidden `IrCommand` (`ir_command.dart`, prints the IR of
   clients as JSON alone on stdout; the errors and warnings of the run go to
   stderr as text with the count of the infos, a client with no IR is named
   there, and the exit code is the one `check` gives);
@@ -339,7 +367,11 @@ that the API composes, including an `implements` fake of a tag class.
   expected, actual, schema, hint; the first mismatch only, never the value),
   `JsonValue` (extension type over `Object?`, accessors never throw).
 - `model/` - `Patch<T>` (`PatchValue`, `PatchNull`; a field is `Patch<T>?`),
-  `Date` (`format: date`, no time or zone).
+  `Date` (`format: date`, no time or zone), `DeepEquality` (deep `==` and
+  `hashCode` of lists, maps and patches for generated models). The barrel
+  re-exports `immutable` from `package:meta`, so generated code imports only
+  the runtime. `JsonReader` also has `constant`, `additional`, `patchValue`,
+  `asBytes` and `attempt` for generated code.
 - `result/` - sealed `Result<T, E>`: `Success`, `Failure` (`HttpError`,
   `UndocumentedStatus`, `DecodeError`, `TransportError`, `Cancelled`); no
   helper methods, pattern matching only. `E = Never` still needs

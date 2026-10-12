@@ -517,7 +517,18 @@ final class SchemaMapper {
     final pending = _Pending(id)
       ..hint = hint
       ..componentKey = componentKey
-      ..overrideName = overrideName;
+      ..overrideName = overrideName
+      ..jsonKind = switch (kind) {
+        .string => .string,
+        .integer => .integer,
+        .number => .number,
+        .boolean => .boolean,
+        null =>
+          _branches(schema) == null ||
+                  schema.discriminator?.propertyName != null
+              ? .object
+              : null,
+      };
     pending.depth = (hint?._parent?.depth ?? -1) + 1;
     _pending[id] = pending;
     if (enumKey != null) _inlineEnums[enumKey] = pending;
@@ -588,6 +599,34 @@ final class SchemaMapper {
     return true;
   }
 
+  /// Whether every one of [types] has a JSON type of its own, as the
+  /// emitted `switch` on the JSON value tells them apart.
+  bool _distinctKinds(List<DartType> types) {
+    final kinds = <_JsonKind>{};
+    for (final type in types) {
+      final kind = _typeKind(type);
+      if (kind == null || !kinds.add(kind)) return false;
+    }
+    return true;
+  }
+
+  /// The JSON type of every value of [type], or null when it takes values
+  /// of several types.
+  _JsonKind? _typeKind(DartType type) => switch (type) {
+    CoreType(:final kind) => switch (kind) {
+      .string || .dateTime || .date || .bytes || .binary => .string,
+      .integer => .integer,
+      .float || .number => .number,
+      .boolean => .boolean,
+      .json => null,
+    },
+    ListType() => .array,
+    MapType() => .object,
+    CustomType(:final json) => _typeKind(json),
+    PatchType(:final value) => _typeKind(value),
+    NamedType(:final id) => _pending[id]?.jsonKind,
+  };
+
   /// The JSON type every value of [schema] has, or null when it may have
   /// several (or any); [seen] stops a cycle.
   _JsonKind? _jsonKind(Schema schema, Set<SpecLocation> seen) {
@@ -602,11 +641,10 @@ final class SchemaMapper {
         null => null,
       };
     }
-    if (_branches(object) case (_, final branches)) {
-      final kinds = {
-        for (final b in branches) _jsonKind(b, {...seen}),
-      };
-      return kinds.length == 1 ? kinds.single : null;
+    // A union is an object when a discriminator picks its variant; any
+    // other union may hold values of several types.
+    if (_branches(object) != null) {
+      return object.discriminator?.propertyName != null ? .object : null;
     }
     if (SchemaShapes.singleOf(object) case final single?) {
       return _jsonKind(single, seen);
@@ -1102,11 +1140,26 @@ final class SchemaMapper {
     }
     final discriminator = schema.discriminator;
     final property = discriminator?.propertyName;
-    final dispatch = property != null
+    var dispatch = property != null
         ? UnionDispatch.discriminator
         : _byJsonType([for (final (_, _, branch) in variants) branch])
         ? UnionDispatch.jsonType
         : UnionDispatch.structural;
+    if (dispatch == .jsonType &&
+        !_distinctKinds([for (final (type, _, _) in variants) type])) {
+      // A variant came out as a type that takes any JSON (a schema
+      // excluded or replaced, a recursive alias): its JSON type does not
+      // pick it any more.
+      dispatch = .structural;
+      _context.report(
+        .unionUndiscriminated,
+        'A variant of this ${kind.name} is generated as a type that takes any '
+        'JSON value, so the JSON type of a value does not pick a variant; '
+        'the union tries its variants instead (union: structural).',
+        schema.location,
+        fix: 'Add a discriminator at the source.',
+      );
+    }
     if (dispatch != .structural) {
       _reportUnionOverride(
         schema,
@@ -1699,6 +1752,11 @@ final class _Pending {
   bool patchBody = false;
   String? name;
   late Declaration Function(String name, NameScope scope) build;
+
+  /// The JSON type of every value of the declaration: an object for a
+  /// model and a union with a discriminator, the type of an enum's values;
+  /// null for a union that may hold values of several types.
+  _JsonKind? jsonKind;
 
   /// Overridden names are claimed first, then component keys, then inline
   /// names.

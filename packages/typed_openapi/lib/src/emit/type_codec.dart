@@ -89,20 +89,33 @@ final class TypeCodec {
       ? 'JsonReader.nullable(${decoder(type)})'
       : decoder(type);
 
-  String _custom(CustomType custom) {
-    final CustomType(:type, :json) = custom;
+  String _custom(CustomType custom) =>
+      '(value) => ${_customValue(custom, 'value')}';
+
+  /// The value of the custom type [custom] decoded from [json], a JSON
+  /// expression: its `fromJson`, or its converter's, of the JSON side.
+  String _customValue(CustomType custom, String json) {
+    final CustomType(:type, json: side) = custom;
     final converter = _converter(custom);
-    final read = switch (json) {
-      MapType(value: CoreType(kind: .json)) => 'JsonReader.asObject',
-      ListType(item: CoreType(kind: .json)) => 'JsonReader.asList',
-      CoreType(kind: .json) => '',
-      _ => decoder(json),
+    final read = switch (side) {
+      MapType(value: CoreType(kind: .json)) => 'JsonReader.asObject($json)',
+      ListType(item: CoreType(kind: .json)) => 'JsonReader.asList($json)',
+      CoreType(kind: .json) => json,
+      _ => '${decoder(side)}($json)',
     };
-    final value = read.isEmpty ? 'value' : '$read(value)';
     return converter == null
-        ? '(value) => $type.fromJson($value)'
-        : '(value) => const $converter().fromJson($value)';
+        ? '$type.fromJson($read)'
+        : 'const $converter().fromJson($read)';
   }
+
+  /// The value of [type] decoded from [json], a JSON expression that is
+  /// not `null`.
+  String decodeValue(DartType type, String json) => switch (type) {
+    NamedType(:final id) when declaration(id) is ModelDecl =>
+      '${this.type(type)}.fromJson(JsonReader.asObject($json))',
+    final CustomType custom => _customValue(custom, json),
+    _ => '${decoder(type)}($json)',
+  };
 
   /// Whether a value of [type] is its own JSON (a scalar, `JsonValue`, or
   /// a list or map of them), so [encode] returns it as is.

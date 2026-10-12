@@ -168,11 +168,10 @@ final class UnionEmitter {
   }
 
   /// The value of [type] decoded from [json], a JSON expression.
-  String _decode(DartType type, String json) => switch (type) {
-    NamedType(:final id) when _codec.declaration(id) is ModelDecl =>
-      '${_codec.type(type)}.fromJson(JsonReader.asObject($json))',
-    _ => '${_codec.decoder(type)}($json)',
-  };
+  String _decode(DartType type, String json) {
+    _codec.imports.fromRuntime('JsonReader');
+    return _codec.decodeValue(type, json);
+  }
 
   String _wrap(UnionVariantIr variant, String value) =>
       '${variant.name}($value)';

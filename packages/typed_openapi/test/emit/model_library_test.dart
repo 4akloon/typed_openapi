@@ -102,7 +102,7 @@ void main() {
       final root = emit('''
     Root:
       type: object
-      required: [id, req, json]
+      required: [id, req, json, dates]
       properties:
         id: {type: integer}
         req: {type: [string, 'null']}
@@ -114,6 +114,7 @@ void main() {
         list: {type: array, items: {type: [string, 'null'], format: date-time}}
         map: {type: object, additionalProperties: {type: string, format: date}}
         kind: {const: root}
+        dates: {type: [array, 'null'], items: {type: string, format: date}}
 ''')['models/root.dart']!;
       for (final line in [
         "final r = JsonReader(json, schema: 'Root');",
@@ -136,6 +137,8 @@ void main() {
             '[for (final e0 in v) e0?.toUtc().toIso8601String()],',
         "'map': ?map?.map((k0, v0) => MapEntry(k0, v0.toJson())),",
         "'kind': 'root',",
+        "'dates': switch (dates) {final v? => "
+            '[for (final e0 in v) e0.toJson()], null => null},',
         "String get kind => 'root';",
         'this.meta = const JsonValue(null),',
         "import 'dart:convert' show base64Encode;",
@@ -481,6 +484,31 @@ void main() {
           'if (JsonReader.attempt(decode) case final value?) return value;',
         ),
       );
+    });
+
+    test('a variant of a custom type decodes its JSON side', () {
+      final root = emit(
+        r'''
+    Root:
+      oneOf:
+        - $ref: '#/components/schemas/Money'
+        - {type: boolean}
+    Money: {type: string}
+''',
+        overrides: '''
+schemas:
+  Money:
+    dartType: {type: Money, import: 'package:app/money.dart'}
+''',
+      )['models/root.dart']!;
+      expect(
+        root,
+        contains(
+          'final String value => '
+          'RootMoney(Money.fromJson(JsonReader.asString(value))),',
+        ),
+      );
+      expect(root, contains("import 'package:app/money.dart' show Money;"));
     });
 
     test('a union of unions wraps the inner union', () {

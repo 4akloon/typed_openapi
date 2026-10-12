@@ -288,7 +288,17 @@ final class ModelEmitter {
       return 'if ($name case final v?) $key: '
           '${_codec.encode(type.withNullable(false), 'v')}';
     }
-    if (field.required) return '$key: ${_codec.encodeNullable(type, name)}';
+    if (field.required) {
+      final nullable = _codec.encodeNullable(type, name);
+      if (!type.nullable ||
+          _codec.isIdentity(type) ||
+          nullable.startsWith('$name?.')) {
+        return '$key: $nullable';
+      }
+      // A field is not promoted by `name == null ? ...`; a pattern binds it.
+      return '$key: switch ($name) {final v? => '
+          '${_codec.encode(type.withNullable(false), 'v')}, null => null}';
+    }
     if (_isJson(type)) return '$key: ?$name.raw';
     final inner = type.withNullable(false);
     if (_codec.isIdentity(inner)) return '$key: ?$name';

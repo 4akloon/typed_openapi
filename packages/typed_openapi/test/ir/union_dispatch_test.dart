@@ -233,6 +233,24 @@ schemas:
     );
   });
 
+  test('a variant that takes any JSON makes the union structural', () {
+    final fixture = IrFixture(
+      '''
+$head    Pet:
+      oneOf:
+        - \$ref: '#/components/schemas/Cat'
+        - {type: string}
+''',
+      overrides: 'schemas:\n  Cat: {exclude: true}\n',
+    );
+    final (ir, _) = mapComponents(fixture, ['Pet']);
+    expect(union(ir, 'Pet').dispatch, UnionDispatch.structural);
+    expect(fixture.codes, [
+      (DiagnosticCode.excludedSchemaReferenced, '#/components/schemas/Cat'),
+      (DiagnosticCode.unionUndiscriminated, '#/components/schemas/Pet'),
+    ]);
+  });
+
   test('the override and the config key reject other values', () {
     final bag = DiagnosticBag();
     final set = OverrideLoader(

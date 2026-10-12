@@ -29,6 +29,7 @@ Check the specs without generating anything:
 dart run typed_openapi check            # all clients
 dart run typed_openapi check core_api   # one client
 dart run typed_openapi check --format json   # also: sarif, github-actions
+dart run typed_openapi generate          # models of every client without errors
 ```
 
 `check` reads the whole spec, follows its `$ref`s (also into other local
