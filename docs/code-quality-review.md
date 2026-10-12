@@ -208,20 +208,22 @@ The rules in `CLAUDE.md` are context, not enforcement. To make them hold:
 
 ## 6. Exemption list (single source)
 
-Files already over the limit that may not grow; the list only shrinks.
+Files and methods already over their limit that may not grow; the list only
+shrinks. The single source is now the allowlists in the ratchet tests, one per
+package:
 
-```
-ir/schema_mapper.dart 2196       generate/output_writer.dart 896
-load/yaml_composer.dart 810      config/config_loader.dart 780
-ir/ir.dart 733                   overrides/override_applier.dart 667
-overrides/override_loader.dart 612   ir/operation_builder.dart 565
-ir/ir_builder.dart 534           model/operation.dart 467
-overrides/override_resolver.dart 450 ir/schema_shapes.dart 446
-runtime json/json_reader.dart 422    emit/union_emitter.dart 416
-normalize/normalizer.dart 383    emit/model_emitter.dart 379
-runtime dio/dio_request_sender.dart 378  parse/object_reader.dart 342
-normalize/rules/schema_shape_rules.dart 341  parse/operation_parser.dart 314
-```
+- `packages/typed_openapi/test/quality/size_limits_test.dart`
+- `packages/typed_openapi_runtime/test/quality/size_limits_test.dart`
+
+Each holds a file allowlist (path -> lines), a method allowlist
+(`path#Type.name` -> lines, methods over 40 lines of `lib/`) and the
+permanent exemptions. The tests fail on a file or method over its limit that
+is not listed and on a listed one that grew; a listed unit that shrank or is
+within its limit again is a stale entry that is deleted (nothing fails, so
+nothing reminds you). A new entry is never added: the unit is split instead.
+The measuring code is `test/helpers/size_limits.dart` (the method check is an
+indentation heuristic, expression bodies are not seen). The numbers that were
+listed here in this document are not kept: they would go stale.
 
 Permanent exemption (not to be split): `diagnostics/diagnostic_code.dart`.
 
