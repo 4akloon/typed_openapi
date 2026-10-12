@@ -78,6 +78,26 @@ void main() {
       ]);
     });
 
+    test('wraps a paragraph with a stray backtick (corpus: stripe)', () {
+      // The second run of backticks is two long, so it closes no span and
+      // the spans after it are not the odd-numbered ones.
+      const text =
+          'The amount when the `rate_type`` is `flat_amount`. Tax rates with '
+          '`rate_type` `percentage` can vary based on the transaction, '
+          'resulting in this field being `null`.';
+      final lines = code.docLines(text, 80);
+      expect(lines.length, greaterThan(1));
+      expect([for (final l in lines) l.length], everyElement(lessThan(81)));
+      expect(lines.join(' '), text);
+    });
+
+    test('keeps a span of a longer run of backticks on one line', () {
+      expect(code.docLines('Say hello there ``do it`` ok', 20), [
+        'Say hello there',
+        '``do it`` ok',
+      ]);
+    });
+
     test('neutralises doc directives', () {
       expect(code.docLines('See {@link Foo} and {@template t}', 80), [
         r'See \{@link Foo} and \{@template t}',

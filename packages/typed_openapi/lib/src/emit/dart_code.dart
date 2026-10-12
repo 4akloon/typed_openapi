@@ -125,16 +125,18 @@ final class DartCode {
   List<String> proseLines(String text, int width) {
     // Spaces inside a code span are held back from `_wrap`, then restored.
     const held = '\u0000';
-    final parts = text.split('`');
-    final joined = [
-      for (final (i, part) in parts.indexed)
-        if (i.isOdd && i < parts.length - 1)
-          part.replaceAll(' ', held)
-        else
-          part,
-    ].join('`');
+    final spans = _spans(text);
+    final joined = StringBuffer();
+    var written = 0;
+    for (final (:start, :end) in spans) {
+      joined
+        ..write(text.substring(written, start))
+        ..write(text.substring(start, end).replaceAll(' ', held));
+      written = end;
+    }
+    joined.write(text.substring(written));
     return [
-      for (final line in _wrap(joined, width < 20 ? 20 : width))
+      for (final line in _wrap('$joined', width < 20 ? 20 : width))
         line.replaceAll(held, ' '),
     ];
   }
@@ -154,21 +156,38 @@ final class DartCode {
   static final _fenceClose = RegExp(r'^\s*```+\s*$');
   static final _special = RegExp(r'[\\\[\]<>]|\{(?=@)');
 
+  /// The text inside the code spans of [text] as `(start, end)` indexes: the
+  /// backtick runs are paired, the first with the second, the third with the
+  /// fourth. A run of any length closes a span, so a stray second backtick
+  /// at the end of a span does not shift the spans after it. A last run with
+  /// no partner opens nothing.
+  static List<({int start, int end})> _spans(String text) {
+    final runs = _backticks.allMatches(text).toList();
+    return [
+      for (var i = 0; i + 1 < runs.length; i += 2)
+        (start: runs[i].end, end: runs[i + 1].start),
+    ];
+  }
+
+  static final _backticks = RegExp('`+');
+
   /// Escapes [line] outside its code spans: a span shows its text as it
   /// is, so an escape there would show too. A line with an unpaired
   /// backtick has no spans.
   static String _escapeDoc(String line) {
-    final parts = line.split('`');
-    if (parts.length.isEven) {
-      return line.replaceAllMapped(_special, (m) => '\\${m[0]}');
+    final runs = _backticks.allMatches(line).length;
+    String escape(String text) =>
+        text.replaceAllMapped(_special, (m) => '\\${m[0]}');
+    if (runs.isOdd) return escape(line);
+    final result = StringBuffer();
+    var written = 0;
+    for (final (:start, :end) in _spans(line)) {
+      result
+        ..write(escape(line.substring(written, start)))
+        ..write(line.substring(start, end));
+      written = end;
     }
-    return [
-      for (final (i, part) in parts.indexed)
-        if (i.isEven)
-          part.replaceAllMapped(_special, (m) => '\\${m[0]}')
-        else
-          part,
-    ].join('`');
+    return (result..write(escape(line.substring(written)))).toString();
   }
 
   static List<String> _wrap(String line, int width) {
