@@ -21,7 +21,10 @@ Minimum SDK: Dart 3.10 (`>=3.10.0 <4.0.0`), also for generated code.
 dart pub get                                 # repo root, once and after pubspec edits
 dart analyze packages                        # repo root; must print "No issues found!"
 cd packages/typed_openapi && dart test       # also in typed_openapi_runtime
+cd packages/typed_openapi_runtime && dart test -p chrome                        # dart2js
+cd packages/typed_openapi_runtime && dart test -p chrome --compiler dart2wasm   # dart2wasm
 cd packages/typed_openapi && dart format lib test bin   # a second run must change 0 files
+cd packages/typed_openapi_runtime && dart format lib test # the same
 cd packages/<package> && dart pub publish --dry-run # before publishing
 ```
 
@@ -303,6 +306,65 @@ Rules of the pipeline:
   stdout, usage errors to stderr. Codes: `0` ok, `1` errors found, `64` usage,
   `78` the config file could not be loaded (TOA904 and per-client TOA902 exit
   `1`). Diagnostics a baseline accepts do not count.
+
+## Runtime (`packages/typed_openapi_runtime/lib/src/`)
+
+The only package generated clients depend on (dependencies: `dio`, `meta`).
+Pure Dart, works on the web (compiled to JS and to Wasm); SSE needs a
+streaming adapter there (Dio's default browser adapter delivers the body
+only when the connection closes), and cookie parameters do not work (browsers
+drop the `Cookie` header).
+Generated code is expected to look like `test/helpers/pets_api.dart`
+(illustrative, not a contract); `test/generated_client_test.dart` checks
+that the API composes, including an `implements` fake of a tag class.
+
+- `json/` - `JsonReader` (strict reads for generated `fromJson`: the only
+  widening is int where a number is expected; `null` is an error only in a
+  required non-nullable property, an optional one reads it as absent; RFC
+  3339 date-times need an offset, dates are `Date`; a `FormatException` of a
+  decoder becomes a `JsonDecodeException` at the property; `checkDepth`
+  works without recursion, 1000 levels), `JsonDecodeException` (pointer,
+  expected, actual, schema, hint; the first mismatch only, never the value),
+  `JsonValue` (extension type over `Object?`, accessors never throw).
+- `model/` - `Patch<T>` (`PatchValue`, `PatchNull`; a field is `Patch<T>?`),
+  `Date` (`format: date`, no time or zone).
+- `result/` - sealed `Result<T, E>`: `Success`, `Failure` (`HttpError`,
+  `UndocumentedStatus`, `DecodeError`, `TransportError`, `Cancelled`); no
+  helper methods, pattern matching only. `E = Never` still needs
+  `case Failure()`.
+- `params/` - `PathParameter`, `QueryParameter`, `HeaderParameter`,
+  `CookieParameter` (OAS styles, RFC 6570 expansion, RFC 3986
+  percent-encoding; a path expansion that is empty, `.` or `..` throws
+  `ArgumentError`, as does a `.`/`..` value); internal `ParameterValue`,
+  `PercentEncoder`.
+- `request/` - `OperationInfo` (put into `RequestOptions.extra`),
+  `OperationRequest` (resolves the path and the query itself;
+  `streamStatuses` for event streams), `RawResponse` (what a generated
+  decoder switches on).
+- `dio/` - `DioRequestSender(dio, {isWeb})` (`send`, `openEvents`; requests
+  only through `dio.request`, never mutates the user's Dio, never retries;
+  decoding catches only `DioException`, `JsonDecodeException` and, from the
+  user's decoder, `FormatException` (a converter or `Date.parse` rejecting
+  the data: `DecodeError` at the root pointer, `SseDecodeError` in a
+  stream), `openEvents` also turns an `Exception` raised while reading a non-stream
+  body into `TransportError`, and an `Error` is never caught; the query is
+  built by the runtime, so interceptors see an empty `queryParameters`),
+  `CallOptions`. `openEvents` needs its stream listened to or cancelled; a
+  listener cancel cancels the request.
+- `sse/` - `SseDecoder` (WHATWG, bytes -> `SseMessage`), `SseItemDecoder`
+  (-> `SseEvent` / `SseDecodeError` / `SseDisconnected`; data problems are
+  items, an `Error` from the user's decoder is the only stream error). Use
+  `transformer.bind(stream)`, not `stream.transform`: Dio gives a
+  `Stream<Uint8List>`.
+
+Runtime tests never touch the network: Dio gets `FakeAdapter`
+(`test/helpers/fake_adapter.dart`). They also run in Chrome (the two
+commands above; `CHROME_EXECUTABLE` if Chrome is not found): a file that
+needs the VM (`dart:io`, int64 literals, which dart2js rejects) carries
+`@TestOn('vm')`, a single test `testOn: 'vm'`, and `test/dio/web_test.dart`
+is `@TestOn('browser')`. `test/helpers/test_platform.dart` tells the platform
+for assertions that differ. Do not write an int literal beyond 2^53 in
+`lib/`: it does not compile to JavaScript.
 
 ## Code rules
 
