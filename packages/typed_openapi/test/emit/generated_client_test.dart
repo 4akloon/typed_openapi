@@ -63,6 +63,14 @@ linter:
             p.join('test', 'emit', 'programs', 'calls.dart.txt'),
           ).readAsStringSync(),
         );
+      for (final program in ['fake_dio', 'wire_calls']) {
+        temp.write(
+          'bin/$program.dart',
+          File(
+            p.join('test', 'emit', 'programs', '$program.dart.txt'),
+          ).readAsStringSync(),
+        );
+      }
       for (final fixture in [
         'petstore',
         'hostile_operations',
@@ -72,6 +80,7 @@ linter:
         'secrets',
         'status_bodies',
         'hierarchy',
+        'wire',
       ]) {
         for (final mode in UnionMode.values) {
           final files = emitClient(
@@ -97,8 +106,21 @@ linter:
       expect(result.stderr, '');
       expect(result.stdout, _calls);
     });
+
+    test('puts every value on the wire as the spec says (R10)', () {
+      final result = dart(['run', 'bin/wire_calls.dart'], package);
+      expect(result.stderr, '');
+      expect(result.stdout, _wire);
+    });
   }, timeout: const Timeout(Duration(minutes: 3)));
 }
+
+/// What `bin/wire_calls.dart` prints.
+const _wire = '''
+success 204 null
+https://wire.example.com/helpers?jsonEncode=%22a%5C%22b%22&base64Encode=AQID
+multipart [true, true, true]
+''';
 
 /// What `bin/calls.dart` prints: each call's request and result.
 const _calls = '''

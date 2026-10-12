@@ -21,6 +21,8 @@ paths:
         - {name: call, in: header, schema: {type: string}}
         - {name: "X-'$y\ninjected", in: header, schema: {type: string}}
         - {name: e, in: query, schema: {type: string, enum: []}}
+        - {name: jsonEncode, in: query, required: true, content: {application/json: {schema: {type: string}}}}
+        - {name: base64Encode, in: query, schema: {type: string, format: byte}}
         - {name: big, in: cookie, schema: {type: integer, enum: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]}}
       responses:
         "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Response'}}}}
@@ -55,6 +57,8 @@ paths:
                 toParts: {type: string}
                 hashCode: {type: integer}
                 any: {}
+                jsonEncode: {type: object, properties: {a: {type: string}}}
+                base64Encode: {type: string, format: byte}
       responses:
         "204": {description: ok}
   /d:

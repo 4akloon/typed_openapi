@@ -1,0 +1,53 @@
+// A program that calls the client generated from test/emit/fixtures/wire.yaml
+// through a Dio whose adapter answers from memory, and prints what went on
+// the wire and what each call returned.
+// ignore_for_file: avoid_print
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:dio/dio.dart';
+import 'package:fixture/wire_raw/api_client.dart';
+import 'package:typed_openapi_runtime/typed_openapi_runtime.dart';
+
+import 'fake_dio.dart';
+
+String show(Result<Object?, Object?> result) => switch (result) {
+  Success(:final data, :final statusCode) => 'success $statusCode ${describe(data)}',
+  HttpError(:final body, :final statusCode) => 'error $statusCode ${describe(body)}',
+  UndocumentedStatus(:final statusCode) => 'undocumented $statusCode',
+  DecodeError(:final error) => 'decode ${error.pointer} ${error.expected}',
+  TransportError() => 'transport',
+  Cancelled() => 'cancelled',
+};
+
+String describe(Object? value) => switch (value) {
+  null => 'null',
+  final Uint8List data => 'bytes ${data.length}',
+  final String text => 'text "$text"',
+  _ => 'json ${jsonEncode(value)}',
+};
+
+Future<void> main() async {
+  final adapter = Adapter();
+  final dio = Dio(BaseOptions(baseUrl: 'https://wire.example.com'))
+    ..httpClientAdapter = adapter;
+  final wire = ApiClient(dio).wire;
+
+  // A parameter or a part named like a function the code calls is renamed.
+  adapter.answers.add(() => empty(204));
+  print(show(await wire.helpers(
+    jsonEncode_: 'a"b',
+    base64Encode_: Uint8List.fromList([1, 2, 3]),
+    body: HelpersRequest(
+      jsonEncode_: const HelpersRequestJsonEncode(a: 'x'),
+      base64Encode_: Uint8List.fromList([4, 5, 6]),
+    ),
+  )));
+  print(adapter.requests.last.uri);
+  final multipart = adapter.bodies.last;
+  print('multipart ${[
+    multipart.contains('name="jsonEncode"'),
+    multipart.contains('{"a":"x"}'),
+    multipart.contains('name="base64Encode"\r\n\r\nBAUG'),
+  ]}');
+}

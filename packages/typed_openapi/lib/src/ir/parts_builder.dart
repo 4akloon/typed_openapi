@@ -34,6 +34,7 @@ final class PartsBuilder {
         ...DartNames.reservedWords,
         ...DartNames.objectMembers,
         ...DartNames.lowercaseTypes,
+        ...DartNames.helperFunctions,
         'toParts',
       },
       reservedSuffix: '_',

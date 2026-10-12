@@ -112,9 +112,15 @@ final class DartNames {
     'toJson', 'unknown', 'value', 'values',
   };
 
+  /// The top-level functions of `dart:convert` that generated method bodies
+  /// and parts classes call without a prefix: an argument or a field with
+  /// the name would hide the function (`jsonEncode(jsonEncode)`).
+  static const helperFunctions = {'base64Encode', 'jsonEncode'};
+
   /// Names of a method's arguments that generated code uses itself: the
-  /// request body and the per-call options of the runtime.
-  static const argumentNames = {'body', 'call'};
+  /// request body and the per-call options of the runtime, and the
+  /// [helperFunctions].
+  static const argumentNames = {'body', 'call', ...helperFunctions};
 
   /// The words of [text], in order; empty when it has no ASCII letter or
   /// digit.

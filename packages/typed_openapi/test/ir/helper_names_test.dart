@@ -1,0 +1,69 @@
+import 'package:test/test.dart';
+import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
+import 'package:typed_openapi/src/ir/ir_builder.dart';
+
+import '../helpers/ir_fixture.dart';
+
+const _spec = '''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /a:
+    post:
+      operationId: send
+      tags: [t]
+      parameters:
+        - {name: jsonEncode, in: query, content: {application/json: {schema: {type: string}}}}
+        - {name: base64Encode, in: query, schema: {type: string, format: byte}}
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                jsonEncode: {type: string}
+                base64Encode: {type: string, format: byte}
+                a-b: {type: string}
+                a_b: {type: string}
+      responses: {"204": {description: ok}}
+''';
+
+void main() {
+  final fixture = IrFixture(_spec);
+  final operation = IrBuilder(fixture.diagnostics)
+      .build(fixture.context.spec, fixture.context.client)
+      .groups
+      .single
+      .operations
+      .single;
+
+  test('an argument named like a function the method calls is renamed', () {
+    expect(
+      [for (final p in operation.parameters) p.name],
+      [
+        'jsonEncode_',
+        'base64Encode_',
+      ],
+    );
+    expect(
+      fixture.reported
+          .where((d) => d.message.startsWith('Parameter'))
+          .map(
+            (d) => d.code,
+          ),
+      everyElement(DiagnosticCode.nameReserved),
+    );
+  });
+
+  test('a part named like a function the class calls is renamed', () {
+    expect(
+      [for (final p in operation.body!.parts!) p.name],
+      [
+        'jsonEncode_',
+        'base64Encode_',
+        'aB',
+        'aB2',
+      ],
+    );
+  });
+}

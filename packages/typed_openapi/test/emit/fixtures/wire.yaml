@@ -1,0 +1,21 @@
+openapi: 3.1.0
+info: {title: Wire, version: "1"}
+paths:
+  /helpers:
+    post:
+      operationId: helpers
+      tags: [wire]
+      description: Parameters and parts named like the functions the generated code calls.
+      parameters:
+        - {name: jsonEncode, in: query, required: true, content: {application/json: {schema: {type: string}}}}
+        - {name: base64Encode, in: query, schema: {type: string, format: byte}}
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                jsonEncode: {type: object, properties: {a: {type: string}}}
+                base64Encode: {type: string, format: byte}
+      responses:
+        "204": {description: ok}

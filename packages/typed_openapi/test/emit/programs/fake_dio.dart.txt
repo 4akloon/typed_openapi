@@ -1,0 +1,61 @@
+// A Dio whose adapter answers from memory and keeps what it was sent; the
+// programs that call the generated clients of the wire fixtures share it.
+import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:dio/dio.dart';
+
+/// Answers each request with the next response of [answers].
+final class Adapter implements HttpClientAdapter {
+  final List<ResponseBody Function()> answers = [];
+  final List<RequestOptions> requests = [];
+  final List<String> bodies = [];
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    requests.add(options);
+    final bytes = <int>[];
+    if (requestStream != null) {
+      await for (final chunk in requestStream) {
+        bytes.addAll(chunk);
+      }
+    }
+    bodies.add(utf8.decode(bytes, allowMalformed: true));
+    return answers.removeAt(0)();
+  }
+
+  @override
+  void close({bool force = false}) {}
+}
+
+ResponseBody json(int status, Object? body) => ResponseBody.fromString(
+  jsonEncode(body),
+  status,
+  headers: {
+    Headers.contentTypeHeader: ['application/json'],
+  },
+);
+
+ResponseBody empty(int status) => ResponseBody.fromString('', status);
+
+ResponseBody bytes(int status, List<int> data, String type) =>
+    ResponseBody.fromBytes(
+      data,
+      status,
+      headers: {
+        Headers.contentTypeHeader: [type],
+      },
+    );
+
+ResponseBody text(int status, String body) => ResponseBody.fromString(
+  body,
+  status,
+  headers: {
+    Headers.contentTypeHeader: ['text/plain'],
+  },
+);
