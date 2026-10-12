@@ -108,4 +108,79 @@ clients:
     expect(config.formats, isEmpty);
     expect(config.triState, TriStateRule.patch);
   });
+  test('reserved words are no default_group; equal suffixes are an error', () {
+    final bag = DiagnosticBag();
+    final clients = load('''
+clients:
+  a: {input: a.json, output: lib/a, naming: {default_group: class}}
+  b: {input: b.json, output: lib/b, naming: {default_group: abstract}}
+  c: {input: c.json, output: lib/c, naming: {input_suffix: Body, patch_suffix: Body}}
+  d: {input: d.json, output: lib/d, naming: {input_suffix: Patch}}
+  e: {input: e.json, output: lib/e, naming: {input_suffix: Request, patch_suffix: Changes}}
+''', bag);
+    expect(bag.all.map((d) => (d.code, d.pointer?.value)), [
+      (DiagnosticCode.configInvalid, '#/clients/a/naming/default_group'),
+      (DiagnosticCode.configInvalid, '#/clients/b/naming/default_group'),
+      (DiagnosticCode.configInvalid, '#/clients/c/naming/patch_suffix'),
+      (DiagnosticCode.configInvalid, '#/clients/d/naming/input_suffix'),
+    ]);
+    expect(bag.all.first.message, contains('reserved word'));
+    expect(bag.all[2].message, contains('different'));
+    expect(clients[0].generation.defaultGroup, 'DefaultApi');
+    expect(clients[1].generation.defaultGroup, 'DefaultApi');
+    expect(clients[2].generation.inputSuffix, 'Input');
+    expect(clients[2].generation.patchSuffix, 'Patch');
+    expect(clients[3].generation.inputSuffix, 'Input');
+    expect(clients[3].generation.patchSuffix, 'Patch');
+    expect(clients[4].generation.inputSuffix, 'Request');
+    expect(clients[4].generation.patchSuffix, 'Changes');
+  });
+
+  group('key', () {
+    test('does not depend on the order of custom types', () {
+      final bag = DiagnosticBag();
+      final clients = load('''
+defaults:
+  types:
+    formats: {b: {type: B, import: 'package:x/b.dart'}}
+clients:
+  a:
+    input: a.json
+    output: lib/a
+    types:
+      formats: {a: {type: A, import: 'package:x/a.dart'}}
+      schemas: {Y: {type: Y, import: 'package:x/y.dart'}, X: {type: X, import: 'package:x/x.dart'}}
+  b:
+    input: a.json
+    output: lib/b
+    types:
+      formats: {a: {type: A, import: 'package:x/a.dart'}, b: {type: B, import: 'package:x/b.dart'}}
+      schemas: {X: {type: X, import: 'package:x/x.dart'}, Y: {type: Y, import: 'package:x/y.dart'}}
+''', bag);
+      expect(bag.all, isEmpty);
+      expect(clients[0].generation.key, clients[1].generation.key);
+    });
+
+    test('is the same for clients without a filter', () {
+      final clients = load('''
+clients:
+  a: {input: a.json, output: lib/a}
+  b: {input: a.json, output: lib/b}
+''', DiagnosticBag());
+      expect(clients[0].generation.key, clients[1].generation.key);
+    });
+
+    test('differs for clients with a filter: it is reported at its client', () {
+      final clients = load('''
+defaults:
+  include: {tags: [pets]}
+clients:
+  a: {input: a.json, output: lib/a}
+  b: {input: a.json, output: lib/b}
+  c: {input: a.json, output: lib/c, exclude: {paths: ['/x']}}
+''', DiagnosticBag());
+      final keys = {for (final c in clients) c.generation.key};
+      expect(keys, hasLength(3));
+    });
+  });
 }

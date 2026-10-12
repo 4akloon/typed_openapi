@@ -649,4 +649,57 @@ clients:
       ],
     );
   });
+
+  group('runs', () {
+    const spec = '''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /lists:
+    get:
+      operationId: getLists
+      tags: [lists]
+      responses:
+        "200": {description: ok}
+''';
+
+    List<ClientCheck> check(String clients) {
+      final dir = TempDir();
+      dir.write('api.yaml', spec);
+      final path = dir.write('typed_openapi.yaml', clients);
+      final bag = DiagnosticBag();
+      return SpecChecker(
+        bag,
+        DisplayPaths(dir.path),
+      ).checkClients(ConfigLoader(bag).load(path)!);
+    }
+
+    test('clients with identical settings share one run', () {
+      final checks = check('''
+clients:
+  a: {input: api.yaml, output: lib/a}
+  b: {input: api.yaml, output: lib/b}
+''');
+      expect(identical(checks[0].ir, checks[1].ir), isTrue);
+    });
+
+    test('clients that differ only where their filters are written do not '
+        'share one', () {
+      final checks = check('''
+clients:
+  a: {input: api.yaml, output: lib/a, include: {tags: [nope]}}
+  b: {input: api.yaml, output: lib/b, include: {tags: [nope]}}
+''');
+      expect(identical(checks[0].ir, checks[1].ir), isFalse);
+      expect(
+        [
+          for (final c in checks)
+            for (final d in c.diagnostics)
+              if (d.code == DiagnosticCode.filterMatchesNothing)
+                d.pointer?.value,
+        ],
+        ['#/clients/a/include/tags/0', '#/clients/b/include/tags/0'],
+      );
+    });
+  });
 }

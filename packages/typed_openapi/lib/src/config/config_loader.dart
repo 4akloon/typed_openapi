@@ -9,6 +9,7 @@ import '../diagnostics/display_paths.dart';
 import '../diagnostics/json_pointer.dart';
 import '../diagnostics/severity.dart';
 import '../diagnostics/severity_levels.dart';
+import '../ir/names.dart';
 import '../load/yaml_composer.dart';
 import '../normalize/normalizer.dart';
 import '../overrides/override_set.dart';
@@ -523,15 +524,13 @@ final class _GenerationReader {
         }
       }
     }
+    final suffixes = _suffixes();
+    final client = _sources.last.$2;
     return GenerationConfig(
       groupTemplate: _groupTemplate() ?? GenerationConfig.defaultGroupTemplate,
-      defaultGroup:
-          _identifierAt('default_group') ??
-          GenerationConfig.defaultDefaultGroup,
-      inputSuffix:
-          _identifierAt('input_suffix') ?? GenerationConfig.defaultInputSuffix,
-      patchSuffix:
-          _identifierAt('patch_suffix') ?? GenerationConfig.defaultPatchSuffix,
+      defaultGroup: _defaultGroup() ?? GenerationConfig.defaultDefaultGroup,
+      inputSuffix: suffixes.$1,
+      patchSuffix: suffixes.$2,
       operationPrefix: _pattern(),
       groupBy: _choice('group_by', GroupBy.values) ?? .tag,
       include: _filter('include'),
@@ -542,6 +541,8 @@ final class _GenerationReader {
       triState: _choice('tri_state', TriStateRule.values) ?? .patch,
       defaultErrorSchema: _string('errors', 'default_schema')?.$1,
       file: _reader.file,
+      client: client,
+      clientSpan: _reader.spanAt(client),
     );
   }
 
@@ -588,6 +589,46 @@ final class _GenerationReader {
     final (value, at) = picked;
     if (value is String && _identifier.hasMatch(value)) return value;
     return _invalid('"$key" must be a Dart identifier.', at);
+  }
+
+  /// `default_group` is the name of a class, so a reserved word or a
+  /// built-in identifier cannot be it.
+  String? _defaultGroup() {
+    final name = _identifierAt('default_group');
+    if (name == null) return null;
+    if (!DartNames.reservedWords.contains(name) &&
+        !DartNames.builtInIdentifiers.contains(name)) {
+      return name;
+    }
+    return _invalid(
+      '"default_group" is the name of a class and "$name" is a reserved word '
+      'in Dart.',
+      _pick('default_group', 'naming')!.$2,
+    );
+  }
+
+  /// `input_suffix` and `patch_suffix`: two model names made from one schema
+  /// must differ, so equal suffixes are an error, reported at the later
+  /// key, and both go back to their defaults.
+  (String, String) _suffixes() {
+    final input = _identifierAt('input_suffix');
+    final patch = _identifierAt('patch_suffix');
+    final inputSuffix = input ?? GenerationConfig.defaultInputSuffix;
+    final patchSuffix = patch ?? GenerationConfig.defaultPatchSuffix;
+    if (inputSuffix != patchSuffix) return (inputSuffix, patchSuffix);
+    final at = patch != null
+        ? _pick('patch_suffix', 'naming')!.$2
+        : _pick('input_suffix', 'naming')!.$2;
+    _invalid(
+      '"input_suffix" and "patch_suffix" must be different, both are '
+      '"$inputSuffix"; the defaults ${GenerationConfig.defaultInputSuffix} '
+      'and ${GenerationConfig.defaultPatchSuffix} are used.',
+      at,
+    );
+    return (
+      GenerationConfig.defaultInputSuffix,
+      GenerationConfig.defaultPatchSuffix,
+    );
   }
 
   RegExp? _pattern() {

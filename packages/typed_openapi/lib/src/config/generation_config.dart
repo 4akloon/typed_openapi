@@ -96,6 +96,8 @@ final class GenerationConfig {
     this.triState = .patch,
     this.defaultErrorSchema,
     this.file,
+    this.client,
+    this.clientSpan,
   });
 
   /// The default of [groupTemplate].
@@ -125,8 +127,13 @@ final class GenerationConfig {
   /// a schema that is also used elsewhere.
   final String patchSuffix;
 
-  /// `naming.operation_prefix`: a pattern removed from the start of every
+  /// `naming.operation_prefix`: a pattern removed from the start of an
   /// `operationId` before it becomes a method name.
+  ///
+  /// It is applied only where its match starts at index 0 and is not empty:
+  /// `^v1_` and `v1_` both turn `v1_list` into `list`, but `users_v1_list`
+  /// is left as it is, and so is every id when the pattern can match the
+  /// empty string (`.*`) and does not match anything at the start.
   final RegExp? operationPrefix;
 
   /// `group_by`.
@@ -158,8 +165,21 @@ final class GenerationConfig {
   /// The config file, as diagnostics name it.
   final String? file;
 
+  /// Where the client is in the config file (`#/clients/<name>`); null for
+  /// a config made in code.
+  final JsonPointer? client;
+
+  /// The source range of the client's entry in the config file.
+  final SourceSpan? clientSpan;
+
   /// The settings as one string: two clients with equal keys generate the
   /// same IR from the same spec.
+  ///
+  /// The order in which `types.formats` and `types.schemas` are written does
+  /// not matter. A client with an `include` or `exclude` filter has its own
+  /// key, so that the diagnostics about its patterns (TOA557, TOA558) and
+  /// about an empty client (TOA563) are reported at its own place in the
+  /// config, not at the place of another client that has the same settings.
   String get key => jsonEncode({
     'group': groupTemplate,
     'default_group': defaultGroup,
@@ -169,16 +189,16 @@ final class GenerationConfig {
     'group_by': groupBy.name,
     'include': include.toJson(),
     'exclude': exclude.toJson(),
+    'client': include.isEmpty && exclude.isEmpty ? null : client?.value,
     'number': numberType,
-    'formats': {
-      for (final MapEntry(:key, :value) in formats.entries)
-        key: [value.type, value.import, value.converter],
-    },
-    'schemas': {
-      for (final MapEntry(:key, :value) in schemas.entries)
-        key: [value.type, value.import, value.converter],
-    },
+    'formats': _sorted(formats),
+    'schemas': _sorted(schemas),
     'tri_state': triState.name,
     'default_schema': defaultErrorSchema,
   });
+
+  static Map<String, Object?> _sorted(Map<String, DartTypeOverride> types) => {
+    for (final name in types.keys.toList()..sort())
+      name: [types[name]!.type, types[name]!.import, types[name]!.converter],
+  };
 }
