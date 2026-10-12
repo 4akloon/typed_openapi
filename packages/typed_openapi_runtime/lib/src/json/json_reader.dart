@@ -1,3 +1,4 @@
+import '../model/date.dart';
 import '../model/patch.dart';
 import 'json_decode_exception.dart';
 import 'json_objects.dart';
@@ -222,6 +223,31 @@ final class JsonReader {
       'If the server sends this format on purpose, map it to your own type '
       'with a converter (types.formats in the config, R6.8) or override the '
       "property's format";
+
+  /// An RFC 3339 `full-date` string (`format: date`), such as `2024-02-03`.
+  /// A date-time and a date that does not exist (`2024-02-30`) are rejected
+  /// with [dateHint]; a date-time is reported as such, because the server
+  /// sent one where a date was declared.
+  static Date asDate(Object? value) {
+    final text = asString(value);
+    final date = Date.tryParse(text);
+    if (date != null) {
+      return date;
+    }
+    throw JsonDecodeException(
+      expected: 'an RFC 3339 full-date string',
+      actual: _rfc3339.hasMatch(text) || _localDateTime.hasMatch(text)
+          ? 'a date-time'
+          : 'a string in another format',
+      hint: dateHint,
+    );
+  }
+
+  /// The fix for a server that sends `date` in another format.
+  static const String dateHint =
+      'If the server sends this format on purpose, map it to your own type '
+      'with a converter (types.formats in the config, R6.8) or override '
+      "the property's format";
 
   /// Any JSON value.
   static JsonValue asValue(Object? value) => JsonValue(value);

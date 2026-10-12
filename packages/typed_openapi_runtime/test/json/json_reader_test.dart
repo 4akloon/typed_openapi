@@ -352,6 +352,53 @@ void main() {
     });
   });
 
+  group('asDate', () {
+    test('reads a full-date', () {
+      expect(JsonReader.asDate('2024-02-03'), Date(2024, 2, 3));
+      expect(JsonReader.asDate('2024-02-29'), Date(2024, 2, 29));
+    });
+
+    test('a date-time is rejected with the hint', () {
+      for (final text in ['2024-02-03T04:05:06Z', '2024-02-03T04:05:06']) {
+        final e = failure(() => JsonReader.asDate(text));
+        expect(e.expected, 'an RFC 3339 full-date string', reason: text);
+        expect(e.actual, contains('date-time'), reason: text);
+        expect(e.hint, JsonReader.dateHint, reason: text);
+      }
+    });
+
+    test('other strings are rejected with the hint', () {
+      for (final text in ['2024-02-30', '2023-02-29', '2024-2-3', 'today']) {
+        final e = failure(() => JsonReader.asDate(text));
+        expect(e.actual, 'a string in another format', reason: text);
+        expect(e.hint, JsonReader.dateHint, reason: text);
+      }
+    });
+
+    test('a non-string is a type mismatch without a hint', () {
+      for (final value in [42, null]) {
+        final e = failure(() => JsonReader.asDate(value));
+        expect(e.expected, 'a string');
+        expect(e.hint, isNull);
+      }
+    });
+
+    test('works with the combinators and properties', () {
+      expect(JsonReader.nullable(JsonReader.asDate)(null), isNull);
+      expect(
+        JsonReader.nullable(JsonReader.asDate)('2024-02-03'),
+        Date(2024, 2, 3),
+      );
+      expect(
+        JsonReader.listOf(JsonReader.asDate)(['2024-02-03']),
+        [Date(2024, 2, 3)],
+      );
+      const r = JsonReader({'on': '2024-02-30'}, schema: 'Event');
+      final e = failure(() => r.required('on', JsonReader.asDate));
+      expect(e.path, ['on']);
+    });
+  });
+
   group('checkDepth', () {
     Object? nested(int depth) {
       Object? value = 1;
