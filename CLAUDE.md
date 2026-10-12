@@ -399,6 +399,11 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   as a concrete one. It writes the sealed status types (variants extend the
   base and wrap `body`, equal by value) and the parts classes after the
   group class. Only `Dio` is imported from `package:dio`.
+  `test/emit/generated_client_test.dart` builds a package of the clients
+  of the fixtures (both `union` modes), runs `dart analyze --fatal-infos`
+  on it and runs `test/emit/programs/calls.dart.txt` (`bin/calls.dart`
+  there), which calls the petstore client through a fake Dio adapter and
+  prints every request and result.
 - `generate/` - `OutputWriter` (atomic per run: the whole tree and the
   manifest `.typed_openapi.json` (generator, `format` 2, hash of the inputs,
   every file with its hash) are built in a staging directory next to the

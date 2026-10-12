@@ -1,0 +1,235 @@
+// A program that calls the petstore client generated from
+// test/emit/fixtures/petstore.yaml through a Dio whose adapter answers from
+// memory, and prints what was sent and what each call returned.
+// ignore_for_file: avoid_print
+import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:dio/dio.dart';
+import 'package:fixture/petstore_raw/api_client.dart';
+import 'package:typed_openapi_runtime/typed_openapi_runtime.dart';
+
+/// Answers each request with the next response of [answers].
+final class Adapter implements HttpClientAdapter {
+  final List<ResponseBody Function()> answers = [];
+  final List<RequestOptions> requests = [];
+  final List<String> bodies = [];
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    requests.add(options);
+    final bytes = <int>[];
+    if (requestStream != null) {
+      await for (final chunk in requestStream) {
+        bytes.addAll(chunk);
+      }
+    }
+    bodies.add(utf8.decode(bytes, allowMalformed: true));
+    return answers.removeAt(0)();
+  }
+
+  @override
+  void close({bool force = false}) {}
+}
+
+ResponseBody json(int status, Object? body) => ResponseBody.fromString(
+  jsonEncode(body),
+  status,
+  headers: {
+    Headers.contentTypeHeader: ['application/json'],
+  },
+);
+
+ResponseBody empty(int status) => ResponseBody.fromString('', status);
+
+ResponseBody bytes(int status, List<int> data, String type) =>
+    ResponseBody.fromBytes(
+      data,
+      status,
+      headers: {
+        Headers.contentTypeHeader: [type],
+      },
+    );
+
+String show(Result<Object?, Object?> result) => switch (result) {
+  Success(:final data, :final statusCode) => 'success $statusCode ${describe(data)}',
+  HttpError(:final body, :final statusCode) => 'error $statusCode ${describe(body)}',
+  UndocumentedStatus(:final statusCode) => 'undocumented $statusCode',
+  DecodeError(:final error) => 'decode ${error.pointer} ${error.expected}',
+  TransportError() => 'transport',
+  Cancelled() => 'cancelled',
+};
+
+String describe(Object? value) => switch (value) {
+  null => 'null',
+  final Uint8List data => 'bytes ${data.length}',
+  CreatePetResponseOk(:final body) => 'Ok ${body.name}',
+  CreatePetResponseCreated(:final body) => 'Created ${body.id}',
+  CreatePetResponseNoContent() => 'NoContent',
+  CreatePetErrorNotFound(:final body) => 'NotFound ${body.code}',
+  CreatePetErrorClientError(:final body) => 'ClientError ${body.id}',
+  CreatePetErrorServiceUnavailable() => 'ServiceUnavailable',
+  final Pet pet => 'Pet ${pet.id} ${pet.name} ${pet.status?.value}',
+  final List<Pet> pets => 'Pets ${pets.map((p) => p.name).join(',')}',
+  final Problem problem => 'Problem ${problem.code}',
+  final PlaceOrderResponse order => 'Order ${order.id} ${order.status?.value}',
+  final String text => 'text $text',
+  // JsonValue and models.
+  _ => 'json ${jsonEncode(value)}',
+};
+
+String request(Adapter adapter) {
+  final options = adapter.requests.last;
+  final info = OperationInfo.of(options);
+  return '${options.method} ${options.uri} '
+      '[${info?.operationId}; ${info?.security.map((a) => a.join('+')).join('|')}]';
+}
+
+Future<void> main() async {
+  final adapter = Adapter();
+  final dio = Dio(BaseOptions(baseUrl: 'https://pets.example.com/v1'))
+    ..httpClientAdapter = adapter;
+  final client = ApiClient(dio);
+  final pets = client.pets;
+
+  print('server ${ApiClient.server1(region: 'us')} ${ApiClient.server2}');
+
+  adapter.answers.add(() => json(200, [{'id': 1, 'name': 'Rex', 'status': 'sold'}]));
+  print(show(await pets.listPets(
+    limit: 5,
+    tags: ['a b', 'c'],
+    status: [Status.available, Status.sold],
+    filter: {'kind': 'dog'},
+    next: '/a//b?c',
+    where: {'age': 3},
+    xTrace: 't-1',
+    session: 's 1',
+  )));
+  print(request(adapter));
+  final sent = adapter.requests.last.headers;
+  print('headers ${sent['X-Trace']} ${sent['Cookie']}');
+
+  adapter.answers.add(() => json(500, {'code': 'down'}));
+  print(show(await pets.listPets(xTrace: 't')));
+
+  for (final answer in [
+    () => json(200, {'id': 1, 'name': 'Rex'}),
+    () => json(201, {'id': 'job-1'}),
+    () => empty(204),
+    () => json(404, {'code': 'gone'}),
+    () => json(422, {'id': 'bad'}),
+    () => empty(503),
+    () => empty(302),
+    () => json(200, {'id': 'x'}),
+  ]) {
+    adapter.answers.add(answer);
+    print(show(await pets.createPet(body: const Pet(id: 1, name: 'Rex', status: .available))));
+  }
+  print('body ${adapter.bodies.last}');
+
+  adapter.answers.add(() => json(200, {'data': {'id': 7, 'name': 'Tom'}}));
+  // ignore: deprecated_member_use_from_same_package
+  print(show(await pets.getPet(petId: 7)));
+  print(request(adapter));
+
+  adapter.answers.add(() => empty(204));
+  print(show(await pets.deletePet(petId: 7, reason: 'old')));
+  print('${request(adapter)} reason=${adapter.requests.last.headers['reason']}');
+
+  adapter.answers.add(() => bytes(200, [1, 2, 3], 'image/png'));
+  var received = 0;
+  print(show(await pets.getPhoto(
+    petId: 7,
+    call: CallOptions(onReceiveProgress: (count, _) => received = count),
+  )));
+  print('received $received');
+  print(request(adapter));
+  adapter.answers.add(() => bytes(404, utf8.encode('{"code":"nophoto"}'), 'application/json'));
+  print(show(await pets.getPhoto(petId: 7)));
+
+  adapter.answers.add(() => ResponseBody.fromString('hello', 200, headers: {
+    Headers.contentTypeHeader: ['text/plain'],
+  }));
+  print(show(await pets.getNote(petId: [1, 2])));
+  print(request(adapter));
+  adapter.answers.add(() => json(404, {'code': 'nonote'}));
+  print(show(await pets.getNote(petId: [1])));
+
+  adapter.answers.add(() => empty(204));
+  print(show(await pets.putPhoto(petId: 7, body: FileUpload.bytes(Uint8List.fromList(utf8.encode('png'))))));
+  print('${adapter.requests.last.contentType} ${adapter.bodies.last}');
+  adapter.answers.add(() => empty(204));
+  print(show(await pets.putPhoto(
+    petId: 7,
+    body: FileUpload.stream(Stream.value(utf8.encode('gif')), length: 3, contentType: 'image/gif'),
+  )));
+  print('${adapter.requests.last.contentType} ${adapter.bodies.last}');
+
+  adapter.answers.add(() => empty(204));
+  print(show(await pets.uploadPhoto(
+    petId: 7,
+    body: UploadPhotoRequest(
+      file: FileUpload.bytes(Uint8List.fromList(utf8.encode('img')), filename: 'a.png'),
+      extra: [FileUpload.bytes(Uint8List.fromList(utf8.encode('x')), filename: 'x.bin')],
+      caption: 'hi',
+      meta: const Job(id: 'j'),
+    ),
+  )));
+  final multipart = adapter.bodies.last;
+  print('multipart ${[
+    multipart.contains('name="file"; filename="a.png"\r\ncontent-type: image/png'),
+    multipart.contains('name="extra"; filename="x.bin"\r\ncontent-type: application/octet-stream'),
+    multipart.contains('name="caption"\r\n\r\nhi'),
+    multipart.contains('name="meta"\r\ncontent-type: application/json'),
+  ]}');
+
+  final store = client.store;
+  adapter.answers.add(() => json(200, {'id': 3, 'status': 'pending'}));
+  print(show(await store.placeOrder(
+    body: const PlaceOrderRequest(petId: 1, tags: ['a', 'b'], meta: {'k': 'v'}),
+  )));
+  print('${request(adapter)} ${adapter.requests.last.contentType} ${adapter.bodies.last}');
+
+  adapter.answers.add(() => json(200, {'any': true}));
+  print(show(await store.sendNote(body: 'note')));
+  print('${adapter.requests.last.contentType} ${adapter.bodies.last}');
+  adapter.answers.add(() => json(400, {'ok': false}));
+  print(show(await store.sendNote()));
+
+  adapter.answers.add(() => empty(200));
+  print(show(await client.defaultApi.health(
+    call: const CallOptions(headers: {'X-Extra': '1'}),
+  )));
+  print('extra ${adapter.requests.last.headers['X-Extra']}');
+
+  final token = CancelToken()..cancel('stop');
+  print(show(await client.defaultApi.health(call: CallOptions(cancelToken: token))));
+
+  adapter.answers.add(() => throw DioException.connectionError(
+    requestOptions: RequestOptions(),
+    reason: 'offline',
+  ));
+  print(show(await client.defaultApi.health()));
+
+  adapter.answers.add(() => json(200, {'data': {'id': 'x'}}));
+  // ignore: deprecated_member_use_from_same_package
+  print(show(await pets.getPet(petId: 1)));
+}
+
+/// A tag class can be faked with `implements` (R10.7).
+class FakePets implements PetsApi {
+  @override
+  Future<Result<void, Never>> deletePet({
+    required int petId,
+    String? reason,
+    CallOptions? call,
+  }) async => const Success(null, statusCode: 204);
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
