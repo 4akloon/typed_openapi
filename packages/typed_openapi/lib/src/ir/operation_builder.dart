@@ -517,14 +517,7 @@ final class OperationBuilder {
     }
     return ErrorsByStatus(
       cases,
-      sensitive: {
-        for (final response in responses)
-          if (response.isError &&
-              (response.type == null
-                  ? _secrets.isDefaultErrorSecret(fallback)
-                  : response.sensitive))
-            response.status,
-      },
+      sensitive: _secrets.errorStatuses(responses, fallback),
     );
   }
 

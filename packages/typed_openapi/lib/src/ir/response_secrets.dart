@@ -1,5 +1,6 @@
 import '../model/schema.dart';
 import 'dart_type.dart';
+import 'ir.dart';
 import 'ir_context.dart';
 import 'schema_shapes.dart';
 
@@ -14,6 +15,7 @@ final class ResponseSecrets {
 
   final IrContext _context;
 
+  // Lazy because a field initializer cannot read `_context`.
   late final RefFollower _refs = RefFollower(
     (schema) => switch (_context.model.resolveSchema(schema)) {
       final SchemaObject object => object,
@@ -28,12 +30,12 @@ final class ResponseSecrets {
       schema != null &&
       type != null &&
       (SchemaShapes.carriesSecret(schema, refs: _refs) ||
-          type.holdsRawJson &&
+          (type.holdsRawJson &&
               SchemaShapes.carriesSecret(
                 schema,
                 refs: _refs,
                 intoProperties: true,
-              ));
+              )));
 
   /// Whether the body of type [type] of the `errors.default_schema` is a
   /// secret.
@@ -44,4 +46,16 @@ final class ResponseSecrets {
         : _context.model.document.components?.schemas[key];
     return isSecret(schema, type);
   }
+
+  /// The statuses of the error [responses] whose body is a secret: a
+  /// response without a body of its own has the body of [fallback] (the type
+  /// of `errors.default_schema`), which counts when that schema is one.
+  Set<String> errorStatuses(List<ResponseIr> responses, DartType? fallback) => {
+    for (final response in responses)
+      if (response.isError &&
+          (response.type == null
+              ? isDefaultErrorSecret(fallback)
+              : response.sensitive))
+        response.status,
+  };
 }
