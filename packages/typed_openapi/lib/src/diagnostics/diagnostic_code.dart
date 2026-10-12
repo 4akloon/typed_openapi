@@ -233,6 +233,14 @@ enum DiagnosticCode {
   /// a node in another file.
   overrideSharedTarget('TOA808', 'override-shared-target', .info),
 
+  /// An override removes the `type` of a nullable 3.1 schema, so the schema
+  /// is no longer nullable: nullability is the `null` in that `type`.
+  overrideNullabilityDropped(
+    'TOA809',
+    'override-nullability-dropped',
+    .info,
+  ),
+
   /// The configuration file does not exist.
   configNotFound('TOA901', 'config-not-found', .error),
 

@@ -191,15 +191,16 @@ final class OverrideApplier {
       );
       return;
     }
+    final rawRef = raw[r'$ref'] is String ? raw[r'$ref'] as String : null;
+    final shape = _nullableShape(raw);
     final toRef =
-        spec.containsKey(r'$ref') ||
-        spec.containsKey('nullable') &&
-            (raw.containsKey(r'$ref') || _nullableReference(raw) != null);
+        spec[r'$ref'] is String ||
+        spec.containsKey('nullable') && (rawRef != null || shape != null);
     if (toRef) {
-      yield* _reference(entry, at, raw, property);
+      yield* _reference(entry, at, raw, property, rawRef, shape);
       return;
     }
-    if (_version == .v30 && raw.containsKey(r'$ref')) {
+    if (_version == .v30 && rawRef != null) {
       for (final field in ['type', ..._plainFields]) {
         if (!spec.containsKey(field) || property && field == 'required') {
           continue;
@@ -228,14 +229,22 @@ final class OverrideApplier {
     }
   }
 
-  /// Makes the schema at [at] a (nullable) reference.
+  /// Makes the schema at [at] a (nullable) reference, or changes the
+  /// nullability of a schema that is one or has a `null` branch.
+  ///
+  /// An override with `$ref` replaces the node. One with only `nullable`
+  /// keeps every other key of the node: [rawRef] is the `$ref` of a schema
+  /// that is a reference, [shape] the nullable form of one that is nullable.
   Iterable<OverrideEdit> _reference(
     OverrideEntry entry,
     SpecLocation at,
     Map<String, Object?> raw,
     bool property,
+    String? rawRef,
+    _NullableShape? shape,
   ) sync* {
     final spec = entry.spec;
+    final specRef = spec[r'$ref'];
     final others = [
       for (final field in spec.keys)
         if (field != r'$ref' &&
@@ -248,63 +257,117 @@ final class OverrideApplier {
         .invalidOverride,
         entry,
         others.first,
-        '"${others.first}" cannot be set on a schema that is a reference.',
-        fix: r'Replace the reference with "$ref" and "nullable" only.',
+        specRef is String || rawRef != null
+            ? '"${others.first}" cannot be set on a schema that is a '
+                  'reference.'
+            : '"${others.first}" cannot be set together with "nullable" on '
+                  'a schema that is nullable through "anyOf" or "oneOf".',
+        fix: specRef is String || rawRef != null
+            ? r'Replace the reference with "$ref" and "nullable" only.'
+            : 'Override "nullable" alone, or the schema by its name.',
       );
       return;
     }
-    final ref =
-        (spec[r'$ref'] ?? raw[r'$ref'] ?? _nullableReference(raw)) as String;
     final nullable = spec['nullable'] == true;
-    final next = <String, Object?>{
-      if (!nullable) r'$ref': ref,
-      if (nullable && _version == .v30) ...{
-        'allOf': [
-          {r'$ref': ref},
-        ],
-        'nullable': true,
-      },
-      if (nullable && _version != .v30)
-        'anyOf': [
-          {r'$ref': ref},
-          {'type': 'null'},
-        ],
-    };
-    final fields = [
-      for (final field in [r'$ref', 'nullable'])
-        if (spec.containsKey(field)) field,
-    ];
-    if (_equality.equals(raw, next)) {
-      for (final field in fields) {
-        _unchanged(entry, field);
+    if (specRef is String) {
+      final next = <String, Object?>{
+        if (!nullable) r'$ref': specRef,
+        ..._nullableForm(specRef, nullable),
+      };
+      final fields = [
+        for (final field in [r'$ref', 'nullable'])
+          if (spec.containsKey(field)) field,
+      ];
+      if (_equality.equals(raw, next)) {
+        for (final field in fields) {
+          _unchanged(entry, field);
+        }
+        return;
       }
+      yield OverrideEdit(SpecEdit.replace(at, next), [
+        for (final field in fields) (entry, field),
+      ]);
       return;
     }
-    yield OverrideEdit(SpecEdit.replace(at, next), [
-      for (final field in fields) (entry, field),
-    ]);
+    if (nullable == (shape != null)) {
+      _unchanged(entry, 'nullable');
+      return;
+    }
+    final Map<String, Object?> next;
+    if (shape == null) {
+      next = {
+        for (final MapEntry(:key, :value) in raw.entries)
+          if (key != r'$ref') key: value,
+        ..._nullableForm(rawRef!, true),
+      };
+    } else {
+      final merged = shape.withoutNull();
+      if (merged == null) {
+        _report(
+          .fixNotApplied,
+          entry,
+          'nullable',
+          'This override was not applied: the schema and the "'
+              '${shape.key}" branch both set the same key to different values, '
+              'so they cannot be merged.',
+          fix: 'Override the schema by its name.',
+        );
+        return;
+      }
+      next = merged;
+    }
+    yield OverrideEdit(SpecEdit.replace(at, next), [(entry, 'nullable')]);
   }
 
-  /// The `$ref` of a nullable reference in the form [_reference] writes for
-  /// the document's dialect; null for any other schema.
-  String? _nullableReference(Map<String, Object?> raw) {
-    final bool v30 = _version == .v30;
-    final shape = v30
-        ? raw['nullable'] == true && raw.length == 2
-        : raw.length == 1;
-    final list = raw[v30 ? 'allOf' : 'anyOf'];
-    if (!shape || list is! List<Object?> || list.length != (v30 ? 1 : 2)) {
-      return null;
+  /// The keys that make [ref] nullable in the document's dialect; none when
+  /// [nullable] is false.
+  Map<String, Object?> _nullableForm(String ref, bool nullable) => {
+    if (nullable && _version == .v30) ...{
+      'allOf': [
+        {r'$ref': ref},
+      ],
+      'nullable': true,
+    },
+    if (nullable && _version != .v30)
+      'anyOf': [
+        {r'$ref': ref},
+        {'type': 'null'},
+      ],
+  };
+
+  /// The nullable form of [raw] for the document's dialect: a `$ref` in
+  /// `allOf` next to `nullable: true` in 3.0, one branch and a
+  /// `{type: 'null'}` in `anyOf` or `oneOf` from 3.1; any other keys are
+  /// siblings. Null for any other schema.
+  _NullableShape? _nullableShape(Map<String, Object?> raw) {
+    if (_version == .v30) {
+      final list = raw['allOf'];
+      if (raw['nullable'] != true ||
+          list is! List<Object?> ||
+          list.length != 1) {
+        return null;
+      }
+      final branch = list.single;
+      return branch is Map<String, Object?> &&
+              branch.length == 1 &&
+              branch[r'$ref'] is String
+          ? _NullableShape(raw, 'allOf', branch)
+          : null;
     }
-    if (!v30 && !_equality.equals(list.last, const {'type': 'null'})) {
-      return null;
+    for (final key in ['anyOf', 'oneOf']) {
+      final list = raw[key];
+      if (list is! List<Object?> || list.length != 2) continue;
+      final nulls = [
+        for (var i = 0; i < 2; i++)
+          if (_equality.equals(list[i], const {'type': 'null'})) i,
+      ];
+      if (nulls.length != 1) continue;
+      final branch = list[1 - nulls.single];
+      if (branch is Map<String, Object?>) {
+        return _NullableShape(raw, key, branch);
+      }
     }
-    final first = list.first;
-    return first is Map<String, Object?> &&
-            first.length == 1 &&
-            first[r'$ref'] is String
-        ? first[r'$ref'] as String
-        : null;
+    return null;
   }
 
   Iterable<OverrideEdit> _typeAndNullable30(
@@ -356,7 +419,9 @@ final class OverrideApplier {
     var nullable =
         spec['nullable'] as bool? ??
         (wasNullable && (spec['type'] != null || !spec.containsKey('type')));
+    var failed = false;
     if (nullable && nextBase.isEmpty) {
+      failed = true;
       _report(
         .invalidOverride,
         entry,
@@ -371,7 +436,7 @@ final class OverrideApplier {
     final types = [...nextBase, if (nullable) 'null'];
     final fields = [
       if (spec.containsKey('type')) 'type',
-      if (spec.containsKey('nullable') && nextBase.isNotEmpty) 'nullable',
+      if (spec.containsKey('nullable') && !failed) 'nullable',
     ];
     if (spec.containsKey('type') && _equality.equals(base, nextBase)) {
       _unchanged(entry, 'type');
@@ -382,6 +447,18 @@ final class OverrideApplier {
       fields.remove('nullable');
     }
     if (fields.isEmpty) return;
+    if (spec.containsKey('type') &&
+        spec['type'] == null &&
+        wasNullable &&
+        !spec.containsKey('nullable')) {
+      _report(
+        .overrideNullabilityDropped,
+        entry,
+        'type',
+        'From OpenAPI 3.1, nullability is the "null" in "type"; removing the '
+            'type also makes the schema non-nullable.',
+      );
+    }
     final sources = [for (final field in fields) (entry, field)];
     yield OverrideEdit(switch (types) {
       [] => SpecEdit.remove(at.child('type')),
@@ -512,5 +589,41 @@ final class OverrideApplier {
       span: _overrides.spanOf(at),
       fix: fix,
     );
+  }
+}
+
+/// A nullable schema whose nullability is a branch or a flag next to one
+/// other branch, with the keys around them.
+final class _NullableShape {
+  /// Reads the shape of [raw] whose nullable form is [key] with [branch].
+  const _NullableShape(this.raw, this.key, this.branch);
+
+  /// The schema.
+  final Map<String, Object?> raw;
+
+  /// `allOf` (3.0), `anyOf` or `oneOf` (3.1).
+  final String key;
+
+  /// The one branch that is not `null`.
+  final Map<String, Object?> branch;
+
+  /// The schema without nullability: the branch merged with the other keys,
+  /// less a `default` that is `null`. Null when the branch and the other keys
+  /// set one key to different values.
+  Map<String, Object?>? withoutNull() {
+    final siblings = {
+      for (final MapEntry(:key, :value) in raw.entries)
+        if (key != this.key &&
+            key != 'nullable' &&
+            !(key == 'default' && value == null))
+          key: value,
+    };
+    for (final MapEntry(:key, :value) in branch.entries) {
+      if (siblings.containsKey(key) &&
+          !const DeepCollectionEquality().equals(siblings[key], value)) {
+        return null;
+      }
+    }
+    return {...branch, ...siblings};
   }
 }

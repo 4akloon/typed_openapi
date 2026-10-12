@@ -594,19 +594,24 @@ schemas:
     expect(run.result.overrides?.operations.single.group, 'zoo');
   });
 
-  test('"type: null" on a nullable 3.1 schema removes the type, no error', () {
-    final run = _Run(
-      '''
+  test(
+    '"type: null" on a nullable 3.1 schema removes the type and says so',
+    () {
+      final run = _Run(
+        '''
 $_header31
 components:
   schemas:
     A: {type: [string, 'null'], description: d}
 ''',
-      'schemas: {A: {type: null}}\n',
-    );
-    expect(run.overrideDiagnostics, isEmpty);
-    expect(run.at('#/components/schemas/A'), {'description': 'd'});
-  });
+        'schemas: {A: {type: null}}\n',
+      );
+      expect(run.overrideDiagnostics, [
+        (DiagnosticCode.overrideNullabilityDropped, '#/schemas/A/type'),
+      ]);
+      expect(run.at('#/components/schemas/A'), {'description': 'd'});
+    },
+  );
 
   test('a 3.1 nullable reference is already nullable', () {
     const spec = r'''
@@ -687,6 +692,262 @@ schemas:
         'format': 'x',
         'enum': ['a', 'b'],
       });
+    });
+  });
+
+  group(r'a "$ref" that is not a string', () {
+    for (final (version, header) in [('3.0', _header30), ('3.1', _header31)]) {
+      for (final ref in ['5', 'null']) {
+        for (final nullable in [true, false]) {
+          test(
+            'is no reference: $version, \$ref: $ref, nullable: $nullable',
+            () {
+              final run = _Run(
+                '''
+$header
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        owner: {\$ref: $ref}
+''',
+                'schemas: {Pet: {properties: {owner: {nullable: $nullable}}}}\n',
+              );
+              const pointer = '#/schemas/Pet/properties/owner/nullable';
+              expect(run.overrideDiagnostics, [
+                if (version == '3.1' && nullable)
+                  (DiagnosticCode.invalidOverride, pointer)
+                else if (!nullable)
+                  (DiagnosticCode.overrideUnchanged, pointer),
+              ]);
+            },
+          );
+        }
+      }
+    }
+  });
+
+  group('3.1 nullable through a "null" branch', () {
+    const spec = r'''
+components:
+  schemas:
+    Owner: {type: object}
+    Pet:
+      type: object
+      properties:
+        owner:
+          anyOf: [{$ref: '#/components/schemas/Owner'}, {type: 'null'}]
+          default: null
+          title: Owner
+        age:
+          anyOf: [{type: integer}, {type: 'null'}]
+          default: null
+          title: Age
+        nick:
+          oneOf: [{type: string}, {type: 'null'}]
+          description: d
+        plain: {description: x}
+''';
+
+    test('"nullable: true" says the schema is already nullable', () {
+      final run = _Run('$_header31$spec', '''
+schemas:
+  Pet:
+    properties:
+      owner: {nullable: true}
+      age: {nullable: true}
+      nick: {nullable: true}
+''');
+      expect(run.overrideDiagnostics, [
+        for (final name in ['owner', 'age', 'nick'])
+          (
+            DiagnosticCode.overrideUnchanged,
+            '#/schemas/Pet/properties/$name/nullable',
+          ),
+      ]);
+    });
+
+    test('"nullable: false" keeps the branch and the siblings', () {
+      final run = _Run('$_header31$spec', '''
+schemas:
+  Pet:
+    properties:
+      owner: {nullable: false}
+      age: {nullable: false}
+      nick: {nullable: false}
+      plain: {nullable: false}
+''');
+      expect(run.overrideDiagnostics, [
+        (
+          DiagnosticCode.overrideUnchanged,
+          '#/schemas/Pet/properties/plain/nullable',
+        ),
+      ]);
+      const props = '#/components/schemas/Pet/properties';
+      expect(run.at('$props/owner'), {
+        r'$ref': '#/components/schemas/Owner',
+        'title': 'Owner',
+      });
+      expect(run.at('$props/age'), {'type': 'integer', 'title': 'Age'});
+      expect(run.at('$props/nick'), {'type': 'string', 'description': 'd'});
+    });
+
+    test('a field that comes with "nullable" is not set beside the union', () {
+      final run = _Run('$_header31$spec', '''
+schemas:
+  Pet:
+    properties:
+      age: {nullable: false, enum: [1]}
+''');
+      expect(run.overrideDiagnostics, [
+        (DiagnosticCode.invalidOverride, '#/schemas/Pet/properties/age/enum'),
+      ]);
+    });
+  });
+
+  group(r'a "$ref" with siblings and a "nullable" override', () {
+    const spec = r'''
+components:
+  schemas:
+    Owner: {type: object}
+    Pet:
+      type: object
+      properties:
+        friend:
+          $ref: '#/components/schemas/Owner'
+          description: buddy
+          readOnly: true
+''';
+    const nullable = '''
+schemas: {Pet: {properties: {friend: {nullable: true}}}}
+''';
+    const friend = '#/components/schemas/Pet/properties/friend';
+
+    test('keeps the siblings in 3.1', () {
+      final run = _Run('$_header31$spec', nullable);
+      expect(run.overrideDiagnostics, isEmpty);
+      expect(run.at(friend), {
+        'description': 'buddy',
+        'readOnly': true,
+        'anyOf': [
+          {r'$ref': '#/components/schemas/Owner'},
+          {'type': 'null'},
+        ],
+      });
+    });
+
+    test('keeps the siblings in 3.0', () {
+      final run = _Run('$_header30$spec', nullable);
+      expect(run.overrideDiagnostics, isEmpty);
+      expect(run.at(friend), {
+        'description': 'buddy',
+        'readOnly': true,
+        'allOf': [
+          {r'$ref': '#/components/schemas/Owner'},
+        ],
+        'nullable': true,
+      });
+    });
+
+    test('"nullable: false" on a plain reference changes nothing', () {
+      for (final header in [_header30, _header31]) {
+        final run = _Run(
+          '$header$spec',
+          'schemas: {Pet: {properties: {friend: {nullable: false}}}}\n',
+        );
+        expect(run.overrideDiagnostics, [
+          (
+            DiagnosticCode.overrideUnchanged,
+            '#/schemas/Pet/properties/friend/nullable',
+          ),
+        ]);
+        expect(run.at(friend), {
+          r'$ref': '#/components/schemas/Owner',
+          'description': 'buddy',
+          'readOnly': true,
+        });
+      }
+    });
+
+    test(r'an explicit "$ref" replaces the whole node', () {
+      final run = _Run('$_header31$spec', r'''
+schemas: {Pet: {properties: {friend: {$ref: '#/components/schemas/Pet'}}}}
+''');
+      expect(run.overrideDiagnostics, isEmpty);
+      expect(run.at(friend), {r'$ref': '#/components/schemas/Pet'});
+    });
+
+    test('the 3.0 nullable form with siblings is already nullable', () {
+      final run = _Run(
+        '''
+$_header30
+components:
+  schemas:
+    Owner: {type: object}
+    Pet:
+      type: object
+      properties:
+        friend:
+          allOf: [{\$ref: '#/components/schemas/Owner'}]
+          nullable: true
+          description: buddy
+''',
+        '''
+schemas: {Pet: {properties: {friend: {nullable: true}}}}
+''',
+      );
+      expect(run.overrideDiagnostics, [
+        (
+          DiagnosticCode.overrideUnchanged,
+          '#/schemas/Pet/properties/friend/nullable',
+        ),
+      ]);
+      final off = _Run(
+        '''
+$_header30
+components:
+  schemas:
+    Owner: {type: object}
+    Pet:
+      type: object
+      properties:
+        friend:
+          allOf: [{\$ref: '#/components/schemas/Owner'}]
+          nullable: true
+          description: buddy
+''',
+        '''
+schemas: {Pet: {properties: {friend: {nullable: false}}}}
+''',
+      );
+      expect(off.overrideDiagnostics, isEmpty);
+      expect(off.at(friend), {
+        r'$ref': '#/components/schemas/Owner',
+        'description': 'buddy',
+      });
+    });
+  });
+
+  test(r'"type" is not written next to a "$ref" in 3.0', () {
+    final run = _Run(
+      '''
+$_header30
+components:
+  schemas:
+    Status: {type: string}
+    Pet:
+      type: object
+      properties:
+        status: {\$ref: '#/components/schemas/Status'}
+''',
+      'schemas: {Pet: {properties: {status: {type: integer}}}}\n',
+    );
+    expect(run.overrideDiagnostics, [
+      (DiagnosticCode.fixNotApplied, '#/schemas/Pet/properties/status/type'),
+    ]);
+    expect(run.at('#/components/schemas/Pet/properties/status'), {
+      r'$ref': '#/components/schemas/Status',
     });
   });
 }
