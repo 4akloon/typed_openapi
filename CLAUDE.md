@@ -65,7 +65,14 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   JSON Schema ruleset are TOA009 (the value is read as its text); parser
   warnings are TOA015. A syntax error is returned to the caller, which
   reports TOA001 (`.json` falls back to `jsonDecode` without positions).
-  `OpenApiVersionDetector` reads the version.
+  `YamlComposer` (with `ComposedYaml`, re-exported from it) only wires one
+  run of `YamlComposition` (the event loop, the stack and building nodes) to
+  its collaborators: `YamlLimits` (depth and budget, TOA007/TOA008),
+  `YamlAnchors` (anchors, span records and alias expansion; `YamlAnchor`),
+  `YamlTags` (tags, scalar resolution; `YamlScalarText` is the extension
+  type that resolves a scalar's text), `YamlFrame` (the collection being
+  built and its keys) and `YamlReporter` (the key diagnostics and the
+  generic report). `OpenApiVersionDetector` reads the version.
 - `model/` - the immutable typed model, a superset of OAS 3.0/3.1/3.2:
   `SpecNode` (every node has a `SpecLocation` = file URI + pointer, `x-`
   `extensions` and reported `unknownKeys`), `RefOr<T>` = `Ref<T>` | `Inline<T>`,
