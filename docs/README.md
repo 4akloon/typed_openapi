@@ -8,4 +8,8 @@
 | `research/README.md` | Competitor research summary, decisions taken, recommendations |
 | `research/01…07-*.md` | Detailed reports with primary sources |
 
-All documents are in Ukrainian; code and code comments are in English.
+All documents are written in English. Some older ones (`requirements.md`,
+`roadmap.md`, `research/`, `superpowers/`) are still in Ukrainian and are
+translated when they are next edited. `code-quality-review.md` holds the
+quality review and the list of files over the size limits;
+`code-quality-plan.md` is the sequenced cleanup plan.

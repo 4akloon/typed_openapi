@@ -556,6 +556,92 @@ for assertions that differ. Do not write an int literal beyond 2^53 in
 - Tests do not touch the network; temp files only through `TempDir` in
   `test/helpers/temp_dir.dart`.
 
+## Code quality rules (size, decomposition, readability)
+
+Based on Google's code review standard (design, complexity, tests, naming,
+comments) and Effective Dart. A reader must understand a unit quickly; if
+not, decompose it. Review and sources: `docs/code-quality-review.md`.
+
+**Limits** (all lines count, comments and blanks included: use `wc -l`):
+
+| Unit | Limit | Notes |
+| --- | --- | --- |
+| File in `lib/` | 300 lines | |
+| Test file | 500 lines | split by behaviour, helpers to `test/helpers/` |
+| Method / function | 40 lines | Google reviews anything over ~40 |
+| Parameters | 5 | past that, take a parameter object |
+| Nesting | 3 levels of `if`/`for`/`switch`/`try` | early `continue`/`return`, extract |
+| Class | one responsibility, ~15 members | not "and" in its one-line doc |
+| Declarations per file | one public class or sealed family | small private helpers may share the file |
+
+Exempt: `load/yaml/` (vendored), and a flat catalog with no logic
+(`diagnostic_code.dart`). Nothing else is exempt without a line in the
+exemption list of `docs/code-quality-review.md`.
+
+**Before you write**
+
+- Run `wc -l` on the file you are about to extend. If your change would take
+  it past the limit, extract first (in its own commit), then add.
+- A file already over the limit (the legacy list is in the review) **never
+  grows**. When a task touches one, move the unit you are changing into a
+  new file/class first, so each touch leaves the file shorter.
+- A method over 40 lines: split it by what it does (named steps), not by
+  line count. Each part gets a name that says what, not how (`_mergeParts`,
+  not `_model2`).
+
+**How to decompose**
+
+- Split by responsibility into collaborator classes (composition), each in
+  its own file under the stage folder. `part`/`part of`, mixins used only to
+  spread one class across files, and `utils`/`helpers`/`common` files are
+  not decomposition.
+- A helper class made public to leave a file stays out of
+  `lib/typed_openapi.dart` unless it is API: the `show` lists keep the
+  surface small.
+- No hidden state passed through fields. Do not set a field (`_direction`,
+  `_patchTarget`, `_replacing`) before a call and read it deep inside:
+  pass a parameter or a small immutable context object, so a method can be
+  read and tested alone.
+- A refactor changes no behaviour: generated output stays byte-identical
+  (compare before and after on the fixtures), tests stay green, and it is a
+  separate commit from any feature or fix (`refactor(...)`).
+- Do not abstract for a future need (Google: solve the problem you know you
+  have now). Three similar lines are better than a premature interface; an
+  extension point needs a second user first.
+
+**Readability**
+
+- Names say what the thing is or does; no abbreviations, no `2`/`Impl`/
+  `Helper`/`Manager` suffixes. Booleans read as a state (`isLossy`,
+  `hasDefault`) in the positive form; no positional `bool` parameters.
+- A comment explains why (a spec quirk, a requirement id, a trap), never what
+  the next line does; if it needs to say what, rewrite the code. Delete a
+  comment that the change made false.
+- Prefer a `switch` over a sealed type or a record to a chain of `is`/`if`
+  tests; prefer returning a value to mutating an argument or a collection
+  passed in.
+- No `!` where a pattern or an early return can promote the value; no
+  `dynamic`, no `late` without a comment on why it is set before first read.
+- Every user-input problem is a diagnostic, never a bare `catch` or a silent
+  default (see the design rules below).
+
+**Tests**
+
+- Tests come in the same commit as the code; a new branch of logic has a test
+  that fails without it.
+- A test names the behaviour (`'a path expansion of ".." throws'`), builds its
+  input in the test or a named helper, and checks one thing. Repeated set-up
+  of more than ~5 lines becomes a helper in `test/helpers/`.
+
+**Self-review before saying "done"**
+
+1. `wc -l` of every file touched, and the longest method added: within limits?
+2. Could a new reader of the diff say in one sentence what each new class and
+   method is for? If not, rename or split.
+3. Is there code, a parameter or a flag nothing uses yet? Remove it.
+4. `dart analyze packages` clean, tests green, `dart format` changes 0 files,
+   and `CLAUDE.md`/`docs/` updated if behaviour or structure changed.
+
 ## Design rules (from CONTRIBUTING.md)
 
 - Nothing is guessed silently: every normalizer fix, fallback or skipped
@@ -579,6 +665,8 @@ for assertions that differ. Do not write an int literal beyond 2^53 in
 
 - `docs/requirements.md` - requirements R0-R15 and decisions on open questions.
 - `docs/roadmap.md` - milestones M1-M13.
+- `docs/code-quality-review.md` - quality review, the exemption list of files
+  over the size limits, and the refactoring order.
 - `docs/research/` - competitor research (`README.md` summary, `01`-`07`
   detailed reports).
 - `docs/superpowers/plans/` - step-by-step implementation plan per milestone
@@ -587,5 +675,8 @@ for assertions that differ. Do not write an int literal beyond 2^53 in
 
 ## Language
 
-Documents in `docs/` are written in Ukrainian. Code, code comments, doc
-comments, diagnostics messages and commit messages are in English.
+Everything is in English: documents in `docs/`, `CLAUDE.md`, READMEs, code,
+code comments, doc comments, diagnostics messages and commit messages. A new
+or edited document is written in English; a document still in Ukrainian
+(see `docs/README.md`) is translated when it is next edited. The only
+Ukrainian files are the intentional user-facing `README.ua.md` translations.
