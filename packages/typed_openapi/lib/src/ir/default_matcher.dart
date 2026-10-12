@@ -50,8 +50,10 @@ final class DefaultMatcher {
     return parsed != null && parsed.toIso8601String().startsWith(text);
   }
 
+  /// RFC 3339 allows a lower-case `t` and `z`, which [DateTime.tryParse]
+  /// does not.
   static bool _isDateTime(String text) =>
-      _dateTime.hasMatch(text) && DateTime.tryParse(text) != null;
+      _dateTime.hasMatch(text) && DateTime.tryParse(text.toUpperCase()) != null;
 
   static bool _isInt32(num value) =>
       value == value.truncate() && value >= _int32Min && value <= _int32Max;

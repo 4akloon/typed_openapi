@@ -433,8 +433,9 @@ enum DiagnosticCode {
 
   /// A response documents a 1xx or 3xx status. The client has no result for
   /// them (Dio follows redirects and the interim statuses are not
-  /// responses), so the response is not generated and the status is an
-  /// undocumented one at run time.
+  /// responses), so the response is not generated; at run time the status is
+  /// an undocumented one, or handled by the `default` response when the
+  /// operation has one.
   responseStatusNotGenerated(
     'TOA658',
     'response-status-not-generated',

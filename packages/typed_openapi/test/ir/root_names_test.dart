@@ -64,6 +64,63 @@ void main() {
     });
   });
 
+  group('a server variable that gets another name', () {
+    String servers(String variables) =>
+        'servers: [{url: "https://{a-b}.x/{aB}/{class}/{ }", '
+        'variables: $variables}]';
+
+    test('is reported: a collision, a reserved word, no letters', () {
+      final fixture = IrFixture(
+        _spec(
+          't',
+          servers: servers(
+            '{a-b: {default: "1"}, aB: {default: "2"}, class: {default: "3"}, '
+            '" ": {default: "4"}}',
+          ),
+        ),
+      );
+      final variables = fixture.build().root.servers.single.variables;
+      expect(
+        [for (final v in variables) v.name],
+        [
+          'aB',
+          'aB2',
+          'class_',
+          'value',
+        ],
+      );
+      expect(
+        [
+          for (final d in fixture.reported) (d.code, d.pointer?.value),
+        ].where((c) => c.$1 != DiagnosticCode.operationMultipleTags),
+        [
+          (DiagnosticCode.nameCollision, '#/servers/0/variables/aB'),
+          (DiagnosticCode.nameReserved, '#/servers/0/variables/class'),
+          (DiagnosticCode.nameUnrepresentable, '#/servers/0/variables/ '),
+        ],
+      );
+      expect(
+        fixture.reportedOf(.nameCollision).single.message,
+        allOf(contains('"aB"'), contains('"aB2"'), contains('"aB"')),
+      );
+    });
+
+    test('is not reported when nothing changes', () {
+      final fixture = IrFixture(
+        _spec(
+          't',
+          servers:
+              'servers: [{url: "https://{region}.x", '
+              'variables: {region: {default: eu}}}]',
+        ),
+      );
+      fixture.build();
+      expect(fixture.reportedOf(.nameCollision), isEmpty);
+      expect(fixture.reportedOf(.nameReserved), isEmpty);
+      expect(fixture.reportedOf(.nameUnrepresentable), isEmpty);
+    });
+  });
+
   group('the root client class', () {
     test('of a name with no ASCII letters is ApiClient with TOA559', () {
       final fixture = IrFixture(_spec('t'), clientName: 'мій-клієнт');
@@ -85,10 +142,13 @@ void main() {
       expect(fixture.reportedOf(.nameUnrepresentable), hasLength(1));
     });
 
-    test('of a name that starts with a digit has a prefix, not a dollar', () {
+    test('of a name that starts with a digit has a prefix, with TOA559', () {
       final fixture = IrFixture(_spec('t'), clientName: '1password');
       expect(fixture.build().root.name, 'Api1PasswordClient');
-      expect(fixture.reportedOf(.nameLossy), isEmpty);
+      final [prefixed] = fixture.reportedOf(.nameLossy);
+      expect(prefixed.message, contains('"1password"'));
+      expect(prefixed.message, contains('"Api1PasswordClient"'));
+      expect(prefixed.fix, contains('naming.client'));
     });
 
     test('of an ordinary name has no report', () {

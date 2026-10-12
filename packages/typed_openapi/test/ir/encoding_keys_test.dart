@@ -1,6 +1,7 @@
 import 'package:test/test.dart';
 import 'package:typed_openapi/src/diagnostics/severity.dart';
 import 'package:typed_openapi/src/ir/ir.dart';
+import 'package:typed_openapi/src/model/parameter.dart';
 
 import '../helpers/ir_fixture.dart';
 
@@ -22,6 +23,7 @@ paths:
 components:
   schemas:
     Base: {type: object, properties: {base: {type: string}}}
+    Free: {type: object}
 ''';
 
 const _object = '''
@@ -94,6 +96,35 @@ paths:
       );
       expect(_keys(fixture.build()), isEmpty);
       expect(fixture.reportedOf(.encodingKeyUnknown), hasLength(1));
+    });
+
+    test('is not reported for a free-form object, and the entry is kept', () {
+      final fixture = IrFixture(
+        _spec(
+          'application/x-www-form-urlencoded',
+          '{meta: {style: deepObject, explode: true}}',
+          schema: '{type: object}',
+        ),
+      );
+      final ir = fixture.build();
+      expect(_keys(ir), ['meta']);
+      final [encoding] = ir.groups.single.operations.single.body!.encoding;
+      expect(encoding.style, ParameterStyle.deepObject);
+      expect(encoding.explode, isTrue);
+      expect(fixture.reportedOf(.encodingKeyUnknown), isEmpty);
+    });
+
+    test('is not reported for a schema with no properties in its parts', () {
+      final fixture = IrFixture(
+        _spec(
+          'application/x-www-form-urlencoded',
+          '{meta: {contentType: text/plain}}',
+          schema:
+              r'{allOf: [{type: object}, {$ref: "#/components/schemas/Free"}]}',
+        ),
+      );
+      expect(_keys(fixture.build()), ['meta']);
+      expect(fixture.reportedOf(.encodingKeyUnknown), isEmpty);
     });
 
     test('is not reported when every key names a property', () {

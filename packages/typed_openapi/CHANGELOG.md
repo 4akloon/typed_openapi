@@ -210,12 +210,15 @@
     not an HTTP status (a code 100-599, a range `1XX`-`5XX` or `default`), or
     repeats another key in a different case; the response is not generated.
   - TOA658 response-status-not-generated (info): a documented 1xx or 3xx
-    response is not generated; the status is undocumented at run time.
+    response is not generated; at run time the status is undocumented, or
+    handled by the `default` response when the operation has one.
   - TOA659 encoding-key-unknown (warning): an `encoding` key of a form or
-    multipart body names no property of its schema; the entry is ignored.
+    multipart body names no property of its schema; the entry is ignored. A
+    schema that lists no properties is free-form and is not checked.
   - TOA660 default-value-invalid (warning): a parameter's `default` does not
     fit its `enum` or `format` (`date`, `date-time`, `uuid`, `int32`); it is
-    not documented as the default.
+    not documented as the default (a lower-case `t` or `z` of a `date-time`
+    is valid, as RFC 3339 says).
   - TOA661 part-media-type-chosen (info): the `contentType` of the `encoding`
     of a multipart part is a list (`image/png, image/jpeg`), a wildcard
     (`image/*`) or no media type; the part is sent with one concrete type
@@ -224,8 +227,9 @@
   - TOA662 part-media-type-not-json (warning): an object part whose
     `contentType` is not JSON (`application/xml`) is a `String` the caller
     supplies, sent with that media type; it used to make every call throw.
-  - Renamed parts, group fields, server members and root client names are
-    reported (TOA550, TOA551, TOA552, TOA559); a method named `jsonEncode`,
+  - Renamed parts, group fields, server members, server variables and root
+    client names (also one that gets the `Api` prefix because it starts with
+    a digit) are reported (TOA550, TOA551, TOA552, TOA559); a method named `jsonEncode`,
     `base64Encode`, `int`, `bool`, `double` or `num` gets a suffix (TOA550).
 - The IR names what the API emitter declares, after the models (which never
   move): the root client (`naming.client`, else the client name with

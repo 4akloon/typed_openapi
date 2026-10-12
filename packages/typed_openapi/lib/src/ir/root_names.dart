@@ -48,7 +48,17 @@ final class RootNames {
       _reportUnnamed(source, at);
       return 'ApiClient';
     }
-    final name = pascal.startsWith(r'$') ? 'Api${pascal.substring(1)}' : pascal;
+    final isPrefixed = pascal.startsWith(r'$');
+    final name = isPrefixed ? 'Api${pascal.substring(1)}' : pascal;
+    if (isPrefixed) {
+      _context.report(
+        .nameLossy,
+        'The client name "$source" starts with a digit, which a class name '
+        'cannot; the root client is named "${name}Client".',
+        at,
+        fix: 'Set naming.client in the config.',
+      );
+    }
     _context.checkLossyName(
       source,
       '${name}Client',
@@ -109,7 +119,7 @@ final class RootNames {
             url: url,
             location: server.location,
             description: server.description,
-            variables: _serverVariables(server.variables),
+            variables: _serverVariables(server),
           ),
     ];
   }
@@ -146,22 +156,61 @@ final class RootNames {
     );
   }
 
-  static List<ServerVariableIr> _serverVariables(
-    Map<String, ServerVariable> variables,
-  ) {
+  List<ServerVariableIr> _serverVariables(Server server) {
     final scope = NameScope(
       reserved: DartNames.reservedWords,
       reservedSuffix: '_',
     );
     return [
-      for (final MapEntry(key: wire, :value) in variables.entries)
+      for (final MapEntry(key: wire, :value) in server.variables.entries)
         ServerVariableIr(
-          name: scope.claim(_names.camel(wire) ?? 'value').$1,
+          name: _claimVariable(scope, wire, value.location),
           wireName: wire,
           defaultValue: value.defaultValue,
           values: value.enumValues ?? const [],
           description: value.description,
         ),
     ];
+  }
+
+  /// The argument name of the server variable [wire], reported when it is
+  /// not the name the variable makes (TOA550, TOA551, TOA552, TOA559).
+  String _claimVariable(NameScope scope, String wire, SpecLocation at) {
+    final automatic = _names.camel(wire);
+    final candidate = automatic ?? 'value';
+    final (name, change) = scope.claim(candidate);
+    const fix =
+        'Rename the variable at the source; the URL still uses its own '
+        'name.';
+    if (automatic == null) {
+      _context.report(
+        .nameUnrepresentable,
+        'Server variable "$wire" has no ASCII letter or digit; the argument '
+        'is named "$name".',
+        at,
+        fix: fix,
+      );
+    } else if (change != null) {
+      _context.report(
+        change == .reserved ? .nameReserved : .nameCollision,
+        change == .reserved
+            ? 'Server variable "$wire" would be the Dart name "$candidate"; '
+                  'the argument is named "$name".'
+            : 'Another server variable is named "$candidate"; the argument '
+                  'of "$wire" is named "$name".',
+        at,
+        fix: fix,
+      );
+    }
+    if (automatic != null) {
+      _context.checkLossyName(
+        wire,
+        name,
+        at,
+        what: 'Server variable',
+        fix: fix,
+      );
+    }
+    return name;
   }
 }

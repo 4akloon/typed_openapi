@@ -64,6 +64,9 @@ void main() {
         '{type: integer, enum: [1, 2], default: 2}',
         '{type: string, format: date, default: "2020-02-29"}',
         '{type: string, format: date-time, default: "2020-01-01T00:00:00Z"}',
+        // RFC 3339 allows a lower-case `t` and `z`.
+        '{type: string, format: date-time, default: "2020-01-01t00:00:00z"}',
+        '{type: string, format: date-time, default: "2020-01-01t00:00:00.5+02:00"}',
         '{type: string, format: uuid, default: "123e4567-e89b-12d3-a456-426614174000"}',
         '{type: integer, format: int32, default: 7}',
         '{type: string, format: email, default: nobody}',

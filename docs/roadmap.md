@@ -220,7 +220,7 @@ Findings and decisions of M9 that were deliberately deferred (plan:
 | The headers of a multipart part's `encoding` are not sent (TOA656) | when needed |
 | A form property nested deeper than its style allows (an object in an object for `form`) makes `FormBody.encode` throw `ArgumentError` at run time; the generator does not warn | when needed (a diagnostic, or the deepObject convention of Rails and Stripe) |
 | `style: cookie` (OpenAPI 3.2) is sent percent-encoded, like `form` | M11 (with the platform matrix) |
-| A documented 1xx or 3xx response is `UndocumentedStatus`; `default` never catches a 2xx | when needed |
+| A documented 1xx or 3xx response is `UndocumentedStatus` (or the `default` response's type when there is one); `default` never catches a 2xx | when needed |
 | `callbacks`, `links` and `webhooks` are not generated (TOA567 reports callbacks and webhooks) | when needed |
 | `generate --format` and the per-client lines next to a machine report | after a user decision |
 | Files over the size limits that M9 grew (see the allowlist comments in `test/quality/size_limits_test.dart`) | the code-quality plan |

@@ -128,6 +128,22 @@ void main() {
       });
     }
 
+    test('is an undocumented status at run time, or the default one', () {
+      final (_, plain) = build({'"200"': body('a'), '"304"': body('b')});
+      expect(
+        plain.reported.single.message,
+        contains('an undocumented status (UndocumentedStatus)'),
+      );
+      final (_, caught) = build({
+        '"200"': body('a'),
+        '"304"': body('b'),
+        'default': body('c'),
+      });
+      final message = caught.reported.single.message;
+      expect(message, contains('handled by the default response'));
+      expect(message, isNot(contains('undocumented')));
+    });
+
     test('does not declare a model for its body', () {
       final (ir, _) = build({
         '"200"': body('a'),

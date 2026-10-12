@@ -52,6 +52,9 @@ final class ResponseStatuses {
     final at = operation.location.child('responses');
     final result = <(String, RefOr<Response>)>[];
     final seen = <String>{};
+    final outcome = operation.responses.containsKey('default')
+        ? 'handled by the default response'
+        : 'an undocumented status (UndocumentedStatus)';
     for (final MapEntry(:key, :value) in operation.responses.entries) {
       final status = normalize(key);
       if (status == null) {
@@ -67,7 +70,7 @@ final class ResponseStatuses {
         _context.report(
           .responseStatusNotGenerated,
           'The $key response is not generated: the client has no result for '
-          'a 1xx or 3xx status, which stays an undocumented one.',
+          'a 1xx or 3xx status, which at run time is $outcome.',
           at.child(key),
         );
       } else if (!seen.add(status)) {

@@ -56,8 +56,9 @@ final class BodyEncoding {
 
   /// The names of the properties of [schema] and of its `$ref` target and
   /// `allOf`, `oneOf` and `anyOf` parts; null when it is unresolved
-  /// (reported already) or lets any property in (`additionalProperties`
-  /// other than `false`).
+  /// (reported already), lets any property in (`additionalProperties` other
+  /// than `false`) or lists none: a free-form `{type: object}` is open, as
+  /// JSON Schema says.
   Set<String>? _propertyNames(Schema? schema) {
     final names = <String>{};
     final seen = <Object>{};
@@ -79,7 +80,9 @@ final class BodyEncoding {
     }
 
     visit(schema);
-    return isOpen || isUnresolved ? null : names;
+    return isOpen || isUnresolved || schema != null && names.isEmpty
+        ? null
+        : names;
   }
 
   /// The style of a form property as the IR keeps it: what the spec writes
