@@ -194,9 +194,14 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `checkLossyName` reports letters a name lost, TOA559; `defaultErrorSchema`
   is `errors.default_schema` if `components.schemas` has the key, else
   TOA562), `SchemaShapes` (shape questions the mapper and `DirectionIndex`
-  share: null-only, enum values, the one schema a wrapper stands for),
+  share: null-only, enum values, the one schema a wrapper stands for; an
+  `allOf` part with no structure, only annotations and `nullable`, is not a
+  merge part and is set aside next to the one `$ref`),
   `SchemaMapper` (types, models, enums, unions, `allOf` merge,
-  single-schema collapse, custom types; declarations are created when first
+  single-schema collapse, custom types; a field's `description`, `default`,
+  `deprecated` come from the property, then its annotation-only `allOf`
+  parts, then the schema it refers to (3.0 ignores siblings of a `$ref`);
+  declarations are created when first
   reached, so only reachable schemas exist, and named at the end: override
   names, then component keys, then inline names by depth. A declaration is
   its `DeclId`: reaching it again gives the same one, named after the first
@@ -218,17 +223,24 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   stream; any other media type is bytes (`Uint8List`) without its schema and
   the media types that are dropped are named, TOA561, except variants of the
   chosen type and other JSON types; envelopes; errors, with
-  `errors.default_schema` for statuses without a body) and `IrBuilder`
+  `errors.default_schema` for statuses without a body; header parameters
+  `Accept`, `Content-Type` and `Authorization` are dropped as OpenAPI says;
+  a parameter style its `in` does not allow falls back to the default, and
+  an `in: querystring` parameter is skipped, TOA564) and `IrBuilder`
   (operations written as a `$ref` are skipped (TOA107); groups by tag, path
   or one class, with an override `group` (UpperCamelCase, or a value that
-  differs only by case or separators) and TOA553-TOA555; method names,
+  differs only by case or separators) and TOA553-TOA555; the names of custom
+  types are taken in the type scope first, so a declaration named like one
+  gets a suffix, TOA551; method names,
   override names first, then
   `operationId` without the `operation_prefix`, then the path; TOA563 when
   no operation is generated, at the config client if filters left some
   out, else at `#/paths`; then everything above). `IrJson` dumps an IR; the
   hidden `typed_openapi ir` command prints it. Naming and mapping codes use
   the second half of each area's hundred: TOA250-TOA256, TOA350-TOA351,
-  TOA450-TOA452, TOA550-TOA563.
+  TOA450-TOA452, TOA550-TOA564. TOA552 on an enum value is an info (an
+  override cannot name enum values; `x-enum-varnames` in the spec does), and
+  `unknown` is reserved in the enum value scope (`unknown_`).
 - `check/` - `SpecChecker`: config -> load -> version -> overrides ->
   `Normalizer` -> `IrBuilder` once per run (file, preset, rules, overrides
   file, `GenerationConfig.key`); an overrides file that cannot be used is

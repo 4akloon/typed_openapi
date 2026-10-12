@@ -120,7 +120,11 @@ with a media type that is not JSON, a form, text or an event stream is sent
 and read as bytes without its schema (info `TOA561`, which also names the
 other media types of an operation that are dropped); an
 `errors.default_schema` that is not a key of `components.schemas` is a
-warning `TOA562` and is ignored.
+warning `TOA562` and is ignored; a parameter `style` that its `in` does not
+allow (path `form`, query `matrix`, ...) is a warning `TOA564` and the default
+style is used, and an `in: querystring` parameter (OpenAPI 3.2) is `TOA564`
+too and is not generated. Header parameters named `Accept`, `Content-Type`
+or `Authorization` are not generated, as OpenAPI says to ignore them.
 
 Every finding has a stable code (`TOA011`), a JSON pointer into the spec and,
 for files the parser could position, a line and column. Paths are relative

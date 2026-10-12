@@ -15,7 +15,9 @@
   `PetInput` (`naming.input_suffix`); a PATCH body schema that is also used
   elsewhere gets its own model `PetPatch` (`naming.patch_suffix`) with the
   tri-state fields. `allOf` parts merge into one model,
-  one `$ref` (also nullable) stays a reference, `oneOf`/`anyOf` with one
+  one `$ref` stays a reference (also nullable, and also with parts that only
+  annotate: `allOf: [{$ref: Pet}, {nullable: true, description: ...}]`; the
+  annotations go to the field), `oneOf`/`anyOf` with one
   branch besides `null` is that branch, nullable; other `oneOf`/`anyOf` are
   unions with their discriminator mapping resolved. `{data: T}` envelopes of
   success responses are unwrapped. Documented errors give `Never`, one
@@ -33,7 +35,17 @@
   tag|path|single`, override `group`; a spec without any tag gets one
   TOA554, otherwise each untagged operation does). Reserved and `dart:core` names get
   `Model` (types) or `_` (members), collisions `2`, `3`... with TOA550 /
-  TOA551 and the override to pin the name; unrepresentable names are TOA552.
+  TOA551 and the override to pin the name; unrepresentable names are TOA552
+  (an info for enum values: name them with `x-enum-varnames` in the spec).
+  The value name `unknown` is reserved in enums (`unknown_`), as the emitters
+  add an `unknown` member. The names of custom types (`types.formats`,
+  `types.schemas`, `dartType`) are taken in the library's type scope, so a
+  generated type of the same name gets a suffix (TOA551).
+- In OpenAPI 3.1 and later the `description`, `default` and `deprecated`
+  written beside a `$ref` win over the target's for that field; in 3.0 a
+  `$ref` has no siblings and the target's are used.
+- Header parameters named `Accept`, `Content-Type` and `Authorization` (any
+  case) are not generated: OpenAPI says to ignore them.
 - Filters (R4): `include` / `exclude` by `tags`, `operations` and path
   globs, override `exclude` on operations, schemas and properties; only
   schemas the selected operations reach are generated.
@@ -69,6 +81,11 @@
     not a key of `components.schemas`; the setting is ignored.
   - TOA563 client-empty (warning): no operation of the client is generated
     (filtered out, written as `$ref`, or an unbound path variable).
+  - TOA564 parameter-style-invalid (warning): a parameter `style` that its
+    `in` does not allow (path: `simple`, `label`, `matrix`; query: `form`,
+    `spaceDelimited`, `pipeDelimited`, `deepObject`; header: `simple`;
+    cookie: `form`) falls back to the default style of the placement; an
+    `in: querystring` parameter (OpenAPI 3.2) is not generated.
 - An `allOf` parent that an override excludes is still merged into the flat
   child: the exclude only removes the parent's own declaration, and TOA254
   (info) says so.
