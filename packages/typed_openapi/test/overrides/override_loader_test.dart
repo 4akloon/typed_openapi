@@ -229,7 +229,7 @@ operations:
 schemas:
   Pet:
     title: x
-    dartType: {type: P, import: p.dart, from: x}
+    dartType: {type: P, import: 'package:p/p.dart', from: x}
     properties:
       id: {nullabel: true, nullable: true}
 ''')!;

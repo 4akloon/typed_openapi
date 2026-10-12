@@ -118,7 +118,6 @@ components:
     expect(ir.declarations.map((d) => d.name), [
       'Order',
       'OrderItemsItem',
-      'OrderKind',
       'OrderPricesValue',
       'OrderStatus',
     ]);
@@ -126,7 +125,7 @@ components:
       'status(status): OrderStatus?',
       'state(state): OrderStatus?',
       'items(items): List<OrderItemsItem>?',
-      'kind(kind): OrderKind?',
+      'kind(kind): String?',
       'prices(prices): Map<String, OrderPricesValue>?',
     ]);
     final status =

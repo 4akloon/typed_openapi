@@ -23,6 +23,34 @@ final class DartTypeOverride {
   /// A class with `fromJson` and `toJson` that converts [type], when the
   /// type itself has no such members.
   final String? converter;
+
+  static final _name = RegExp(r'^[A-Za-z$][A-Za-z0-9_$]*$');
+  static final _library = RegExp(
+    r'^(package:[A-Za-z_][A-Za-z0-9_]*/\S+|dart:\w+)$',
+  );
+
+  /// What makes [value] unusable as the `field` of a custom type in
+  /// generated code, or null: `type` and `converter` must be Dart names that
+  /// generated code writes as they are (no prefix or type arguments), and
+  /// `import` a `package:` or `dart:` library, as relative paths would
+  /// depend on where the client is written (R6.8).
+  static String? problem(String field, String value) => switch (field) {
+    'import' when !_library.hasMatch(value) =>
+      '"import" must be a package: or dart: library, such as '
+          'package:app/money.dart.',
+    'type' || 'converter'
+        when !_name.hasMatch(value) || _reserved.contains(value) =>
+      '"$field" must be a Dart type name, such as Money.',
+    _ => null,
+  };
+
+  static const _reserved = {
+    'assert', 'break', 'case', 'catch', 'class', 'const', 'continue', //
+    'default', 'do', 'else', 'enum', 'extends', 'false', 'final',
+    'finally', 'for', 'if', 'in', 'is', 'new', 'null', 'rethrow', 'return',
+    'super', 'switch', 'this', 'throw', 'true', 'try', 'var', 'void',
+    'while', 'with', 'dynamic', 'Function',
+  };
 }
 
 /// What every entry of the overrides file has.

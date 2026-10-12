@@ -110,24 +110,24 @@ final class IrBuilder {
     for (final name in context.customTypeNames) {
       types.reserve(name);
     }
-    final declarations = mapper.declarations(types);
+    mapper.nameDeclarations(types);
     final groupClasses = <String>{};
-    return ClientIr(
-      declarations: declarations,
-      groups: [
-        for (final group in built.keys.toList()..sort())
-          GroupIr(
-            _groupName(
-              context,
-              types,
-              group,
-              groupSites[group]!.operation.location,
-              groupClasses,
-            ),
-            built[group]!,
+    final groupIrs = [
+      for (final group in built.keys.toList()..sort())
+        GroupIr(
+          _groupName(
+            context,
+            types,
+            group,
+            groupSites[group]!.operation.location,
+            groupClasses,
           ),
-      ],
-    );
+          built[group]!,
+        ),
+    ];
+    // The types the emitters add for declarations are named after the
+    // groups, so they never rename a group or a declaration.
+    return ClientIr(declarations: mapper.declarations(types), groups: groupIrs);
   }
 
   /// Reports operations without a group: one TOA554 when no generated

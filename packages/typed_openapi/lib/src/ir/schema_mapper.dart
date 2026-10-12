@@ -135,23 +135,62 @@ final class SchemaMapper {
     );
   }
 
-  /// The declarations created so far, named in [scope]: overridden names
-  /// first, then component keys, then inline names, each by location.
-  List<Declaration> declarations(NameScope scope) {
-    final ordered = _pending.values.toList()
-      ..sort((a, b) {
-        final byRank = a.rank.compareTo(b.rank);
-        if (byRank != 0) return byRank;
-        final byDepth = a.depth.compareTo(b.depth);
-        if (byDepth != 0) return byDepth;
-        return a.id.compareTo(b.id);
-      });
-    for (final pending in ordered) {
+  /// Names the declarations created so far in [scope]: overridden names
+  /// first, then component keys, then inline names, each by location. A
+  /// declaration named already keeps its name.
+  void nameDeclarations(NameScope scope) {
+    for (final pending in _ordered) {
       _claim(scope, pending);
     }
+  }
+
+  /// The declarations created so far, named in [scope] as
+  /// [nameDeclarations] does. The types the emitters add for a declaration
+  /// (the known values and the unknown value of an enum, the variant
+  /// classes and the unknown variant of a union) are named in [scope]
+  /// afterwards, in the same order, so they never take a declaration's
+  /// name; a caller that names other types in between (the groups) keeps
+  /// them before these too.
+  List<Declaration> declarations(NameScope scope) {
+    nameDeclarations(scope);
     return [
-      for (final pending in ordered) pending.build(_claim(scope, pending)),
+      for (final pending in _ordered)
+        pending.build(_claim(scope, pending), scope),
     ];
+  }
+
+  List<_Pending> get _ordered => _pending.values.toList()
+    ..sort((a, b) {
+      final byRank = a.rank.compareTo(b.rank);
+      if (byRank != 0) return byRank;
+      final byDepth = a.depth.compareTo(b.depth);
+      if (byDepth != 0) return byDepth;
+      return a.id.compareTo(b.id);
+    });
+
+  /// Claims [candidate] in the library [scope] for a type the emitters add
+  /// to the declaration [owner] ([what] says which); a name that differs
+  /// is reported.
+  String _helperName(
+    NameScope scope,
+    String candidate,
+    _Pending owner,
+    String what,
+  ) {
+    final (name, change) = scope.claim(candidate);
+    if (change != null) {
+      _context.report(
+        change == .reserved ? .nameReserved : .nameCollision,
+        change == .reserved
+            ? '"$candidate" is a name Dart already has; $what is named '
+                  '"$name".'
+            : 'Another type is named "$candidate"; $what is named "$name".',
+        owner.id.location,
+        fix: 'Rename the other type, or rename this one.',
+        override: _typeOverride(owner, owner.name ?? candidate),
+      );
+    }
+    return name;
   }
 
   /// Claims the name of [pending] once; an inline declaration's parent is
@@ -537,7 +576,10 @@ final class SchemaMapper {
       final suffix = _names.pascal(json) ?? 'Field';
       final custom = override?.dartType;
       final hint = NameHint._under(pending, suffix);
-      final mapped = custom == null
+      final constant = custom == null ? _constantOf(property) : null;
+      final mapped = constant != null
+          ? constant.$2
+          : custom == null
           ? _map(property, hint)
           : _replaced(property, hint);
       fields.add(
@@ -546,6 +588,8 @@ final class SchemaMapper {
           override: override,
           location: property.location,
           valueType: custom == null ? mapped : _custom(custom, mapped),
+          constValue: constant?.$1,
+          constraints: notes.constraints,
           required: required.contains(json),
           readOnly: readOnly,
           writeOnly: writeOnly,
@@ -562,28 +606,39 @@ final class SchemaMapper {
         additionalSchema == null || additionalSchema is BooleanSchema
         ? null
         : _map(additionalSchema, NameHint._under(pending, 'Value'));
-    pending.build = (name) {
+    pending.build = (name, _) {
       final scope = NameScope(
         reserved: {...DartNames.reservedWords, ...DartNames.modelMembers},
         reservedSuffix: '_',
       );
+      final named = [
+        for (final field in fields)
+          (
+            field,
+            _memberName(
+              scope,
+              field.json,
+              field.override,
+              field.location,
+              owner: name,
+            ),
+          ),
+      ];
+      final extraName = additional == null
+          ? null
+          : _additionalName(scope, name, schema.location);
       return ModelDecl(
         id: pending.id,
         name: name,
         description: schema.description,
         deprecated: schema.deprecated,
         additionalProperties: additional,
+        additionalPropertiesName: extraName ?? 'additionalProperties',
         direction: direction,
         fields: [
-          for (final field in fields)
+          for (final (field, fieldName) in named)
             FieldIr(
-              name: _memberName(
-                scope,
-                field.json,
-                field.override,
-                field.location,
-                owner: name,
-              ),
+              name: fieldName,
               jsonKey: field.json,
               valueType: field.valueType,
               location: field.location,
@@ -596,9 +651,49 @@ final class SchemaMapper {
               defaultValue: field.defaultValue,
               description: field.description,
               deprecated: field.deprecated,
+              constValue: field.constValue,
+              constraints: field.constraints,
             ),
         ],
       );
+    };
+  }
+
+  /// The name of the field that holds a model's `additionalProperties`,
+  /// claimed in the model's field [scope] after the properties, so a
+  /// property keeps its name; a name that differs is reported.
+  String _additionalName(NameScope scope, String owner, SpecLocation at) {
+    const candidate = 'additionalProperties';
+    final (name, change) = scope.claim(candidate);
+    if (change != null) {
+      _context.report(
+        .nameCollision,
+        'A property of $owner is named "$candidate"; the field that holds '
+        'its additionalProperties is named "$name".',
+        at,
+        fix: 'Name the property explicitly to keep the names stable.',
+      );
+    }
+    return name;
+  }
+
+  /// The one value of a property that can hold no other, with the type of
+  /// the value: a `const` or a one-value enum written inline, not nullable,
+  /// of one JSON type (decision 8 of M8). Its field is a constant.
+  (Object, DartType)? _constantOf(Schema property) {
+    if (property is! SchemaObject || property.ref != null || _replacing) {
+      return null;
+    }
+    if (_isNullable(property)) return null;
+    final values = SchemaShapes.enumValues(property);
+    if (values == null || values.length != 1) return null;
+    final value = values.single!;
+    return switch (_enumKind(property, values)) {
+      .string => (value, const CoreType(.string)),
+      .integer => (value, const CoreType(.integer)),
+      .number => (value, const CoreType(.number)),
+      .boolean => (value, const CoreType(.boolean)),
+      null => null,
     };
   }
 
@@ -632,6 +727,7 @@ final class SchemaMapper {
         property.ref == null || _context.model.document.version != .v30;
     final written = [if (siblings) property, ...parts, ?target];
     return _FieldNotes(
+      constraints: _constraintsOf(written),
       description: written
           .map((s) => s.description)
           .firstWhere((d) => d != null, orElse: () => null),
@@ -644,11 +740,49 @@ final class SchemaMapper {
     );
   }
 
+  /// The constraints of a field from the schemas [written] for it, the first
+  /// that sets each one winning (R6.7). A 3.0 boolean `exclusiveMinimum`
+  /// makes `minimum` exclusive, and the same for the maximum.
+  static ConstraintsIr _constraintsOf(List<SchemaObject> written) {
+    T? first<T extends Object>(T? Function(SchemaObject s) read) {
+      for (final schema in written) {
+        if (read(schema) case final value?) return value;
+      }
+      return null;
+    }
+
+    final minimum = first((s) => s.minimum);
+    final maximum = first((s) => s.maximum);
+    final minExclusive = first((s) => s.exclusiveMinimumFlag) ?? false;
+    final maxExclusive = first((s) => s.exclusiveMaximumFlag) ?? false;
+    return ConstraintsIr(
+      minLength: first((s) => s.minLength),
+      maxLength: first((s) => s.maxLength),
+      pattern: first((s) => s.pattern),
+      minimum: minExclusive ? null : minimum,
+      maximum: maxExclusive ? null : maximum,
+      exclusiveMinimum:
+          first((s) => s.exclusiveMinimum) ?? (minExclusive ? minimum : null),
+      exclusiveMaximum:
+          first((s) => s.exclusiveMaximum) ?? (maxExclusive ? maximum : null),
+      multipleOf: first((s) => s.multipleOf),
+      minItems: first((s) => s.minItems),
+      maxItems: first((s) => s.maxItems),
+      uniqueItems: written.any((s) => s.uniqueItems),
+      minProperties: first((s) => s.minProperties),
+      maxProperties: first((s) => s.maxProperties),
+    );
+  }
+
   /// Whether [field] tells "absent" from `null` by the config's rule (R7.2).
+  /// A field of any JSON value (`JsonValue`) allows `null` too.
   bool _isTriState(_Field field, _Pending pending) =>
       switch (_context.config.triState) {
         .patch =>
-          pending.patchBody && !field.required && field.valueType.nullable,
+          pending.patchBody &&
+              !field.required &&
+              (field.valueType.nullable ||
+                  field.valueType == const CoreType(.json)),
         .optional => pending.patchBody && !field.required,
         .extension => field.marked,
       };
@@ -891,7 +1025,7 @@ final class SchemaMapper {
     }
     final exhaustive =
         _context.overrides.schemaAt(schema.location)?.exhaustive ?? true;
-    pending.build = (name) => UnionDecl(
+    pending.build = (name, types) => UnionDecl(
       id: pending.id,
       name: name,
       kind: kind,
@@ -905,9 +1039,48 @@ final class SchemaMapper {
           UnionVariantIr(
             type,
             discriminatorValues: [...?values[target]]..sort(),
+            name: _helperName(
+              types,
+              _variantClass(name, type),
+              pending,
+              'a variant class of $name',
+            ),
           ),
       ],
+      unknownName: _helperName(
+        types,
+        '${name}Unknown',
+        pending,
+        'the unknown variant class of $name',
+      ),
     );
+  }
+
+  /// The class that wraps a variant of [type] in the union [union]: the
+  /// union's name and the variant's (`PetCat`), or the variant's name and
+  /// `Case` when it starts with the union's already (`PetVariant1Case` for
+  /// an inline variant, `PetCatCase` for a variant named `PetCat`). A
+  /// built-in type is named by its kind (`IdOrNameString`, `IdOrNameInt`).
+  String _variantClass(String union, DartType type) {
+    final label = switch (type) {
+      NamedType(:final id) => _pending[id]?.name ?? _fallbackName,
+      CustomType(:final type) => type,
+      ListType() => 'List',
+      MapType() => 'Map',
+      PatchType() => 'Patch',
+      CoreType(:final kind) => switch (kind) {
+        .integer => 'Int',
+        .float => 'Double',
+        .number => 'Num',
+        .string => 'String',
+        .boolean => 'Bool',
+        .dateTime => 'DateTime',
+        .date => 'Date',
+        .bytes || .binary => 'Bytes',
+        .json => 'Json',
+      },
+    };
+    return label.startsWith(union) ? '${label}Case' : '$union$label';
   }
 
   /// The schema a discriminator `mapping` value names: a
@@ -1034,7 +1207,7 @@ final class SchemaMapper {
   ) {
     final exhaustive =
         _context.overrides.schemaAt(schema.location)?.exhaustive ?? true;
-    pending.build = (name) {
+    pending.build = (name, types) {
       final scope = NameScope(
         reserved: {...DartNames.reservedWords, ...DartNames.enumMembers},
         reservedSuffix: '_',
@@ -1044,6 +1217,18 @@ final class SchemaMapper {
         name: name,
         kind: kind,
         exhaustive: exhaustive,
+        knownName: _helperName(
+          types,
+          '${name}Known',
+          pending,
+          'the enum of the known values of $name',
+        ),
+        unknownName: _helperName(
+          types,
+          '${name}Unknown',
+          pending,
+          'the class of an unknown value of $name',
+        ),
         description: schema.description,
         deprecated: schema.deprecated,
         values: [
@@ -1335,7 +1520,7 @@ final class _Pending {
   int depth = 0;
   bool patchBody = false;
   String? name;
-  late Declaration Function(String name) build;
+  late Declaration Function(String name, NameScope scope) build;
 
   /// Overridden names are claimed first, then component keys, then inline
   /// names.
@@ -1349,6 +1534,7 @@ final class _Pending {
 /// What a property's schema says about its field (`SchemaMapper._notesOf`).
 final class _FieldNotes {
   const _FieldNotes({
+    this.constraints = const ConstraintsIr(),
     this.description,
     this.defaultValue,
     this.deprecated = false,
@@ -1356,6 +1542,7 @@ final class _FieldNotes {
     this.writeOnly = false,
   });
 
+  final ConstraintsIr constraints;
   final String? description;
   final (Object?,)? defaultValue;
   final bool deprecated;
@@ -1377,6 +1564,8 @@ final class _Field {
     required this.defaultValue,
     required this.description,
     required this.deprecated,
+    required this.constValue,
+    required this.constraints,
   });
 
   final String json;
@@ -1392,4 +1581,6 @@ final class _Field {
   final (Object?,)? defaultValue;
   final String? description;
   final bool deprecated;
+  final Object? constValue;
+  final ConstraintsIr constraints;
 }

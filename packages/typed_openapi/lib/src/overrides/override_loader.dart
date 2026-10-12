@@ -450,6 +450,18 @@ final class _OverrideReader {
     final import = _string(value, 'import', p, required: true);
     final converter = _string(value, 'converter', p);
     if (type == null || import == null) return null;
+    var valid = true;
+    for (final (field, written) in [
+      ('type', type),
+      ('import', import),
+      if (converter != null) ('converter', converter),
+    ]) {
+      if (DartTypeOverride.problem(field, written) case final problem?) {
+        _invalid(problem, p.child(field));
+        valid = false;
+      }
+    }
+    if (!valid) return null;
     return DartTypeOverride(type: type, import: import, converter: converter);
   }
 

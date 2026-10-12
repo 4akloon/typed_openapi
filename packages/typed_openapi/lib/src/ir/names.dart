@@ -67,6 +67,7 @@ final class DartNames {
     'double', 'int', 'num', 'Uint8List',
     // typed_openapi_runtime
     'CallOptions', 'Cancelled', 'CookieParameter', 'Date', 'DecodeError',
+    'DeepEquality',
     'DioRequestSender', 'Failure', 'HeaderParameter', 'HttpError',
     'JsonDecodeException', 'JsonReader', 'JsonValue', 'OperationInfo',
     'OperationRequest', 'Patch', 'PatchNull', 'PatchValue', 'PathParameter',

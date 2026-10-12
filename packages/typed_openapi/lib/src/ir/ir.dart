@@ -82,6 +82,7 @@ final class ModelDecl extends Declaration {
     required this.fields,
     this.direction = .both,
     this.additionalProperties,
+    this.additionalPropertiesName = 'additionalProperties',
     super.description,
     super.deprecated,
   });
@@ -95,6 +96,10 @@ final class ModelDecl extends Declaration {
   /// The type of the values of `additionalProperties`, when the schema
   /// allows other keys with a schema.
   final DartType? additionalProperties;
+
+  /// The Dart name of the field that holds [additionalProperties], given in
+  /// the scope of the model's fields.
+  final String additionalPropertiesName;
 }
 
 /// A field of a model.
@@ -112,6 +117,8 @@ final class FieldIr {
     this.defaultValue,
     this.description,
     this.deprecated = false,
+    this.constValue,
+    this.constraints = const ConstraintsIr(),
   });
 
   /// The Dart name.
@@ -147,6 +154,15 @@ final class FieldIr {
   /// `deprecated`.
   final bool deprecated;
 
+  /// The one value the property can hold, when its schema is a `const` or
+  /// an enum with one value written inline (not nullable): the field is a
+  /// constant, not a constructor parameter, and [valueType] is the type of
+  /// the value.
+  final Object? constValue;
+
+  /// The constraints of the property's schema (R6.7), for documentation.
+  final ConstraintsIr constraints;
+
   /// The type of the field (R6.1): `Patch<T>?` for a tri-state field, the
   /// value type for a required one, and a nullable value type otherwise.
   DartType get type {
@@ -155,6 +171,85 @@ final class FieldIr {
     }
     return required ? valueType : valueType.withNullable(true);
   }
+}
+
+/// The constraints of a schema (R6.7): the client documents them and
+/// checks none.
+///
+/// OpenAPI 3.0's boolean `exclusiveMinimum` and `exclusiveMaximum` are read
+/// into the bound they make exclusive, so 3.0 and 3.1 give the same value.
+final class ConstraintsIr {
+  /// Creates the constraints; all are optional.
+  const ConstraintsIr({
+    this.minLength,
+    this.maxLength,
+    this.pattern,
+    this.minimum,
+    this.maximum,
+    this.exclusiveMinimum,
+    this.exclusiveMaximum,
+    this.multipleOf,
+    this.minItems,
+    this.maxItems,
+    this.uniqueItems = false,
+    this.minProperties,
+    this.maxProperties,
+  });
+
+  /// `minLength`.
+  final int? minLength;
+
+  /// `maxLength`.
+  final int? maxLength;
+
+  /// `pattern`.
+  final String? pattern;
+
+  /// `minimum`, when it is inclusive.
+  final num? minimum;
+
+  /// `maximum`, when it is inclusive.
+  final num? maximum;
+
+  /// The exclusive lower bound.
+  final num? exclusiveMinimum;
+
+  /// The exclusive upper bound.
+  final num? exclusiveMaximum;
+
+  /// `multipleOf`.
+  final num? multipleOf;
+
+  /// `minItems`.
+  final int? minItems;
+
+  /// `maxItems`.
+  final int? maxItems;
+
+  /// `uniqueItems`.
+  final bool uniqueItems;
+
+  /// `minProperties`.
+  final int? minProperties;
+
+  /// `maxProperties`.
+  final int? maxProperties;
+
+  /// Whether no constraint is set.
+  bool get isEmpty =>
+      minLength == null &&
+      maxLength == null &&
+      pattern == null &&
+      minimum == null &&
+      maximum == null &&
+      exclusiveMinimum == null &&
+      exclusiveMaximum == null &&
+      multipleOf == null &&
+      minItems == null &&
+      maxItems == null &&
+      !uniqueItems &&
+      minProperties == null &&
+      maxProperties == null;
 }
 
 /// The JSON type of an enum's values.
@@ -181,9 +276,12 @@ final class EnumDecl extends Declaration {
     required this.kind,
     required this.values,
     this.exhaustive = true,
+    String? knownName,
+    String? unknownName,
     super.description,
     super.deprecated,
-  });
+  }) : _knownName = knownName,
+       _unknownName = unknownName;
 
   /// The JSON type of the values.
   final EnumKind kind;
@@ -193,6 +291,16 @@ final class EnumDecl extends Declaration {
 
   /// Whether a `switch` must name every value (research §7.8).
   final bool exhaustive;
+
+  final String? _knownName;
+  final String? _unknownName;
+
+  /// The Dart enum of the values the spec lists (`StatusKnown`), named in
+  /// the library scope after the declarations and the groups.
+  String get knownName => _knownName ?? '${name}Known';
+
+  /// The class of a value the spec does not list (`StatusUnknown`).
+  String get unknownName => _unknownName ?? '${name}Unknown';
 }
 
 /// A value of an enum.
@@ -219,6 +327,19 @@ enum UnionKind {
   anyOf,
 }
 
+/// How a union's `fromJson` picks a variant (R9).
+enum UnionDispatch {
+  /// By the value of the discriminator property and its mapping.
+  discriminator,
+
+  /// By the JSON type of the value: each variant has another one (R9.3).
+  jsonType,
+
+  /// By trying the variants (`union: structural`, R9.2): a `oneOf` takes
+  /// the one variant that decodes, an `anyOf` the first.
+  structural,
+}
+
 /// A `oneOf` or `anyOf` with more than one variant besides `null` (R9).
 final class UnionDecl extends Declaration {
   /// Creates a union.
@@ -227,15 +348,26 @@ final class UnionDecl extends Declaration {
     required super.name,
     required this.kind,
     required this.variants,
+    this.dispatch = .discriminator,
     this.discriminator,
     this.defaultVariant,
     this.exhaustive = true,
+    String? unknownName,
     super.description,
     super.deprecated,
-  });
+  }) : _unknownName = unknownName;
 
   /// `oneOf` or `anyOf`.
   final UnionKind kind;
+
+  /// How `fromJson` picks a variant.
+  final UnionDispatch dispatch;
+
+  final String? _unknownName;
+
+  /// The class of a value no variant takes (`PetUnknown`), named in the
+  /// library scope after the declarations and the groups.
+  String get unknownName => _unknownName ?? '${name}Unknown';
 
   /// The variants, in the order of the spec.
   final List<UnionVariantIr> variants;
@@ -254,10 +386,18 @@ final class UnionDecl extends Declaration {
 /// A variant of a union.
 final class UnionVariantIr {
   /// Creates a variant.
-  const UnionVariantIr(this.type, {this.discriminatorValues = const []});
+  const UnionVariantIr(
+    this.type, {
+    this.discriminatorValues = const [],
+    this.name = '',
+  });
 
   /// The type of the variant.
   final DartType type;
+
+  /// The class that wraps a value of [type] (`PetCat`), named in the
+  /// library scope after the declarations and the groups.
+  final String name;
 
   /// The discriminator values that select this variant, sorted.
   final List<String> discriminatorValues;

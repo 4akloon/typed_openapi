@@ -754,6 +754,18 @@ final class _GenerationReader {
         at.child('converter'),
       );
     }
+    var valid = true;
+    for (final (field, written) in [
+      ('type', type),
+      ('import', import),
+      if (converter is String) ('converter', converter),
+    ]) {
+      if (DartTypeOverride.problem(field, written) case final problem?) {
+        _invalid(problem, at.child(field));
+        valid = false;
+      }
+    }
+    if (!valid) return null;
     return DartTypeOverride(
       type: type,
       import: import,
