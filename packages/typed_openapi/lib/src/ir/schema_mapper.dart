@@ -237,8 +237,21 @@ final class SchemaMapper {
   DartType _component(SchemaObject schema) {
     if (!_replacing) {
       final custom = _customSchemaType(schema);
-      if (custom != null) return custom;
-      if (_context.overrides.schemaAt(schema.location)?.exclude ?? false) {
+      final excluded =
+          _context.overrides.schemaAt(schema.location)?.exclude ?? false;
+      if (custom != null) {
+        if (excluded) {
+          _context.report(
+            .excludedSchemaReferenced,
+            'This schema is excluded by an override, but it also has a custom '
+            'Dart type; the type is used and the exclude has no effect.',
+            schema.location,
+            fix: 'Remove the exclude, or the custom type.',
+          );
+        }
+        return custom;
+      }
+      if (excluded) {
         _context.report(
           .excludedSchemaReferenced,
           'This schema is excluded by an override, but a generated type uses '
@@ -275,6 +288,7 @@ final class SchemaMapper {
     // A structural schema (array, map, scalar) has no declaration of its
     // own: each use gets its type. One that refers back to itself without
     // a declaration in between cannot be spelled out.
+    if (!_replacing) _reportAliasOverride(schema);
     if (!_enterAlias(schema.location)) return const CoreType(.json);
     try {
       final hint = NameHint(
@@ -288,6 +302,29 @@ final class SchemaMapper {
       return _structural(schema, hint);
     } finally {
       _aliases.remove(schema.location);
+    }
+  }
+
+  /// Reports the `name` and `exhaustive` of the override of [schema], an
+  /// alias that is not a declaration: they would change a type it does not
+  /// have (TOA807).
+  void _reportAliasOverride(SchemaObject schema) {
+    final entry = _context.overrides.schemaAt(schema.location);
+    if (entry == null) return;
+    for (final (field, written) in [
+      ('name', entry.name),
+      ('exhaustive', entry.exhaustive),
+    ]) {
+      if (written == null) continue;
+      _context.reportAtOverride(
+        .overrideUnchanged,
+        'The $field of this override has no effect: the schema is not '
+        'generated as a type of its own, its uses are the type of what it '
+        'stands for.',
+        entry,
+        field,
+        fix: 'Remove it, or override the schema this one refers to.',
+      );
     }
   }
 
@@ -374,7 +411,14 @@ final class SchemaMapper {
       for (final branch in branches)
         if (!_isNullOnly(branch)) branch,
     ];
-    return nonNull.length > 1 ? (kind, nonNull) : null;
+    // Branches that only add constraints (`required`, ...) or only hold one
+    // value each (an enum) do not make a union.
+    if (nonNull.length < 2 ||
+        nonNull.every(_addsOnlyConstraints) ||
+        _enumValues(schema) != null) {
+      return null;
+    }
+    return (kind, nonNull);
   }
 
   static bool _isNullOnly(Schema schema) =>
@@ -382,7 +426,26 @@ final class SchemaMapper {
       schema.ref == null &&
       ((schema.types.length == 1 && schema.types.single == .nullType) ||
           (schema.enumValues != null &&
-              schema.enumValues!.every((v) => v == null)));
+              schema.enumValues!.every((v) => v == null)) ||
+          (schema.enumValues == null &&
+              schema.constValue != null &&
+              schema.constValue!.$1 == null));
+
+  /// Whether [schema] is written inline and only validates: `required`,
+  /// `minProperties` and the like, with no `type`, `properties`, items,
+  /// values, `allOf` or union of its own.
+  static bool _addsOnlyConstraints(Schema schema) =>
+      schema is SchemaObject &&
+      schema.ref == null &&
+      schema.types.isEmpty &&
+      schema.properties.isEmpty &&
+      schema.items == null &&
+      schema.additionalProperties == null &&
+      schema.format == null &&
+      _enumValues(schema) == null &&
+      schema.allOf.isEmpty &&
+      schema.oneOf.isEmpty &&
+      schema.anyOf.isEmpty;
 
   /// The declaration of [schema] with identity [id]: the one it has already
   /// when it is reached again, else a new one named by [hint] (an inline
@@ -449,7 +512,19 @@ final class SchemaMapper {
 
   void _model(SchemaObject schema, _Pending pending) {
     final fields = <_Field>[];
-    final (properties, required) = _merged(schema);
+    final (properties, required, additionalSchema) = _merged(schema);
+    _reportBranchesBesideModel(schema);
+    if (_context.overrides.schemaAt(schema.location) case final entry?
+        when entry.exhaustive != null) {
+      _context.reportAtOverride(
+        .overrideUnchanged,
+        'The exhaustive of this override has no effect: only an enum or a '
+            'union can be exhaustive, and this schema is a model.',
+        entry,
+        'exhaustive',
+        fix: 'Remove it.',
+      );
+    }
     final direction = pending.id.variant != .base
         ? ModelDirection.request
         : _directions.splits(schema)
@@ -491,10 +566,10 @@ final class SchemaMapper {
         ),
       );
     }
-    final extra = schema.additionalProperties;
-    final additional = extra == null || extra is BooleanSchema
+    final additional =
+        additionalSchema == null || additionalSchema is BooleanSchema
         ? null
-        : _map(extra, NameHint._under(pending, 'Value'));
+        : _map(additionalSchema, NameHint._under(pending, 'Value'));
     pending.build = (name) {
       final scope = NameScope(
         reserved: {...DartNames.reservedWords, ...DartNames.modelMembers},
@@ -542,19 +617,34 @@ final class SchemaMapper {
         .extension => field.marked,
       };
 
-  /// The properties and required names of [schema] with its `allOf` parts
-  /// merged in, parts first and in order (R6.3). A property that a later
-  /// part defines again with another schema is reported; the later one is
-  /// used.
-  (Map<String, Schema>, Set<String>) _merged(SchemaObject schema) {
+  /// The properties, required names and `additionalProperties` of [schema]
+  /// with its `allOf` parts merged in, parts first and in order (R6.3). A
+  /// property, or `additionalProperties`, that a later part defines again
+  /// with another schema is reported; the later one is used. A part an
+  /// override excludes is left out (TOA254), and a discriminator on a part
+  /// is not used (TOA452).
+  (Map<String, Schema>, Set<String>, Schema?) _merged(SchemaObject schema) {
     final properties = <String, Schema>{};
     final required = <String>{};
     final seen = <SpecLocation>{};
+    Schema? additional;
     void add(SchemaObject part) {
       if (!seen.add(part.location)) return;
       for (final written in part.allOf) {
         final resolved = _resolved(written);
         if (resolved == null) continue;
+        if (_context.overrides.schemaAt(resolved.location)?.exclude ?? false) {
+          _context.report(
+            .excludedSchemaReferenced,
+            'This allOf part is excluded by an override, so its properties '
+            'are not merged into the model.',
+            written.location,
+            fix:
+                'Exclude what uses the schema too, or remove the exclude of '
+                'the schema.',
+          );
+          continue;
+        }
         if (resolved.properties.isEmpty &&
             resolved.allOf.isEmpty &&
             (_enumValues(resolved) != null ||
@@ -571,6 +661,18 @@ final class SchemaMapper {
         }
         add(resolved);
       }
+      if (part.discriminator case final discriminator?) {
+        _context.report(
+          .inheritancePolymorphismDeferred,
+          'This discriminator is on a schema that is not a oneOf or anyOf '
+          'union, so it is not used: the schemas that extend it are flat '
+          'models, and a value of this type is not decoded into them.',
+          discriminator.location,
+          fix:
+              'Polymorphic decoding of an allOf base is not generated yet; '
+              'list the subtypes in a oneOf to decode them.',
+        );
+      }
       for (final MapEntry(key: name, value: property)
           in part.properties.entries) {
         final earlier = properties[name];
@@ -585,11 +687,60 @@ final class SchemaMapper {
         }
         properties[name] = property;
       }
+      if (part.additionalProperties case final later?) {
+        final earlier = additional;
+        if (earlier != null && !_same(earlier, later)) {
+          _context.report(
+            .allOfPropertyConflict,
+            'additionalProperties is defined again by another allOf part; '
+            'this definition is used.',
+            later.location,
+            fix:
+                'Define additionalProperties in one allOf part at the '
+                'source.',
+          );
+        }
+        additional = later;
+      }
       required.addAll(part.required);
     }
 
     add(schema);
-    return (properties, required);
+    return (properties, required, additional);
+  }
+
+  /// Reports the `oneOf` and `anyOf` of [schema], which is generated as a
+  /// model: branches that only add constraints are TOA255, others TOA256.
+  void _reportBranchesBesideModel(SchemaObject schema) {
+    for (final (key, branches) in [
+      ('oneOf', schema.oneOf),
+      ('anyOf', schema.anyOf),
+    ]) {
+      final real = [
+        for (final branch in branches)
+          if (!_isNullOnly(branch)) branch,
+      ];
+      if (real.isEmpty) continue;
+      if (real.every(_addsOnlyConstraints)) {
+        _context.report(
+          .oneOfConstraintsIgnored,
+          'The $key of this schema only adds constraints to its properties; '
+          'it is generated as a model and the branches are ignored.',
+          schema.location.child(key),
+          fix: 'Nothing to do; the constraints are not checked by the client.',
+        );
+      } else {
+        _context.report(
+          .allOfBesideUnionIgnored,
+          'The $key branches of this schema are ignored: it is generated as '
+          'a model of its properties and allOf parts.',
+          schema.location.child(key),
+          fix:
+              'Move the properties into the branches, or make the schema a '
+              'plain union at the source.',
+        );
+      }
+    }
   }
 
   /// Whether two property schemas are the same: one schema through
@@ -612,6 +763,24 @@ final class SchemaMapper {
     UnionKind kind,
     List<Schema> branches,
   ) {
+    if (schema.allOf.isNotEmpty) {
+      _context.report(
+        .allOfBesideUnionIgnored,
+        'The allOf parts of this schema are ignored: it is generated as the '
+        'union of its $kind branches.',
+        schema.location.child('allOf'),
+        fix: 'Put the shared parts into every branch at the source.',
+      );
+    }
+    if (schema.properties.isNotEmpty) {
+      _context.report(
+        .allOfBesideUnionIgnored,
+        'The properties of this schema are ignored: it is generated as the '
+        'union of its $kind branches.',
+        schema.location.child('properties'),
+        fix: 'Put the shared properties into every branch at the source.',
+      );
+    }
     final variants = <(DartType, SpecLocation?, SpecLocation)>[
       for (final (i, branch) in branches.indexed)
         (
@@ -662,6 +831,15 @@ final class SchemaMapper {
         final target = _mappingTarget(ref, schema.location.document);
         for (final (type, at, _) in variants) {
           if (at != null && at == target) fallback = type;
+        }
+        if (fallback == null) {
+          _context.report(
+            .discriminatorMappingNotVariant,
+            'The default mapping "$ref" is not a variant of this union; it '
+            'is ignored.',
+            discriminator.location.child('defaultMapping'),
+            fix: "Map the default to one of the union's variants.",
+          );
         }
       }
     }
@@ -898,15 +1076,45 @@ final class SchemaMapper {
     return 'value${negative ? 'Minus' : ''}$digits';
   }
 
-  /// The non-null values of an enum (`enum`, or `const` as a one-value
-  /// enum), or null when [schema] is not one.
-  static List<Object?>? _enumValues(SchemaObject schema) {
+  /// The non-null values of an enum, or null when [schema] is not one: its
+  /// `enum`, its `const` as a one-value enum, or the values of a `oneOf` or
+  /// `anyOf` whose branches are all `const`s or enums written inline
+  /// (`oneOf: [{const: red}, {const: green}]`).
+  static List<Object?>? _enumValues(SchemaObject schema) =>
+      _ownValues(schema) ?? _branchValues(schema);
+
+  static List<Object?>? _ownValues(SchemaObject schema) {
     final values = [
       ...?schema.enumValues,
       if (schema.enumValues == null) ?schema.constValue?.$1,
     ];
     final nonNull = [for (final v in values) ?v];
     return nonNull.isEmpty ? null : nonNull;
+  }
+
+  static List<Object?>? _branchValues(SchemaObject schema) {
+    if (schema.properties.isNotEmpty ||
+        schema.allOf.isNotEmpty ||
+        schema.oneOf.isNotEmpty == schema.anyOf.isNotEmpty) {
+      return null;
+    }
+    final values = <Object?>[];
+    for (final branch in [...schema.oneOf, ...schema.anyOf]) {
+      if (_isNullOnly(branch)) continue;
+      if (branch is! SchemaObject || branch.ref != null) return null;
+      if (branch.properties.isNotEmpty ||
+          branch.allOf.isNotEmpty ||
+          branch.oneOf.isNotEmpty ||
+          branch.anyOf.isNotEmpty) {
+        return null;
+      }
+      final own = _ownValues(branch);
+      if (own == null) return null;
+      for (final value in own) {
+        if (!values.contains(value)) values.add(value);
+      }
+    }
+    return values.isEmpty ? null : values;
   }
 
   static EnumKind? _enumKind(SchemaObject schema, List<Object?> values) {
@@ -1038,15 +1246,31 @@ final class SchemaMapper {
 
   /// The name of a schema a `$ref` points to: its `components.schemas` key,
   /// else the last token of its pointer (`#/definitions/Pet`), else its file
-  /// name without the extension (`pet.yaml`).
+  /// name without the extension (`pet.yaml`). A branch of a union is named
+  /// after the union (`PetVariant2` for `.../Pet/oneOf/1`).
   static String _referenceName(SpecLocation location) {
-    final key = _componentKey(location);
-    if (key != null) return key;
-    final tokens = location.pointer.tokens;
-    if (tokens.isNotEmpty) return tokens.last;
+    final named = _tokensName(location.pointer.tokens);
+    if (named != null) return named;
     final file = location.document.pathSegments.lastOrNull ?? '';
     final dot = file.lastIndexOf('.');
     return dot > 0 ? file.substring(0, dot) : file;
+  }
+
+  static String? _tokensName(List<String> tokens) {
+    if (tokens.length == 3 && tokens[0] == 'components') {
+      if (tokens[1] == 'schemas') return tokens[2];
+    }
+    if (tokens.isEmpty) return null;
+    final index = int.tryParse(tokens.last);
+    if (index == null || tokens.length < 2) return tokens.last;
+    final owner = _tokensName(tokens.sublist(0, tokens.length - 2));
+    if (owner == null) return null;
+    final part = switch (tokens[tokens.length - 2]) {
+      'oneOf' || 'anyOf' => 'Variant',
+      'allOf' => 'Part',
+      _ => 'Item',
+    };
+    return '$owner$part${index + 1}';
   }
 
   /// The key of the schema at [location] in `components.schemas` of its
