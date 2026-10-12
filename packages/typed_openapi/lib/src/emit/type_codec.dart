@@ -58,7 +58,12 @@ final class TypeCodec {
   /// is not `null` (a nullable item or map value is decoded by
   /// `JsonReader.nullable`).
   String decoder(DartType type) {
-    _imports.fromRuntime('JsonReader');
+    final code = _decoder(type);
+    if (code.contains('JsonReader.')) _imports.fromRuntime('JsonReader');
+    return code;
+  }
+
+  String _decoder(DartType type) {
     return switch (type) {
       CoreType(:final kind) => switch (kind) {
         .integer => 'JsonReader.asInt',

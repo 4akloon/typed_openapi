@@ -14,7 +14,7 @@ sealed class Pet {
     final r = JsonReader.of(json, schema: 'Pet');
     return switch (r.json['kind']) {
       'cat' => PetCat(Cat.fromJson(JsonReader.asObject(r.json))),
-      'dog' => PetDog(Dog.fromJson(JsonReader.asObject(r.json))),
+      ('dog' || 'puppy') && final String tag => PetDog._(Dog.fromJson(JsonReader.asObject(r.json)), tag),
       _ => PetUnknown._(JsonValue(r.json)),
     };
   }
@@ -49,19 +49,28 @@ final class PetCat implements Pet {
 @immutable
 final class PetDog implements Pet {
   /// Wraps [value].
-  const PetDog(this.value);
+  const PetDog(this.value) : discriminator = null;
+
+  const PetDog._(this.value, this.discriminator);
 
   /// The value of the variant.
   final Dog value;
 
-  @override
-  Object? toJson() => {...value.toJson(), 'kind': 'dog'};
+  /// The `kind` [value] was decoded with; null for a
+  /// wrapper made in code, which writes `'dog'`.
+  final String? discriminator;
 
   @override
-  bool operator ==(Object other) => other is PetDog && other.value == value;
+  Object? toJson() => {...value.toJson(), 'kind': discriminator ?? 'dog'};
 
   @override
-  int get hashCode => value.hashCode;
+  bool operator ==(Object other) =>
+      other is PetDog &&
+      other.value == value &&
+      other.discriminator == discriminator;
+
+  @override
+  int get hashCode => Object.hash(value, discriminator);
 
   @override
   String toString() => 'PetDog($value)';

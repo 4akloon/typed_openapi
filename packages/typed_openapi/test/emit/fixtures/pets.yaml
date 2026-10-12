@@ -46,7 +46,7 @@ components:
         - $ref: '#/components/schemas/Dog'
       discriminator:
         propertyName: kind
-        mapping: {cat: Cat, dog: Dog}
+        mapping: {cat: Cat, dog: Dog, puppy: Dog}
     IdOrName:
       oneOf: [{type: string}, {type: integer}]
     Owner:
@@ -57,4 +57,5 @@ components:
         status: {$ref: '#/components/schemas/Status'}
         birthday: {type: string, format: date}
         pets: {type: array, items: {$ref: '#/components/schemas/Pet'}}
+        secret: {type: string, format: password}
       additionalProperties: {type: integer}

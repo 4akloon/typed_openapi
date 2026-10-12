@@ -581,7 +581,7 @@ components:
       ]);
     });
 
-    test('a discriminator on a base that is extended is TOA452', () {
+    test('a discriminator on an extended base makes a union of subtypes', () {
       final fixture = IrFixture(r'''
 openapi: 3.1.0
 info: {title: t, version: "1"}
@@ -609,15 +609,16 @@ components:
         'name(name): String?',
         'lives(lives): int?',
       ]);
-      expect(fixture.codes, [
-        (
-          DiagnosticCode.inheritancePolymorphismDeferred,
-          '#/components/schemas/Pet/discriminator',
-        ),
+      expect(fieldsOf(ir, 'Holder'), ['pet(pet): Pet?']);
+      final pet = declaration<UnionDecl>(ir, 'Pet');
+      expect(pet.variants.map((v) => '${v.name} ${v.discriminatorValues}'), [
+        'PetCat [cat]',
+        'PetDog [dog]',
       ]);
+      expect(fixture.codes, isEmpty);
     });
 
-    test('TOA452 does not say a base without subtypes is extended', () {
+    test('a discriminator on a schema nothing extends is TOA452', () {
       final fixture = IrFixture('''
 openapi: 3.1.0
 info: {title: t, version: "1"}
@@ -630,8 +631,8 @@ components:
 ''');
       mapComponents(fixture, ['Pet']);
       final found = fixture.reported.single;
-      expect(found.code, DiagnosticCode.inheritancePolymorphismDeferred);
-      expect(found.message, contains('if any'));
+      expect(found.code, DiagnosticCode.discriminatorWithoutSubtypes);
+      expect(found.message, contains('no schema extends'));
     });
 
     test('a discriminator on a union is not TOA452', () {

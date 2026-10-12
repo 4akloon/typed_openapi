@@ -344,14 +344,18 @@ final class ModelEmitter {
   /// `other`.
   static String _own(String name) => name == 'other' ? 'this.other' : name;
 
+  /// `toString` with every field but the constants; a secret (`writeOnly`,
+  /// `format: password`) prints as `<redacted>`.
   void _toString(DartWriter out, ModelDecl model, List<FieldIr> fields) {
     final names = [
-      for (final field in fields) field.name,
-      if (model.additionalProperties != null) model.additionalPropertiesName,
+      for (final field in fields) (field.name, field.sensitive),
+      if (model.additionalProperties != null)
+        (model.additionalPropertiesName, false),
     ];
     final shown = [
-      for (final name in names)
-        '${name.replaceAll(r'$', r'\$')}: ${_code.interpolate(name)}',
+      for (final (name, secret) in names)
+        '${name.replaceAll(r'$', r'\$')}: '
+            '${secret ? '<redacted>' : _code.interpolate(name)}',
     ];
     out
       ..line('@override')

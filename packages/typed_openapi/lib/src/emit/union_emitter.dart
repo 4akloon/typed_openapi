@@ -68,21 +68,34 @@ final class UnionEmitter {
               if (seen.add(value)) _code.string(value),
           ];
           if (values.isEmpty) continue;
-          cases.add(
-            '${values.join(' || ')} => '
-            '${_wrap(variant, _decode(variant.type, 'r.json'))},',
-          );
+          final decoded = _decode(variant.type, 'r.json');
+          if (_remembers(decl, variant)) {
+            final pattern = values.length == 1
+                ? values.single
+                : '(${values.join(' || ')})';
+            cases.add(
+              '$pattern && final String tag => '
+              '${variant.name}._($decoded, tag),',
+            );
+          } else {
+            cases.add('${values.join(' || ')} => ${_wrap(variant, decoded)},');
+          }
         }
         final fallback = switch (decl.defaultVariant) {
           final type? => decl.variants.firstWhere((v) => v.type == type),
           null => null,
         };
-        final otherwise = fallback == null
-            ? '${decl.unknownName}._(JsonValue(r.json))'
-            : _wrap(fallback, _decode(fallback.type, 'r.json'));
-        if (cases.isEmpty) {
-          out.line('return $otherwise;');
-          return;
+        final String otherwise;
+        if (fallback == null) {
+          otherwise = '_ => ${decl.unknownName}._(JsonValue(r.json))';
+        } else if (_remembers(decl, fallback)) {
+          otherwise =
+              'final tag => ${fallback.name}._('
+              '${_decode(fallback.type, 'r.json')}, '
+              'tag is String ? tag : null)';
+        } else {
+          otherwise =
+              '_ => ${_wrap(fallback, _decode(fallback.type, 'r.json'))}';
         }
         out
           ..line(
@@ -90,7 +103,7 @@ final class UnionEmitter {
           )
           ..indented(() {
             cases.forEach(out.line);
-            out.line('_ => $otherwise,');
+            out.line('$otherwise,');
           })
           ..line('};');
       });
@@ -103,19 +116,25 @@ final class UnionEmitter {
       ..line('/// another type is a [${decl.unknownName}].')
       ..line('factory $name.fromJson(Object? json) => switch (json) {')
       ..indented(() {
-        // An integer must meet `int` before `num` takes it.
-        final ordered = [
-          for (final v in decl.variants)
-            if (_codec.jsonPattern(v.type) != 'num') v,
-          for (final v in decl.variants)
-            if (_codec.jsonPattern(v.type) == 'num') v,
+        final cases = <(String, String)>[
+          for (final variant in decl.variants)
+            if (variant.jsonKinds.isEmpty)
+              (
+                _codec.jsonPattern(variant.type)!,
+                _wrap(variant, _decode(variant.type, 'value')),
+              )
+            else
+              for (final kind in variant.jsonKinds)
+                (_kindPattern(kind), '${variant.name}(JsonValue(value))'),
         ];
-        for (final variant in ordered) {
-          final pattern = _codec.jsonPattern(variant.type)!;
-          out.line(
-            'final $pattern value => '
-            '${_wrap(variant, _decode(variant.type, 'value'))},',
-          );
+        // An integer must meet `int` before `num` takes it.
+        for (final (pattern, value) in [
+          for (final c in cases)
+            if (c.$1 != 'num') c,
+          for (final c in cases)
+            if (c.$1 == 'num') c,
+        ]) {
+          out.line('final $pattern value => $value,');
         }
         out.line('_ => ${decl.unknownName}._(JsonValue(json)),');
       })
@@ -169,26 +188,82 @@ final class UnionEmitter {
 
   /// The value of [type] decoded from [json], a JSON expression.
   String _decode(DartType type, String json) {
-    _codec.imports.fromRuntime('JsonReader');
-    return _codec.decodeValue(type, json);
+    final code = _codec.decodeValue(type, json);
+    if (code.contains('JsonReader.')) _codec.imports.fromRuntime('JsonReader');
+    return code;
   }
 
   String _wrap(UnionVariantIr variant, String value) =>
       '${variant.name}($value)';
 
+  /// The pattern of a JSON value of [kind].
+  static String _kindPattern(JsonKind kind) => switch (kind) {
+    .string => 'String',
+    .integer => 'int',
+    .number => 'num',
+    .boolean => 'bool',
+    .array => 'List<Object?>',
+    .object => 'Map<String, Object?>',
+  };
+
+  /// Whether the wrapper of [variant] writes the discriminator itself, as
+  /// its model has no property for it (decision 5), and so keeps the value
+  /// it was decoded with: an alias (`kitty` for `Cat`) is written back as
+  /// it came, not changed into the first value of the mapping.
+  bool _remembers(UnionDecl decl, UnionVariantIr variant) {
+    final property = decl.discriminator;
+    final type = variant.type;
+    if (property == null || type is! NamedType) return false;
+    final model = _codec.declaration(type.id);
+    return model is ModelDecl &&
+        !model.fields.any((f) => f.jsonKey == property);
+  }
+
   void _variant(DartWriter out, UnionDecl decl, UnionVariantIr variant) {
     final type = _codec.type(variant.type);
     final name = variant.name;
+    final remembers = _remembers(decl, variant);
+    final property = decl.discriminator ?? '';
+    final first = variant.discriminatorValues.firstOrNull;
     out
-      ..line('/// A [${decl.name}] that is a `${_plain(type)}`.')
+      ..line(
+        variant.jsonKinds.isEmpty
+            ? '/// A [${decl.name}] that is a `${_plain(type)}`.'
+            : '/// A [${decl.name}] of a JSON type several variants share '
+                  '(${variant.jsonKinds.map((k) => k.name).join(', ')}), '
+                  'as received.',
+      )
       ..line('@immutable')
       ..block('final class $name implements ${decl.name}', () {
+        out.line('/// Wraps [value].');
+        if (remembers) {
+          out
+            ..line('const $name(this.value) : discriminator = null;')
+            ..line()
+            ..line('const $name._(this.value, this.discriminator);');
+        } else {
+          out.line('const $name(this.value);');
+        }
         out
-          ..line('/// Wraps [value].')
-          ..line('const $name(this.value);')
           ..line()
           ..line('/// The value of the variant.')
-          ..line('final $type value;')
+          ..line('final $type value;');
+        if (remembers) {
+          out
+            ..line()
+            ..line(
+              '/// The `${_plain(property)}` [value] was decoded with; null '
+              'for a',
+            )
+            ..line(
+              first == null
+                  ? '/// wrapper made in code, which writes none.'
+                  : '/// wrapper made in code, which writes '
+                        '`${_plain(_code.string(first))}`.',
+            )
+            ..line('final String? discriminator;');
+        }
+        out
           ..line()
           ..line('@override')
           ..line('Object? toJson() => ${_toJson(decl, variant)};')
@@ -202,12 +277,15 @@ final class UnionEmitter {
             'const DeepEquality().equals(other.value, value)'
           else
             'other.value == value',
+          if (remembers) 'other.discriminator == discriminator',
         ], '&&');
         out
           ..line()
           ..line('@override')
           ..line(
-            deep
+            remembers
+                ? 'int get hashCode => Object.hash(value, discriminator);'
+                : deep
                 ? 'int get hashCode => const DeepEquality().hash(value);'
                 : 'int get hashCode => value.hashCode;',
           )
@@ -222,19 +300,17 @@ final class UnionEmitter {
 
   /// The JSON of a variant: the value's, and for a model of a union with a
   /// discriminator that the model has no property for, the discriminator
-  /// too (decision 5).
+  /// too (decision 5): the one it was decoded with, else the first value
+  /// of the mapping.
   String _toJson(UnionDecl decl, UnionVariantIr variant) {
     final encoded = _codec.encode(variant.type, 'value');
-    final property = decl.discriminator;
-    final value = variant.discriminatorValues.firstOrNull;
-    if (property == null || value == null) return encoded;
-    final type = variant.type;
-    if (type is! NamedType) return encoded;
-    final model = _codec.declaration(type.id);
-    if (model is! ModelDecl || model.fields.any((f) => f.jsonKey == property)) {
-      return encoded;
-    }
-    return '{...$encoded, ${_code.string(property)}: ${_code.string(value)}}';
+    if (!_remembers(decl, variant)) return encoded;
+    final key = _code.string(decl.discriminator!);
+    return switch (variant.discriminatorValues.firstOrNull) {
+      final first? =>
+        '{...$encoded, $key: discriminator ?? ${_code.string(first)}}',
+      null => '{...$encoded, $key: ?discriminator}',
+    };
   }
 
   void _unknown(DartWriter out, UnionDecl decl) {

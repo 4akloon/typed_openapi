@@ -419,10 +419,15 @@ void main() {
         "final r = JsonReader.of(json, schema: 'Root');",
         "return switch (r.json['kind']) {",
         "'cat' => RootCat(Cat.fromJson(JsonReader.asObject(r.json))),",
-        "'dog' || 'puppy' => RootDog(Dog.fromJson(JsonReader.asObject(r.json))),",
+        "('dog' || 'puppy') && final String tag => "
+            'RootDog._(Dog.fromJson(JsonReader.asObject(r.json)), tag),',
         '_ => RootUnknown._(JsonValue(r.json)),',
         'Object? toJson() => value.toJson();',
-        "Object? toJson() => {...value.toJson(), 'kind': 'dog'};",
+        'const RootDog(this.value) : discriminator = null;',
+        'final String? discriminator;',
+        "Object? toJson() => {...value.toJson(), 'kind': discriminator ?? 'dog'};",
+        'other.discriminator == discriminator;',
+        'int get hashCode => Object.hash(value, discriminator);',
         'final class RootUnknown implements Root {',
       ]) {
         expect(pet, contains(line));
@@ -509,6 +514,113 @@ schemas:
         ),
       );
       expect(root, contains("import 'package:app/money.dart' show Money;"));
+    });
+
+    test('a shared JSON type is one variant of any JSON value', () {
+      final root = emit(r'''
+    Root:
+      anyOf:
+        - {type: integer}
+        - {type: number}
+        - {type: number, format: double}
+        - $ref: '#/components/schemas/A'
+        - {type: object, properties: {b: {type: string}}}
+    A: {type: object, properties: {a: {type: string}}}
+''')['models/root.dart']!;
+      expect(
+        root,
+        contains(
+          '  factory Root.fromJson(Object? json) => switch (json) {\n'
+          '    final int value => RootInt(JsonReader.asInt(value)),\n'
+          '    final Map<String, Object?> value => RootJson(JsonValue(value)),\n'
+          '    final num value => RootJson(JsonValue(value)),\n'
+          '    _ => RootUnknown._(JsonValue(json)),\n'
+          '  };\n',
+        ),
+      );
+      expect(
+        root,
+        contains(
+          '/// A [Root] of a JSON type several variants share (number, '
+          'object), as received.',
+        ),
+      );
+    });
+
+    test('imports JsonReader only when a decoder uses it', () {
+      final root = emit('''
+    Root:
+      anyOf:
+        - {type: string, enum: [none]}
+        - {type: object, properties: {a: {type: string}}}
+        - {type: object, properties: {b: {type: string}}}
+''')['models/root.dart']!;
+      expect(root, contains('show DeepEquality, JsonValue, immutable;'));
+      expect(
+        root,
+        contains(
+          'final String value => RootVariant1Case(RootVariant1.fromJson(value)),',
+        ),
+      );
+    });
+
+    test('a polymorphic base decodes into its subtypes', () {
+      final files = emit(r'''
+    Root:
+      type: object
+      required: [kind]
+      properties: {kind: {type: string}}
+      discriminator: {propertyName: kind, mapping: {kitty: Cat}}
+    Cat:
+      allOf:
+        - $ref: '#/components/schemas/Root'
+        - {properties: {lives: {type: integer}}}
+''');
+      final root = files['models/root.dart']!;
+      expect(
+        root,
+        contains(
+          "      'kitty' => "
+          'RootCat(Cat.fromJson(JsonReader.asObject(r.json))),\n',
+        ),
+      );
+      expect(root, contains('Object? toJson() => value.toJson();'));
+      expect(files['models/cat.dart'], contains('final String kind;'));
+    });
+
+    test('toString hides secrets', () {
+      final files = emit(
+        '''
+    Root:
+      type: object
+      properties:
+        name: {type: string}
+        password: {type: string, format: password}
+        token: {type: string, writeOnly: true}
+''',
+        paths: r'''
+    post:
+      operationId: postX
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Root'}
+      responses:
+        '204': {description: ok}''',
+      );
+      expect(
+        files['models/root_input.dart'],
+        contains(
+          r"String toString() => 'RootInput(name: $name, "
+          "password: <redacted>, token: <redacted>)';",
+        ),
+      );
+      expect(
+        files['models/root.dart'],
+        contains(
+          r"String toString() => 'Root(name: $name, password: <redacted>)';",
+        ),
+      );
     });
 
     test('a union of unions wraps the inner union', () {

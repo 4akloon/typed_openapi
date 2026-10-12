@@ -231,21 +231,21 @@ enum DiagnosticCode {
     .info,
   ),
 
-  /// A `discriminator` sits on a schema that is not a `oneOf` or `anyOf`
-  /// union (a base that other schemas extend with `allOf`): the schemas that
-  /// extend it are flat models for now, and polymorphic decoding is not
-  /// generated.
-  inheritancePolymorphismDeferred(
+  /// A `discriminator` sits on a schema that is neither a `oneOf`/`anyOf`
+  /// union nor a base other schemas extend with `allOf`: nothing can be
+  /// picked by it, so the schema is generated as a model.
+  discriminatorWithoutSubtypes(
     'TOA452',
-    'inheritance-polymorphism-deferred',
+    'discriminator-without-subtypes',
     .info,
   ),
 
   /// A `oneOf` or `anyOf` without a discriminator has variants of the same
-  /// JSON type, so a value cannot be told apart by its type: it is generated
-  /// as `JsonValue` (R9.2). An override `union: structural` (or the config
-  /// key `union`) generates a union that tries the variants; a discriminator
-  /// at the source is better.
+  /// JSON type, so a value of that type cannot be told apart (R9.2): the
+  /// union keeps it as `JsonValue` in one variant (`PetJson`), or, when no
+  /// variant has a JSON type of its own, is `JsonValue` itself. An override
+  /// `union: structural` (or the config key `union`) generates a union that
+  /// tries the variants; a discriminator at the source is better.
   unionUndiscriminated('TOA453', 'union-undiscriminated', .warning),
 
   /// Two variants of a union have the same Dart type; the later one is

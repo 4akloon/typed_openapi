@@ -257,9 +257,19 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   helper types (`EnumDecl.knownName`/`unknownName`,
   `UnionVariantIr.name`, `UnionDecl.unknownName`, named after the groups)
   come from `SchemaMapper`. `UnionDispatch` is `discriminator`, `jsonType`
-  (every variant has its own JSON type; `int` before `num`) or
-  `structural` (`union: structural`); other unions without a discriminator
-  are `JsonValue` (TOA453), duplicate variant types are dropped (TOA454).
+  (by JSON type, `int` before `num`; the variants of a JSON type several
+  share are one variant of `JsonValue`, `UnionVariantIr.jsonKinds`, with
+  TOA453) or `structural` (`union: structural`); a union where every
+  variant shares its type is `JsonValue` (TOA453), duplicate variant types
+  are dropped (TOA454). A component with a discriminator that other
+  components extend with `allOf` (directly or deeper) is, where it is used
+  as a type, a union of their flat models (`_subtypes`; a mapping to the
+  base itself is TOA451 and decodes as unknown; one that nothing extends
+  is TOA452); a subtype that is only `allOf: [$ref: Base]` stays a model.
+  A wrapper whose model has no discriminator property keeps the value it
+  was decoded with (`discriminator`); one made in code writes the first
+  mapping value. `toString` prints `<redacted>` for `FieldIr.sensitive`
+  (`writeOnly` or `format: password`).
 - `generate/` - `OutputWriter` (writes changed files through a temp file
   and rename, deletes what it did not write and empty directories, writes
   the manifest `.typed_openapi.json` last; refuses an output that holds a

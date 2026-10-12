@@ -141,6 +141,7 @@ void main() {
  "pets": [
    {"kind": "cat", "lives": 7, "bornAt": "2024-01-02T03:04:05+02:00"},
    {"kind": "dog", "bark": false, "photo": "AQID"},
+   {"kind": "puppy", "bark": true},
    {"kind": "fish", "fins": 2}
  ],
  "score": 10}
@@ -151,6 +152,8 @@ void main() {
   print(owner.status is StatusUnknown);
   final pets = owner.pets!;
   print([for (final pet in pets) pet.runtimeType].join(', '));
+  print(jsonEncode(const PetDog(Dog(bark: true)).toJson()));
+  print(Owner(id: const IdOrNameInt(5), secret: 's3cret'));
   print(owner == Owner.fromJson(jsonDecode(text) as Map<String, Object?>));
   print(owner.hashCode == Owner.fromJson(jsonDecode(text) as Map<String, Object?>).hashCode);
   print(jsonEncode(Owner(id: const IdOrNameInt(5), status: Status.active).toJson()));
@@ -169,10 +172,12 @@ void main() {
 ''';
 
 const _decoded = '''
-{"id":"o-1","status":"away","birthday":"2020-02-29","pets":[{"kind":"cat","lives":7,"bornAt":"2024-01-02T01:04:05.000Z"},{"bark":false,"photo":"AQID","kind":"dog"},{"kind":"fish","fins":2}],"score":10}
+{"id":"o-1","status":"away","birthday":"2020-02-29","pets":[{"kind":"cat","lives":7,"bornAt":"2024-01-02T01:04:05.000Z"},{"bark":false,"photo":"AQID","kind":"dog"},{"bark":true,"kind":"puppy"},{"kind":"fish","fins":2}],"score":10}
 true
 true
-PetCat, PetDog, PetUnknown
+PetCat, PetDog, PetDog, PetUnknown
+{"bark":true,"kind":"dog"}
+Owner(id: IdOrNameInt(5), status: null, birthday: null, pets: null, secret: <redacted>, additionalProperties: {})
 true
 true
 {"id":5,"status":"active"}

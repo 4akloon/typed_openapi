@@ -119,6 +119,7 @@ final class FieldIr {
     this.deprecated = false,
     this.constValue,
     this.constraints = const ConstraintsIr(),
+    this.sensitive = false,
   });
 
   /// The Dart name.
@@ -162,6 +163,10 @@ final class FieldIr {
 
   /// The constraints of the property's schema (R6.7), for documentation.
   final ConstraintsIr constraints;
+
+  /// Whether the value is a secret: the property is `writeOnly` or has
+  /// `format: password`. `toString` does not print it.
+  final bool sensitive;
 
   /// The type of the field (R6.1): `Patch<T>?` for a tri-state field, the
   /// value type for a required one, and a nullable value type otherwise.
@@ -327,12 +332,36 @@ enum UnionKind {
   anyOf,
 }
 
+/// The JSON type of a value: what a union without a discriminator tells
+/// its variants apart by (R9.3).
+enum JsonKind {
+  /// A string.
+  string,
+
+  /// A whole number.
+  integer,
+
+  /// Any number.
+  number,
+
+  /// `true` or `false`.
+  boolean,
+
+  /// An array.
+  array,
+
+  /// An object.
+  object,
+}
+
 /// How a union's `fromJson` picks a variant (R9).
 enum UnionDispatch {
   /// By the value of the discriminator property and its mapping.
   discriminator,
 
-  /// By the JSON type of the value: each variant has another one (R9.3).
+  /// By the JSON type of the value (R9.3): a variant of each JSON type that
+  /// one variant alone has, and one variant of any JSON value
+  /// ([UnionVariantIr.jsonKinds]) for the types several variants share.
   jsonType,
 
   /// By trying the variants (`union: structural`, R9.2): a `oneOf` takes
@@ -390,6 +419,7 @@ final class UnionVariantIr {
     this.type, {
     this.discriminatorValues = const [],
     this.name = '',
+    this.jsonKinds = const [],
   });
 
   /// The type of the variant.
@@ -398,6 +428,11 @@ final class UnionVariantIr {
   /// The class that wraps a value of [type] (`PetCat`), named in the
   /// library scope after the declarations and the groups.
   final String name;
+
+  /// For the variant of any JSON value of a union dispatched by JSON type:
+  /// the JSON types it takes, those several variants share (R9.2). Empty
+  /// for every other variant.
+  final List<JsonKind> jsonKinds;
 
   /// The discriminator values that select this variant, sorted.
   final List<String> discriminatorValues;

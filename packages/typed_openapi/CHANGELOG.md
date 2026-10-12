@@ -18,6 +18,13 @@
   package, an input or foreign files is refused (TOA830), and
   `.typed_openapi.json` lists the generator, a hash of the inputs and the
   files.
+- A schema with a discriminator that other schemas extend with `allOf` is
+  a union of their models where it is used as a type. A union without a
+  discriminator dispatches the variants whose JSON type is their own and
+  keeps the rest in one `JsonValue` variant (`PetJson`, TOA453). A wrapper
+  writes back the discriminator value it was decoded with, so aliases
+  survive a round trip. `toString` does not print `writeOnly` and
+  `format: password` fields.
 - Semantic IR (M6): `check` builds each client's IR (`IrBuilder`,
   `ClientIr`) from the normalized spec and reports naming and mapping
   problems. Types follow R6.2 (`integer` -> `int`, `number` -> `num` or

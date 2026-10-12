@@ -16,6 +16,7 @@ final class Owner {
     this.status,
     this.birthday,
     this.pets,
+    this.secret,
     this.additionalProperties = const {},
   });
 
@@ -28,7 +29,8 @@ final class Owner {
       status: r.optional('status', Status.fromJson),
       birthday: r.optional('birthday', JsonReader.asDate),
       pets: r.optional('pets', JsonReader.listOf(Pet.fromJson)),
-      additionalProperties: r.additional(const {'id', 'status', 'birthday', 'pets'}, JsonReader.asInt),
+      secret: r.optional('secret', JsonReader.asString),
+      additionalProperties: r.additional(const {'id', 'status', 'birthday', 'pets', 'secret'}, JsonReader.asInt),
     );
   }
 
@@ -41,6 +43,8 @@ final class Owner {
 
   final List<Pet>? pets;
 
+  final String? secret;
+
   /// The properties of the object the schema does not list (`additionalProperties`).
   final Map<String, int> additionalProperties;
 
@@ -51,6 +55,7 @@ final class Owner {
     'status': ?status?.toJson(),
     'birthday': ?birthday?.toJson(),
     if (pets case final v?) 'pets': [for (final e0 in v) e0.toJson()],
+    'secret': ?secret,
     ...additionalProperties,
   };
 
@@ -61,6 +66,7 @@ final class Owner {
       other.status == status &&
       other.birthday == birthday &&
       const DeepEquality().equals(other.pets, pets) &&
+      other.secret == secret &&
       const DeepEquality().equals(other.additionalProperties, additionalProperties);
 
   @override
@@ -69,9 +75,10 @@ final class Owner {
     status,
     birthday,
     pets,
+    secret,
     additionalProperties,
   ]);
 
   @override
-  String toString() => 'Owner(id: $id, status: $status, birthday: $birthday, pets: $pets, additionalProperties: $additionalProperties)';
+  String toString() => 'Owner(id: $id, status: $status, birthday: $birthday, pets: $pets, secret: <redacted>, additionalProperties: $additionalProperties)';
 }

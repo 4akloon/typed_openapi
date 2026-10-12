@@ -233,7 +233,7 @@ schemas:
     );
   });
 
-  test('a variant that takes any JSON makes the union structural', () {
+  test('a variant that takes any JSON joins the shared variant', () {
     final fixture = IrFixture(
       '''
 $head    Pet:
@@ -244,10 +244,14 @@ $head    Pet:
       overrides: 'schemas:\n  Cat: {exclude: true}\n',
     );
     final (ir, _) = mapComponents(fixture, ['Pet']);
-    expect(union(ir, 'Pet').dispatch, UnionDispatch.structural);
+    final pet = union(ir, 'Pet');
+    expect(pet.dispatch, UnionDispatch.jsonType);
+    expect(pet.variants.map((v) => '${v.name} ${v.jsonKinds}'), [
+      'PetJson [JsonKind.object]',
+      'PetString []',
+    ]);
     expect(fixture.codes, [
       (DiagnosticCode.excludedSchemaReferenced, '#/components/schemas/Cat'),
-      (DiagnosticCode.unionUndiscriminated, '#/components/schemas/Pet'),
     ]);
   });
 
