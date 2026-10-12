@@ -1,0 +1,177 @@
+#--- task10a structural cycles
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /a:
+    get:
+      operationId: a
+      tags: [t]
+      parameters:
+        - {name: p, in: query, schema: {$ref: '#/components/schemas/Self'}}
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/A'}}}}
+components:
+  schemas:
+    Self: {type: array, items: {$ref: '#/components/schemas/Self'}}
+    MapSelf: {type: object, additionalProperties: {$ref: '#/components/schemas/MapSelf'}}
+    A: {type: array, items: {$ref: '#/components/schemas/B'}}
+    B: {type: array, items: {$ref: '#/components/schemas/A'}}
+    H: {type: object, properties: {a: {$ref: '#/components/schemas/A'}, m: {$ref: '#/components/schemas/MapSelf'}}}
+#--- task10a custom types on cycles
+openapi: 3.1.0
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Tree: {type: array, items: {$ref: '#/components/schemas/Tree'}}
+    Forest: {type: object, additionalProperties: {$ref: '#/components/schemas/Forest'}}
+    Pair: {type: array, items: {$ref: '#/components/schemas/Other'}}
+    Other: {type: array, items: {$ref: '#/components/schemas/Pair'}}
+    H:
+      type: object
+      properties:
+        tree: {$ref: '#/components/schemas/Tree'}
+        forest: {$ref: '#/components/schemas/Forest'}
+        pair: {$ref: '#/components/schemas/Pair'}
+        deep: {type: array, items: {$ref: '#/components/schemas/Tree'}}
+#OVERRIDES
+schemas:
+  Tree: {dartType: {type: Tree, import: 'package:a/t.dart'}}
+  Forest: {dartType: {type: Forest, import: 'package:a/f.dart'}}
+  Pair: {dartType: {type: Pair, import: 'package:a/p.dart'}}
+#--- task10a recursion through declarations and allOf aliases
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Base:
+      type: object
+      properties:
+        kids: {type: array, items: {$ref: '#/components/schemas/Node'}}
+        parent: {$ref: '#/components/schemas/Node'}
+        st: {type: string, enum: [a, b]}
+    Node:
+      allOf: [{$ref: '#/components/schemas/Base'}]
+    Leaf:
+      allOf:
+        - {$ref: '#/components/schemas/Node'}
+        - {type: object, properties: {tag: {type: string}}}
+    Chain1: {allOf: [{$ref: '#/components/schemas/Chain2'}]}
+    Chain2: {allOf: [{$ref: '#/components/schemas/Chain3'}]}
+    Chain3: {type: object, properties: {back: {$ref: '#/components/schemas/Chain1'}}}
+    Cyc1: {allOf: [{$ref: '#/components/schemas/Cyc2'}, {type: object, properties: {a: {type: string}}}]}
+    Cyc2: {allOf: [{$ref: '#/components/schemas/Cyc1'}, {type: object, properties: {b: {type: string}}}]}
+#--- task10a shared and reused inline types
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /pets:
+    parameters:
+      - name: filter
+        in: query
+        schema:
+          type: object
+          properties:
+            a: {type: string, enum: [x, y]}
+            b: {type: array, items: {type: object, properties: {c: {type: string, enum: [x, y]}}}}
+    get:
+      operationId: listPets
+      tags: [pets]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Tags'}}}}
+    post:
+      operationId: createPet
+      tags: [pets]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Tags'}}}}
+      responses:
+        "201": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Shared'}}}}
+  /other:
+    post:
+      operationId: createOther
+      tags: [pets]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Shared'}}}}
+      responses:
+        "201": {description: ok}
+    patch:
+      operationId: patchOther
+      tags: [pets]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Shared'}}}}
+      responses:
+        "200": {description: ok}
+components:
+  schemas:
+    Tags:
+      type: array
+      items:
+        type: object
+        properties:
+          kind: {type: string, enum: [a, b]}
+          id: {type: integer, readOnly: true}
+    Shared:
+      allOf:
+        - type: object
+          properties:
+            state: {type: string, enum: [a, b]}
+            id: {type: integer, readOnly: true}
+    Holder:
+      type: object
+      properties:
+        one: {$ref: '#/components/schemas/Tags'}
+        two: {$ref: '#/components/schemas/Tags'}
+        s1: {$ref: '#/components/schemas/Shared'}
+        s2: {$ref: '#/components/schemas/Shared'}
+#--- task10a invalid parameters
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /pets/{id}:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string}}
+      - {name: bad, schema: {type: string}}
+    get:
+      operationId: getPet
+      tags: [pets]
+      parameters:
+        - {name: a, in: Query, schema: {type: string}}
+        - {name: b, in: 7, schema: {type: string}}
+        - {in: query, schema: {type: string}}
+        - {name: ok, in: query, schema: {type: string}}
+      responses:
+        "200": {description: ok}
+  /bad/{id}:
+    get:
+      operationId: badPath
+      tags: [pets]
+      parameters:
+        - {name: id, in: Path, required: true, schema: {type: string}}
+      responses:
+        "200": {description: ok}
+#--- task10a direction cycles in both orders
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /y:
+    get:
+      operationId: getY
+      tags: [t]
+      responses: {"200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Y'}}}}}
+    post:
+      operationId: postY
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Y'}}}}
+      responses: {"204": {description: ok}}
+  /x:
+    get:
+      operationId: getX
+      tags: [t]
+      responses: {"200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/X'}}}}}
+    post:
+      operationId: postX
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/X'}}}}
+      responses: {"204": {description: ok}}
+components:
+  schemas:
+    X: {type: object, properties: {y: {$ref: '#/components/schemas/Y'}, c: {$ref: '#/components/schemas/C'}}}
+    Y: {type: object, properties: {x: {$ref: '#/components/schemas/X'}, z: {$ref: '#/components/schemas/Z'}}}
+    Z: {type: object, properties: {y: {$ref: '#/components/schemas/Y'}}}
+    C: {type: object, properties: {id: {type: integer, readOnly: true}}}

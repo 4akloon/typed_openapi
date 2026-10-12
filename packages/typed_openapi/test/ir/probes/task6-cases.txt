@@ -1,0 +1,549 @@
+#--- task6 s1
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /dup1: {get: {operationId: same, tags: [a], responses: {"200": {description: ok}}}}
+  /dup2: {get: {operationId: same, tags: [a], responses: {"200": {description: ok}}}}
+  /sp: {get: {operationId: "get the thing", tags: [a], responses: {"200": {description: ok}}}}
+  /dot: {get: {operationId: "pets.list.all", tags: [a], responses: {"200": {description: ok}}}}
+  /k1: {delete: {operationId: delete, tags: [a], responses: {"200": {description: ok}}}}
+  /k2: {get: {operationId: get, tags: [a], responses: {"200": {description: ok}}}}
+  /k3: {get: {operationId: new, tags: [a], responses: {"200": {description: ok}}}}
+  /k4: {get: {operationId: in, tags: [a], responses: {"200": {description: ok}}}}
+  /k5: {get: {operationId: "123abc", tags: [a], responses: {"200": {description: ok}}}}
+  /k6: {get: {operationId: "###", tags: [a], responses: {"200": {description: ok}}}}
+  /k7: {get: {operationId: hashCode, tags: [a], responses: {"200": {description: ok}}}}
+  /k8: {get: {operationId: runtimeType, tags: [a], responses: {"200": {description: ok}}}}
+  /k9: {get: {operationId: "Größe", tags: [a], responses: {"200": {description: ok}}}}
+  /k10: {get: {operationId: "list-pets", tags: [a], responses: {"200": {description: ok}}}}
+  /k11: {get: {operationId: "listPets", tags: [a], responses: {"200": {description: ok}}}}
+  /k12: {get: {operationId: "ListPets", tags: [a], responses: {"200": {description: ok}}}}
+#--- task6 s2
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /:
+    get: {responses: {"200": {description: ok}}}
+    post: {responses: {"200": {description: ok}}}
+  /pets/{id}/photos/{photoId}:
+    get:
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+        - {name: photoId, in: path, required: true, schema: {type: string}}
+      responses: {"200": {description: ok}}
+  /v1.2/items:
+    get: {responses: {"200": {description: ok}}}
+  /{tenant}:
+    get:
+      parameters: [{name: tenant, in: path, required: true, schema: {type: string}}]
+      responses: {"200": {description: ok}}
+  /pets/{id}:
+    get:
+      parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+      responses: {"200": {description: ok}}
+  /pets/{id}.json:
+    get:
+      parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+      responses: {"200": {description: ok}}
+  /pets/by-name/{name}:
+    get:
+      parameters: [{name: name, in: path, required: true, schema: {type: string}}]
+      responses: {"200": {description: ok}}
+  /pets/{id}/{id}:
+    get:
+      parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+      responses: {"200": {description: ok}}
+  /a/{user-id}/x:
+    get:
+      parameters: [{name: user-id, in: path, required: true, schema: {type: string}}]
+      responses: {"200": {description: ok}}
+  /a/{user_id}/x:
+    get:
+      parameters: [{name: user_id, in: path, required: true, schema: {type: string}}]
+      responses: {"200": {description: ok}}
+  /x/{id}:
+    get:
+      parameters: [{name: id, in: path, required: false, schema: {type: string}}]
+      responses: {"200": {description: ok}}
+  /y/{id}:
+    get:
+      parameters: [{name: id, in: query, required: true, schema: {type: string}}]
+      responses: {"200": {description: ok}}
+  /z/{}:
+    get: {responses: {"200": {description: ok}}}
+  /w/{id}/{ID}:
+    get:
+      parameters: [{name: id, in: path, required: true, schema: {type: string}}, {name: ID, in: path, required: true, schema: {type: string}}]
+      responses: {"200": {description: ok}}
+  /pets.{ext}:
+    get:
+      parameters: [{name: ext, in: path, required: true, schema: {type: string}}]
+      responses: {"200": {description: ok}}
+#--- task6 s3
+openapi: 3.1.0
+info: {title: t, version: "1"}
+tags: [{name: x}]
+paths:
+  /a/{id}:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string}, description: pathlevel}
+      - {name: id, in: query, schema: {type: string}}
+      - {name: id, in: header, schema: {type: string}}
+      - {name: limit, in: query, schema: {type: integer}}
+      - {name: sess, in: cookie, schema: {type: string}}
+    get:
+      operationId: allId
+      tags: [x]
+      parameters:
+        - {name: limit, in: query, required: true, schema: {type: string}}
+        - {$ref: '#/components/parameters/Page'}
+        - {name: filter, in: query, content: {application/json: {schema: {type: object, properties: {a: {type: string}}}}}}
+        - {name: raw, in: query, content: {text/plain: {schema: {type: string}}}}
+        - {name: none, in: query}
+        - {name: id, in: cookie, schema: {type: integer}}
+        - {name: In, in: query, schema: {type: string}}
+        - {name: 'idQuery', in: query, schema: {type: string}}
+        - {name: 'X-Request-ID', in: header, schema: {type: string}}
+        - {name: 'x-request-id', in: query, schema: {type: string}}
+        - {name: 'this', in: query, schema: {type: string}}
+        - {name: 'dio', in: query, schema: {type: string}}
+        - {name: 'options', in: query, schema: {type: string}}
+        - {name: 'cancelToken', in: query, schema: {type: string}}
+        - {name: 'body', in: query, schema: {type: string}}
+        - {name: '1st', in: query, schema: {type: string}}
+        - {name: '$', in: query, schema: {type: string}}
+        - {name: 'a b', in: query, schema: {type: string}}
+        - {name: 'filter[name]', in: query, schema: {type: string}}
+        - {name: 'sort', in: query, schema: {type: string, enum: [asc, desc]}}
+      responses: {"200": {description: ok}}
+  /b:
+    get:
+      operationId: qs
+      tags: [x]
+      parameters:
+        - {name: q, in: querystring, content: {application/x-www-form-urlencoded: {schema: {type: object, properties: {a: {type: string}}}}}}
+      responses: {"200": {description: ok}}
+components:
+  parameters:
+    Page: {name: page, in: query, required: true, schema: {type: integer}}
+#--- task6 s4
+openapi: 3.1.0
+info: {title: t, version: "1"}
+tags: [{name: x}]
+paths:
+  /multi:
+    post:
+      operationId: multi
+      tags: [x]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data: {schema: {type: object, properties: {f: {type: string, format: binary}}}}
+          application/x-www-form-urlencoded: {schema: {type: object, properties: {a: {type: string}}}}
+          application/json: {schema: {type: object, properties: {j: {type: string}}}}
+      responses: {"200": {description: ok}}
+  /form:
+    post:
+      operationId: formOnly
+      tags: [x]
+      requestBody:
+        content:
+          application/x-www-form-urlencoded: {schema: {type: object, properties: {a: {type: string}}}}
+          multipart/form-data: {schema: {type: object, properties: {f: {type: string, format: binary}}}}
+      responses: {"200": {description: ok}}
+  /oct:
+    put:
+      operationId: octet
+      tags: [x]
+      requestBody:
+        content: {application/octet-stream: {schema: {type: string, format: binary}}}
+      responses:
+        "200": {description: ok, content: {application/octet-stream: {schema: {type: string, format: binary}}}}
+  /oct2:
+    put:
+      operationId: octetNoSchema
+      tags: [x]
+      requestBody:
+        content: {application/octet-stream: {}}
+      responses:
+        "200": {description: ok, content: {application/octet-stream: {}}}
+  /txt:
+    put:
+      operationId: txt
+      tags: [x]
+      requestBody:
+        content: {text/plain: {schema: {type: string}}}
+      responses:
+        "200": {description: ok, content: {text/plain: {schema: {type: integer}}}}
+  /vendor:
+    put:
+      operationId: vendor
+      tags: [x]
+      requestBody:
+        content: {application/vnd.api+json: {schema: {type: object, properties: {v: {type: string}}}}}
+      responses:
+        "200": {description: ok, content: {application/vnd.api+json: {schema: {type: object, properties: {w: {type: string}}}}}}
+  /xml:
+    put:
+      operationId: xml
+      tags: [x]
+      requestBody:
+        content: {application/xml: {schema: {type: object, properties: {v: {type: string}}}}}
+      responses:
+        "200": {description: ok, content: {application/xml: {schema: {type: object, properties: {w: {type: string}}}}}}
+  /xmljson:
+    put:
+      operationId: xmljson
+      tags: [x]
+      requestBody:
+        content:
+          application/xml: {schema: {type: object, properties: {v: {type: string}}}}
+          application/json: {schema: {type: object, properties: {v: {type: string}}}}
+      responses:
+        "200": {description: ok, content: {application/xml: {schema: {type: object, properties: {w: {type: string}}}}, application/json: {schema: {type: object, properties: {z: {type: string}}}}}}
+  /wild:
+    put:
+      operationId: wild
+      tags: [x]
+      requestBody:
+        content: {"*/*": {schema: {type: object, properties: {v: {type: string}}}}}
+      responses:
+        "200": {description: ok, content: {"*/*": {schema: {type: object, properties: {w: {type: string}}}}}}
+  /jsoncharset:
+    put:
+      operationId: jsoncharset
+      tags: [x]
+      requestBody:
+        content: {"application/json; charset=utf-8": {schema: {type: object, properties: {v: {type: string}}}}}
+      responses:
+        "200": {description: ok, content: {"APPLICATION/JSON": {schema: {type: object, properties: {w: {type: string}}}}}}
+  /sse:
+    get:
+      operationId: sse
+      tags: [x]
+      responses:
+        "200": {description: ok, content: {text/event-stream: {itemSchema: {type: object, properties: {w: {type: string}}}}}}
+  /nobodyschema:
+    post:
+      operationId: nobodyschema
+      tags: [x]
+      requestBody:
+        required: true
+        content: {application/json: {}}
+      responses: {"200": {description: ok, content: {application/json: {}}}}
+  /emptybody:
+    post:
+      operationId: emptybody
+      tags: [x]
+      requestBody: {content: {}}
+      responses: {"200": {description: ok}}
+  /refbody:
+    post:
+      operationId: refbody
+      tags: [x]
+      requestBody: {$ref: '#/components/requestBodies/RB'}
+      responses: {"200": {$ref: '#/components/responses/R'}}
+components:
+  requestBodies:
+    RB: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+  responses:
+    R: {description: r, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+  schemas:
+    Pet: {type: object, properties: {name: {type: string}}}
+#--- task6 s5
+openapi: 3.1.0
+info: {title: t, version: "1"}
+tags: [{name: x}]
+paths:
+  /two:
+    post:
+      operationId: two
+      tags: [x]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {type: object, properties: {a: {type: string}}}}}}
+        "201": {description: ok, content: {application/json: {schema: {type: object, properties: {b: {type: string}}}}}}
+  /defonly:
+    get:
+      operationId: defonly
+      tags: [x]
+      responses:
+        default: {description: d, content: {application/json: {schema: {type: object, properties: {a: {type: string}}}}}}
+  /range:
+    get:
+      operationId: range
+      tags: [x]
+      responses:
+        2XX: {description: d, content: {application/json: {schema: {type: object, properties: {a: {type: string}}}}}}
+        4XX: {description: d, content: {application/json: {schema: {type: object, properties: {e: {type: string}}}}}}
+        5XX: {description: d}
+  /nocontent:
+    delete:
+      operationId: nocontent
+      tags: [x]
+      responses:
+        "204": {description: gone}
+  /errs:
+    get:
+      operationId: errs
+      tags: [x]
+      responses:
+        "200": {description: ok}
+        "400": {description: b, content: {application/json: {schema: {type: object, properties: {m: {type: string}}}}}}
+        "401": {description: b}
+        "404": {description: b, content: {application/json: {schema: {type: object, properties: {n: {type: string}}}}}}
+  /errone:
+    get:
+      operationId: errone
+      tags: [x]
+      responses:
+        "200": {description: ok}
+        "404": {description: b, content: {application/json: {schema: {type: object, properties: {n: {type: string}}}}}}
+  /errnone:
+    get:
+      operationId: errnone
+      tags: [x]
+      responses:
+        "200": {description: ok}
+        "404": {description: b}
+        "500": {description: b}
+  /errshared:
+    get:
+      operationId: errshared
+      tags: [x]
+      responses:
+        "200": {description: ok}
+        "404": {description: b, content: {application/json: {schema: {$ref: '#/components/schemas/Err'}}}}
+        "500": {description: b, content: {application/json: {schema: {$ref: '#/components/schemas/Err'}}}}
+        "401": {description: b}
+  /env:
+    get:
+      operationId: env
+      tags: [x]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {type: object, required: [data], properties: {data: {type: array, items: {$ref: '#/components/schemas/Pet'}}}}}}}
+  /envextra:
+    get:
+      operationId: envextra
+      tags: [x]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/Pet'}, total: {type: integer}}}}}}
+  /envopt:
+    get:
+      operationId: envopt
+      tags: [x]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {type: object, properties: {data: {$ref: '#/components/schemas/Pet'}}}}}}
+  /envnull:
+    get:
+      operationId: envnull
+      tags: [x]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {type: object, required: [data], properties: {data: {type: [object, "null"], properties: {z: {type: string}}}}}}}}
+  /envref:
+    get:
+      operationId: envref
+      tags: [x]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/PetData'}}}}
+        "201": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/PetData'}}}}
+  /enverr:
+    get:
+      operationId: enverr
+      tags: [x]
+      responses:
+        "400": {description: ok, content: {application/json: {schema: {type: object, required: [data], properties: {data: {type: string}}}}}}
+  /envprim:
+    get:
+      operationId: envprim
+      tags: [x]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {type: object, required: [data], properties: {data: {type: string}}}}}}
+  /mixed:
+    get:
+      operationId: mixed
+      tags: [x]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {type: object, properties: {a: {type: string}}}}}}
+        "202": {description: ok}
+        "301": {description: ok, content: {application/json: {schema: {type: object, properties: {r: {type: string}}}}}}
+        "1XX": {description: ok}
+  /bothsame:
+    get:
+      operationId: bothsame
+      tags: [x]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {type: object, properties: {a: {type: string}}}}}}
+        "400": {description: ok, content: {application/json: {schema: {type: object, properties: {a: {type: string}}}}}}
+        default: {description: ok, content: {application/json: {schema: {type: object, properties: {a: {type: string}}}}}}
+components:
+  schemas:
+    Err: {type: object, properties: {message: {type: string}}}
+    Pet: {type: object, properties: {name: {type: string}}}
+    PetData: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/Pet'}}}
+#--- task6 s6
+openapi: 3.1.0
+info: {title: t, version: "1"}
+tags: [{name: pets}]
+paths:
+  /1: {get: {operationId: o1, tags: [pets], responses: {"200": {description: ok}}}}
+  /2: {get: {operationId: o2, tags: [Pets], responses: {"200": {description: ok}}}}
+  /3: {get: {operationId: o3, tags: [pet-store], responses: {"200": {description: ok}}}}
+  /4: {get: {operationId: o4, tags: [Pet Store], responses: {"200": {description: ok}}}}
+  /5: {get: {operationId: o5, tags: [class], responses: {"200": {description: ok}}}}
+  /6: {get: {operationId: o6, tags: [Pet], responses: {"200": {description: ok}}}}
+  /7: {get: {operationId: o7, tags: [Default], responses: {"200": {description: ok}}}}
+  /8: {get: {operationId: o8, tags: ["!!!"], responses: {"200": {description: ok}}}}
+  /9: {get: {operationId: o9, tags: [""], responses: {"200": {description: ok}}}}
+  /10: {get: {operationId: o10, tags: [123], responses: {"200": {description: ok}}}}
+  /11: {get: {operationId: o11, tags: [pets, pets], responses: {"200": {description: ok}}}}
+  /12: {get: {operationId: o12, responses: {"200": {description: ok}}}}
+  /13: {get: {operationId: o13, tags: [Api], responses: {"200": {description: ok}}}}
+  /14: {get: {operationId: o14, tags: [Object], responses: {"200": {description: ok}}}}
+  /15: {get: {operationId: o15, tags: [Pet Api], responses: {"200": {description: ok}}}}
+  /16: {get: {operationId: o16, tags: [Über], responses: {"200": {description: ok}}}}
+components:
+  schemas:
+    PetApi: {type: object, properties: {a: {type: string}}}
+    Pet: {type: object, properties: {a: {type: string}}}
+#--- task6 s7
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /1: {get: {operationId: o1, tags: [Pet], responses: {"200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/PetApi'}}}}}}}
+  /2: {get: {operationId: o2, tags: [Pet], responses: {"200": {description: ok}}}}
+  /3: {get: {operationId: o3, tags: [Dio], responses: {"200": {description: ok}}}}
+  /4: {get: {operationId: o4, tags: [Cat], responses: {"200": {description: ok, content: {application/json: {schema: {$ref: "#/components/schemas/Keep"}}}}}}}
+  /5: {get: {operationId: o5, tags: [Object], responses: {"200": {description: ok}}}}
+components:
+  schemas:
+    PetApi: {type: object, properties: {a: {type: string}}}
+    CatApi: {type: object, properties: {a: {type: string}}}
+    ObjectApi: {type: object, properties: {a: {type: string}}}
+    Keep:
+      type: object
+      properties:
+        c: {$ref: '#/components/schemas/CatApi'}
+        o: {$ref: '#/components/schemas/ObjectApi'}
+#--- task6 s8
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /: {get: {operationId: root, responses: {"200": {description: ok}}}}
+  /pets: {get: {operationId: listPets, responses: {"200": {description: ok}}}}
+  /pets/{id}: {get: {operationId: getPet, parameters: [{name: id, in: path, required: true, schema: {type: string}}], responses: {"200": {description: ok}}}}
+  /Pets/all: {get: {operationId: allPets, responses: {"200": {description: ok}}}}
+  /api/v1/users: {get: {operationId: users, responses: {"200": {description: ok}}}}
+  /v1/users: {get: {operationId: users2, responses: {"200": {description: ok}}}}
+  /{tenant}/things: {get: {operationId: things, parameters: [{name: tenant, in: path, required: true, schema: {type: string}}], responses: {"200": {description: ok}}}}
+  /pet-store/x: {get: {operationId: ps, responses: {"200": {description: ok}}}}
+  /class: {get: {operationId: cls, responses: {"200": {description: ok}}}}
+  /123: {get: {operationId: num, responses: {"200": {description: ok}}}}
+  /a: {get: {operationId: ov, tags: [zzz], responses: {"200": {description: ok}}}}
+#OVERRIDES
+operations:
+  ov: {group: "custom store", name: renamed}
+  root: {group: "Pets"}
+#--- task6 s9
+openapi: 3.1.0
+info: {title: t, version: "1"}
+tags: [{name: x}]
+paths:
+  /1: {get: {operationId: users_api_v1_list, tags: [x], responses: {"200": {description: ok}}}}
+#OVERRIDES
+operations:
+  ov: {group: "###", name: "my method!"}
+  root: {group: "123", name: "class"}
+  listPets: {group: "", name: ""}
+  getPet:
+    parameters:
+      "path:id": {name: "bad name"}
+#--- task6 s10
+openapi: 3.1.0
+info: {title: t, version: "1"}
+tags: [{name: x}]
+paths:
+  /1:
+    get: {operationId: many, tags: [x], parameters: [{name: p00, in: query, schema: {type: string}},{name: p01, in: query, schema: {type: string}},{name: p02, in: query, schema: {type: string}},{name: p03, in: query, schema: {type: string}},{name: p04, in: query, schema: {type: string}},{name: p05, in: query, schema: {type: string}},{name: p06, in: query, schema: {type: string}},{name: p07, in: query, schema: {type: string}},{name: p08, in: query, schema: {type: string}},{name: p09, in: query, schema: {type: string}},{name: p10, in: query, schema: {type: string}},{name: p11, in: query, schema: {type: string}},{name: p12, in: query, schema: {type: string}},{name: p13, in: query, schema: {type: string}},{name: p14, in: query, schema: {type: string}},{name: p15, in: query, schema: {type: string}},{name: p16, in: query, schema: {type: string}},{name: p17, in: query, schema: {type: string}},{name: p18, in: query, schema: {type: string}},{name: p19, in: query, schema: {type: string}},{name: p20, in: query, schema: {type: string}},{name: p21, in: query, schema: {type: string}},{name: p22, in: query, schema: {type: string}},{name: p23, in: query, schema: {type: string}},{name: p24, in: query, schema: {type: string}},{name: p25, in: query, schema: {type: string}},{name: p26, in: query, schema: {type: string}},{name: p27, in: query, schema: {type: string}},{name: p28, in: query, schema: {type: string}},{name: p29, in: query, schema: {type: string}},{name: p30, in: query, schema: {type: string}},{name: p31, in: query, schema: {type: string}},{name: p32, in: query, schema: {type: string}},{name: p33, in: query, schema: {type: string}},{name: p34, in: query, schema: {type: string}},{name: p35, in: query, schema: {type: string}},{name: p36, in: query, schema: {type: string}},{name: p37, in: query, schema: {type: string}},{name: p38, in: query, schema: {type: string}},{name: p39, in: query, schema: {type: string}}], responses: {"200": {description: ok}}}
+  /2/{a}:
+    get: {operationId: pathy, tags: [x], parameters: [{name: q, in: query, schema: {type: string}},{name: a, in: path, required: true, schema: {type: string}}, {name: stray, in: path, required: true, schema: {type: string}}], responses: {"200": {description: ok}}}
+#--- task6 s11
+openapi: 3.2.0
+info: {title: t, version: "1"}
+paths:
+  /search:
+    additionalOperations:
+      QUERY: {tags: [s], responses: {"200": {description: ok}}}
+      Copy: {tags: [s], responses: {"200": {description: ok}}}
+  /a/{id}: {$ref: '#/components/pathItems/Shared'}
+  /b/{id}: {$ref: '#/components/pathItems/Shared'}
+components:
+  pathItems:
+    Shared:
+      parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+      get: {operationId: getShared, tags: [s], responses: {"200": {description: ok}}}
+      post: {tags: [s], responses: {"200": {description: ok}}}
+#--- task6 s12
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /1: {post: {operationId: create, tags: [a], requestBody: {content: {application/json: {schema: {type: object, properties: {x: {type: string}}}}}}, responses: {"200": {description: ok, content: {application/json: {schema: {type: object, properties: {x: {type: string}}}}}}}}}
+  /2: {post: {operationId: create, tags: [b], requestBody: {content: {application/json: {schema: {type: object, properties: {y: {type: string}}}}}}, responses: {"200": {description: ok, content: {application/json: {schema: {type: object, properties: {y: {type: string}}}}}}}}}
+  /3: {post: {operationId: createRequest, tags: [b], requestBody: {content: {application/json: {schema: {type: object, properties: {y: {type: string}}}}}}, responses: {"200": {description: ok}}}}
+  /4: {post: {operationId: get, tags: [b], parameters: [{name: sort, in: query, schema: {type: string, enum: [a, b]}}], responses: {"200": {description: ok, content: {application/json: {schema: {type: object, properties: {y: {type: string}}}}}}}}}
+  /5: {post: {operationId: getSort, tags: [b], responses: {"200": {description: ok}}}}
+  /6: {post: {operationId: Create, tags: [c], responses: {"200": {description: ok, content: {application/json: {schema: {type: object, required: [data], properties: {data: {type: object, properties: {q: {type: string}}}}}}}}}}}
+#--- task6 s13
+openapi: 3.1.0
+info: {title: t, version: "1"}
+tags: [{name: x}]
+paths:
+  /1:
+    get:
+      operationId: badin
+      tags: [x]
+      parameters:
+        - {name: a, in: Query, schema: {type: string}}
+        - {name: b, schema: {type: string}}
+        - {in: query, schema: {type: string}}
+      responses: {"200": {description: ok}}
+#--- task6 s14
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /1:
+    get:
+      operationId: weird
+      tags: [x, 5, null]
+      parameters:
+        - {$ref: '#/components/parameters/Missing'}
+        - {name: a, in: query, schema: true}
+        - {name: b, in: query, schema: false}
+        - {name: c, in: query, schema: {$ref: '#/components/schemas/Missing'}}
+        - {name: d, in: query, content: {}}
+        - {name: e, in: query, content: {application/json: {}}}
+        - {name: f, in: query, schema: {type: string}, content: {application/json: {schema: {type: integer}}}}
+      requestBody: {$ref: '#/components/requestBodies/Missing'}
+      responses:
+        "200": {$ref: '#/components/responses/Missing'}
+        "XYZ": {description: x, content: {application/json: {schema: {type: object, properties: {a: {type: string}}}}}}
+        "2xx": {description: x, content: {application/json: {schema: {type: object, required: [data], properties: {data: true}}}}}
+        "4xx": {description: x, content: {application/json: {schema: true}}}
+        "": {description: x}
+  /2:
+    get: {operationId: empty, responses: {}}
+  /3:
+    get: {operationId: nores}
+  /4:
+    get: {operationId: envbool, responses: {"200": {description: ok, content: {application/json: {schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/Missing'}}}}}}}}
+  /5:
+    get: {operationId: envallof, responses: {"200": {description: ok, content: {application/json: {schema: {allOf: [{type: object, required: [data], properties: {data: {type: string}}}]}}}}}}
+#--- task6 s15
+openapi: 3.1.0
+info: {title: t, version: "1"}
+tags: [{name: x}]
+paths:
+  /a: {get: {operationId: getItem, tags: [x], responses: {"200": {description: ok}}}}
+  /b: {get: {operationId: other, tags: [x], responses: {"200": {description: ok}}}}
+#OVERRIDES
+operations:
+  other: {name: getItem}

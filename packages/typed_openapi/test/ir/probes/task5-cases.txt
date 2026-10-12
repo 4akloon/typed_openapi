@@ -1,0 +1,448 @@
+#--- task5 allOf-1-ref
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Base: {type: object, required: [id], properties: {id: {type: integer}}}
+    A: {allOf: [{$ref: '#/components/schemas/Base'}]}
+    H: {type: object, properties: {a: {$ref: '#/components/schemas/A'}}}
+
+#--- task5 allOf-ref-nullable-30
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Base: {type: object, properties: {id: {type: integer}}}
+    H:
+      type: object
+      properties:
+        a: {nullable: true, allOf: [{$ref: '#/components/schemas/Base'}]}
+        b: {allOf: [{$ref: '#/components/schemas/Base'}]}
+
+#--- task5 allOf-ref-plus-props
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Base: {type: object, required: [id], properties: {id: {type: integer}, addr: {type: object, properties: {street: {type: string}}}, st: {type: string, enum: [a, b]}}}
+    Pet:
+      allOf: [{$ref: '#/components/schemas/Base'}]
+      required: [tag]
+      properties: {tag: {type: string}}
+
+#--- task5 allOf-ref-plus-props-reverse
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Pet:
+      allOf: [{$ref: '#/components/schemas/Base'}]
+      properties: {tag: {type: string}}
+    Base: {type: object, required: [id], properties: {id: {type: integer}, addr: {type: object, properties: {street: {type: string}}}}}
+
+#--- task5 allOf-two-refs-conflict
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    A: {type: object, properties: {id: {type: integer}}}
+    B: {type: object, properties: {id: {type: string}}}
+    Pet: {allOf: [{$ref: '#/components/schemas/A'}, {$ref: '#/components/schemas/B'}]}
+
+#--- task5 allOf-nested
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    A: {type: object, properties: {a: {type: string}}}
+    B: {allOf: [{$ref: '#/components/schemas/A'}, {type: object, properties: {b: {type: string}}}]}
+    C: {allOf: [{$ref: '#/components/schemas/B'}, {type: object, properties: {c: {type: string}}}]}
+    D: {allOf: [{allOf: [{$ref: '#/components/schemas/A'}, {properties: {x: {type: string}}}]}, {properties: {y: {type: string}}}]}
+
+#--- task5 allOf-cycle-single
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    A: {allOf: [{$ref: '#/components/schemas/B'}]}
+    B: {allOf: [{$ref: '#/components/schemas/A'}]}
+
+#--- task5 allOf-cycle-multi
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    A: {allOf: [{$ref: '#/components/schemas/B'}, {properties: {a: {type: string}}}]}
+    B: {allOf: [{$ref: '#/components/schemas/A'}, {properties: {b: {type: string}}}]}
+
+#--- task5 allOf-discriminator-base
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [kind]
+      properties: {kind: {type: string}, name: {type: string}}
+      discriminator: {propertyName: kind, mapping: {cat: '#/components/schemas/Cat', dog: '#/components/schemas/Dog'}}
+    Cat: {allOf: [{$ref: '#/components/schemas/Pet'}, {type: object, properties: {lives: {type: integer}}}]}
+    Dog: {allOf: [{$ref: '#/components/schemas/Pet'}, {type: object, properties: {bark: {type: boolean}}}]}
+    H: {type: object, properties: {pet: {$ref: '#/components/schemas/Pet'}}}
+
+#--- task5 oneOf-null-31
+openapi: 3.1.0
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Cat: {type: object, properties: {a: {type: string}}}
+    N: {oneOf: [{$ref: '#/components/schemas/Cat'}, {type: 'null'}]}
+    H: {type: object, properties: {n: {$ref: '#/components/schemas/N'}, m: {anyOf: [{type: string}, {type: 'null'}]}, k: {oneOf: [{$ref: '#/components/schemas/Cat'}, {type: 'null'}]}}}
+
+#--- task5 oneOf-nullable-30
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Cat: {type: object, properties: {a: {type: string}}}
+    N: {nullable: true, oneOf: [{$ref: '#/components/schemas/Cat'}]}
+    U: {nullable: true, oneOf: [{$ref: '#/components/schemas/Cat'}, {type: string}]}
+    H: {type: object, properties: {n: {$ref: '#/components/schemas/N'}, u: {$ref: '#/components/schemas/U'}}}
+
+#--- task5 anyOf-str-int
+openapi: 3.1.0
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Id: {anyOf: [{type: string}, {type: integer}]}
+    H: {type: object, properties: {id: {$ref: '#/components/schemas/Id'}, j: {anyOf: [{type: string}, {type: string, format: date}]}}}
+
+#--- task5 union-disc-nomap
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Cat: {type: object, properties: {kind: {type: string}}}
+    Dog: {type: object, properties: {kind: {type: string}}}
+    Pet: {oneOf: [{$ref: '#/components/schemas/Cat'}, {$ref: '#/components/schemas/Dog'}], discriminator: {propertyName: kind}}
+
+#--- task5 union-disc-badmap
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Cat: {type: object, properties: {kind: {type: string}}}
+    Dog: {type: object, properties: {kind: {type: string}}}
+    Other: {type: object, properties: {kind: {type: string}}}
+    Pet: {oneOf: [{$ref: '#/components/schemas/Cat'}, {$ref: '#/components/schemas/Dog'}], discriminator: {propertyName: kind, mapping: {o: Other, typo: Catt, rel: 'cat.yaml', rem: 'http://x/y.json#/A', bad: '#/nonexistent', root: '#', frag: '#/components/schemas/Cat/properties/kind', c: Cat, c2: Cat}}}
+
+#--- task5 union-union
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    A: {type: object, properties: {kind: {type: string}}}
+    B: {type: object, properties: {kind: {type: string}}}
+    C: {type: object, properties: {kind: {type: string}}}
+    Inner: {oneOf: [{$ref: '#/components/schemas/A'}, {$ref: '#/components/schemas/B'}], discriminator: {propertyName: kind}}
+    Outer: {oneOf: [{$ref: '#/components/schemas/Inner'}, {$ref: '#/components/schemas/C'}], discriminator: {propertyName: kind}}
+    Outer2: {oneOf: [{oneOf: [{$ref: '#/components/schemas/A'}, {$ref: '#/components/schemas/B'}]}, {$ref: '#/components/schemas/C'}]}
+
+#--- task5 const
+openapi: 3.1.0
+info: {title: t, version: "1"}
+components:
+  schemas:
+    S: {type: string, const: cat}
+    N: {const: 5}
+    B: {const: true}
+    Z: {const: null}
+    H: {type: object, properties: {s: {const: dog}, n: {const: 1.5}, b: {const: false}, z: {const: null}, k: {type: string, const: cat}}}
+
+#--- task5 exhaustive-false
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    A: {type: object, properties: {kind: {type: string}}}
+    B: {type: object, properties: {kind: {type: string}}}
+    U: {oneOf: [{$ref: '#/components/schemas/A'}, {$ref: '#/components/schemas/B'}]}
+    E: {type: string, enum: [x, y]}
+    M: {type: object, properties: {a: {type: string}}}
+    Al: {allOf: [{$ref: '#/components/schemas/M'}]}
+
+#OVERRIDES
+schemas:
+  U: {exhaustive: false}
+  E: {exhaustive: false}
+  M: {exhaustive: false}
+  Al: {exhaustive: false, name: Renamed}
+
+#--- task5 props-plus-oneOf-required
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Contact:
+      type: object
+      properties: {email: {type: string}, phone: {type: string}}
+      oneOf:
+        - required: [email]
+        - required: [phone]
+    Contact2:
+      type: object
+      properties: {email: {type: string}, phone: {type: string}}
+      anyOf:
+        - required: [email]
+        - required: [phone]
+    Contact3:
+      type: object
+      oneOf:
+        - required: [email]
+        - required: [phone]
+
+#--- task5 oneOf-const-enum
+openapi: 3.1.0
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Color:
+      type: string
+      oneOf:
+        - {const: red, title: Red}
+        - {const: green, title: Green}
+
+#--- task5 allOf-enum-desc
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Status: {type: string, enum: [a, b]}
+    H: {type: object, properties: {s: {allOf: [{$ref: '#/components/schemas/Status'}, {description: "the status"}]}, n: {allOf: [{type: string}, {minLength: 1}]}}}
+
+#--- task5 allOf-plus-oneOf
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Base: {type: object, properties: {id: {type: integer}}}
+    A: {type: object, properties: {a: {type: string}}}
+    B: {type: object, properties: {b: {type: string}}}
+    P: {allOf: [{$ref: '#/components/schemas/Base'}], oneOf: [{$ref: '#/components/schemas/A'}, {$ref: '#/components/schemas/B'}]}
+
+#--- task5 allOf-addprops
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Base: {type: object, additionalProperties: {type: string}}
+    P: {allOf: [{$ref: '#/components/schemas/Base'}, {type: object, properties: {a: {type: string}}}]}
+
+#--- task5 inline-variant-disc-31
+openapi: 3.1.0
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Cat: {type: object, properties: {kind: {type: string}}}
+    Pet:
+      oneOf:
+        - {$ref: '#/components/schemas/Cat'}
+        - {type: object, properties: {kind: {type: string}}}
+        - {type: string}
+      discriminator: {propertyName: kind}
+
+#--- task5 allOf-nullable-multi
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    A: {type: object, properties: {a: {type: string}}}
+    P: {nullable: true, allOf: [{$ref: '#/components/schemas/A'}, {properties: {b: {type: string}}}]}
+    H: {type: object, properties: {p: {$ref: '#/components/schemas/P'}}}
+
+#--- task5 allOf-dangling-ref
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    P: {allOf: [{$ref: '#/components/schemas/Nope'}, {properties: {b: {type: string}}}]}
+    Q: {allOf: [{$ref: '#/components/schemas/Nope'}]}
+
+#--- task5 allOf-empty-oneOf-empty
+openapi: 3.1.0
+info: {title: t, version: "1"}
+components:
+  schemas:
+    P: {allOf: []}
+    Q: {oneOf: []}
+    R: {oneOf: [{type: 'null'}]}
+    S: {oneOf: [{type: string}, {type: 'null'}, {type: integer}]}
+
+#--- task5 mapping-default-nonvariant
+openapi: 3.2.0
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Cat: {type: object, properties: {kind: {type: string}}}
+    Dog: {type: object, properties: {kind: {type: string}}}
+    Other: {type: object, properties: {kind: {type: string}}}
+    Pet: {oneOf: [{$ref: '#/components/schemas/Cat'}, {$ref: '#/components/schemas/Dog'}], discriminator: {propertyName: kind, defaultMapping: Other}}
+
+#--- task5 x-required-tighten
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Base: {type: object, properties: {name: {type: string}, id: {type: integer}}}
+    P: {allOf: [{$ref: '#/components/schemas/Base'}, {required: [name]}]}
+    U: {oneOf: [{$ref: '#/components/schemas/Base'}, {type: string}]}
+    Q: {allOf: [{$ref: '#/components/schemas/Base'}, {$ref: '#/components/schemas/U'}, {type: array, items: {type: string}}]}
+
+#--- task5 x-dup-variants
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    A: {type: object, properties: {a: {type: string}}}
+    U: {oneOf: [{$ref: '#/components/schemas/A'}, {$ref: '#/components/schemas/A'}]}
+    V: {oneOf: [{type: string, maxLength: 3}, {type: string, minLength: 10}]}
+    W: {oneOf: [{type: string}, {type: string, nullable: true}]}
+
+#--- task5 x-tree-alias
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Base: {type: object, properties: {kids: {type: array, items: {$ref: '#/components/schemas/Node'}}}}
+    Node: {allOf: [{$ref: '#/components/schemas/Base'}]}
+    Alias: {allOf: [{type: object, properties: {a: {type: string}}}]}
+    H: {type: object, properties: {x: {$ref: '#/components/schemas/Alias'}, y: {$ref: '#/components/schemas/Alias'}}}
+
+#--- task5 x-alias-override
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    M: {type: object, properties: {a: {type: string}}}
+    Al: {allOf: [{$ref: '#/components/schemas/M'}]}
+    Ur: {oneOf: [{$ref: '#/components/schemas/M'}, {type: string}]}
+    H: {type: object, properties: {x: {$ref: '#/components/schemas/Al'}, u: {$ref: '#/components/schemas/Ur'}}}
+
+#OVERRIDES
+schemas:
+  Al: {name: Renamed}
+  Ur: {name: Mixed}
+
+#--- task5 x-oneOf-single-plus-props
+openapi: 3.1.0
+info: {title: t, version: "1"}
+components:
+  schemas:
+    M: {type: object, properties: {a: {type: string}}}
+    P: {type: object, properties: {b: {type: string}}, oneOf: [{$ref: '#/components/schemas/M'}, {type: 'null'}]}
+    R: {type: object, properties: {b: {type: string}}, allOf: [{$ref: '#/components/schemas/M'}], oneOf: [{required: [a]}]}
+
+#--- task5 x-disc-3.1-const
+openapi: 3.1.0
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Cat: {type: object, required: [kind], properties: {kind: {const: cat}}}
+    Dog: {type: object, required: [kind], properties: {kind: {const: dog}}}
+    Pet: {oneOf: [{$ref: '#/components/schemas/Cat'}, {$ref: '#/components/schemas/Dog'}], discriminator: {propertyName: kind}}
+
+#--- task5 x-union-mapping-file
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Cat: {type: object, required: [kind], properties: {kind: {type: string}}}
+    Dog: {type: object, required: [kind], properties: {kind: {type: string}}}
+    Pet: {oneOf: [{$ref: '#/components/schemas/Cat'}, {$ref: '#/components/schemas/Dog'}], discriminator: {propertyName: kind, mapping: {cat: 'Cat', dog: '#/components/schemas/Dog'}}}
+    H: {type: object, properties: {p: {$ref: '#/components/schemas/Pet'}, q: {$ref: '#/components/schemas/Pet'}, r: {oneOf: [{$ref: '#/components/schemas/Cat'}, {$ref: '#/components/schemas/Dog'}], discriminator: {propertyName: kind}}}}
+
+#--- task5 y-c1-worse
+openapi: 3.1.0
+info: {title: t, version: "1"}
+components:
+  schemas:
+    E: {allOf: [{type: string, enum: [a, b]}]}
+    N: {oneOf: [{type: string, enum: [a, b]}, {type: 'null'}]}
+    L: {type: array, items: {type: string, enum: [a, b]}}
+    H: {type: object, properties: {x: {$ref: '#/components/schemas/E'}, y: {$ref: '#/components/schemas/E'}, n: {$ref: '#/components/schemas/N'}, m: {$ref: '#/components/schemas/N'}, l: {$ref: '#/components/schemas/L'}, l2: {$ref: '#/components/schemas/L'}}}
+
+#--- task5 y-union-alias-twice
+openapi: 3.1.0
+info: {title: t, version: "1"}
+components:
+  schemas:
+    U: {allOf: [{oneOf: [{type: object, properties: {a: {type: string}}}, {type: object, properties: {b: {type: string}}}]}]}
+    H: {type: object, properties: {x: {$ref: '#/components/schemas/U'}, y: {$ref: '#/components/schemas/U'}}}
+
+#--- task5 z-c1
+openapi: 3.1.0
+info: {title: t, version: "1"}
+components:
+  schemas:
+    L: {type: array, items: {type: string, enum: [p, q]}}
+    E: {allOf: [{type: string, enum: [a, b]}]}
+    H: {type: object, properties: {l: {$ref: '#/components/schemas/L'}, l2: {$ref: '#/components/schemas/L'}}}
+    G: {type: object, properties: {e: {$ref: '#/components/schemas/E'}, e2: {$ref: '#/components/schemas/E'}}}
+
+#--- task5 z-c1b
+openapi: 3.1.0
+info: {title: t, version: "1"}
+components:
+  schemas:
+    E: {allOf: [{type: string, enum: [a, b]}]}
+    G: {type: object, properties: {e: {$ref: '#/components/schemas/E'}, e2: {$ref: '#/components/schemas/E'}}}
+
+#--- task5 z-c1c
+openapi: 3.1.0
+info: {title: t, version: "1"}
+components:
+  schemas:
+    E: {allOf: [{type: object, properties: {a: {type: string, enum: [a, b]}}}]}
+    G: {type: object, properties: {e: {$ref: '#/components/schemas/E'}, e2: {$ref: '#/components/schemas/E'}}}
+
+#--- task5 w-merge-nested-enum
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Base: {type: object, properties: {addr: {type: object, properties: {kind: {type: string, enum: [home, work]}}}}}
+    Pet: {allOf: [{$ref: '#/components/schemas/Base'}, {type: object, properties: {tag: {type: string}}}]}
+
+#--- task5 w-merge-nested-enum-only-derived
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Base: {type: object, properties: {addr: {type: object, properties: {kind: {type: string, enum: [home, work]}}}}}
+    Pet: {allOf: [{$ref: '#/components/schemas/Base'}, {type: object, properties: {tag: {type: string}}}]}
+    Cat: {allOf: [{$ref: '#/components/schemas/Base'}, {type: object, properties: {lives: {type: integer}}}]}
+
+#--- task5 w-merge-nested-obj
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Base: {type: object, properties: {addr: {type: object, properties: {geo: {type: object, properties: {lat: {type: number}}}}}}}
+    Pet: {allOf: [{$ref: '#/components/schemas/Base'}, {type: object, properties: {tag: {type: string}}}]}
+
+#--- task5 v-single-derived
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Base: {type: object, properties: {addr: {type: object, properties: {kind: {type: string, enum: [home, work]}}}}}
+    Pet: {allOf: [{$ref: '#/components/schemas/Base'}, {type: object, properties: {tag: {type: string}}}]}
+
+#--- task5 v-base-direct-enum
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Base: {type: object, properties: {kind: {type: string, enum: [home, work]}}}
+    Pet: {allOf: [{$ref: '#/components/schemas/Base'}, {type: object, properties: {tag: {type: string}}}]}
+    Cat: {allOf: [{$ref: '#/components/schemas/Base'}, {type: object, properties: {lives: {type: integer}}}]}
+

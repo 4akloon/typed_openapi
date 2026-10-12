@@ -1,0 +1,2034 @@
+#--- task7 01 split basic 3.1
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Pet'}}}}}
+  /pets2:
+    post:
+      operationId: createPet
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        password: {type: string, writeOnly: true}
+
+
+#--- task7 02 split basic 3.0
+openapi: 3.0.3
+info: {title: t, version: "1"}
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Pet'}}}}}
+  /pets2:
+    post:
+      operationId: createPet
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        password: {type: string, writeOnly: true}
+
+
+#--- task7 03 response only
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        password: {type: string, writeOnly: true}
+
+
+#--- task7 04 request only
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /pets:
+    post:
+      operationId: createPet
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        password: {type: string, writeOnly: true}
+
+
+#--- task7 05 nested Order/Pet, arrays, maps
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /orders:
+    get:
+      operationId: listOrders
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Order'}}}}
+  /orders2:
+    post:
+      operationId: createOrder
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Order'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        password: {type: string, writeOnly: true}
+    Order:
+      type: object
+      properties:
+        total: {type: number}
+        pet: {$ref: '#/components/schemas/Pet'}
+        pets: {type: array, items: {$ref: '#/components/schemas/Pet'}}
+        byName: {type: object, additionalProperties: {$ref: '#/components/schemas/Pet'}}
+        matrix: {type: array, items: {type: array, items: {$ref: '#/components/schemas/Pet'}}}
+
+
+#--- task7 06 nested only response + request different
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /orders:
+    get:
+      operationId: listOrders
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Order'}}}}
+  /pets2:
+    post:
+      operationId: createPet
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        password: {type: string, writeOnly: true}
+    Order:
+      type: object
+      properties:
+        pet: {$ref: '#/components/schemas/Pet'}
+
+
+#--- task7 07 union variant splits
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /a:
+    get:
+      operationId: getA
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Owner'}}}}
+  /b:
+    post:
+      operationId: postB
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Owner'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        password: {type: string, writeOnly: true}
+    Cat:
+      type: object
+      properties: {lives: {type: integer}}
+    Owner:
+      oneOf: [{$ref: '#/components/schemas/Pet'}, {$ref: '#/components/schemas/Cat'}]
+      discriminator: {propertyName: kind}
+
+
+#--- task7 08 allOf part splits
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /a:
+    get:
+      operationId: getA
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Dog'}}}}
+  /b:
+    post:
+      operationId: postB
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Dog'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        password: {type: string, writeOnly: true}
+    Dog:
+      allOf:
+        - {$ref: '#/components/schemas/Pet'}
+        - type: object
+          properties: {bark: {type: boolean}}
+
+
+#--- task7 09 allOf part splits, both Pet and Dog used
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /a:
+    get:
+      operationId: getA
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Dog'}}}}
+  /b:
+    post:
+      operationId: postB
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Dog'}}}}
+      responses:
+        "204": {description: ok}
+  /c:
+    get:
+      operationId: getC
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+  /d:
+    post:
+      operationId: postD
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        password: {type: string, writeOnly: true}
+    Dog:
+      allOf:
+        - {$ref: '#/components/schemas/Pet'}
+        - type: object
+          properties: {bark: {type: boolean}}
+
+
+#--- task7 10 recursive split
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /a:
+    get:
+      operationId: getA
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Node'}}}}
+  /b:
+    post:
+      operationId: postB
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Node'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    Node:
+      type: object
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        children: {type: array, items: {$ref: '#/components/schemas/Node'}}
+        parent: {$ref: '#/components/schemas/Node'}
+
+
+#--- task7 11 mutual recursion split
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /a:
+    get:
+      operationId: getA
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/A'}}}}
+  /b:
+    post:
+      operationId: postB
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/A'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    A:
+      type: object
+      properties:
+        id: {type: integer, readOnly: true}
+        b: {$ref: '#/components/schemas/B'}
+    B:
+      type: object
+      properties:
+        a: {$ref: '#/components/schemas/A'}
+
+
+#--- task7 12 patch+response+post (Pet, PetInput, PetPatch)
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+  /pets2:
+    post:
+      operationId: createPet
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "204": {description: ok}
+  /pets/{id}:
+    patch:
+      operationId: patchPet
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        password: {type: string, writeOnly: true}
+        tag: {type: [string, 'null']}
+
+
+#--- task7 13 patch+response only (no post), readOnly + writeOnly
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+  /pets/{id}:
+    patch:
+      operationId: patchPet
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        password: {type: string, writeOnly: true}
+        tag: {type: [string, 'null']}
+
+
+#--- task7 14 patch only with readOnly
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /pets/{id}:
+    patch:
+      operationId: patchPet
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        password: {type: string, writeOnly: true}
+        tag: {type: [string, 'null']}
+
+
+#--- task7 15 recursive Node patch only
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /n/{id}:
+    patch:
+      operationId: patchNode
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Node'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    Node:
+      type: object
+      properties:
+        name: {type: [string, 'null']}
+        children: {type: array, items: {$ref: '#/components/schemas/Node'}}
+
+
+#--- task7 16 PUT vs PATCH same schema
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /n/{id}:
+    patch:
+      operationId: patchNode
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "204": {description: ok}
+  /n2/{id}:
+    put:
+      operationId: putNode
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        tag: {type: [string, 'null']}
+
+
+#--- task7 17 PUT+PATCH+GET with readOnly (no password)
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /n/{id}:
+    patch:
+      operationId: patchNode
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "204": {description: ok}
+  /n2/{id}:
+    put:
+      operationId: putNode
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        tag: {type: [string, 'null']}
+
+
+#--- task7 18 patch nested ref child (patch only parent)
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /n/{id}:
+    patch:
+      operationId: patchNode
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Owner'}}}}
+      responses:
+        "204": {description: ok}
+  /g:
+    get:
+      operationId: g
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+  /p:
+    post:
+      operationId: p
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        password: {type: string, writeOnly: true}
+    Owner:
+      type: object
+      properties:
+        pet: {$ref: '#/components/schemas/Pet'}
+        nick: {type: [string, 'null']}
+
+
+#--- task7 19 patch body also nested in another schema
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /n/{id}:
+    patch:
+      operationId: patchNode
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "204": {description: ok}
+  /g:
+    get:
+      operationId: g
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Owner'}}}}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        password: {type: string, writeOnly: true}
+    Owner:
+      type: object
+      properties:
+        pet: {$ref: '#/components/schemas/Pet'}
+
+
+#--- task7 20 inline nested object with readOnly
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /g:
+    get:
+      operationId: g
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+  /p:
+    post:
+      operationId: p
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        name: {type: string}
+        address:
+          type: object
+          properties:
+            id: {type: integer, readOnly: true}
+            street: {type: string}
+
+
+#--- task7 21 inline body with nested ref (3.0 readOnly via allOf)
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /g:
+    get:
+      operationId: g
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+  /p:
+    post:
+      operationId: p
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {type: object, properties: {pet: {$ref: '#/components/schemas/Pet'}}}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        password: {type: string, writeOnly: true}
+
+
+#--- task7 22 name collisions PetInput / PetPatch existing
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+  /pets2:
+    post:
+      operationId: createPet
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "204": {description: ok}
+  /pets/{id}:
+    patch:
+      operationId: patchPet
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "204": {description: ok}
+  /x:
+    get:
+      operationId: x
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/PetInput'}}}}
+  /y:
+    get:
+      operationId: y
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/PetPatch'}}}}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        password: {type: string, writeOnly: true}
+    PetInput:
+      type: object
+      properties: {a: {type: string}}
+    PetPatch:
+      type: object
+      properties: {b: {type: string}}
+
+
+#--- task7 23 custom suffixes suffix=
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+  /pets2:
+    post:
+      operationId: createPet
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "204": {description: ok}
+  /pets/{id}:
+    patch:
+      operationId: patchPet
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        password: {type: string, writeOnly: true}
+
+
+#--- task7 24 tri=optional
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /n/{id}:
+    patch:
+      operationId: patchNode
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/U'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    U:
+      type: object
+      required: [a]
+      properties:
+        a: {type: string}
+        b: {type: string}
+        c: {type: [string, 'null']}
+        d: {type: array, items: {type: string}}
+        e: {$ref: '#/components/schemas/E'}
+    E: {type: object, properties: {x: {type: string}}}
+
+
+#--- task7 25 tri=extension (patch + post + response)
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /n/{id}:
+    patch:
+      operationId: patchNode
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/U'}}}}
+      responses:
+        "204": {description: ok}
+  /g:
+    get:
+      operationId: g
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/U'}}}}
+  /p:
+    post:
+      operationId: p
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/U'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    U:
+      type: object
+      required: [a]
+      properties:
+        a: {type: string, x-typed-tri-state: true}
+        b: {type: [string, 'null'], x-typed-tri-state: true}
+        c: {type: [string, 'null']}
+
+
+#--- task7 26 override triState true on required; false on optional nullable
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /n/{id}:
+    patch:
+      operationId: patchNode
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/U'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    U:
+      type: object
+      required: [a]
+      properties:
+        a: {type: string}
+        c: {type: [string, 'null']}
+
+#OVERRIDES
+schemas:
+  U:
+    properties:
+      a: {triState: true}
+      c: {triState: false}
+
+#--- task7 27 override name Pet -> Animal with split
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+  /pets2:
+    post:
+      operationId: createPet
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "204": {description: ok}
+  /pets/{id}:
+    patch:
+      operationId: patchPet
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        password: {type: string, writeOnly: true}
+
+#OVERRIDES
+schemas:
+  Pet: {name: Animal}
+
+#--- task7 28 override exclude property writeOnly
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+  /pets2:
+    post:
+      operationId: createPet
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        password: {type: string, writeOnly: true}
+
+#OVERRIDES
+schemas:
+  Pet:
+    properties:
+      password: {exclude: true}
+
+#--- task7 29 patch triState on PATCH nullable $ref property + required nullable
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /n/{id}:
+    patch:
+      operationId: patchNode
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/U'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    U:
+      type: object
+      required: [r]
+      properties:
+        r: {type: [string, 'null']}
+        o: {anyOf: [{$ref: '#/components/schemas/E'}, {type: 'null'}]}
+        s: {$ref: '#/components/schemas/S'}
+    S: {type: [object, 'null'], properties: {x: {type: string}}}
+    E: {type: object, properties: {x: {type: string}}}
+
+
+#--- task7 30 patch json + multipart/other media; PATCH body array of Pet
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /n:
+    patch:
+      operationId: patchNode
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Pet'}}}}}
+      responses:
+        "204": {description: ok}
+  /g:
+    get:
+      operationId: g
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        tag: {type: [string, 'null']}
+
+
+#--- task7 31 default error schema in both dirs
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /g:
+    get:
+      operationId: g
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        password: {type: string, writeOnly: true}
+    Err:
+      type: object
+      properties: {id: {type: integer, readOnly: true}, m: {type: string}}
+
+
+#--- task7 32 patch body inline object
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /n/{id}:
+    patch:
+      operationId: patchNode
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {type: object, properties: {tag: {type: [string, 'null']}, pet: {$ref: '#/components/schemas/Pet'}}}}}}
+      responses:
+        "204": {description: ok}
+  /g:
+    get:
+      operationId: g
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+  /p:
+    post:
+      operationId: p
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        password: {type: string, writeOnly: true}
+
+
+#--- task7 33 query parameter with $ref schema + response
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /g:
+    get:
+      operationId: g
+      tags: [t]
+      parameters: [{name: f, in: query, schema: {$ref: '#/components/schemas/Pet'}}]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        password: {type: string, writeOnly: true}
+
+#--- task7 A patch body = allOf[$ref Pet] wrapper, Pet also POST/GET
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /g:
+    get:
+      operationId: g
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+  /p:
+    post:
+      operationId: p
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "204": {description: ok}
+  /n/{id}:
+    patch:
+      operationId: patchPet
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Pet'}]}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        tag: {type: [string, 'null']}
+        password: {type: string, writeOnly: true}
+
+
+#--- task7 B patch body = alias UpdatePet -> $ref Pet
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /g:
+    get:
+      operationId: g
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+  /p:
+    post:
+      operationId: p
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "204": {description: ok}
+  /n/{id}:
+    patch:
+      operationId: patchPet
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/UpdatePet'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        tag: {type: [string, 'null']}
+        password: {type: string, writeOnly: true}
+    UpdatePet: {$ref: '#/components/schemas/Pet'}
+
+
+#--- task7 C patch body anyOf [Pet, null]
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /g:
+    get:
+      operationId: g
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+  /p:
+    post:
+      operationId: p
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "204": {description: ok}
+  /n/{id}:
+    patch:
+      operationId: patchPet
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {anyOf: [{$ref: '#/components/schemas/Pet'}, {type: 'null'}]}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        tag: {type: [string, 'null']}
+        password: {type: string, writeOnly: true}
+
+
+#--- task7 C2 patch body allOf[$ref Pet] wrapper, Pet PATCH only
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /n/{id}:
+    patch:
+      operationId: patchPet
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/Pet'}]}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        tag: {type: [string, 'null']}
+        password: {type: string, writeOnly: true}
+
+
+#--- task7 D cycle caching: Y->X, X->Y,C ; order x first
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /a:
+    get:
+      operationId: a
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/X'}}}}
+  /b:
+    post:
+      operationId: b
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/X'}}}}
+      responses:
+        "204": {description: ok}
+  /c:
+    get:
+      operationId: c
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Y'}}}}
+  /d:
+    post:
+      operationId: d
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Y'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    X:
+      type: object
+      properties:
+        y: {$ref: '#/components/schemas/Y'}
+        c: {$ref: '#/components/schemas/C'}
+    Y:
+      type: object
+      properties:
+        x: {$ref: '#/components/schemas/X'}
+    C:
+      type: object
+      properties: {id: {type: integer, readOnly: true}}
+
+
+#--- task7 D2 cycle: only Y used (both directions)
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /c:
+    get:
+      operationId: c
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Y'}}}}
+  /d:
+    post:
+      operationId: d
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Y'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    X:
+      type: object
+      properties:
+        y: {$ref: '#/components/schemas/Y'}
+        c: {$ref: '#/components/schemas/C'}
+    Y:
+      type: object
+      properties:
+        x: {$ref: '#/components/schemas/X'}
+    C:
+      type: object
+      properties: {id: {type: integer, readOnly: true}}
+
+
+#--- task7 E extension, response-only U
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /g:
+    get:
+      operationId: g
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/U'}}}}
+
+components:
+  schemas:
+    U:
+      type: object
+      properties:
+        b: {type: [string, 'null'], x-typed-tri-state: true}
+
+
+#--- task7 F override triState on response-only
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /g:
+    get:
+      operationId: g
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/U'}}}}
+
+components:
+  schemas:
+    U:
+      type: object
+      properties:
+        b: {type: [string, 'null']}
+
+#OVERRIDES
+schemas:
+  U:
+    properties:
+      b: {triState: true}
+
+#--- task7 G PATCH body union also POST
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /p:
+    post:
+      operationId: p
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Un'}}}}
+      responses:
+        "204": {description: ok}
+  /n/{id}:
+    patch:
+      operationId: patchPet
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Un'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    Un:
+      oneOf: [{$ref: '#/components/schemas/Cat'}, {$ref: '#/components/schemas/Dog'}]
+      discriminator: {propertyName: kind, mapping: {c: '#/components/schemas/Cat', d: '#/components/schemas/Dog'}}
+    Cat: {type: object, properties: {id: {type: integer, readOnly: true}, n: {type: [string, 'null']}}}
+    Dog: {type: object, properties: {n: {type: [string, 'null']}}}
+
+
+#--- task7 H union variant splits - discriminator preserved, both dirs
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /p:
+    post:
+      operationId: p
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Un'}}}}
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Un'}}}}
+
+components:
+  schemas:
+    Un:
+      oneOf: [{$ref: '#/components/schemas/Cat'}, {$ref: '#/components/schemas/Dog'}]
+      discriminator: {propertyName: kind, mapping: {c: '#/components/schemas/Cat', d: '#/components/schemas/Dog'}}
+    Cat: {type: object, properties: {id: {type: integer, readOnly: true}, n: {type: [string, 'null']}}}
+    Dog: {type: object, properties: {n: {type: [string, 'null']}}}
+
+
+#--- task7 I readOnly via $ref sibling / ref to readOnly schema / allOf inline part
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /p:
+    post:
+      operationId: p
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        a: {$ref: '#/components/schemas/Id', readOnly: true}
+        b: {$ref: '#/components/schemas/RoId'}
+        c: {type: string}
+    Id: {type: integer}
+    RoId: {type: integer, readOnly: true}
+
+
+#--- task7 I3 readOnly in 3.0 via allOf wrapper
+openapi: 3.0.3
+info: {title: t, version: "1"}
+paths:
+  /p:
+    post:
+      operationId: p
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        a:
+          allOf: [{$ref: '#/components/schemas/Id'}]
+          readOnly: true
+        c: {type: string}
+    Id: {type: integer}
+
+
+#--- task7 J allOf inline part readOnly
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /p:
+    post:
+      operationId: p
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Dog'}}}}
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Dog'}}}}
+
+components:
+  schemas:
+    Dog:
+      allOf:
+        - type: object
+          properties: {id: {type: integer, readOnly: true}}
+        - type: object
+          properties: {bark: {type: boolean}}
+
+
+#--- task7 K 3.0 PATCH nullable tri-state
+openapi: 3.0.3
+info: {title: t, version: "1"}
+paths:
+  /n/{id}:
+    patch:
+      operationId: patchPet
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/U'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    U:
+      type: object
+      properties:
+        b: {type: string, nullable: true}
+        c: {type: string}
+
+
+#--- task7 L two PATCH bodies share schema, nothing else
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /n/{id}:
+    patch:
+      operationId: p1
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/U'}}}}
+      responses:
+        "204": {description: ok}
+  /m/{id}:
+    patch:
+      operationId: p2
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/U'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    U:
+      type: object
+      properties:
+        b: {type: [string, 'null']}
+
+
+#--- task7 M PATCH body schema referenced from other PATCH body schema
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /n/{id}:
+    patch:
+      operationId: p1
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/U'}}}}
+      responses:
+        "204": {description: ok}
+  /m/{id}:
+    patch:
+      operationId: p2
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/V'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    U:
+      type: object
+      properties:
+        b: {type: [string, 'null']}
+    V:
+      type: object
+      properties:
+        u: {$ref: '#/components/schemas/U'}
+        n: {type: [string, 'null']}
+
+
+#--- task7 N PATCH body with readOnly nested ref where nested also in GET
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /g:
+    get:
+      operationId: g
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Owner'}}}}
+  /n/{id}:
+    patch:
+      operationId: p1
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Owner'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    Owner:
+      type: object
+      properties:
+        id: {type: integer, readOnly: true}
+        pet: {$ref: '#/components/schemas/Pet'}
+    Pet:
+      type: object
+      properties:
+        id: {type: integer, readOnly: true}
+        n: {type: [string, 'null']}
+
+
+#--- task7 O name collision: PetPatch from a different schema + custom suffix equals existing Pet2
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /g:
+    get:
+      operationId: g
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+  /p:
+    post:
+      operationId: p
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "204": {description: ok}
+  /n/{id}:
+    patch:
+      operationId: n
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "204": {description: ok}
+  /q:
+    get:
+      operationId: q
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/PetPatchInput'}}}}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        tag: {type: [string, 'null']}
+        password: {type: string, writeOnly: true}
+    PetPatchInput: {type: object, properties: {a: {type: string}}}
+
+
+#--- task7 P override name PetInput on Pet (explicit) -> suffix applied again?
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /g:
+    get:
+      operationId: g
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+  /p:
+    post:
+      operationId: p
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        tag: {type: [string, 'null']}
+        password: {type: string, writeOnly: true}
+
+#OVERRIDES
+schemas:
+  Pet: {name: PetInput}
+
+#--- task7 Q property name suffix inline enum in split
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /g:
+    get:
+      operationId: g
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+  /p:
+    post:
+      operationId: p
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        id: {type: integer, readOnly: true}
+        kind: {type: string, enum: [a, b]}
+        pw: {type: string, writeOnly: true, enum: [x, y]}
+
+
+#--- task7 R array PATCH item and Map
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /n:
+    patch:
+      operationId: n
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {type: object, additionalProperties: {$ref: '#/components/schemas/Pet'}}}}}
+      responses:
+        "204": {description: ok}
+  /g:
+    get:
+      operationId: g
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        tag: {type: [string, 'null']}
+        password: {type: string, writeOnly: true}
+
+#--- task7 E tri=extension response-only U
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /g:
+    get:
+      operationId: g
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/U'}}}}
+
+components:
+  schemas:
+    U:
+      type: object
+      properties:
+        b: {type: [string, 'null'], x-typed-tri-state: true}
+
+
+#--- task7 E2 tri=extension POST+PATCH+GET U
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /g:
+    get:
+      operationId: g
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/U'}}}}
+  /p:
+    post:
+      operationId: p
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/U'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    U:
+      type: object
+      properties:
+        b: {type: [string, 'null'], x-typed-tri-state: true}
+
+
+#--- task7 E3 tri=extension x-typed-tri-state: 'true' string / false
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /p:
+    post:
+      operationId: p
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/U'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    U:
+      type: object
+      properties:
+        a: {type: [string, 'null'], x-typed-tri-state: "true"}
+        b: {type: [string, 'null'], x-typed-tri-state: false}
+        c: {$ref: '#/components/schemas/S', x-typed-tri-state: true}
+    S: {type: string}
+
+
+#--- task7 H2 union disc values both dirs
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /p:
+    post:
+      operationId: p
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Un'}}}}
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Un'}}}}
+
+components:
+  schemas:
+    Un:
+      oneOf: [{$ref: '#/components/schemas/Cat'}, {$ref: '#/components/schemas/Dog'}]
+      discriminator: {propertyName: kind, mapping: {c: '#/components/schemas/Cat', d: '#/components/schemas/Dog'}}
+    Cat: {type: object, properties: {id: {type: integer, readOnly: true}, n: {type: [string, 'null']}}}
+    Dog: {type: object, properties: {n: {type: [string, 'null']}}}
+
+
+#--- task7 S err= default error schema in both
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /g:
+    get:
+      operationId: g
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Err'}}}}
+  /p:
+    post:
+      operationId: p
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Err'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    Err:
+      type: object
+      properties: {id: {type: integer, readOnly: true}, m: {type: string}}
+
+
+#--- task7 S2 err= only error schema, also POST body of same
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /p:
+    post:
+      operationId: p
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Err'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    Err:
+      type: object
+      properties: {id: {type: integer, readOnly: true}, m: {type: string}}
+
+
+#--- task7 T patch body inline with readOnly field
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /n/{id}:
+    patch:
+      operationId: n
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {type: object, properties: {id: {type: integer, readOnly: true}, n: {type: [string, 'null']}}}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+
+
+#--- task7 U patch body: Pet recursion via property parent: Node with readOnly; also GET
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /g:
+    get:
+      operationId: g
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Node'}}}}
+  /n/{id}:
+    patch:
+      operationId: n
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Node'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    Node:
+      type: object
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: [string, 'null']}
+        parent: {$ref: '#/components/schemas/Node'}
+        children: {type: array, items: {$ref: '#/components/schemas/Node'}}
+
+
+#--- task7 V patch+post+get recursive Node
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /g:
+    get:
+      operationId: g
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Node'}}}}
+  /p:
+    post:
+      operationId: p
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Node'}}}}
+      responses:
+        "204": {description: ok}
+  /n/{id}:
+    patch:
+      operationId: n
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Node'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    Node:
+      type: object
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: [string, 'null']}
+        parent: {$ref: '#/components/schemas/Node'}
+        children: {type: array, items: {$ref: '#/components/schemas/Node'}}
+
+
+#--- task7 W custom suffix collision: input_suffix generates same name for two schemas (Pet+Input vs PetInput existing) suffix=
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /g:
+    get:
+      operationId: g
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+  /p:
+    post:
+      operationId: p
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "204": {description: ok}
+  /q:
+    get:
+      operationId: q
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/PetReq'}}}}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      properties: {id: {type: integer, readOnly: true}, n: {type: string}}
+    PetReq: {type: object, properties: {a: {type: string}}}
+
+#--- task7 X1 patch body boolean schema true / no schema / requestBody $ref
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /a:
+    patch:
+      operationId: a
+      requestBody: {content: {application/json: {schema: true}}}
+      responses: {"204": {description: ok}}
+  /b:
+    patch:
+      operationId: b
+      requestBody: {$ref: '#/components/requestBodies/RB'}
+      responses: {"204": {description: ok}}
+  /c:
+    patch:
+      operationId: c
+      requestBody: {content: {application/json: {}}}
+      responses: {"204": {description: ok}}
+  /d:
+    patch:
+      operationId: d
+      requestBody: {content: {application/merge-patch+json: {schema: {$ref: '#/components/schemas/U'}}, application/json: {schema: {$ref: '#/components/schemas/V'}}}}
+      responses: {"200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/U'}}}}}
+components:
+  requestBodies:
+    RB: {content: {application/json: {schema: {$ref: '#/components/schemas/U'}}}}
+  schemas:
+    U: {type: object, properties: {x: {type: [string, 'null']}, id: {type: integer, readOnly: true}}}
+    V: {type: object, properties: {y: {type: [string, 'null']}}}
+
+#--- task7 X2 broken refs/empty schemas
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /a:
+    patch:
+      operationId: a
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Missing'}}}}
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Missing2'}}}}
+
+components:
+  schemas:
+    Z: {}
+
+
+#--- task7 X3 property ref to non-object / cyc alias
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /a:
+    post:
+      operationId: a
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/A'}}}}
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/A'}}}}
+
+components:
+  schemas:
+    A:
+      type: object
+      properties:
+        id: {type: integer, readOnly: true}
+        l: {$ref: '#/components/schemas/L'}
+    L: {type: array, items: {$ref: '#/components/schemas/L'}}
+
+
+#--- task7 X4 PATCH only, schema is array of Node recursion
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /a:
+    patch:
+      operationId: a
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/N'}}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    N:
+      type: object
+      properties:
+        n: {type: [string, 'null']}
+        kids: {type: array, items: {$ref: '#/components/schemas/N'}}
+
+#--- task7 Z excluded only directional prop
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /g:
+    get:
+      operationId: g
+      tags: [t]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+  /p:
+    post:
+      operationId: p
+      tags: [t]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "204": {description: ok}
+
+components:
+  schemas:
+    Pet:
+      type: object
+      properties: {id: {type: integer, readOnly: true}, n: {type: string}}
+
+#OVERRIDES
+schemas:
+  Pet:
+    properties:
+      id: {exclude: true}
