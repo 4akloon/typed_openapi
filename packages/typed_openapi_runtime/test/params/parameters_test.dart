@@ -22,7 +22,6 @@ void main() {
     });
 
     test('label', () {
-      expect(path(.label, false, empty), '.');
       expect(path(.label, false, string), '.blue');
       expect(path(.label, false, array), '.blue,black,brown');
       expect(path(.label, true, array), '.blue.black.brown');
@@ -32,6 +31,7 @@ void main() {
 
     test('matrix', () {
       expect(path(.matrix, false, empty), ';color');
+      expect(path(.matrix, true, empty), ';color');
       expect(path(.matrix, false, string), ';color=blue');
       expect(path(.matrix, false, array), ';color=blue,black,brown');
       expect(path(.matrix, true, array), ';color=blue;color=black;color=brown');
@@ -69,8 +69,97 @@ void main() {
           }
         }
       }
-      expect(path(.simple, false, '...'), '...');
       expect(path(.simple, false, 'a.b'), 'a.b');
+    });
+
+    test('an empty or all-dot expansion would drop or climb a segment', () {
+      // The expansions of the OAS examples for an empty value: '' and '.'
+      // are not path segments (Dio collapses `//` and drops `.`).
+      final cases = <String, PathParameter>{
+        'simple empty': const PathParameter('id', ''),
+        'simple [empty]': const PathParameter('id', ['']),
+        'simple no items': const PathParameter('id', <String>[]),
+        'simple null': const PathParameter('id', null),
+        'simple empty map': const PathParameter('id', <String, Object?>{}),
+        'label empty': const PathParameter('id', '', style: .label),
+        'label [empty]': const PathParameter('id', [''], style: .label),
+        'label [empty, empty] exploded': const PathParameter(
+          'id',
+          ['', ''],
+          style: .label,
+          explode: true,
+        ),
+        'label [empty, empty, empty] exploded': const PathParameter(
+          'id',
+          ['', '', ''],
+          style: .label,
+          explode: true,
+        ),
+        'label no items': const PathParameter('id', <String>[], style: .label),
+        'label null': const PathParameter('id', null, style: .label),
+        'matrix null': const PathParameter('id', null, style: .matrix),
+        'matrix no items': const PathParameter(
+          'id',
+          <String>[],
+          style: .matrix,
+        ),
+        'simple three dots': const PathParameter('id', '...'),
+      };
+      for (final MapEntry(key: label, value: parameter) in cases.entries) {
+        expect(
+          parameter.encode,
+          throwsA(
+            isA<ArgumentError>().having(
+              (e) => e.message,
+              'message',
+              allOf(
+                contains('would change the request path'),
+                anyOf(
+                  contains('cannot be empty'),
+                  contains('cannot be only dots'),
+                ),
+              ),
+            ),
+          ),
+          reason: label,
+        );
+      }
+    });
+
+    test('valid neighbours of the rejected values', () {
+      expect(const PathParameter('id', '.a').encode(), '.a');
+      expect(const PathParameter('id', 'a.').encode(), 'a.');
+      expect(const PathParameter('id', 'a..b').encode(), 'a..b');
+      expect(const PathParameter('id', ' ').encode(), '%20');
+      expect(const PathParameter('id', ['', '']).encode(), ',');
+      expect(
+        const PathParameter('id', ['a', 'b'], style: .label).encode(),
+        '.a,b',
+      );
+      expect(
+        const PathParameter(
+          'id',
+          ['a', 'b'],
+          style: .label,
+          explode: true,
+        ).encode(),
+        '.a.b',
+      );
+      expect(
+        const PathParameter('id', ['', ''], style: .label).encode(),
+        '.,',
+      );
+      expect(const PathParameter('id', '', style: .matrix).encode(), ';id');
+      expect(
+        const PathParameter(
+          'id',
+          ['', ''],
+          style: .matrix,
+          explode: true,
+        ).encode(),
+        ';id;id',
+      );
+      expect(const PathParameter('id', 0).encode(), '0');
     });
 
     test('matrix keeps an empty item or value without "="', () {
@@ -78,14 +167,6 @@ void main() {
       expect(path(.matrix, true, const {'R': '', 'G': 1}), ';R;G=1');
       expect(path(.matrix, false, const ['', 'x']), ';color=,x');
       expect(path(.simple, true, const {'R': '', 'G': 1}), 'R=,G=1');
-    });
-
-    test('undefined values expand to nothing', () {
-      for (final style in PathStyle.values) {
-        expect(path(style, false, null), '');
-        expect(path(style, true, const <String>[]), '');
-        expect(path(style, false, const <String, Object?>{}), '');
-      }
     });
   });
 

@@ -31,10 +31,9 @@ enum QueryStyle {
 /// A path parameter: its value replaces `{name}` in the path template.
 ///
 /// Values are the JSON form of the parameter (`toJson` applied): a scalar, a
-/// list or a string-keyed map. `null` and empty lists and maps are
-/// undefined and expand to `''`. Every character but the unreserved ones is
-/// percent-encoded, so a value cannot add path segments; a value that is
-/// exactly `.` or `..` is rejected, see [encode].
+/// list or a string-keyed map. Every character but the unreserved ones is
+/// percent-encoded, so a value cannot add path segments. A value that would
+/// remove or climb a path segment is rejected, see [encode].
 final class PathParameter {
   /// Creates a path parameter; OAS defaults are `simple` without explode.
   const PathParameter(
@@ -58,39 +57,21 @@ final class PathParameter {
 
   /// The text that replaces `{name}`.
   ///
-  /// Throws [ArgumentError] when a scalar, item or property is exactly `.` or
-  /// `..`: a client normalizes such a path segment away, which would change
-  /// the request path, and percent-encoding does not help.
+  /// Throws [ArgumentError] when the value would change the request path,
+  /// because a client drops an empty path segment (`//`) and normalizes `.`
+  /// and `..` away, and percent-encoding does not help:
+  ///
+  /// - the expansion is empty (`''`, `null`, an empty list or map, or a list
+  ///   of one empty string with the `simple` style);
+  /// - the expansion consists only of `.` characters (`.`, `..`: the `label`
+  ///   style of `''`, or of two empty strings with explode);
+  /// - a scalar, an item, a key or a property value is exactly `.` or `..`.
+  ///
+  /// Neighbours are valid: `.a`, `a..b`, `.a.b` (`label` of `a` and `b`) and
+  /// `;id` (`matrix` of `''`).
   String encode() {
     final value = ParameterValue.of(this.value, kind: style.name);
-    _rejectDotSegments(value);
-    return switch (style) {
-      .simple => value.expand(
-        name,
-        encoder: .unreserved,
-        explode: explode,
-        named: false,
-      ),
-      .label => value.expand(
-        name,
-        encoder: .unreserved,
-        explode: explode,
-        named: false,
-        first: '.',
-        separator: '.',
-      ),
-      .matrix => value.expand(
-        name,
-        encoder: .unreserved,
-        explode: explode,
-        named: true,
-        first: ';',
-        separator: ';',
-      ),
-    };
-  }
-
-  void _rejectDotSegments(ParameterValue value) {
+    final expansion = _expand(value);
     final texts = switch (value) {
       UndefinedValue() => const <String>[],
       ScalarValue(:final text) => [text],
@@ -99,17 +80,50 @@ final class PathParameter {
         for (final (key, text) in pairs) ...[key, text],
       ],
     };
-    for (final text in texts) {
-      if (text == '.' || text == '..') {
-        throw ArgumentError.value(
-          this.value,
-          name,
-          'A path parameter value cannot be a dot segment ("$text"): it '
-          'would change the request path',
-        );
-      }
+    final dots = texts.where((text) => text == '.' || text == '..').firstOrNull;
+    final problem = switch (expansion) {
+      _ when dots != null => 'cannot be a dot segment ("$dots")',
+      '' => 'cannot be empty',
+      _ when _onlyDots.hasMatch(expansion) =>
+        'cannot be only dots ("$expansion")',
+      _ => null,
+    };
+    if (problem != null) {
+      throw ArgumentError.value(
+        this.value,
+        name,
+        'A path parameter value $problem: it would change the request path',
+      );
     }
+    return expansion;
   }
+
+  static final RegExp _onlyDots = RegExp(r'^\.+$');
+
+  String _expand(ParameterValue value) => switch (style) {
+    .simple => value.expand(
+      name,
+      encoder: .unreserved,
+      explode: explode,
+      named: false,
+    ),
+    .label => value.expand(
+      name,
+      encoder: .unreserved,
+      explode: explode,
+      named: false,
+      first: '.',
+      separator: '.',
+    ),
+    .matrix => value.expand(
+      name,
+      encoder: .unreserved,
+      explode: explode,
+      named: true,
+      first: ';',
+      separator: ';',
+    ),
+  };
 }
 
 /// A query parameter.
