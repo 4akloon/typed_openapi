@@ -26,7 +26,7 @@ final class TypedOpenApiCli {
     _runner
       ..addCommand(CheckCommand(out ?? stdout, paths))
       ..addCommand(BaselineCommand(out ?? stdout, paths))
-      ..addCommand(IrCommand(out ?? stdout, paths));
+      ..addCommand(IrCommand(out ?? stdout, _err, paths));
   }
 
   final CommandRunner<int> _runner;

@@ -8,17 +8,20 @@ import '../config/config_loader.dart';
 import '../diagnostics/diagnostic_bag.dart';
 import '../diagnostics/display_paths.dart';
 import '../diagnostics/reporters.dart';
+import 'check_command.dart';
 
 /// `typed_openapi ir`: prints the semantic IR of clients as JSON, to see
 /// the names and types the generator will emit and to write overrides
 /// before code generation exists.
 ///
-/// The command is hidden: its output is for inspection and may change in
-/// any release.
+/// The JSON is alone on stdout. The diagnostics of the run, as `check` finds
+/// them, go to stderr as text, and the exit code is the one `check` gives.
+/// The command is hidden: its output is for inspection and may change in any
+/// release.
 final class IrCommand extends Command<int> {
-  /// Creates the command; the IR is written to [_out] and files are named
-  /// as [_paths] does.
-  IrCommand(this._out, [this._paths = const DisplayPaths()]) {
+  /// Creates the command; the IR is written to [_out], diagnostics to
+  /// [_err], and files are named as [_paths] does.
+  IrCommand(this._out, this._err, [this._paths = const DisplayPaths()]) {
     argParser.addOption(
       'config',
       abbr: 'c',
@@ -28,6 +31,7 @@ final class IrCommand extends Command<int> {
   }
 
   final StringSink _out;
+  final StringSink _err;
   final DisplayPaths _paths;
 
   @override
@@ -52,7 +56,7 @@ final class IrCommand extends Command<int> {
       _paths,
     ).load(results.option('config')!);
     if (config == null) {
-      _out.writeln(const TextReporter().format(diagnostics));
+      _err.writeln(const TextReporter().format(diagnostics));
       return ExitCode.config.code;
     }
     final only = results.rest.toSet();
@@ -62,15 +66,25 @@ final class IrCommand extends Command<int> {
         'Unknown client: ${(unknown.toList()..sort()).join(', ')}.',
       );
     }
-    final checks = SpecChecker(
-      diagnostics,
-      _paths,
-    ).checkClients(config, only: only);
+    final checks = SpecChecker(diagnostics, _paths).check(config, only: only);
     final json = {
       for (final ClientCheck(:client, :ir, :irJson) in checks)
         client.name: ir == null || irJson == null ? null : irJson.toJson(ir),
     };
     _out.writeln(const JsonEncoder.withIndent('  ').convert(json));
-    return json.values.contains(null) ? 1 : ExitCode.success.code;
+    if (diagnostics.all.isNotEmpty) {
+      _err.writeln(const TextReporter().format(diagnostics));
+    }
+    for (final MapEntry(:key, :value) in json.entries) {
+      if (value == null) {
+        _err.writeln(
+          'Client $key has no IR: its spec could not be read (see the '
+          'errors above).',
+        );
+      }
+    }
+    return json.values.contains(null) || diagnostics.hasErrors
+        ? CheckCommand.exitHasErrors
+        : ExitCode.success.code;
   }
 }

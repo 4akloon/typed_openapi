@@ -641,4 +641,117 @@ paths:
     final (_, help, _) = await run(['help']);
     expect(help, isNot(contains(' ir ')));
   });
+
+  group('ir diagnostics', () {
+    const spec = '''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /a: {get: {operationId: same, tags: [a], responses: {"204": {description: ok}}}}
+  /b: {get: {operationId: same, tags: [b], responses: {"204": {description: ok}}}}
+''';
+
+    test('are printed to stderr and the JSON stays alone on stdout', () async {
+      final dir = TempDir();
+      dir.write('api.yaml', spec.replaceAll('tags: [b]', 'tags: [a]'));
+      final path = dir.write('typed_openapi.yaml', '''
+clients:
+  api: {input: api.yaml, output: lib/api, naming: {group: Api}}
+''');
+      final (code, out, err) = await run([
+        'ir',
+        '-c',
+        path,
+      ], workingDirectory: dir.path);
+      // The invalid config and the duplicate operationId are errors, as in
+      // `check`.
+      expect(code, 1);
+      expect(jsonDecode(out), contains('api'));
+      expect(err, contains('error TOA902 config-invalid'));
+      expect(err, contains('error TOA504 duplicate-operation-id'));
+      expect(err, contains('errors: 2, warnings: 0, infos: 1'));
+      final (checkCode, checkOut, _) = await run([
+        'check',
+        '-c',
+        path,
+      ], workingDirectory: dir.path);
+      expect(checkCode, code);
+      expect(checkOut, err);
+    });
+
+    test(
+      'give the exit code check gives, levels and baseline included',
+      () async {
+        final dir = TempDir();
+        dir.write('api.yaml', spec);
+        final path = dir.write('typed_openapi.yaml', '''
+clients:
+  api:
+    input: api.yaml
+    output: lib/api
+    severity: {duplicate-operation-id: warning}
+''');
+        final (code, out, err) = await run([
+          'ir',
+          '-c',
+          path,
+        ], workingDirectory: dir.path);
+        expect(code, 0);
+        expect(jsonDecode(out), contains('api'));
+        expect(err, contains('warning TOA504 duplicate-operation-id'));
+      },
+    );
+
+    test('a clean run prints nothing to stderr', () async {
+      final dir = TempDir();
+      dir.write(
+        'api.yaml',
+        spec.replaceAll('same', 'one').replaceFirst('one', 'two'),
+      );
+      final path = dir.write(
+        'typed_openapi.yaml',
+        'clients:\n  api: {input: api.yaml, output: lib/api}\n',
+      );
+      final (code, out, err) = await run([
+        'ir',
+        '-c',
+        path,
+      ], workingDirectory: dir.path);
+      expect(code, 0);
+      expect(jsonDecode(out), contains('api'));
+      expect(err, isEmpty);
+    });
+
+    test('an unreadable spec says so on stderr', () async {
+      final dir = TempDir();
+      final path = dir.write(
+        'typed_openapi.yaml',
+        'clients:\n  broken: {input: missing.yaml, output: lib/b}\n',
+      );
+      final (code, out, err) = await run([
+        'ir',
+        '-c',
+        path,
+      ], workingDirectory: dir.path);
+      expect(code, 1);
+      expect(jsonDecode(out), {'broken': null});
+      expect(err, contains('error TOA004'));
+      expect(err, contains('Client broken has no IR'));
+    });
+
+    test(
+      'a config that cannot be loaded goes to stderr, stdout is empty',
+      () async {
+        final dir = TempDir();
+        final (code, out, err) = await run([
+          'ir',
+          '-c',
+          'missing.yaml',
+        ], workingDirectory: dir.path);
+        expect(code, 78);
+        expect(out, isEmpty);
+        expect(err, contains('TOA901'));
+      },
+    );
+  });
 }

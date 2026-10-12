@@ -75,7 +75,8 @@ final class SpecChecker {
   final DisplayPaths _paths;
 
   /// Checks the spec of every client in [config] and reports what each
-  /// client's baseline does not accept.
+  /// client's baseline does not accept; returns what each client found, as
+  /// [checkClients] does.
   ///
   /// See [checkClients] for how specs are checked. A client with a
   /// `baseline` reports only the diagnostics its baseline does not accept;
@@ -87,12 +88,13 @@ final class SpecChecker {
   /// error says what is wrong. [strictBaseline] applies after the client's
   /// levels, so it makes a stale entry an error even if the config lowered or
   /// turned off `baseline-entry-stale`.
-  void check(
+  List<ClientCheck> check(
     ProjectConfig config, {
     Set<String> only = const {},
     bool strictBaseline = false,
   }) {
-    for (final result in checkClients(config, only: only)) {
+    final checks = checkClients(config, only: only);
+    for (final result in checks) {
       final client = result.client;
       final path = client.baseline;
       if (path == null) {
@@ -140,6 +142,7 @@ final class SpecChecker {
         if (reported != null) _diagnostics.add(reported);
       }
     }
+    return checks;
   }
 
   /// Checks the spec of every client in [config]; returns what each client
