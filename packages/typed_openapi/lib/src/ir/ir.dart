@@ -120,6 +120,7 @@ final class FieldIr {
     this.constValue,
     this.constraints = const ConstraintsIr(),
     this.sensitive = false,
+    this.knownValues = const [],
   });
 
   /// The Dart name.
@@ -167,6 +168,11 @@ final class FieldIr {
   /// Whether the value is a secret: the property is `writeOnly` or has
   /// `format: password`. `toString` does not print it.
   final bool sensitive;
+
+  /// The values of the enum branches of the property's schema that a union
+  /// left out because another branch has them (TOA455), in order and once
+  /// each; the field's doc comment lists them.
+  final List<Object?> knownValues;
 
   /// The type of the field (R6.1): `Patch<T>?` for a tri-state field, the
   /// value type for a required one, and a nullable value type otherwise.

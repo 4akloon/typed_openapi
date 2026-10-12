@@ -76,7 +76,9 @@ $head    Zero:
 $head    Dated:
       anyOf: [{type: string, format: date-time}, {enum: ['']}]
     Short:
-      anyOf: [{type: string, maxLength: 3}, {enum: ['']}]
+      anyOf: [{type: string, minLength: 1}, {enum: ['']}]
+    Pattern:
+      anyOf: [{type: string, pattern: '^a'}, {enum: [a]}]
     Id:
       anyOf: [{type: string}, {type: integer, enum: [1]}]
     Rate:
@@ -85,14 +87,17 @@ $head    Dated:
     final (ir, types) = mapComponents(fixture, [
       'Dated',
       'Short',
+      'Pattern',
       'Id',
       'Rate',
     ]);
     expect(types['Dated'], 'JsonValue');
     expect(types['Short'], 'JsonValue');
+    expect(types['Pattern'], 'JsonValue');
     expect(fixture.codes, [
       (DiagnosticCode.unionUndiscriminated, '#/components/schemas/Dated'),
       (DiagnosticCode.unionUndiscriminated, '#/components/schemas/Short'),
+      (DiagnosticCode.unionUndiscriminated, '#/components/schemas/Pattern'),
     ]);
     expect(union(ir, 'Id').dispatch, UnionDispatch.jsonType);
     expect(union(ir, 'Id').variants.map((v) => v.name), [
@@ -143,6 +148,149 @@ $head    Maybe:
         '#/components/schemas/Maybe/anyOf/1',
       ),
     ]);
+  });
+
+  test('a constraint that every enum value satisfies still subsumes it', () {
+    final fixture = IrFixture('''
+$head    Name:
+      anyOf: [{type: string, maxLength: 5000}, {type: string, enum: ['']}]
+    Pin:
+      anyOf: [{type: string, minLength: 0, maxLength: 4}, {const: abc}]
+    Level:
+      anyOf:
+        - {type: integer, minimum: 0, maximum: 10, multipleOf: 5}
+        - {type: integer, enum: [0, 5, 10]}
+    Open:
+      anyOf:
+        - {type: integer, minimum: 0, exclusiveMinimum: true}
+        - {type: integer, enum: [1]}
+    Fine:
+      anyOf:
+        - {type: number, exclusiveMaximum: 2.5}
+        - {type: integer, enum: [1, 2]}
+''');
+    final (_, types) = mapComponents(fixture, [
+      'Name',
+      'Pin',
+      'Level',
+      'Open',
+      'Fine',
+    ]);
+    expect(types, {
+      'Name': 'String',
+      'Pin': 'String',
+      'Level': 'int',
+      'Open': 'int',
+      'Fine': 'num',
+    });
+    expect(fixture.codes, hasLength(5));
+  });
+
+  test('an enum value that breaks a constraint keeps the union', () {
+    final fixture = IrFixture('''
+$head    Name:
+      anyOf: [{type: string, maxLength: 3}, {enum: ['', abcd]}]
+    Level:
+      anyOf:
+        - {type: integer, minimum: 1}
+        - {type: integer, enum: [0, 1]}
+    Open:
+      anyOf:
+        - {type: integer, minimum: 1, exclusiveMinimum: true}
+        - {type: integer, enum: [1]}
+    Step:
+      anyOf: [{type: integer, multipleOf: 5}, {type: integer, enum: [5, 7]}]
+''');
+    final (_, types) = mapComponents(fixture, [
+      'Name',
+      'Level',
+      'Open',
+      'Step',
+    ]);
+    expect(types, {
+      'Name': 'JsonValue',
+      'Level': 'JsonValue',
+      'Open': 'JsonValue',
+      'Step': 'JsonValue',
+    });
+    expect(
+      fixture.codes.where((c) => c.$1 == DiagnosticCode.unionBranchSubsumed),
+      isEmpty,
+    );
+  });
+
+  test('a reference to a plain scalar is the plain branch', () {
+    final fixture = IrFixture('''
+$head    Slug: {type: string, maxLength: 20}
+    Count: {type: integer}
+    Code: {type: string, format: uuid}
+    Tag: {type: string, enum: [a]}
+    Short: {type: string, maxLength: 1}
+    Name:
+      anyOf: [\$ref: '#/components/schemas/Slug', {enum: ['']}]
+    Number:
+      oneOf: [\$ref: '#/components/schemas/Count', {const: 3}]
+    Formatted:
+      anyOf: [\$ref: '#/components/schemas/Code', {enum: ['']}]
+    Listed:
+      anyOf: [\$ref: '#/components/schemas/Tag', {enum: ['']}]
+    Tight:
+      anyOf: [\$ref: '#/components/schemas/Short', {enum: [ab]}]
+''');
+    final (_, types) = mapComponents(fixture, [
+      'Name',
+      'Number',
+      'Formatted',
+      'Listed',
+      'Tight',
+    ]);
+    expect(types['Name'], 'String');
+    expect(types['Number'], 'int');
+    expect(types['Formatted'], 'JsonValue');
+    expect(types['Listed'], isNot('String'));
+    expect(types['Tight'], 'JsonValue');
+    expect(
+      [
+        for (final c in fixture.codes)
+          if (c.$1 == DiagnosticCode.unionBranchSubsumed) c.$2,
+      ],
+      [
+        '#/components/schemas/Name/anyOf/1',
+        '#/components/schemas/Number/oneOf/1',
+      ],
+    );
+  });
+
+  test('a field keeps the values of the branch it drops', () {
+    final fixture = IrFixture('''
+$head    Transcription:
+      type: object
+      properties:
+        model:
+          description: The model.
+          anyOf:
+            - {type: string}
+            - {type: string, enum: [whisper-1, 'gpt`4', '']}
+        plain: {type: string}
+        three:
+          anyOf:
+            - {type: string}
+            - {enum: [x]}
+            - \$ref: '#/components/schemas/Customer'
+''');
+    final (ir, _) = mapComponents(fixture, ['Transcription']);
+    final fields =
+        (ir.declarations.firstWhere((d) => d.name == 'Transcription')
+                as ModelDecl)
+            .fields;
+    expect(
+      {for (final f in fields) f.name: f.knownValues},
+      {
+        'model': ['whisper-1', 'gpt`4', ''],
+        'plain': <Object?>[],
+        'three': ['x'],
+      },
+    );
   });
 
   test('valid unions and enums report no TOA455', () {

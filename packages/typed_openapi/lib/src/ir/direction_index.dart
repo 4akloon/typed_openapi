@@ -85,7 +85,10 @@ final class DirectionIndex {
     final seen = <SpecLocation>{};
     var current = _model.resolveSchema(schema);
     while (current is SchemaObject && seen.add(current.location)) {
-      final single = SchemaShapes.singleOf(current);
+      final single = SchemaShapes.singleOf(
+        current,
+        resolve: _model.resolveSchema,
+      );
       if (single == null) return current;
       current = _model.resolveSchema(single);
     }

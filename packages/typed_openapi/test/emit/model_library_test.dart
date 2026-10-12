@@ -645,4 +645,34 @@ schemas:
       expect(files['models/inner.dart'], contains("'a' => InnerVariant1Case("));
     });
   });
+
+  test('the field documents its known values', () {
+    final files = emit('''
+    Root:
+      type: object
+      properties:
+        model:
+          description: The model.
+          anyOf:
+            - {type: string}
+            - {type: string, enum: [whisper-1, 'gpt`4', '']}
+        level:
+          anyOf: [{type: integer}, {type: integer, enum: [1, 2]}]
+''');
+    expect(
+      files['models/root.dart'],
+      allOf(
+        contains(
+          '  /// The model.\n'
+          '  ///\n'
+          '  /// Known values: `"whisper-1"`, `"gpt\\u00604"`, `""`.\n'
+          '  final String? model;\n',
+        ),
+        contains(
+          '  /// Known values: `1`, `2`.\n'
+          '  final int? level;\n',
+        ),
+      ),
+    );
+  });
 }

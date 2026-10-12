@@ -262,12 +262,15 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   TOA453) or `structural` (`union: structural`); a union where every
   variant shares its type is `JsonValue` (TOA453), duplicate variant types
   are dropped (TOA454). In a union without a discriminator an inline enum
-  or `const` of a primitive type next to an inline branch of that type
-  with no constraint (`anyOf: [string, {enum: ['']}]`) is dropped
-  (TOA455, info; `SchemaShapes.subsumedBranches`, before the dispatch is
-  decided), and a union left with one branch is that branch's type; an
-  integer enum is also covered by a plain `number`, not the other way
-  round. A component with a discriminator that other
+  or `const` of a primitive type next to a branch of that type
+  that has all its values (`anyOf: [string, {enum: ['']}]`; the other
+  branch has no `format`, `pattern`, `enum` or `const`, may be a `$ref`,
+  and its length and range constraints are met by every enum value) is
+  dropped (TOA455, info; `SchemaShapes.subsumedBranches`, before the
+  dispatch is decided), and a union left with one branch is that branch's
+  type; an integer enum is also covered by a plain `number`, not the other
+  way round. The dropped values go to `FieldIr.knownValues`, which the
+  field's doc comment lists (`Known values: ...`). A component with a discriminator that other
   components extend with `allOf` (directly or deeper) is, where it is used
   as a type, a union of their flat models (`_subtypes`; a mapping to the
   base itself is TOA451 and decodes as unknown; one that nothing extends

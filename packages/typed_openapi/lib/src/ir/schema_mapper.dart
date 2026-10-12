@@ -321,7 +321,7 @@ final class SchemaMapper {
     final id = _idOf(schema);
     // A schema that extends a polymorphic base with `allOf` and adds nothing
     // is a subtype, not a reference to the base (which is the union).
-    final single = switch (SchemaShapes.singleOf(schema)) {
+    final single = switch (SchemaShapes.singleOf(schema, resolve: _resolved)) {
       final part? when schema.allOf.contains(part) && _isBase(part) => null,
       final part => part,
     };
@@ -405,7 +405,7 @@ final class SchemaMapper {
   }
 
   DartType _inline(SchemaObject schema, NameHint hint) {
-    final single = SchemaShapes.singleOf(schema);
+    final single = SchemaShapes.singleOf(schema, resolve: _resolved);
     if (single != null) {
       _reportSubsumed(schema, collapsed: true);
       final type = _map(single, hint);
@@ -424,7 +424,7 @@ final class SchemaMapper {
   void _reportSubsumed(SchemaObject schema, {required bool collapsed}) {
     if (_replacing) return;
     for (final MapEntry(key: branch, value: kind)
-        in SchemaShapes.subsumedBranches(schema).entries) {
+        in SchemaShapes.subsumedBranches(schema, resolve: _resolved).entries) {
       final values = SchemaShapes.enumValues(branch)!;
       final shown = [
         for (final value in values.take(3)) _valueText(value),
@@ -480,7 +480,7 @@ final class SchemaMapper {
     final (kind, branches) = schema.oneOf.isNotEmpty
         ? (UnionKind.oneOf, schema.oneOf)
         : (UnionKind.anyOf, schema.anyOf);
-    final dropped = SchemaShapes.subsumedBranches(schema);
+    final dropped = SchemaShapes.subsumedBranches(schema, resolve: _resolved);
     final nonNull = [
       for (final branch in branches)
         if (!SchemaShapes.isNullOnly(branch) && !dropped.containsKey(branch))
@@ -710,7 +710,7 @@ final class SchemaMapper {
     if (_branches(object) != null) {
       return object.discriminator?.propertyName != null ? .object : null;
     }
-    if (SchemaShapes.singleOf(object) case final single?) {
+    if (SchemaShapes.singleOf(object, resolve: _resolved) case final single?) {
       return _jsonKind(single, seen);
     }
     if (object.properties.isNotEmpty || object.allOf.isNotEmpty) {
@@ -809,6 +809,7 @@ final class SchemaMapper {
           valueType: custom == null ? mapped : _custom(custom, mapped),
           constValue: constant?.$1,
           constraints: notes.constraints,
+          knownValues: notes.knownValues,
           sensitive: writeOnly || notes.password,
           required: required.contains(json),
           readOnly: readOnly,
@@ -873,6 +874,7 @@ final class SchemaMapper {
               deprecated: field.deprecated,
               constValue: field.constValue,
               constraints: field.constraints,
+              knownValues: field.knownValues,
               sensitive: field.sensitive,
             ),
         ],
@@ -947,7 +949,19 @@ final class SchemaMapper {
     final siblings =
         property.ref == null || _context.model.document.version != .v30;
     final written = [if (siblings) property, ...parts, ?target];
+    final known = <Object?>[];
+    for (final schema in [property, if (property.ref != null) ?target]) {
+      for (final branch in SchemaShapes.subsumedBranches(
+        schema,
+        resolve: _resolved,
+      ).keys) {
+        for (final value in SchemaShapes.enumValues(branch) ?? const []) {
+          if (!known.contains(value)) known.add(value);
+        }
+      }
+    }
     return _FieldNotes(
+      knownValues: known,
       constraints: _constraintsOf(written),
       description: written
           .map((s) => s.description)
@@ -1975,6 +1989,7 @@ final class _Pending {
 /// What a property's schema says about its field (`SchemaMapper._notesOf`).
 final class _FieldNotes {
   const _FieldNotes({
+    this.knownValues = const [],
     this.constraints = const ConstraintsIr(),
     this.description,
     this.defaultValue,
@@ -1984,6 +1999,7 @@ final class _FieldNotes {
     this.password = false,
   });
 
+  final List<Object?> knownValues;
   final ConstraintsIr constraints;
   final String? description;
   final (Object?,)? defaultValue;
@@ -2009,6 +2025,7 @@ final class _Field {
     required this.deprecated,
     required this.constValue,
     required this.constraints,
+    required this.knownValues,
     required this.sensitive,
   });
 
@@ -2027,5 +2044,6 @@ final class _Field {
   final bool deprecated;
   final Object? constValue;
   final ConstraintsIr constraints;
+  final List<Object?> knownValues;
   final bool sensitive;
 }

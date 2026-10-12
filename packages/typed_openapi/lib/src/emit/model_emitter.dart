@@ -208,12 +208,22 @@ final class ModelEmitter {
       if (constant && field.description == null)
         'Always `${jsonEncode(field.constValue)}`.',
       ?_constraints(field.constraints),
+      ?_knownValues(field.knownValues),
       if (field.defaultValue case (final value,))
         'Defaults to `${jsonEncode(value)}` on the server.',
     ];
     if (parts.isNotEmpty) out.doc(parts.join('\n\n'));
     if (field.deprecated) out.line(deprecation);
   }
+
+  /// The values a union left out of a field's type as a sentence, each as
+  /// a JSON code span; null when there are none. A backtick in a value is
+  /// the JSON escape `\u0060`, so a span never ends early.
+  static String? _knownValues(List<Object?> values) => values.isEmpty
+      ? null
+      : 'Known values: ${[
+          for (final value in values) '`${jsonEncode(value).replaceAll('`', r'\u0060')}`',
+        ].join(', ')}.';
 
   /// The constraints of a field as a sentence (decision 12), such as
   /// `1–64 characters, matches `^[a-z]+$`.`; null when there are none.

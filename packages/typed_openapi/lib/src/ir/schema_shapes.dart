@@ -10,8 +10,13 @@ final class SchemaShapes {
   /// The one schema [schema] stands for (R6.3, rules carried from M3): the
   /// part of an `allOf` with one part besides parts that only annotate
   /// ([isAnnotationOnly]), or the branch of a `oneOf`/`anyOf` with one branch
-  /// besides `null`; null when there is none.
-  static Schema? singleOf(SchemaObject schema) {
+  /// besides `null` and the branches that add no value to another
+  /// ([subsumedBranches]); null when there is none. A [resolve] follows the
+  /// `$ref` of a branch.
+  static Schema? singleOf(
+    SchemaObject schema, {
+    Schema? Function(Schema)? resolve,
+  }) {
     if (schema.properties.isNotEmpty || enumValues(schema) != null) {
       return null;
     }
@@ -25,7 +30,7 @@ final class SchemaShapes {
       return schema.allOf.length == 1 ? schema.allOf.first : null;
     }
     if (schema.allOf.isNotEmpty) return null;
-    final dropped = subsumedBranches(schema);
+    final dropped = subsumedBranches(schema, resolve: resolve);
     final nonNull = [
       for (final branch in branches)
         if (!isNullOnly(branch) && !dropped.containsKey(branch)) branch,
@@ -38,12 +43,19 @@ final class SchemaShapes {
   /// The branches of the `oneOf` or `anyOf` of [schema] that add no value
   /// to another branch (TOA455), each with the JSON type of the branch that
   /// has its values: an enum or `const` of one primitive type next to a
-  /// branch of that type with no constraint at all, in a union without a
-  /// discriminator (`anyOf: [string, {enum: ['']}]`). An integer enum is
-  /// also covered by a plain `number`; a number enum is not covered by an
-  /// `integer`. Only branches written inline count, and a schema that is
+  /// branch of that type that has all its values, in a union without a
+  /// discriminator (`anyOf: [string, {enum: ['']}]`). The other branch is
+  /// plain: a string, integer, number or boolean written inline, or a
+  /// `$ref` that [resolve] follows to one, with no `enum`, `const`,
+  /// `format` or `pattern`; its length and range constraints (`maxLength`,
+  /// `minimum`, `multipleOf`, ...) are met by every enum value. An integer
+  /// enum is also covered by a plain `number`; a number enum is not covered
+  /// by an `integer`. The enum branch is written inline; a schema that is
   /// also a model or has an `allOf` has none.
-  static Map<SchemaObject, JsonKind> subsumedBranches(SchemaObject schema) {
+  static Map<SchemaObject, JsonKind> subsumedBranches(
+    SchemaObject schema, {
+    Schema? Function(Schema)? resolve,
+  }) {
     if (schema.oneOf.isNotEmpty == schema.anyOf.isNotEmpty ||
         schema.properties.isNotEmpty ||
         schema.allOf.isNotEmpty ||
@@ -51,55 +63,106 @@ final class SchemaShapes {
       return const {};
     }
     final branches = [...schema.oneOf, ...schema.anyOf];
-    final plain = {for (final branch in branches) ?_plainKind(branch)};
+    final plain = [
+      for (final branch in branches) ?_plain(branch, resolve),
+    ];
     final dropped = <SchemaObject, JsonKind>{};
+    if (plain.isEmpty) return dropped;
     for (final branch in branches) {
       if (branch is! SchemaObject) continue;
       final kind = _valuesKind(branch);
       if (kind == null) continue;
-      if (plain.contains(kind)) {
-        dropped[branch] = kind;
-      } else if (kind == .integer && plain.contains(JsonKind.number)) {
-        dropped[branch] = .number;
+      final values = branch.enumValues ?? [?branch.constValue?.$1];
+      for (final (plainKind, constraints) in plain) {
+        if ((plainKind == kind ||
+                (kind == .integer && plainKind == JsonKind.number)) &&
+            _allows(constraints, values)) {
+          dropped[branch] = plainKind;
+          break;
+        }
       }
     }
     return dropped;
   }
 
-  /// The JSON type of [schema] when it is written inline and allows every
-  /// value of that type: a string, integer, number or boolean with no enum,
-  /// `const`, format or other constraint.
-  static JsonKind? _plainKind(Schema schema) {
-    if (schema is! SchemaObject ||
-        schema.ref != null ||
-        schema.enumValues != null ||
-        schema.constValue != null ||
-        schema.format != null ||
-        schema.pattern != null ||
-        schema.minLength != null ||
-        schema.maxLength != null ||
-        schema.minimum != null ||
-        schema.maximum != null ||
-        schema.exclusiveMinimum != null ||
-        schema.exclusiveMaximum != null ||
-        schema.exclusiveMinimumFlag != null ||
-        schema.exclusiveMaximumFlag != null ||
-        schema.multipleOf != null ||
-        schema.contentMediaType != null ||
-        schema.contentEncoding != null ||
-        schema.contentSchema != null ||
-        schema.properties.isNotEmpty ||
-        schema.items != null ||
-        schema.prefixItems.isNotEmpty ||
-        schema.additionalProperties != null ||
-        schema.allOf.isNotEmpty ||
-        schema.oneOf.isNotEmpty ||
-        schema.anyOf.isNotEmpty ||
-        schema.not != null ||
-        schema.discriminator != null) {
+  /// The JSON type of [schema] and the schema whose constraints apply when
+  /// it allows every value of that type but those its length and range
+  /// constraints cut: a string, integer, number or boolean with no enum,
+  /// `const`, format, pattern or structure. A `$ref` is read through
+  /// [resolve].
+  static (JsonKind, SchemaObject)? _plain(
+    Schema schema,
+    Schema? Function(Schema)? resolve,
+  ) {
+    var target = schema;
+    if (schema is SchemaObject && schema.ref != null) {
+      if (resolve == null) return null;
+      target = resolve(schema) ?? schema;
+    }
+    if (target is! SchemaObject ||
+        target.ref != null ||
+        target.enumValues != null ||
+        target.constValue != null ||
+        target.format != null ||
+        target.pattern != null ||
+        target.contentMediaType != null ||
+        target.contentEncoding != null ||
+        target.contentSchema != null ||
+        target.properties.isNotEmpty ||
+        target.items != null ||
+        target.prefixItems.isNotEmpty ||
+        target.additionalProperties != null ||
+        target.allOf.isNotEmpty ||
+        target.oneOf.isNotEmpty ||
+        target.anyOf.isNotEmpty ||
+        target.not != null ||
+        target.discriminator != null) {
       return null;
     }
-    return _primitiveKind(schema);
+    return switch (_primitiveKind(target)) {
+      final kind? => (kind, target),
+      null => null,
+    };
+  }
+
+  /// Whether every one of [values] (strings, numbers or booleans) meets the length and range constraints
+  /// of [schema].
+  static bool _allows(SchemaObject schema, List<Object?> values) {
+    for (final value in values) {
+      if (value is String) {
+        final length = value.runes.length;
+        if (length < (schema.minLength ?? 0) ||
+            length > (schema.maxLength ?? length)) {
+          return false;
+        }
+      } else if (value is num) {
+        final minimum = schema.minimum;
+        final maximum = schema.maximum;
+        if (minimum != null &&
+            (schema.exclusiveMinimumFlag == true
+                ? value <= minimum
+                : value < minimum)) {
+          return false;
+        }
+        if (maximum != null &&
+            (schema.exclusiveMaximumFlag == true
+                ? value >= maximum
+                : value > maximum)) {
+          return false;
+        }
+        if (schema.exclusiveMinimum case final bound? when value <= bound) {
+          return false;
+        }
+        if (schema.exclusiveMaximum case final bound? when value >= bound) {
+          return false;
+        }
+        if (schema.multipleOf case final step? when step > 0) {
+          final ratio = value / step;
+          if ((ratio - ratio.roundToDouble()).abs() > 1e-9) return false;
+        }
+      }
+    }
+    return true;
   }
 
   /// The JSON type of the values of the enum or `const` [schema] written

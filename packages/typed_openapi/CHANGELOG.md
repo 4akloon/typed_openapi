@@ -27,10 +27,13 @@
   `format: password` fields.
 - A `oneOf` or `anyOf` without a discriminator drops an inline enum or
   `const` of a primitive type (string, integer, number, boolean) when
-  another inline branch is that type with no constraint, as in Stripe's
-  `anyOf: [string, {enum: ['']}]` (TOA455, info); a union left with one
-  branch is that branch's type (`String`) and no longer `JsonValue`
-  (TOA453). An integer enum is also covered by a plain `number`.
+  another branch (inline or a `$ref`) is that type with no `format` or
+  `pattern` and length or range constraints that every enum value meets, as
+  in Stripe's `anyOf: [{type: string, maxLength: 5000}, {enum: ['']}]`
+  (TOA455, info); a union left with one branch is that branch's type
+  (`String`) and no longer `JsonValue` (TOA453). An integer enum is also
+  covered by a plain `number`. The dropped values are listed in the doc
+  comment of the field (`Known values: ...`).
 - Semantic IR (M6): `check` builds each client's IR (`IrBuilder`,
   `ClientIr`) from the normalized spec and reports naming and mapping
   problems. Types follow R6.2 (`integer` -> `int`, `number` -> `num` or
