@@ -18,8 +18,8 @@ import '../ir/ir.dart';
 import 'check_command.dart';
 
 /// `typed_openapi generate`: checks every client as `check` does and
-/// writes the whole client of each client without errors into its output
-/// directory: the models, the API classes and the root client (M8, M9).
+/// writes each client without errors into its output directory: the
+/// models, the API classes and the root client (M8, M9).
 ///
 /// A client whose check reports an error, including an overrides file that
 /// cannot be used, is skipped; so is one whose output directory the

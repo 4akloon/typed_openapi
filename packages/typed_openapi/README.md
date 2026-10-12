@@ -43,10 +43,21 @@ dart run typed_openapi generate --break-lock  # take over a lock of unknown owne
 
 ### What `generate` writes
 
-Each client gets `models.dart` (it exports every model) and
-`models/<name>.dart`, one file per class, with the header
-`// GENERATED CODE - DO NOT MODIFY BY HAND.` and `// dart format off` on the
-second line. The code is clean under `package:lints/recommended` and the
+Each client gets this tree in its `output` directory:
+
+```text
+<output>/
+  petstore.dart          the root class; exports models.dart and api.dart
+                         (api_client.dart for a client named api or models)
+  api.dart               exports the group files
+  api/pets_api.dart      one plain class per group (tag)
+  models.dart            exports every model
+  models/pet.dart        one file per class
+  .typed_openapi.json    the manifest
+```
+
+Every Dart file has the header `// GENERATED CODE - DO NOT MODIFY BY HAND.`
+and `// dart format off` on the second line. The code is clean under `package:lints/recommended` and the
 `flutter_lints` rules without `ignore_for_file`, and the same spec and
 config give the same bytes. The classes are plain `class`es (not `final`, so
 you can extend them); a union base is `sealed`.
@@ -94,6 +105,8 @@ you can extend them); a union base is `sealed`.
   its schema could carry a secret: any model or union variant it may hold,
   at any depth, has a secret property.
 
+### Operations
+
 The operations of a client are in `api/<group>.dart`, one plain class per
 group (`PetsApi`), exported by `api.dart`; the root `<client>.dart`
 (`petstore.dart`, `api_client.dart` for a client named `api` or `models`)
@@ -127,8 +140,9 @@ switch (await client.pets.getPet(petId: 1)) {
   JSON error bodies are decoded too.
 - Bodies: JSON models; forms with the spec's `encoding`; multipart parts as a
   class (`UploadPhotoRequest`) whose binary properties are `FileUpload`s
-  (`FileUpload.bytes`, which works on the web, or `FileUpload.stream`); a
-  binary body is a `FileUpload`. Event streams come with M10 (TOA654).
+  (`FileUpload.bytes`, which works on the web, or `FileUpload.stream`, which
+  Dio's browser adapter buffers); the parts are sent in the order of the
+  schema; a binary body is a `FileUpload`. Event streams come with M10 (TOA654).
 - The client never changes your Dio: set the base URL there, from the root
   class's server constants (`PetstoreClient.server`, or a method such as
   `PetstoreClient.server1(region: 'eu')` for a URL with variables). When the
@@ -144,6 +158,12 @@ a manifest (`.typed_openapi.json`: the generator, the manifest format, a hash
 of the inputs and the hash of every file) next to the output and swaps it in,
 so a failed run leaves the previous output (or nothing) and never a half tree.
 A run that would change nothing does not touch the directory.
+
+An output written by the models-only generator (before operations) upgrades
+in place: the next run writes the API files and keeps the models, with no
+`--force`. A file of your own in it whose name the full client now uses
+(`api.dart`, `<client>.dart`, in any letter case) is refused with `TOA830`
+like any other foreign file.
 
 **It replaces only what it wrote.** A file that the previous manifest lists
 and whose hash still matches is replaced or deleted. Any other file in the

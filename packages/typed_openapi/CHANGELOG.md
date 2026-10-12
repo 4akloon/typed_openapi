@@ -202,8 +202,21 @@
   - TOA652 default-error-schema-missing (warning): `errors.default_schema` is
     not a key of `components.schemas`; the setting is ignored (TOA562 before
     M9).
-  - TOA656 encoding-headers-ignored (info): the `headers` of a multipart
-    part's `encoding` are not sent.
+  - TOA656 encoding-headers-ignored (info): the `headers` of the `encoding`
+    of a multipart part or a form property are not sent.
+  - TOA657 response-status-invalid (warning): a key of `responses` that is
+    not an HTTP status (a code 100-599, a range `1XX`-`5XX` or `default`), or
+    repeats another key in a different case; the response is not generated.
+  - TOA658 response-status-not-generated (info): a documented 1xx or 3xx
+    response is not generated; the status is undocumented at run time.
+  - TOA659 encoding-key-unknown (warning): an `encoding` key of a form or
+    multipart body names no property of its schema; the entry is ignored.
+  - TOA660 default-value-invalid (warning): a parameter's `default` does not
+    fit its `enum` or `format` (`date`, `date-time`, `uuid`, `int32`); it is
+    not documented as the default.
+  - Renamed parts, group fields, server members and root client names are
+    reported (TOA550, TOA551, TOA552, TOA559); a method named `jsonEncode`,
+    `base64Encode`, `int`, `bool`, `double` or `num` gets a suffix (TOA550).
 - The IR names what the API emitter declares, after the models (which never
   move): the root client (`naming.client`, else the client name with
   `Client`), the sealed types of successes and errors with variants named by

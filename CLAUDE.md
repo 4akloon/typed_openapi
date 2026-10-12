@@ -454,7 +454,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   type of its response, as a success is: `r.bytes` for bytes, `r.text` for
   text (an empty one is `''`), the type's decoder for JSON; errors that
   share one body type but not a media type (`text/plain` and JSON strings)
-  get an arm each.
+  get an arm each. In such an operation `UndocumentedStatus.rawBody` is the
+  raw bytes, not parsed JSON. `text/json` is JSON everywhere.
   Bodies: JSON (`toJson`), `FormBody` with `FormEncoding`s, the parts class
   (`toParts()`, `FileUpload` for binary strings and lists of them,
   `encoding` media types) or `MultipartBody.fromJson` (TOA655),
@@ -582,7 +583,10 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `DartTypeOverride`, `UnionMode`). Not exported: `CheckCommand`,
   `BaselineCommand`, `GenerateCommand`, `RealPaths`, the emitters
   (`DartCode`, `DartWriter`, `Imports`, `TypeCodec`, `ModelEmitter`,
-  `EnumEmitter`, `UnionEmitter`), the
+  `EnumEmitter`, `UnionEmitter`, and the API emitters `ApiLibrary`,
+  `OperationEmitter`, `RequestWriter`, `DecoderWriter`, `PartsEmitter`,
+  `StatusTypeEmitter`: `generate` runs them, there is no public entry
+  point yet), the
   internals of `parse/` (`OpenApiParser`, `OperationParser`, `SchemaParser`,
   `ObjectReader`, `ParseContext`, `SpecIndex`, `DialectChecker`), `resolve/`
   (`RefTarget`, `RefResolver`), `normalize/` (`TreeEditor`, the rule
@@ -591,7 +595,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `SchemaMapper`, `SchemaShapes`, `RefFollower`, `Decimal`, `NameHint`,
   `DirectionIndex`,
   `OperationSelector`, `OperationBuilder`, `SpecOperation`, `DartNames`,
-  `NameScope`), `IrCommand`, `YamlComposer` and `load/yaml/`.
+  `NameScope`, `MediaTypePicker`, `RootNames`, `TypeClaims`, `PartsBuilder`,
+  `BodyEncoding`, `SchemaDefaults`, `DefaultMatcher`), `IrCommand`, `YamlComposer` and `load/yaml/`.
 
 Data flows loader -> parser -> resolver -> overrides -> normalizer -> IR
 builder -> checker, every stage writing problems into one `DiagnosticBag`;

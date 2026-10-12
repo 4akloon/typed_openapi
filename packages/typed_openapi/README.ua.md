@@ -44,10 +44,21 @@ dart run typed_openapi generate --break-lock  # забрати замок нев
 
 ### Що пише `generate`
 
-Кожен клієнт отримує `models.dart` (він експортує всі моделі) і
-`models/<ім'я>.dart`, по файлу на клас, із заголовком
-`// GENERATED CODE - DO NOT MODIFY BY HAND.` і `// dart format off` у другому
-рядку. Код чистий під `package:lints/recommended` і правилами `flutter_lints`
+Кожен клієнт отримує таке дерево у своєму каталозі `output`:
+
+```text
+<output>/
+  petstore.dart          кореневий клас; експортує models.dart і api.dart
+                         (api_client.dart для клієнта api чи models)
+  api.dart               експортує файли груп
+  api/pets_api.dart      звичайний клас на групу (тег)
+  models.dart            експортує всі моделі
+  models/pet.dart        по файлу на клас
+  .typed_openapi.json    маніфест
+```
+
+Кожен Dart-файл має заголовок `// GENERATED CODE - DO NOT MODIFY BY HAND.` і
+`// dart format off` у другому рядку. Код чистий під `package:lints/recommended` і правилами `flutter_lints`
 без `ignore_for_file`, а та сама специфікація з тим самим конфігом дає ті самі
 байти. Класи — звичайні `class` (не `final`, тож їх можна розширювати); база
 union — `sealed`.
@@ -95,33 +106,64 @@ union — `sealed`.
   містити секрет: будь-яка модель чи варіант union-а, які воно може
   тримати, на будь-якій глибині має секретну властивість.
 
+### Операції
+
 Операції клієнта — у `api/<група>.dart`, звичайний клас на групу
 (`PetsApi`), експортує їх `api.dart`; корінь `<клієнт>.dart` (`petstore.dart`,
 `api_client.dart` для клієнта `api` чи `models`) експортує моделі й API і
-містить кореневий клас `PetstoreClient(dio)` (`naming.client` його
-перейменовує) з полем на групу: `client.pets.getPet(petId: 1)`.
+містить кореневий клас:
+
+```dart
+final client = PetstoreClient(dio); // naming.client його перейменовує
+switch (await client.pets.getPet(petId: 1)) {
+  case Success(:final data):
+    print(data.name);
+  case HttpError(:final body):
+    print(body.code);
+  case Failure():
+    print('інша помилка');
+}
+```
 
 - Усі аргументи іменовані, обов'язкові — `required`, тіло — `body`, останній
-  — `CallOptions? call`. Метод повертає `Future<Result<T, E>>` і не кидає
-  винятків на відповідь: задокументована помилка — `HttpError`, інший статус
-  — `UndocumentedStatus`, тіло, що не декодується, — `DecodeError`, мережа —
-  `TransportError`, скасування — `Cancelled`.
-- `T` — тіло успіху (`void` без тіла, `JsonValue`, коли 2xx не описано,
-  TOA653) або sealed-тип за статусом, коли 2xx різні; `E` — `Never`, тіло
-  помилки або sealed-тип за статусом (`CreatePetErrorNotFound`).
-- Тіла: JSON, форми з `encoding`, multipart-частини як клас, де файли —
-  `FileUpload`, бінарне тіло — `FileUpload`. Потоки подій — у M10 (TOA654).
+  — `CallOptions? call` (cancel token, додаткові заголовки, прогрес, `extra`
+  для інтерсепторів). Метод повертає `Future<Result<T, E>>` і не кидає
+  винятків на відповідь: задокументована помилка — `HttpError` із
+  декодованим тілом, інший статус — `UndocumentedStatus`, тіло, що не
+  декодується, — `DecodeError`, збій мережі — `TransportError`, скасований
+  виклик — `Cancelled`.
+- `T` — єдине тіло успіху (`void` без тіла, `JsonValue`, коли 2xx не описано,
+  TOA653) або sealed-тип, коли 2xx різні (`CreatePetResponseOk`,
+  `...Created`). `E` — `Never` без задокументованих помилок, єдине тіло
+  помилки або sealed-тип за статусом (`CreatePetErrorNotFound`,
+  `...ClientError` для `4XX`, `...Other` для `default`). Текстові успіхи —
+  `String`, бінарні — `Uint8List`; їхні JSON-тіла помилок теж декодуються.
+- Тіла: JSON-моделі; форми з `encoding` специфікації; multipart-частини як
+  клас (`UploadPhotoRequest`), де бінарні властивості — `FileUpload`
+  (`FileUpload.bytes`, що працює й у вебі, або `FileUpload.stream`, який
+  браузерний адаптер Dio буферизує); частини йдуть у порядку схеми; бінарне
+  тіло — `FileUpload`. Потоки подій — у M10 (TOA654).
 - Клієнт не змінює твій Dio: base URL задаєш ти, з констант серверів
-  кореневого класу. Коли query містить `//`, а base URL абсолютний, runtime
-  з'єднує їх сам; відносний base URL лишається Dio, який `//` схлопує.
-- Кожен запит несе `OperationInfo` у `RequestOptions.extra`: `operationId`,
-  теги й вимоги безпеки для інтерсептора, що додає облікові дані.
+  кореневого класу (`PetstoreClient.server`, або метод на кшталт
+  `PetstoreClient.server1(region: 'eu')` для URL зі змінними). Коли query
+  містить `//` (значення з `allowReserved`), а base URL абсолютний, runtime
+  з'єднує їх сам, бо Dio схлопнув би `//`; відносний base URL лишається Dio,
+  який `//` схлопує.
+- Кожен запит несе `OperationInfo` у `RequestOptions.extra`
+  (`OperationInfo.of(options)`): `operationId`, теги й вимоги безпеки з їхніми
+  схемами, для інтерсептора, що додає облікові дані.
 
 `generate` пише каталог виходу цілим. Він будує нове дерево і маніфест
 (`.typed_openapi.json`: генератор, формат маніфесту, хеш входів і хеш кожного
 файлу) поруч із виходом і підміняє ним старий каталог, тож невдалий запуск
 лишає попередній вихід (або нічого), а не половину дерева. Запуск, що нічого
 б не змінив, каталогу не торкається.
+
+Вихід, написаний генератором лише моделей (до операцій), оновлюється на місці:
+наступний запуск пише файли API і лишає моделі, без `--force`. Ваш власний
+файл у ньому з іменем, яке тепер використовує повний клієнт (`api.dart`,
+`<клієнт>.dart`, у будь-якому регістрі), відхиляється з `TOA830`, як і будь-який
+інший чужий файл.
 
 **Він замінює лише те, що сам написав.** Файл, який перелічено в попередньому
 маніфесті й чий хеш досі збігається, замінюється чи видаляється. Будь-який
