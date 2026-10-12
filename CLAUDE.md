@@ -264,9 +264,10 @@ that the API composes, including an `implements` fake of a tag class.
   only through `dio.request`, never mutates the user's Dio, never retries;
   decoding catches only `DioException` and `JsonDecodeException`,
   `openEvents` also turns an `Exception` raised while reading a non-stream
-  body into `TransportError`, and an `Error` is never caught; the query is built by the runtime, so interceptors see
-  an empty `queryParameters`), `CallOptions`. `openEvents` needs its stream
-  listened to or cancelled; a listener cancel cancels the request.
+  body into `TransportError`, and an `Error` is never caught; the query is
+  built by the runtime, so interceptors see an empty `queryParameters`),
+  `CallOptions`. `openEvents` needs its stream listened to or cancelled; a
+  listener cancel cancels the request.
 - `sse/` - `SseDecoder` (WHATWG, bytes -> `SseMessage`), `SseItemDecoder`
   (-> `SseEvent` / `SseDecodeError` / `SseDisconnected`; data problems are
   items, an `Error` from the user's decoder is the only stream error). Use
