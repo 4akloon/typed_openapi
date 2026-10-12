@@ -52,9 +52,17 @@ final class OperationParser {
   Server? server(Object? raw, JsonPointer pointer) =>
       _servers.server(raw, pointer);
 
-  /// Reads the security requirement [raw] at [pointer].
-  SecurityRequirement? securityRequirement(Object? raw, JsonPointer pointer) =>
-      _context.node(raw, pointer, 'A security requirement', _requirement);
+  /// Reads the security requirement [raw] at [pointer]; an entry that is not
+  /// an object is reported and kept as a malformed requirement.
+  SecurityRequirement securityRequirement(Object? raw, JsonPointer pointer) =>
+      _context.node(raw, pointer, 'A security requirement', _requirement) ??
+      _context.register(
+        SecurityRequirement(
+          location: _context.locate(pointer),
+          schemes: {if (raw is String) raw: const []},
+          isMalformed: true,
+        ),
+      );
 
   SecurityRequirement _requirement(ObjectReader r) => _context.register(
     SecurityRequirement(

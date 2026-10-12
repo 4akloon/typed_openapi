@@ -25,16 +25,24 @@ final class SecurityBuilder {
     final schemes = _context.model.document.components?.securitySchemes;
     final read = [
       for (final requirement in requirements)
-        _Alternative(requirement.location, [
-          for (final MapEntry(key: name, value: scopes)
-              in requirement.schemes.entries)
-            (
-              name: name,
-              scopes: scopes,
-              scheme: _scheme(name, schemes),
-              isDefined: _isDefined(name, schemes),
-            ),
-        ]),
+        _Alternative(
+          requirement.location,
+          [
+            for (final MapEntry(key: name, value: scopes)
+                in requirement.schemes.entries)
+              (
+                name: name,
+                scopes: scopes,
+                scheme: requirement.isMalformed ? null : _scheme(name, schemes),
+                isDefined:
+                    !requirement.isMalformed && _isDefined(name, schemes),
+              ),
+            // A written name is the one entry; a number or `null` has none.
+            if (requirement.isMalformed && requirement.schemes.isEmpty)
+              (name: '', scopes: const [], scheme: null, isDefined: false),
+          ],
+          isMalformed: requirement.isMalformed,
+        ),
     ];
     final complete = [
       for (final alternative in read)
@@ -55,6 +63,15 @@ final class SecurityBuilder {
               'alternatives that can be described'
         : 'the metadata has it as an unknown scheme, so the operation is not '
               'read as open';
+    if (alternative.isMalformed) {
+      _context.report(
+        .securitySchemeUnknown,
+        'The security requirement is not an object of scheme names; $outcome.',
+        alternative.location,
+        fix: 'Write the requirement as an object at the source.',
+      );
+      return;
+    }
     for (final entry in alternative.entries) {
       if (entry.scheme != null) continue;
       final problem = entry.isDefined
@@ -105,9 +122,12 @@ final class SecurityBuilder {
 /// The schemes of one security requirement (an alternative), each with its
 /// scopes and the scheme it names, null when that is not defined.
 final class _Alternative {
-  const _Alternative(this.location, this.entries);
+  const _Alternative(this.location, this.entries, {required this.isMalformed});
 
   final SpecLocation location;
+
+  /// Whether the requirement was not an object: its schemes are unknown.
+  final bool isMalformed;
   final List<
     ({
       String name,

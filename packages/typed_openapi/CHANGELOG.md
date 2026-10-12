@@ -185,7 +185,9 @@
   - TOA568 security-scheme-unknown (warning): a security requirement names
     a scheme `components.securitySchemes` does not have; its alternative is
     left out of the metadata when another one can be described, else the
-    scheme has the kind `unknown`, so no operation reads as open.
+    scheme has the kind `unknown`, so no operation reads as open. A
+    requirement that is not an object (`security: ["bearer"]`, `[null]`) is
+    the same, next to its TOA111.
   - TOA653 success-undocumented (warning): no 2xx response; any 2xx is a
     success with the body as `JsonValue`.
   - TOA654 event-stream-not-generated (warning): an operation whose success

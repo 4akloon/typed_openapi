@@ -127,6 +127,55 @@ void main() {
     });
   });
 
+  group('a security requirement that is not an object', () {
+    for (final (entry, name) in [
+      ('"bearer"', 'bearer'),
+      ('null', ''),
+      ('7', ''),
+    ]) {
+      test('$entry is an unknown scheme, never an open operation', () {
+        final fixture = specOf(security: '[$entry]');
+        expect(requirements(fixture), [
+          ['$name:unknown:'],
+        ]);
+        expect(
+          unknown(fixture).single.pointer?.value,
+          '#/paths/~1a/get/security/0',
+        );
+        expect(unknown(fixture).single.message, contains('not an object'));
+        expect(
+          fixture.diagnostics.all.map((d) => d.code),
+          contains(DiagnosticCode.invalidValue),
+        );
+      });
+    }
+
+    test('is dropped when another alternative can be described', () {
+      final fixture = specOf(security: '["bearer", {key: []}]');
+      expect(requirements(fixture), [
+        ['key:apiKey:'],
+      ]);
+      expect(unknown(fixture), hasLength(1));
+    });
+
+    test('keeps every alternative when none can be described', () {
+      final fixture = specOf(security: '[null, {nope: []}]');
+      expect(requirements(fixture), [
+        [':unknown:'],
+        ['nope:unknown:'],
+      ]);
+      expect(unknown(fixture), hasLength(2));
+    });
+
+    test('in the document is inherited as an unknown scheme', () {
+      final fixture = specOf(global: '["bearer"]');
+      expect(requirements(fixture), [
+        ['bearer:unknown:'],
+      ]);
+      expect(unknown(fixture).single.pointer?.value, '#/security/0');
+    });
+  });
+
   group('security that the spec defines', () {
     test('an optional alternative stays optional, without a report', () {
       final fixture = specOf(security: '[{}]');
