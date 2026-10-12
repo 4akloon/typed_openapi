@@ -38,6 +38,20 @@ final class IrOverrides {
 
   final Map<SpecLocation, OverrideEntry> _entries;
 
+  /// The custom Dart types the overrides give to schemas, properties and
+  /// parameters.
+  Iterable<DartTypeOverride> get dartTypes sync* {
+    for (final entry in _entries.values) {
+      final custom = switch (entry) {
+        SchemaOverride(:final dartType) ||
+        PropertyOverride(:final dartType) ||
+        ParameterOverride(:final dartType) => dartType,
+        _ => null,
+      };
+      if (custom != null) yield custom;
+    }
+  }
+
   /// The override of the schema at the end of a `components.schemas`
   /// key's `$ref` chain.
   SchemaOverride? schemaAt(SpecLocation location) =>
@@ -103,6 +117,17 @@ final class IrContext {
 
   /// The generation settings.
   GenerationConfig get config => client.generation;
+
+  /// The names of the custom Dart types of the config (`types.formats`,
+  /// `types.schemas`) and of the overrides (`dartType`), in order.
+  late final List<String> customTypeNames = {
+    for (final custom in [
+      ...config.formats.values,
+      ...config.schemas.values,
+      ...overrides.dartTypes,
+    ])
+      custom.type,
+  }.toList()..sort();
 
   /// Reports [code] at [at]; [override] is an override to copy into the
   /// overrides file, added to [fix].

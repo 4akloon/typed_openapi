@@ -105,6 +105,11 @@ final class IrBuilder {
       },
       reservedSuffix: 'Model',
     );
+    // The user's types are in the generated library's scope too: a
+    // declaration named like one gets a suffix (TOA551).
+    for (final name in context.customTypeNames) {
+      types.reserve(name);
+    }
     final declarations = mapper.declarations(types);
     final groupClasses = <String>{};
     return ClientIr(

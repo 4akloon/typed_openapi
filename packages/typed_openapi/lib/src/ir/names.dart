@@ -177,6 +177,10 @@ final class NameScope {
   /// Whether [name] is given out.
   bool isTaken(String name) => _taken.contains(name);
 
+  /// Gives [name] to something that is not named in this scope (a type the
+  /// user's code declares), so that a later claim of it is a collision.
+  void reserve(String name) => _taken.add(name);
+
   /// Gives out [candidate], or a free name made from it: with
   /// [reservedSuffix] when it is reserved, then the first free of
   /// [alternatives], then with `2`, `3`, ... appended. Returns the name and

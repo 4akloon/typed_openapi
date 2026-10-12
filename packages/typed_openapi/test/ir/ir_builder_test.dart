@@ -6,6 +6,7 @@ import 'package:typed_openapi/src/ir/dart_type.dart';
 import 'package:typed_openapi/src/ir/ir.dart';
 import 'package:typed_openapi/src/ir/ir_builder.dart';
 import 'package:typed_openapi/src/ir/ir_json.dart';
+import 'package:typed_openapi/src/overrides/override_set.dart';
 
 import '../helpers/ir_fixture.dart';
 
@@ -818,5 +819,113 @@ components:
       fixture.codes.where((c) => c.$1 == DiagnosticCode.pathVariableUnbound),
       isEmpty,
     );
+  });
+
+  group('custom type names are reserved (final review M2)', () {
+    const spec = r'''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /a:
+    get:
+      operationId: a
+      tags: [t]
+      responses:
+        "200":
+          description: ok
+          content: {application/json: {schema: {$ref: '#/components/schemas/M'}}}
+components:
+  schemas:
+    M:
+      type: object
+      properties:
+        d: {type: string, format: decimal}
+        x: {$ref: '#/components/schemas/Decimal'}
+        p: {$ref: '#/components/schemas/Plain'}
+        q: {type: object, properties: {z: {type: string}}}
+    Decimal: {type: object, properties: {v: {type: string}}}
+    Plain: {type: object, properties: {v: {type: string}}}
+''';
+
+    test('a declaration named like a format type gets the suffix', () {
+      final fixture = IrFixture(
+        spec,
+        generation: const GenerationConfig(
+          formats: {
+            'decimal': DartTypeOverride(
+              type: 'Decimal',
+              import: 'package:decimal/decimal.dart',
+            ),
+          },
+        ),
+      );
+      final ir = build(fixture);
+      expect(ir.declarations.map((d) => d.name), [
+        'Decimal2',
+        'M',
+        'MQ',
+        'Plain',
+      ]);
+      final found = fixture.reported
+          .where((d) => d.code == DiagnosticCode.nameCollision)
+          .single;
+      expect(found.pointer?.value, '#/components/schemas/Decimal');
+      expect(found.message, contains('"Decimal"'));
+    });
+
+    test('so does one named like a schema or dartType override type', () {
+      final fixture = IrFixture(
+        spec,
+        generation: const GenerationConfig(
+          schemas: {
+            'Plain': DartTypeOverride(
+              type: 'Plain',
+              import: 'package:app/plain.dart',
+            ),
+          },
+        ),
+        overrides: '''
+schemas:
+  M:
+    properties:
+      q:
+        dartType: {type: Decimal, import: 'package:app/decimal.dart'}
+''',
+      );
+      final ir = build(fixture);
+      // Plain is replaced by the custom Plain: nothing is declared for it.
+      expect(ir.declarations.map((d) => d.name), ['Decimal2', 'M']);
+      expect(
+        fixture.reported
+            .where((d) => d.code == DiagnosticCode.nameCollision)
+            .map((d) => d.pointer?.value),
+        ['#/components/schemas/Decimal'],
+      );
+    });
+
+    test('a custom type no declaration is named like changes nothing', () {
+      final fixture = IrFixture(
+        spec,
+        generation: const GenerationConfig(
+          formats: {
+            'decimal': DartTypeOverride(
+              type: 'Money',
+              import: 'package:app/money.dart',
+            ),
+          },
+        ),
+      );
+      final ir = build(fixture);
+      expect(ir.declarations.map((d) => d.name), [
+        'Decimal',
+        'M',
+        'MQ',
+        'Plain',
+      ]);
+      expect(
+        fixture.reported.where((d) => d.code == DiagnosticCode.nameCollision),
+        isEmpty,
+      );
+    });
   });
 }
