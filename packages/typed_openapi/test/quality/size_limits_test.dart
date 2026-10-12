@@ -25,15 +25,6 @@ const Map<String, int> _fileAllowlist = {
   'lib/src/ir/operation_builder.dart': 565,
   'lib/src/ir/schema_mapper.dart': 2196,
   'lib/src/ir/schema_shapes.dart': 446,
-  'lib/src/load/yaml_composer.dart': 810,
-  'lib/src/model/operation.dart': 467,
-  'lib/src/normalize/normalizer.dart': 383,
-  'lib/src/normalize/rules/schema_shape_rules.dart': 341,
-  'lib/src/overrides/override_applier.dart': 667,
-  'lib/src/overrides/override_loader.dart': 612,
-  'lib/src/overrides/override_resolver.dart': 450,
-  'lib/src/parse/object_reader.dart': 342,
-  'lib/src/parse/operation_parser.dart': 314,
   'test/check/spec_checker_test.dart': 705,
   'test/cli/cli_test.dart': 793,
   'test/cli/generate_command_test.dart': 772,
@@ -47,8 +38,6 @@ const Map<String, int> _fileAllowlist = {
   'test/ir/schema_mapper_test.dart': 771,
   'test/ir/union_subsumed_test.dart': 501,
   'test/load/spec_loader_test.dart': 503,
-  'test/load/yaml_composer_test.dart': 634,
-  'test/overrides/override_applier_test.dart': 1017,
 };
 
 /// Files that are exempt for good and are not to be split: a flat catalog
@@ -99,26 +88,13 @@ const Map<String, int> _methodAllowlist = {
   'lib/src/ir/schema_mapper.dart#SchemaMapper._union': 303,
   'lib/src/ir/schema_mapper.dart#SchemaMapper._valueName': 61,
   'lib/src/load/openapi_version.dart#OpenApiVersionDetector.detect': 47,
-  'lib/src/load/yaml_composer.dart#_Composition._alias': 45,
-  'lib/src/load/yaml_composer.dart#_Composition._numberValue': 48,
-  'lib/src/load/yaml_composer.dart#_Composition._start': 63,
-  'lib/src/load/yaml_composer.dart#_Composition.run': 42,
-  'lib/src/normalize/normalizer.dart#Normalizer.normalize': 107,
+  'lib/src/normalize/normalizer.dart#Normalizer.normalize': 43,
   'lib/src/normalize/rules/bool_required_to_array.dart#BoolRequiredToArray._cannotTake':
       42,
   'lib/src/normalize/rules/bool_required_to_array.dart#BoolRequiredToArray.check':
       57,
   'lib/src/normalize/rules/path_param_rules.dart#DeclareMissingPathParams.check':
       48,
-  'lib/src/overrides/override_applier.dart#OverrideApplier._content': 64,
-  'lib/src/overrides/override_applier.dart#OverrideApplier._reference': 83,
-  'lib/src/overrides/override_applier.dart#OverrideApplier._schema': 55,
-  'lib/src/overrides/override_applier.dart#OverrideApplier._typeAndNullable31':
-      73,
-  'lib/src/overrides/override_loader.dart#_OverrideReader._operation': 44,
-  'lib/src/overrides/override_loader.dart#_OverrideReader._schemaSpec': 50,
-  'lib/src/overrides/override_resolver.dart#OverrideResolver._operation': 43,
-  'lib/src/overrides/override_resolver.dart#OverrideResolver._parameter': 51,
   'lib/src/parse/dialect_checker.dart#DialectChecker.check': 42,
   'lib/src/parse/schema_parser.dart#SchemaParser._object': 75,
   'lib/src/resolve/ref_resolver.dart#RefResolver.resolve': 91,

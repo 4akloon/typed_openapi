@@ -11,6 +11,23 @@ change in generated output**, without getting in the way of the M9 work.
 Non-goals: new features, new diagnostics, API changes, renaming public types,
 formatting sweeps.
 
+## Status
+
+- **Phase 0 (guard rails) and phase 1 (safe now) are done** (2026-10-12):
+  the ratchet tests (`test/quality/size_limits_test.dart` in both packages),
+  `yaml_composer.dart` 810 -> 78 lines, `override_applier.dart` 667 -> 76,
+  `override_loader.dart` 612 -> 116, `override_resolver.dart` 450 -> 98,
+  `model/operation.dart` 467 -> 68, `normalizer.dart` 383 -> 202,
+  `schema_shape_rules.dart` 341 -> 7 (one rule per file),
+  `object_reader.dart` 342 -> 278, `operation_parser.dart` 314 -> 288, and
+  the tests of `yaml_composer` and `override_applier` split. Test totals are
+  unchanged (the ratchet adds two tests per package).
+- **Files over the limit in `lib/`: 20 -> 11** (9 in the generator, 2 in the
+  runtime; plus the permanent exemption `diagnostic_code.dart`). Methods over
+  40 lines in the allowlists: 59 -> 48 in the generator.
+- **Waiting for M9** (phase 2 and the rest of phase 1): everything under
+  `ir/`, `emit/`, `config/`, `generate/` and the runtime `dio/`.
+
 ## 1. Coordination with the M9 session
 
 M9 (the operation emitter) is owned by another session ("OpenAPI Dart codegen
