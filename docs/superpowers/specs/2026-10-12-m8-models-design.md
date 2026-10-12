@@ -18,7 +18,7 @@
    - Сигнатури: `factory Pet.fromJson(Map<String, Object?> json)` і `Map<String, Object?> toJson()`. Це контракт json_serializable: модель вкладається в `@JsonSerializable`-класи і навпаки, її можна класти в кеш.
    - `fromJson` кидає `JsonDecodeException`, яку перетворює runtime (рішення M7).
 4. **Форма моделі.**
-   - `final class`, `const`-конструктор з іменованими параметрами (`required` — для обов'язкових полів), `@immutable`, поля `final`.
+   - клас без `final` (рішення користувача після плану: моделі можна розширювати й реалізовувати), `const`-конструктор з іменованими параметрами (`required` — для обов'язкових полів), `@immutable`, поля `final`.
    - `==` і `hashCode` — глибоке порівняння списків і мап через маленький хелпер у runtime (без `package:collection`).
    - `toString`.
    - `copyWith` не генерується (R6.6 SHOULD свідомо звужено).
@@ -43,7 +43,7 @@
    - `fromJson` перевіряє, що прийшло саме воно, інакше `DecodeError` з pointer.
    - Доступ — геттер (`String get petType => 'cat'`).
 9. **Інші enum (рішення 7 research).**
-   - Форма: `sealed X` + `enum XKnown implements X` + `final class XUnknown` з приватним конструктором і статичними аліасами `X.available`.
+   - Форма: `sealed X` + `enum XKnown implements X` + `class XUnknown` з приватним конструктором і статичними аліасами `X.available`.
    - Поле відповіді має тип `X`. Конструктори моделей запиту й параметри операцій приймають лише `XKnown` (R8.2 перевіряє компілятор).
    - Рядкові, числові й булеві enum мають однакову форму. `null` у `enum` робить поле nullable і значенням не стає.
    - `toJson` для `XUnknown` повертає сире значення.

@@ -82,7 +82,7 @@ final class EnumEmitter {
       ..line()
       ..line('/// A value of [$name] the spec does not list; only')
       ..line('/// [$name.fromJson] creates one.')
-      ..block('final class $unknown implements $name', () {
+      ..block('class $unknown implements $name', () {
         out
           ..line('const $unknown._(this.value);')
           ..line()

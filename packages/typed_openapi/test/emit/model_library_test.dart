@@ -41,6 +41,31 @@ $schemas''',
 }
 
 void main() {
+  test('classes are not final, so users can extend and implement them', () {
+    final files = emit(r'''
+    Root:
+      type: object
+      properties:
+        status: {type: string, enum: [a, b]}
+        pet: {$ref: '#/components/schemas/Pet'}
+        other: {oneOf: [{type: string}, {type: integer}]}
+    Cat: {type: object, properties: {kind: {const: cat}}}
+    Dog: {type: object, properties: {kind: {const: dog}}}
+    Pet:
+      oneOf: [{$ref: '#/components/schemas/Cat'}, {$ref: '#/components/schemas/Dog'}]
+      discriminator: {propertyName: kind}
+''');
+    final text = files.values.join('\n');
+    expect(text, isNot(contains('final class')));
+    expect(text, contains('\nclass Root {'));
+    expect(text, contains('\nclass RootStatusUnknown implements RootStatus {'));
+    expect(text, contains('\nclass PetCat implements Pet {'));
+    expect(text, contains('\nclass PetUnknown implements Pet {'));
+    expect(text, contains('\nsealed class Pet {'));
+    expect(text, contains('const PetUnknown._('));
+    expect(text, contains('@immutable\nclass'));
+  });
+
   test('writes a file per declaration and the barrel', () {
     final files = emit(r'''
     Root:
@@ -379,7 +404,7 @@ void main() {
       expect(state, contains(r"itS('it\'s');"));
       expect(
         state,
-        contains('final class RootStateUnknown implements RootState'),
+        contains('class RootStateUnknown implements RootState'),
       );
     });
 
@@ -428,7 +453,7 @@ void main() {
         "Object? toJson() => {...value.toJson(), 'kind': discriminator ?? 'dog'};",
         'other.discriminator == discriminator;',
         'int get hashCode => Object.hash(value, discriminator);',
-        'final class RootUnknown implements Root {',
+        'class RootUnknown implements Root {',
       ]) {
         expect(pet, contains(line));
       }

@@ -8,7 +8,7 @@ import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'
     show DeepEquality, JsonReader, immutable;
 
 @immutable
-final class Dog {
+class Dog {
   /// Creates a [Dog].
   const Dog({this.bark, this.photo});
 

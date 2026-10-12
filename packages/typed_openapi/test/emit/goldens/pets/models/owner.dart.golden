@@ -9,7 +9,7 @@ import 'pet.dart';
 import 'status.dart';
 
 @immutable
-final class Owner {
+class Owner {
   /// Creates a [Owner].
   const Owner({
     required this.id,

@@ -236,7 +236,7 @@ final class UnionEmitter {
                   'as received.',
       )
       ..line('@immutable')
-      ..block('final class $name implements ${decl.name}', () {
+      ..block('class $name implements ${decl.name}', () {
         out.line('/// Wraps [value].');
         if (remembers) {
           out
@@ -322,7 +322,7 @@ final class UnionEmitter {
       ..line('/// A [${decl.name}] that no variant takes; only')
       ..line('/// [${decl.name}.fromJson] creates one.')
       ..line('@immutable')
-      ..block('final class $name implements ${decl.name}', () {
+      ..block('class $name implements ${decl.name}', () {
         out
           ..line('const $name._(this.json);')
           ..line()

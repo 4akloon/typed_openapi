@@ -482,7 +482,7 @@ load (лише тут I/O) → lossless-DTO (JsonPointer + SourceSpan + extensio
 ### 7.7 Представлення (рішення 7)
 
 - **Три стани:** `Patch<T>?`, де `null` означає «ключа немає», плюс `Patch.value(x)` / `Patch.nullValue()`. Узгоджується з R7.3: скрізь у моделі `null` означає «не надсилати». Ергономіка з dot shorthands: `UpdatePet(name: .value('Rex'), tag: .nullValue())`.
-- **Enum:** `sealed class X` + `enum XKnown implements X` + `final class XUnknown` з приватним конструктором і статичними аліасами `X.available`.
+- **Enum:** `sealed class X` + `enum XKnown implements X` + `class XUnknown` з приватним конструктором і статичними аліасами `X.available`.
   - Поле моделі має тип `X`; **параметри операцій і конструктори запитів приймають лише `XKnown`**, тож R8.2 перевіряється компілятором.
   - Вичерпність `switch` зберігається.
   - Extension types **відхилено**: будь-який рядок кастується (`'hacked' as Color`), а вичерпність втрачається (перевірено).

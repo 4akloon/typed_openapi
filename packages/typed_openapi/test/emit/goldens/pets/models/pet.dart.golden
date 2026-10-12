@@ -25,7 +25,7 @@ sealed class Pet {
 
 /// A [Pet] that is a `Cat`.
 @immutable
-final class PetCat implements Pet {
+class PetCat implements Pet {
   /// Wraps [value].
   const PetCat(this.value);
 
@@ -47,7 +47,7 @@ final class PetCat implements Pet {
 
 /// A [Pet] that is a `Dog`.
 @immutable
-final class PetDog implements Pet {
+class PetDog implements Pet {
   /// Wraps [value].
   const PetDog(this.value) : discriminator = null;
 
@@ -79,7 +79,7 @@ final class PetDog implements Pet {
 /// A [Pet] that no variant takes; only
 /// [Pet.fromJson] creates one.
 @immutable
-final class PetUnknown implements Pet {
+class PetUnknown implements Pet {
   const PetUnknown._(this.json);
 
   /// The JSON as received.

@@ -5,7 +5,7 @@ import 'dart_writer.dart';
 import 'type_codec.dart';
 
 /// Writes the class of a [ModelDecl] (decisions 3, 4, 8, 10–13 of M8): a
-/// `final class` with a `const` constructor, `fromJson`, `toJson`, deep
+/// `class` with a `const` constructor, `fromJson`, `toJson`, deep
 /// `==` and `hashCode`, and `toString`.
 ///
 /// A field of a model sent in requests that holds an enum takes only the
@@ -42,7 +42,7 @@ final class ModelEmitter {
     if (model.deprecated) out.line(deprecation);
     out
       ..line('@immutable')
-      ..block('final class $name', () {
+      ..block('class $name', () {
         out.line('/// Creates a [$name].');
         _constructor(out, 'const $name', model, fields, typed: known);
         if (known) {

@@ -48,7 +48,7 @@ enum StatusKnown implements Status {
 
 /// A value of [Status] the spec does not list; only
 /// [Status.fromJson] creates one.
-final class StatusUnknown implements Status {
+class StatusUnknown implements Status {
   const StatusUnknown._(this.value);
 
   @override

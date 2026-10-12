@@ -19,7 +19,7 @@ sealed class IdOrName {
 
 /// A [IdOrName] that is a `String`.
 @immutable
-final class IdOrNameString implements IdOrName {
+class IdOrNameString implements IdOrName {
   /// Wraps [value].
   const IdOrNameString(this.value);
 
@@ -43,7 +43,7 @@ final class IdOrNameString implements IdOrName {
 
 /// A [IdOrName] that is a `int`.
 @immutable
-final class IdOrNameInt implements IdOrName {
+class IdOrNameInt implements IdOrName {
   /// Wraps [value].
   const IdOrNameInt(this.value);
 
@@ -68,7 +68,7 @@ final class IdOrNameInt implements IdOrName {
 /// A [IdOrName] that no variant takes; only
 /// [IdOrName.fromJson] creates one.
 @immutable
-final class IdOrNameUnknown implements IdOrName {
+class IdOrNameUnknown implements IdOrName {
   const IdOrNameUnknown._(this.json);
 
   /// The JSON as received.

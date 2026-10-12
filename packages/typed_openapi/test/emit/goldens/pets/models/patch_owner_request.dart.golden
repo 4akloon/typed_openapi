@@ -5,7 +5,7 @@ import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'
     show DeepEquality, JsonReader, JsonValue, Patch, immutable;
 
 @immutable
-final class PatchOwnerRequest {
+class PatchOwnerRequest {
   /// Creates a [PatchOwnerRequest].
   const PatchOwnerRequest({this.name, this.meta});
 

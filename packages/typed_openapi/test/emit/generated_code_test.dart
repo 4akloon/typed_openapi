@@ -128,7 +128,8 @@ linter:
     - use_full_hex_values_for_flutter_colors
     - use_key_in_widget_constructors
 ''')
-        ..write('bin/decode.dart', _decodeProgram);
+        ..write('bin/decode.dart', _decodeProgram)
+        ..write('bin/extend.dart', _extendProgram);
       for (final fixture in ['pets', 'everything', 'hostile']) {
         for (final mode in UnionMode.values) {
           final files = emitFixture(
@@ -156,6 +157,44 @@ linter:
     });
   }, timeout: const Timeout(Duration(minutes: 3)));
 }
+
+/// Classes of another library extend generated ones, and a switch over a
+/// sealed base is still exhaustive.
+const _extendProgram = r'''
+import 'package:fixture/pets_raw/models.dart';
+
+class MyCat extends PetCat {
+  const MyCat(super.value);
+}
+
+class BigCat extends Cat {
+  const BigCat() : super(lives: 9);
+}
+
+class Tagged implements StatusUnknown {
+  @override
+  String toJson() => 'tagged';
+
+  @override
+  String get value => 'tagged';
+}
+
+String describe(Pet pet) => switch (pet) {
+  PetCat() => 'cat',
+  PetDog() => 'dog',
+  PetUnknown() => 'unknown',
+};
+
+String status(Status status) => switch (status) {
+  StatusKnown() => 'known',
+  StatusUnknown() => 'unknown',
+};
+
+void main() {
+  describe(const MyCat(BigCat()));
+  status(Tagged());
+}
+''';
 
 const _decodeProgram = r'''
 // ignore_for_file: avoid_print
