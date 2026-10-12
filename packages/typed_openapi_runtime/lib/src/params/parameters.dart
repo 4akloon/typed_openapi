@@ -1,0 +1,219 @@
+import 'parameter_value.dart';
+import 'percent_encoder.dart';
+
+/// The `style` of a path parameter.
+enum PathStyle {
+  /// `blue`, `blue,black`, `R,100,G,200` (explode: `R=100,G=200`).
+  simple,
+
+  /// `.blue`, `.blue,black` (explode: `.blue.black`).
+  label,
+
+  /// `;color=blue`, `;color=blue,black` (explode: `;color=blue;color=black`).
+  matrix,
+}
+
+/// The `style` of a query parameter.
+enum QueryStyle {
+  /// `color=blue`, `color=blue&color=black` (no explode: `color=blue,black`).
+  form,
+
+  /// Arrays joined by spaces: `color=blue%20black`.
+  spaceDelimited,
+
+  /// Arrays joined by pipes: `color=blue%7Cblack`.
+  pipeDelimited,
+
+  /// Objects as `color%5BR%5D=100&color%5BG%5D=200` (`color[R]=100`).
+  deepObject,
+}
+
+/// A path parameter: its value replaces `{name}` in the path template.
+///
+/// Values are the JSON form of the parameter (`toJson` applied): a scalar, a
+/// list or a string-keyed map. `null` and empty lists and maps are
+/// undefined and expand to `''`. Every character but the unreserved ones is
+/// percent-encoded, so a value cannot add path segments.
+final class PathParameter {
+  /// Creates a path parameter; OAS defaults are `simple` without explode.
+  const PathParameter(
+    this.name,
+    this.value, {
+    this.style = .simple,
+    this.explode = false,
+  });
+
+  /// The name in the path template.
+  final String name;
+
+  /// The JSON form of the value.
+  final Object? value;
+
+  /// The serialization style.
+  final PathStyle style;
+
+  /// Whether lists and objects are exploded.
+  final bool explode;
+
+  /// The text that replaces `{name}`.
+  String encode() {
+    final value = ParameterValue.of(this.value);
+    return switch (style) {
+      .simple => value.expand(
+        name,
+        encoder: .unreserved,
+        explode: explode,
+        named: false,
+      ),
+      .label => value.expand(
+        name,
+        encoder: .unreserved,
+        explode: explode,
+        named: false,
+        first: '.',
+        separator: '.',
+      ),
+      .matrix => value.expand(
+        name,
+        encoder: .unreserved,
+        explode: explode,
+        named: true,
+        first: ';',
+        separator: ';',
+      ),
+    };
+  }
+}
+
+/// A query parameter.
+///
+/// Values are the JSON form of the parameter, as for [PathParameter];
+/// undefined values are not sent. Names and values are percent-encoded;
+/// [allowReserved] keeps the reserved characters that are safe in a query.
+final class QueryParameter {
+  /// Creates a query parameter. OAS defaults: `form`; explode for `form`
+  /// only.
+  const QueryParameter(
+    this.name,
+    this.value, {
+    this.style = .form,
+    bool? explode,
+    this.allowReserved = false,
+  }) : explode = explode ?? style == .form;
+
+  /// The parameter name.
+  final String name;
+
+  /// The JSON form of the value.
+  final Object? value;
+
+  /// The serialization style.
+  final QueryStyle style;
+
+  /// Whether lists and objects are exploded.
+  final bool explode;
+
+  /// Whether reserved characters are sent without percent-encoding.
+  final bool allowReserved;
+
+  /// The `name=value` pairs joined by `&`, or `''` when the value is
+  /// undefined.
+  String encode() {
+    final value = ParameterValue.of(this.value);
+    final PercentEncoder encoder = allowReserved ? .reserved : .unreserved;
+    if (style == .deepObject) return _deepObject(value, encoder);
+    return value.expand(
+      name,
+      encoder: encoder,
+      explode: explode,
+      named: true,
+      separator: '&',
+      delimiter: switch (style) {
+        .spaceDelimited => '%20',
+        .pipeDelimited => '%7C',
+        _ => ',',
+      },
+      ifEmpty: '=',
+    );
+  }
+
+  String _deepObject(ParameterValue value, PercentEncoder encoder) {
+    final key = PercentEncoder.unreserved.encode(name);
+    return switch (value) {
+      UndefinedValue() => '',
+      ObjectValue(:final pairs) => [
+        for (final (property, text) in pairs)
+          '$key%5B${PercentEncoder.unreserved.encode(property)}%5D='
+              '${encoder.encode(text)}',
+      ].join('&'),
+      _ => throw ArgumentError.value(
+        this.value,
+        name,
+        'deepObject serializes objects only',
+      ),
+    };
+  }
+}
+
+/// A header parameter (`simple` style).
+///
+/// Values are the JSON form of the parameter, as for [PathParameter]. They
+/// are not percent-encoded, except control characters and non-ASCII, which
+/// a header value cannot carry.
+final class HeaderParameter {
+  /// Creates a header parameter; the OAS default is no explode.
+  const HeaderParameter(this.name, this.value, {this.explode = false});
+
+  /// The header name.
+  final String name;
+
+  /// The JSON form of the value.
+  final Object? value;
+
+  /// Whether objects are written as `R=100,G=200`.
+  final bool explode;
+
+  /// The header value, or `null` when the value is undefined.
+  String? encode() => switch (ParameterValue.of(value)) {
+    UndefinedValue() => null,
+    final defined => defined.expand(
+      name,
+      encoder: .header,
+      explode: explode,
+      named: false,
+    ),
+  };
+}
+
+/// A cookie parameter: one or more `name=value` pairs of the `Cookie`
+/// header.
+///
+/// Values are the JSON form of the parameter, as for [PathParameter], and
+/// are percent-encoded. Exploded lists and objects give one pair per item,
+/// joined by `; `.
+final class CookieParameter {
+  /// Creates a cookie parameter; the OAS default is explode.
+  const CookieParameter(this.name, this.value, {this.explode = true});
+
+  /// The cookie name.
+  final String name;
+
+  /// The JSON form of the value.
+  final Object? value;
+
+  /// Whether lists and objects give one pair per item.
+  final bool explode;
+
+  /// The pairs joined by `; `, or `null` when the value is undefined.
+  String? encode() => switch (ParameterValue.of(value)) {
+    UndefinedValue() => null,
+    final defined => defined.expand(
+      name,
+      encoder: .unreserved,
+      explode: explode,
+      named: true,
+      separator: '; ',
+      ifEmpty: '=',
+    ),
+  };
+}

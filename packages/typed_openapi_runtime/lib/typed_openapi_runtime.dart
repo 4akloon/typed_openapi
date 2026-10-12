@@ -5,6 +5,14 @@ export 'src/json/json_decode_exception.dart' show JsonDecodeException;
 export 'src/json/json_reader.dart' show JsonReader;
 export 'src/json/json_value.dart' show JsonValue;
 export 'src/model/patch.dart' show Patch, PatchNull, PatchValue;
+export 'src/params/parameters.dart'
+    show
+        CookieParameter,
+        HeaderParameter,
+        PathParameter,
+        PathStyle,
+        QueryParameter,
+        QueryStyle;
 export 'src/result/result.dart'
     show
         Cancelled,

@@ -1,0 +1,202 @@
+import 'package:test/test.dart';
+import 'package:typed_openapi_runtime/typed_openapi_runtime.dart';
+
+void main() {
+  // The values of the OAS "Style Examples" table.
+  const empty = '';
+  const string = 'blue';
+  const array = ['blue', 'black', 'brown'];
+  const object = {'R': 100, 'G': 200, 'B': 150};
+
+  group('path styles (OAS style examples)', () {
+    String path(PathStyle style, bool explode, Object? value) =>
+        PathParameter('color', value, style: style, explode: explode).encode();
+
+    test('simple', () {
+      expect(path(.simple, false, string), 'blue');
+      expect(path(.simple, false, array), 'blue,black,brown');
+      expect(path(.simple, true, array), 'blue,black,brown');
+      expect(path(.simple, false, object), 'R,100,G,200,B,150');
+      expect(path(.simple, true, object), 'R=100,G=200,B=150');
+      expect(const PathParameter('id', 42).encode(), '42');
+    });
+
+    test('label', () {
+      expect(path(.label, false, empty), '.');
+      expect(path(.label, false, string), '.blue');
+      expect(path(.label, false, array), '.blue,black,brown');
+      expect(path(.label, true, array), '.blue.black.brown');
+      expect(path(.label, false, object), '.R,100,G,200,B,150');
+      expect(path(.label, true, object), '.R=100.G=200.B=150');
+    });
+
+    test('matrix', () {
+      expect(path(.matrix, false, empty), ';color');
+      expect(path(.matrix, false, string), ';color=blue');
+      expect(path(.matrix, false, array), ';color=blue,black,brown');
+      expect(path(.matrix, true, array), ';color=blue;color=black;color=brown');
+      expect(path(.matrix, false, object), ';color=R,100,G,200,B,150');
+      expect(path(.matrix, true, object), ';R=100;G=200;B=150');
+    });
+
+    test('values cannot add path segments or queries', () {
+      expect(const PathParameter('id', 'a/b?c#d').encode(), 'a%2Fb%3Fc%23d');
+      expect(const PathParameter('id', 'über ok').encode(), '%C3%BCber%20ok');
+      expect(const PathParameter('id', "!*'()").encode(), '%21%2A%27%28%29');
+      expect(const PathParameter('id', '-._~').encode(), '-._~');
+    });
+
+    test('undefined values expand to nothing', () {
+      for (final style in PathStyle.values) {
+        expect(path(style, false, null), '');
+        expect(path(style, true, const <String>[]), '');
+        expect(path(style, false, const <String, Object?>{}), '');
+      }
+    });
+  });
+
+  group('query styles (OAS style examples)', () {
+    String query(
+      Object? value, {
+      QueryStyle style = .form,
+      bool? explode,
+      bool allowReserved = false,
+    }) => QueryParameter(
+      'color',
+      value,
+      style: style,
+      explode: explode,
+      allowReserved: allowReserved,
+    ).encode();
+
+    test('form', () {
+      expect(query(empty), 'color=');
+      expect(query(string), 'color=blue');
+      expect(query(array), 'color=blue&color=black&color=brown');
+      expect(query(array, explode: false), 'color=blue,black,brown');
+      expect(query(object), 'R=100&G=200&B=150');
+      expect(query(object, explode: false), 'color=R,100,G,200,B,150');
+    });
+
+    test('spaceDelimited and pipeDelimited default to no explode', () {
+      expect(
+        query(array, style: .spaceDelimited),
+        'color=blue%20black%20brown',
+      );
+      expect(
+        query(object, style: .spaceDelimited),
+        'color=R%20100%20G%20200%20B%20150',
+      );
+      expect(query(array, style: .pipeDelimited), 'color=blue%7Cblack%7Cbrown');
+      expect(
+        query(array, style: .pipeDelimited, explode: true),
+        'color=blue&color=black&color=brown',
+      );
+      expect(
+        const QueryParameter('a', 1, style: .pipeDelimited).explode,
+        isFalse,
+      );
+      expect(const QueryParameter('a', 1).explode, isTrue);
+    });
+
+    test('deepObject', () {
+      expect(
+        query(object, style: .deepObject),
+        'color%5BR%5D=100&color%5BG%5D=200&color%5BB%5D=150',
+      );
+      expect(query(null, style: .deepObject), '');
+      expect(
+        () => query(array, style: .deepObject),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+
+    test('scalars, nulls and order', () {
+      expect(query(1.5), 'color=1.5');
+      expect(query(true), 'color=true');
+      expect(query(null), '');
+      expect(query(const <Object?>[]), '');
+      expect(query(const ['a', null, 'b']), 'color=a&color=b');
+      expect(query(const {'z': 1, 'a': null, 'b': 2}), 'z=1&b=2');
+    });
+
+    test('names and values are percent-encoded', () {
+      expect(
+        const QueryParameter('a b[]', 'x&y=z+w#v').encode(),
+        'a%20b%5B%5D=x%26y%3Dz%2Bw%23v',
+      );
+    });
+
+    test('allowReserved keeps reserved characters that are safe', () {
+      expect(
+        query(r"a/b?c:d@e!f$g'h(i)j*k,l;m", allowReserved: true),
+        r"color=a/b?c:d@e!f$g'h(i)j*k,l;m",
+      );
+      expect(
+        query('x&y=z+w#v[0] %41%zz', allowReserved: true),
+        'color=x%26y%3Dz%2Bw%23v%5B0%5D%20%41%25zz',
+      );
+      expect(query('a/b'), 'color=a%2Fb');
+    });
+  });
+
+  group('header and cookie', () {
+    test('headers use simple style without percent-encoding', () {
+      expect(
+        const HeaderParameter('X-Ids', array).encode(),
+        'blue,black,brown',
+      );
+      expect(
+        const HeaderParameter('X-Color', object, explode: true).encode(),
+        'R=100,G=200,B=150',
+      );
+      expect(
+        const HeaderParameter('X-Text', 'a b/c,"d"').encode(),
+        'a b/c,"d"',
+      );
+      expect(const HeaderParameter('X-None', null).encode(), isNull);
+    });
+
+    test('a header value cannot break the header line', () {
+      expect(
+        const HeaderParameter('X-Text', 'a\r\nInjected: 1').encode(),
+        'a%0D%0AInjected: 1',
+      );
+      expect(const HeaderParameter('X-Text', 'ü').encode(), '%C3%BC');
+    });
+
+    test('cookies are name=value pairs joined by "; "', () {
+      expect(const CookieParameter('id', 'a b;c').encode(), 'id=a%20b%3Bc');
+      expect(
+        const CookieParameter('ids', array).encode(),
+        'ids=blue; ids=black; ids=brown',
+      );
+      expect(
+        const CookieParameter('ids', array, explode: false).encode(),
+        'ids=blue,black,brown',
+      );
+      expect(
+        const CookieParameter('o', object).encode(),
+        'R=100; G=200; B=150',
+      );
+      expect(const CookieParameter('id', null).encode(), isNull);
+    });
+  });
+
+  test('values that are not JSON scalars are a programming error', () {
+    expect(
+      () => const PathParameter('id', [
+        ['nested'],
+      ]).encode(),
+      throwsA(isA<ArgumentError>()),
+    );
+    expect(
+      () => QueryParameter('t', DateTime(2024)).encode(),
+      throwsA(isA<ArgumentError>()),
+    );
+    expect(
+      () => const QueryParameter('n', double.infinity).encode(),
+      throwsA(isA<ArgumentError>()),
+    );
+  });
+}
