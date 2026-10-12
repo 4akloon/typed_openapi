@@ -243,8 +243,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   hidden `typed_openapi ir` command prints it. Naming and mapping codes use
   the second half of each area's hundred: TOA250-TOA256, TOA350-TOA351,
   TOA450-TOA456, TOA550-TOA564; `generate` has TOA830 (output not owned),
-  TOA831 (output not written) and TOA832 (an interrupted run recovered,
-  info). TOA552 on an enum value is an info (an override cannot name enum
+  TOA831 (output not written, or its lock held) and TOA832 (an interrupted
+  run recovered, or a lock taken over; info). TOA552 on an enum value is an info (an override cannot name enum
   values; `x-enum-varnames` in the spec does), and `unknown` is reserved in
   the enum value scope (`unknown_`).
 - `emit/` - the model emitter (M8), whose only input is the IR (it never
@@ -330,31 +330,55 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   anywhere in any branch) and a secret variant make the unknown variant
   print `<redacted>`.
 - `generate/` - `OutputWriter` (atomic per run: the whole tree and the
-  manifest `.typed_openapi.json` (generator, hash of the inputs, every file
-  with its hash) are built in a staging directory next to the output, made
-  with the umask mode and given the mode of the old output, then the old
-  directory is renamed to a backup, the staging one to the output, and the
-  backup removed; a failure restores the backup, and when that fails too
-  TOA831 names the backup that holds the old tree; a failed first run
-  leaves nothing; a run that changes nothing does not swap; refuses with
-  TOA830 an output that holds a `pubspec.yaml`, is a package's `lib`, is or
-  holds a symbolic link, is not a directory, holds a file the config makes
-  any client read, or holds files without a manifest that parses as JSON
-  and names `typed_openapi` as its generator; I/O errors, also an
-  unreadable directory, are TOA831). A run killed between the renames
-  leaves `.<output>.typed_openapi-*` directories: the next run puts the
-  backup back when the output is missing, removes the directories (a backup
-  only once the output holds a manifest) and reports TOA832 (info).
-  `OutputWriter.beforeInstall` is a test seam (`@visibleForTesting`).
+  manifest `.typed_openapi.json` (generator, `format` 2, hash of the inputs,
+  every file with its hash) are built in a staging directory next to the
+  output, made with the umask mode, then given the mode of the old output
+  (`chmod`, only when the modes differ, after the files are written, so a
+  read-only 0555 output works; the backup of such a directory is made
+  writable before it is removed; a missing or failing `chmod` is TOA831),
+  then the old directory is renamed to a backup, the staging one to the
+  output, and the backup removed; a failure restores the backup, and when
+  that fails too TOA831 names the backup that holds the old tree; a failed
+  first run leaves nothing; a run that changes nothing does not swap.
+  **It replaces only what it wrote** (decision 17): a file of the old
+  directory that the manifest does not list, or whose SHA-256 differs from
+  the manifest's, or that has no hash in it (a manifest before format 2), is
+  a stray, unless it already holds what the run writes; with strays, or
+  files and no manifest of this generator (a manifest that parses as JSON
+  and names `typed_openapi`), the client is refused with TOA830 that names
+  up to 8 files, and `generate --force` (`OutputChanges.forced` counts them)
+  replaces them. Whatever `force` says, TOA830 also refuses an output that
+  holds a `pubspec.yaml`, is a package's `lib`, is or holds a symbolic link,
+  is not a directory, or holds an input of the run; I/O errors, also an
+  unreadable directory, are TOA831.
+  **A lock** `.<output>.typed_openapi.lock` (JSON with pid, host and a
+  random id) is created exclusively next to the output, resolved through
+  symbolic links and lower-cased on a case-insensitive file system, before
+  anything else is read and removed at the end (only if it still holds this
+  run's text). A held lock is TOA831 and nothing is touched; a lock of a
+  pid on this host that `kill -0` says is gone is taken over, and `--force`
+  breaks any lock, both reported as TOA832; a lock whose process cannot be
+  told (another host, unreadable, no `kill`, Windows) is held.
+  A run killed between the renames leaves `.<output>.typed_openapi-<8
+  letters or digits>[-old]` directories. Under the lock, `_leftovers` skips
+  any that holds an input of the run (by location, by symbolic link and by
+  file identity), `_inspect` checks the output (or the newest backup, when
+  the output is missing) as above, and only then `_recover` restores that
+  backup and removes the other leftovers (a backup only once the output
+  holds a manifest), reporting TOA832 (info). `OutputWriter.forTesting`
+  (`@visibleForTesting`) takes the test hooks (`beforeInstall`, and `run`
+  for `chmod`/`kill`); the public constructor has none.
   `RealPaths` compares paths with symbolic links resolved and case ignored
   where the file system ignores it (found by a probe; `ConfigLoader` uses it
   for TOA904 too). An input of the run is also found by file identity
-  (`FileSystemEntity.identical`) among the files about to be deleted, so a
-  hard link or a case-different name never gets an input deleted. The
-  protected files are those of every client in the config, also one that
-  was not selected: the declared input, overrides and baseline, the `$ref`'d
-  files of the clients that were checked, and the config itself. A client
-  whose output overlaps another's (TOA904) is skipped by `generate`.
+  (`FileSystemEntity.identical`) among the files in the output, so a hard
+  link or a case-different name never gets an input deleted: this stays as
+  the second line of defence. The protected files are those of every client
+  in the config, also one that was not selected: the declared input,
+  overrides and baseline, the `$ref`'d files of the clients that were
+  checked, and the config itself. A client whose output overlaps another's
+  (TOA904) is skipped by `generate`. `GenerateCommand` has `--config/-c` and
+  `--force`.
 - `check/` - `SpecChecker`: config -> load -> version -> overrides ->
   `Normalizer` -> `IrBuilder` once per run (file, preset, rules, overrides
   file, `GenerationConfig.key`); an overrides file that cannot be used is
@@ -445,7 +469,7 @@ Rules of the pipeline:
 
 ## Runtime (`packages/typed_openapi_runtime/lib/src/`)
 
-The only package generated clients depend on (dependencies: `dio`, `meta`).
+The only package generated clients depend on (dependencies: `dio`, `meta`, floor `^1.15.0` so Flutter's pinned `meta` resolves).
 Pure Dart, works on the web (compiled to JS and to Wasm); SSE needs a
 streaming adapter there (Dio's default browser adapter delivers the body
 only when the connection closes), and cookie parameters do not work (browsers

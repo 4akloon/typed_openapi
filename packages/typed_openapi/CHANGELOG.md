@@ -20,16 +20,31 @@
   (`PetJson`) or, when no variant has a type of its own, is `JsonValue`
   (TOA453). A variant that takes any JSON makes the union structural, still
   with TOA453.
-- `generate` owns the output directory: it builds the tree and the manifest
-  `.typed_openapi.json` (the generator, a hash of the inputs and the files)
-  in a temporary directory next to it and swaps it in, so a failed run keeps
-  the previous output and a failed first run leaves nothing. A run that
-  changes nothing does not touch the directory, and files it did not
-  generate are deleted with the old directory. It refuses a directory that
-  holds a package, a symbolic link, a file that any client of the config
-  reads (also through links or another letter case) or foreign files
-  (TOA830). A run killed while it swapped is recovered by the next one
-  (TOA832). Outputs that overlap are skipped (TOA904).
+- `generate` writes the output directory as a whole: it builds the tree and
+  the manifest `.typed_openapi.json` (the generator, the manifest `format`
+  2, a hash of the inputs and the hash of every file) in a temporary
+  directory next to it and swaps it in, so a failed run keeps the previous
+  output and a failed first run leaves nothing. A run that changes nothing
+  does not touch the directory.
+- `generate` replaces only what it wrote: a file that the previous manifest
+  lists with a matching hash. A file of the user or of another client, or a
+  generated file that was edited, is foreign or modified: the client is not
+  generated and `TOA830` names the files. The new flag `generate --force`
+  replaces them (and says how many); it never replaces a directory with a
+  package, a symbolic link or a file any client reads (the config, a spec,
+  its `$ref`'d files, overrides, baseline; also through links or another
+  letter case). A manifest without the hash of a file (written before format
+  2) counts the file as modified: pass `--force` once. Outputs that overlap
+  are skipped (`TOA904`).
+- `generate` holds a lock file `.<output>.typed_openapi.lock` next to the
+  output while it works (created exclusively, with its pid and host): a
+  second run on the same output gets `TOA831` and changes nothing, the lock
+  of a process that is gone is taken over (`TOA832`), and `--force` breaks
+  any lock. A run killed while it swapped leaves `.<output>.typed_openapi-*`
+  directories; the next run recovers under the lock (`TOA832`), after it has
+  checked the output, and never touches a directory that holds an input of
+  the run. A read-only output (mode 555) works, and a missing `chmod` is
+  `TOA831`.
 - A schema with a discriminator that other schemas extend with `allOf`
   (also from other files the spec reads) is a union of their models where it
   is used as a type. A wrapper writes back the discriminator value it was
