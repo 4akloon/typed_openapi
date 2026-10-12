@@ -405,12 +405,13 @@ final class OperationBuilder {
         if (_kind(type) != kind) continue;
         final media = _context.model.resolve(written);
         // A variant of the chosen type (`application/json; profile=...`) or
-        // another JSON type has the same use: nothing is lost.
+        // another JSON type (also `text/json`) has the same use: nothing is
+        // lost.
         final dropped = [
           for (final other in content.keys)
             if (other != type &&
                 _baseType(other) != _baseType(type) &&
-                !(kind == .json && _kind(other) == .json))
+                !(kind == .json && _isJson(other)))
               other,
         ];
         if (dropped.isNotEmpty) {
@@ -471,6 +472,11 @@ final class OperationBuilder {
   /// [contentType] without its parameters, in lower case.
   static String _baseType(String contentType) =>
       contentType.split(';').first.trim().toLowerCase();
+
+  /// Whether [contentType] is JSON, also as `text/json`, which is a text
+  /// type for [_kind] but is read as JSON by every server that sends it.
+  static bool _isJson(String contentType) =>
+      _kind(contentType) == .json || _baseType(contentType) == 'text/json';
 
   static BodyKind _kind(String contentType) {
     final type = _baseType(contentType);

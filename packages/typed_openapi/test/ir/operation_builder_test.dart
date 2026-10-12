@@ -538,18 +538,13 @@ paths:
 ''');
       build(fixture);
       final found = reported(fixture, .mediaTypeAsBytes);
-      // `application/vnd.api+json` and `text/json` are JSON too (text/json
-      // is text, so it is not).
-      expect(found, hasLength(2));
+      // The 200 response has only JSON variants (`text/json` too): nothing
+      // is dropped. The 201 response drops the XML.
       expect(found.map((d) => d.pointer?.value), [
-        '#/paths/~1a/get/responses/200/content',
         '#/paths/~1a/get/responses/201/content',
       ]);
-      expect(found[0].message, contains('"text/json"'));
-      expect(found[0].message, isNot(contains('profile')));
-      expect(found[0].message, isNot(contains('vnd.api')));
-      expect(found[1].message, contains('"application/xml"'));
-      expect(found[1].message, isNot(contains('profile')));
+      expect(found.single.message, contains('"application/xml"'));
+      expect(found.single.message, isNot(contains('profile')));
     });
 
     test('one JSON media type is silent', () {
