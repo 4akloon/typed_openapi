@@ -4,11 +4,13 @@ import '../diagnostics/json_pointer.dart';
 import '../model/operation.dart';
 import '../model/spec_node.dart';
 import '../normalize/normalizer.dart';
+import 'api_names.dart';
 import 'direction_index.dart';
 import 'ir.dart';
 import 'ir_context.dart';
 import 'names.dart';
 import 'operation_builder.dart';
+import 'operation_checks.dart';
 import 'operation_selector.dart';
 import 'schema_mapper.dart';
 
@@ -71,7 +73,6 @@ final class IrBuilder {
     }
     _reportUntagged(context, selected, untagged);
     final built = <String, List<OperationIr>>{};
-    var unbound = 0;
     for (final group in groups.keys.toList()..sort()) {
       final scope = NameScope(
         reserved: {...DartNames.reservedWords, ...DartNames.objectMembers},
@@ -79,10 +80,7 @@ final class IrBuilder {
       );
       final names = _methodNames(context, groups[group]!, scope);
       for (final entry in groups[group]!) {
-        final operation = operations.build(entry, names[entry]!);
-        if (operation == null) {
-          unbound++;
-        } else {
+        if (operations.build(entry, names[entry]!) case final operation?) {
           (built[group] ??= []).add(operation);
         }
       }
@@ -92,9 +90,11 @@ final class IrBuilder {
         context,
         refs: refs,
         filtered: all.length - selected.length,
-        unbound: unbound,
+        unbound: operations.unbound,
+        streams: operations.streams,
       );
     }
+    OperationChecks(context).webhooks();
     final types = NameScope(
       reserved: {
         ...DartNames.reservedWords,
@@ -110,9 +110,9 @@ final class IrBuilder {
     }
     mapper.nameDeclarations(types);
     final groupClasses = <String>{};
-    final groupIrs = [
+    final groupIrs = {
       for (final group in built.keys.toList()..sort())
-        GroupIr(
+        group: GroupIr(
           _groupName(
             context,
             types,
@@ -122,10 +122,11 @@ final class IrBuilder {
           ),
           built[group]!,
         ),
-    ];
+    };
     // The types the emitters add for declarations are named after the
-    // groups, so they never rename a group or a declaration.
-    return ClientIr(declarations: mapper.declarations(types), groups: groupIrs);
+    // groups, so they never rename a group or a declaration; M9's are last.
+    final declarations = mapper.declarations(types);
+    return ApiNames(context, types).client(declarations, groupIrs);
   }
 
   /// Reports operations without a group: one TOA554 when no generated
@@ -179,8 +180,9 @@ final class IrBuilder {
     required int refs,
     required int filtered,
     required int unbound,
+    required int streams,
   }) {
-    if (refs + filtered + unbound == 0) return;
+    if (refs + filtered + unbound + streams == 0) return;
     final reasons = [
       if (filtered > 0)
         '$filtered ${filtered == 1 ? 'is' : 'are'} left out by the include '
@@ -190,11 +192,15 @@ final class IrBuilder {
       if (unbound > 0)
         '$unbound ${unbound == 1 ? 'has' : 'have'} a path variable without a '
             'parameter (TOA556)',
+      if (streams > 0)
+        '$streams ${streams == 1 ? 'is an event stream' : 'are event '
+                  'streams'}, generated from M10 (TOA654)',
     ];
     final fixes = [
       if (filtered > 0) 'Check include, exclude and the overrides.',
       if (refs > 0) 'Write the operations inline at the source.',
       if (unbound > 0) 'Declare the path parameters at the source.',
+      if (streams > 0) 'Leave the event streams out with exclude.',
     ];
     final config = context.config;
     final byFilter =

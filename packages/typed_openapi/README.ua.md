@@ -189,6 +189,7 @@ Override, ціль якого зникла, дає warning, той, з яким 
 ```yaml
 defaults:
   naming:
+    client: PetstoreClient       # кореневий клас; за замовчуванням ім'я клієнта + Client
     group: '{Tag}Api'            # клас на тег; group_by: tag|path|single
     patch_suffix: Patch          # PetPatch: тіло PATCH схеми, вжитої ще деінде
     operation_prefix: '^v1_'     # зрізається з operationId (nestjs: XController_)

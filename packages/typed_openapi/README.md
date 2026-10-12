@@ -189,6 +189,7 @@ generate and how in `defaults` or per client:
 ```yaml
 defaults:
   naming:
+    client: PetstoreClient       # root client class; default: client name + Client
     group: '{Tag}Api'            # class per tag; group_by: tag|path|single
     patch_suffix: Patch          # PetPatch: PATCH body of a schema used elsewhere too
     operation_prefix: '^v1_'     # removed from operationIds (nestjs: XController_)

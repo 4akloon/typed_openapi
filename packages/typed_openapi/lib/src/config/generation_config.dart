@@ -87,6 +87,7 @@ final class GenerationConfig {
     this.inputSuffix = defaultInputSuffix,
     this.patchSuffix = defaultPatchSuffix,
     this.operationPrefix,
+    this.clientClass,
     this.groupBy = .tag,
     this.include = const OperationFilter(),
     this.exclude = const OperationFilter(),
@@ -138,6 +139,11 @@ final class GenerationConfig {
   /// is left as it is, and so is every id when the pattern can match the
   /// empty string (`.*`) and does not match anything at the start.
   final RegExp? operationPrefix;
+
+  /// `naming.client`: the class name of the root client; null for the
+  /// client's name in UpperCamelCase with `Client` (`petstore` gives
+  /// `PetstoreClient`).
+  final String? clientClass;
 
   /// `group_by`.
   final GroupBy groupBy;
@@ -202,6 +208,7 @@ final class GenerationConfig {
     'input_suffix': inputSuffix,
     'patch_suffix': patchSuffix,
     'operation_prefix': operationPrefix?.pattern,
+    'client_class': clientClass,
     'group_by': groupBy.name,
     'include': include.toJson(),
     'exclude': exclude.toJson(),

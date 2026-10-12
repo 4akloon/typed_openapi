@@ -494,6 +494,7 @@ final class _GenerationReader {
   _GenerationReader(this._reader, this._sources);
 
   static const _namingKeys = {
+    'client',
     'group',
     'default_group',
     'input_suffix',
@@ -531,6 +532,7 @@ final class _GenerationReader {
       inputSuffix: suffixes.$1,
       patchSuffix: suffixes.$2,
       operationPrefix: _pattern(),
+      clientClass: _clientClass(),
       groupBy: _choice('group_by', GroupBy.values) ?? .tag,
       include: _filter('include'),
       exclude: _filter('exclude'),
@@ -608,6 +610,22 @@ final class _GenerationReader {
       '"default_group" is the name of a class and "$name" is a reserved word '
       'in Dart.',
       _pick('default_group', 'naming')!.$2,
+    );
+  }
+
+  /// `client` is the name of a class, as `default_group` is.
+  String? _clientClass() {
+    final name = _identifierAt('client');
+    if (name == null) return null;
+    if (!DartNames.reservedWords.contains(name) &&
+        !DartNames.builtInIdentifiers.contains(name) &&
+        name.startsWith(RegExp(r'[A-Z$]'))) {
+      return name;
+    }
+    return _invalid(
+      '"client" is the name of a class: an identifier that starts with an '
+      'uppercase letter and is not a reserved word in Dart.',
+      _pick('client', 'naming')!.$2,
     );
   }
 

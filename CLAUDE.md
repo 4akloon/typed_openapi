@@ -268,7 +268,18 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   or one class, with an override `group` (UpperCamelCase, or a value that
   differs only by case or separators) and TOA553-TOA555; the names of custom
   types are taken in the type scope first, so a declaration named like one
-  gets a suffix, TOA551; method names,
+  gets a suffix, TOA551; `ApiNames` names, after the declarations, groups
+  and M8 helper types, the root client (`ClientIr.root`: `naming.client`
+  or the client name with `Client`, so `SpecChecker` keys a run by the
+  client name when `naming.client` is unset; group fields and servers are
+  its members), the sealed `StatusTypeIr`s of successes with different
+  bodies and of `ErrorsByStatus` (variants by reason phrase, `ApiNames.
+  variantOf`; the plural when an inline body has the name) and the class of
+  multipart parts (`RequestBodyIr.parts`, TOA655 when the schema is not an
+  object); `OperationBuilder` keeps security requirements (TOA568 for an
+  unknown scheme), skips event-stream operations (TOA654) and reports
+  operation servers (TOA566), callbacks and webhooks (TOA567) and a missing
+  2xx (TOA653); method names,
   override names first, then
   `operationId` without the `operation_prefix`, then the path; TOA563 when
   no operation is generated, at the config client if filters left some

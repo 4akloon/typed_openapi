@@ -6,7 +6,10 @@ import 'dart_type.dart';
 import 'ir.dart';
 import 'ir_context.dart';
 import 'names.dart';
+import 'operation_checks.dart';
+import 'parts_builder.dart';
 import 'schema_mapper.dart';
+import 'security_builder.dart';
 
 /// An operation of the spec with its method and path.
 final class SpecOperation {
@@ -37,7 +40,10 @@ final class SpecOperation {
 final class OperationBuilder {
   /// Creates a builder that maps types with [_mapper].
   OperationBuilder(this._context, this._mapper)
-    : _encoding = BodyEncoding(_context);
+    : _checks = OperationChecks(_context),
+      _security = SecurityBuilder(_context),
+      _parts = PartsBuilder(_context, _mapper),
+      _encoding = BodyEncoding(_context);
 
   static const _names = DartNames();
 
@@ -72,16 +78,38 @@ final class OperationBuilder {
 
   final IrContext _context;
   final SchemaMapper _mapper;
+  final OperationChecks _checks;
+  final SecurityBuilder _security;
+  final PartsBuilder _parts;
   final BodyEncoding _encoding;
 
+  /// How many operations [build] left out because a success is an event
+  /// stream (TOA654).
+  int streams = 0;
+
+  /// How many operations [build] left out because a path variable has no
+  /// parameter (TOA556).
+  int unbound = 0;
+
   /// The IR of [entry], named [name]; null when its path template cannot
-  /// be filled.
+  /// be filled, or when a success is an event stream (counted in
+  /// [streams]).
   OperationIr? build(SpecOperation entry, String name) {
     final operation = entry.operation;
     final prefix = _names.pascal(name) ?? name;
     final parameters = _parameters(entry, prefix);
-    if (parameters == null) return null;
+    if (parameters == null) {
+      unbound++;
+      return null;
+    }
     final responses = _responses(operation, prefix);
+    if (_checks.isEventStream(responses)) {
+      streams++;
+      return null;
+    }
+    _checks.successes(operation);
+    _checks.servers(entry);
+    _checks.callbacks(operation);
     return OperationIr(
       location: operation.location,
       name: name,
@@ -96,6 +124,7 @@ final class OperationBuilder {
       body: _body(operation, entry.method, prefix),
       responses: responses,
       errors: _errors(responses),
+      security: _security.of(operation),
     );
   }
 
@@ -340,18 +369,11 @@ final class OperationBuilder {
     );
     final kind = contentType == null ? BodyKind.none : _kind(contentType);
     final schema = media?.schema;
-    // Raw bytes have no model, as in responses; text is a string.
-    final DartType? type = switch ((schema, kind)) {
-      (_, .bytes) => const CoreType(.binary),
-      (_, .text || .eventStream) => const CoreType(.string),
-      (null, _) => null,
-      (final schema?, _) => _mapper.typeOf(
-        schema,
-        NameHint(prefix, 'Request'),
-        direction: .request,
-        patchBody: method.toLowerCase() == 'patch',
-      ),
-    };
+    final parts = kind == .multipart && schema != null
+        ? _parts.of(schema, media!, prefix)
+        : null;
+    // Parts are a class of their own.
+    final type = parts == null ? _bodyType(schema, kind, prefix, method) : null;
     return RequestBodyIr(
       kind: kind,
       location: body.location,
@@ -362,7 +384,29 @@ final class OperationBuilder {
       encoding: kind == .form || kind == .multipart
           ? _encoding.of(media!, kind)
           : const [],
+      parts: parts,
     );
+  }
+
+  /// The type of a request body of [kind]: raw bytes have no model, as in
+  /// responses, and text is a string.
+  DartType? _bodyType(
+    Schema? schema,
+    BodyKind kind,
+    String prefix,
+    String method,
+  ) {
+    return switch ((schema, kind)) {
+      (_, .bytes) => const CoreType(.binary),
+      (_, .text || .eventStream) => const CoreType(.string),
+      (null, _) => null,
+      (final schema?, _) => _mapper.typeOf(
+        schema,
+        NameHint(prefix, 'Request'),
+        direction: .request,
+        patchBody: method.toLowerCase() == 'patch',
+      ),
+    };
   }
 
   List<ResponseIr> _responses(Operation operation, String prefix) {

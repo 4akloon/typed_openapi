@@ -677,8 +677,8 @@ paths:
     test('clients with identical settings share one run', () {
       final checks = check('''
 clients:
-  a: {input: api.yaml, output: lib/a}
-  b: {input: api.yaml, output: lib/b}
+  a: {input: api.yaml, output: lib/a, naming: {client: Api}}
+  b: {input: api.yaml, output: lib/b, naming: {client: Api}}
 ''');
       expect(identical(checks[0].ir, checks[1].ir), isTrue);
     });

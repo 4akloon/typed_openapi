@@ -167,6 +167,18 @@
     placement; also a form property's `encoding` style.
   - TOA565 querystring-not-generated (warning): an `in: querystring`
     parameter (OpenAPI 3.2) is not generated (TOA564 before M9).
+  - TOA566 operation-servers-ignored (warning): a path item or operation has
+    its own `servers`; requests go to the Dio base URL.
+  - TOA567 callbacks-not-generated (info): `callbacks` of an operation and
+    the document's `webhooks` are not generated.
+  - TOA568 security-scheme-unknown (warning): a security requirement names
+    a scheme `components.securitySchemes` does not have.
+  - TOA653 success-undocumented (warning): no 2xx response; any 2xx is a
+    success with the body as `JsonValue`.
+  - TOA654 event-stream-not-generated (warning): an operation whose success
+    is `text/event-stream` is not generated until M10.
+  - TOA655 multipart-not-object (warning): a multipart body that is not an
+    object with properties has no class of parts.
   - TOA650 media-type-as-bytes (info): a body whose media type is not JSON, a
     form, `multipart/form-data`, `text/*` or `text/event-stream`, or a form
     or multipart response, is bytes and its schema is not used (TOA561
@@ -179,6 +191,14 @@
     M9).
   - TOA656 encoding-headers-ignored (info): the `headers` of a multipart
     part's `encoding` are not sent.
+- The IR names what the API emitter declares, after the models (which never
+  move): the root client (`naming.client`, else the client name with
+  `Client`), the sealed types of successes and errors with variants named by
+  the HTTP reason phrase (`CreatePetErrorNotFound`, `…ClientError` for
+  `4XX`, `…Other` for `default`, `…Status499`; the plural `GetPetErrors`
+  when an inline body is `GetPetError`), the classes of multipart parts
+  (`UploadRequest`), the group fields and the servers of the root client;
+  and it keeps security requirements with their schemes.
 - An `apiKey` security scheme without `in` is TOA112, as one without `name`.
 - Schemas named `Dio` or like the runtime's new names (`FileUpload`,
   `FormBody`, `MultipartBody`, `SecurityScheme`, ...) get the `Model` suffix

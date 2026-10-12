@@ -367,6 +367,18 @@ enum DiagnosticCode {
   /// send yet: the parameter is not generated (TOA564 until M9).
   querystringNotGenerated('TOA565', 'querystring-not-generated', .warning),
 
+  /// A path item or an operation has its own `servers`; the client sends
+  /// every request to the base URL of the user's Dio.
+  operationServersIgnored('TOA566', 'operation-servers-ignored', .warning),
+
+  /// An operation has `callbacks`, or the document has `webhooks`: requests
+  /// the server makes, which the client does not generate.
+  callbacksNotGenerated('TOA567', 'callbacks-not-generated', .info),
+
+  /// A security requirement names a scheme that `components.securitySchemes`
+  /// does not have; the scheme is left out of the operation's metadata.
+  securitySchemeUnknown('TOA568', 'security-scheme-unknown', .warning),
+
   /// `*/*` is used as a media type.
   wildcardMediaType('TOA601', 'wildcard-media-type', .warning),
 
@@ -388,6 +400,20 @@ enum DiagnosticCode {
     'default-error-schema-missing',
     .warning,
   ),
+
+  /// An operation documents no 2xx response: any 2xx is a success whose
+  /// value is the body as `JsonValue`.
+  successUndocumented('TOA653', 'success-undocumented', .warning),
+
+  /// A success of an operation is `text/event-stream`; the operation is not
+  /// generated until M10 generates event streams.
+  eventStreamNotGenerated('TOA654', 'event-stream-not-generated', .warning),
+
+  /// The schema of a multipart body is not an object with properties (a
+  /// union, an `allOf`, a map): there is no class of parts, the body is the
+  /// schema's type, each property of its JSON is a part, and a binary
+  /// string is sent as base64 text, not as a file.
+  multipartNotObject('TOA655', 'multipart-not-object', .warning),
 
   /// An `encoding` entry of a multipart or form body has `headers`, which
   /// the client does not send.
