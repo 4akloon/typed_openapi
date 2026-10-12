@@ -59,6 +59,8 @@ paths:
                 any: {}
                 jsonEncode: {type: object, properties: {a: {type: string}}}
                 base64Encode: {type: string, format: byte}
+                list: {type: array, items: {$ref: '#/components/schemas/Node'}}
+                blob: {type: string, format: byte}
       responses:
         "204": {description: ok}
   /d:
@@ -70,6 +72,8 @@ paths:
         - {name: j, in: query, content: {application/json: {schema: {type: object, properties: {a: {type: string}}}}}}
         - {name: jv, in: query, content: {application/json: {schema: {}}}}
         - {name: jr, in: query, required: true, content: {application/json: {schema: {$ref: '#/components/schemas/Node'}}}}
+        - {name: f, in: header, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Node'}}}}}
+        - {name: g, in: cookie, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Node'}}}}}
       responses:
         "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Maybe'}}}}
     post:
