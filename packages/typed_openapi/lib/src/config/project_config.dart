@@ -1,4 +1,5 @@
 import '../diagnostics/severity_levels.dart';
+import 'generation_config.dart';
 
 /// Normalizer presets a client may name in the config.
 enum Preset {
@@ -31,6 +32,7 @@ final class ClientConfig {
     this.baseline,
     this.disabledRules = const {},
     this.severity = const SeverityLevels(),
+    this.generation = const GenerationConfig(),
   });
 
   /// Line width of generated code when the config does not set one.
@@ -63,6 +65,9 @@ final class ClientConfig {
   /// The levels the config gives diagnostic codes for this client:
   /// `defaults.severity` with the client's `severity` on top.
   final SeverityLevels severity;
+
+  /// What the config says about generating the client.
+  final GenerationConfig generation;
 }
 
 /// The parsed `typed_openapi.yaml`.

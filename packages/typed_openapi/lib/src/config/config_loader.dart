@@ -11,6 +11,8 @@ import '../diagnostics/severity.dart';
 import '../diagnostics/severity_levels.dart';
 import '../load/yaml_composer.dart';
 import '../normalize/normalizer.dart';
+import '../overrides/override_set.dart';
+import 'generation_config.dart';
 import 'project_config.dart';
 
 /// Reads `typed_openapi.yaml` into a [ProjectConfig].
@@ -23,7 +25,22 @@ final class ConfigLoader {
   const ConfigLoader(this._diagnostics, [this._paths = const DisplayPaths()]);
 
   static const _topLevelKeys = {'defaults', 'clients'};
-  static const _defaultsKeys = {'preset', 'line_width', 'rules', 'severity'};
+  static const _generationKeys = {
+    'naming',
+    'group_by',
+    'include',
+    'exclude',
+    'types',
+    'tri_state',
+    'errors',
+  };
+  static const _defaultsKeys = {
+    'preset',
+    'line_width',
+    'rules',
+    'severity',
+    ..._generationKeys,
+  };
   static const _clientKeys = {
     'input',
     'output',
@@ -33,6 +50,7 @@ final class ConfigLoader {
     'line_width',
     'rules',
     'severity',
+    ..._generationKeys,
   };
 
   final DiagnosticBag _diagnostics;
@@ -138,6 +156,10 @@ final class ConfigLoader {
         ...defaultLevels,
         ...reader.severityAt(value, pointer),
       };
+      final generation = _GenerationReader(reader, [
+        if (defaults != null) (defaults, defaultsPointer),
+        (value, pointer),
+      ]).read();
       if (input == null || output == null) continue;
       outputSpans[name] = reader.spanAt(pointer.child('output'));
       baselineSpans[name] = reader.spanAt(pointer.child('baseline'));
@@ -155,6 +177,7 @@ final class ConfigLoader {
               if (!value) key,
           },
           severity: SeverityLevels(levels),
+          generation: generation,
         ),
       );
     }
@@ -461,5 +484,240 @@ class _ConfigReader {
       pointer: at,
       span: spanAt(at),
     );
+  }
+}
+
+/// Reads the generation settings of a client: each key from the client, or
+/// from `defaults` when the client does not set it; `naming`, `types` and
+/// `errors` key by key, and `types.formats` and `types.schemas` entry by
+/// entry.
+final class _GenerationReader {
+  _GenerationReader(this._reader, this._sources);
+
+  static const _namingKeys = {
+    'group',
+    'default_group',
+    'input_suffix',
+    'patch_suffix',
+    'operation_prefix',
+  };
+  static const _filterKeys = {'tags', 'operations', 'paths'};
+  static const _typesKeys = {'number', 'formats', 'schemas'};
+  static const _customTypeKeys = {'type', 'import', 'converter'};
+  static final _identifier = RegExp(r'^[A-Za-z_$][A-Za-z0-9_$]*$');
+
+  final _ConfigReader _reader;
+
+  /// The maps to read, `defaults` first.
+  final List<(Map<String, Object?>, JsonPointer)> _sources;
+
+  GenerationConfig read() {
+    for (final (map, at) in _sources) {
+      for (final (section, keys) in [
+        ('naming', _namingKeys),
+        ('types', _typesKeys),
+        ('errors', const {'default_schema'}),
+      ]) {
+        if (_reader.mapAt(map, section, at) case final inner?) {
+          _reader.checkKeys(inner, keys, at.child(section));
+        }
+      }
+    }
+    return GenerationConfig(
+      groupTemplate: _groupTemplate() ?? GenerationConfig.defaultGroupTemplate,
+      defaultGroup:
+          _identifierAt('default_group') ??
+          GenerationConfig.defaultDefaultGroup,
+      inputSuffix:
+          _identifierAt('input_suffix') ?? GenerationConfig.defaultInputSuffix,
+      patchSuffix:
+          _identifierAt('patch_suffix') ?? GenerationConfig.defaultPatchSuffix,
+      operationPrefix: _pattern(),
+      groupBy: _choice('group_by', GroupBy.values) ?? .tag,
+      include: _filter('include'),
+      exclude: _filter('exclude'),
+      numberType: _numberType(),
+      formats: _customTypes('formats'),
+      schemas: _customTypes('schemas'),
+      triState: _choice('tri_state', TriStateRule.values) ?? .patch,
+      defaultErrorSchema: _string('errors', 'default_schema')?.$1,
+      file: _reader.file,
+    );
+  }
+
+  /// The value of [key] (or of [key] in [section]) from the last source
+  /// that has it, with its pointer.
+  (Object?, JsonPointer)? _pick(String key, [String? section]) {
+    for (final (map, at) in _sources.reversed) {
+      if (section == null) {
+        if (map.containsKey(key)) return (map[key], at.child(key));
+        continue;
+      }
+      final inner = map[section];
+      if (inner is Map<String, Object?> && inner.containsKey(key)) {
+        return (inner[key], at.child(section).child(key));
+      }
+    }
+    return null;
+  }
+
+  (String, JsonPointer)? _string(String section, String key) {
+    final picked = _pick(key, section);
+    if (picked == null) return null;
+    final (value, at) = picked;
+    if (value is String && value.isNotEmpty) return (value, at);
+    return _invalid('"$key" must be a non-empty string.', at);
+  }
+
+  String? _groupTemplate() {
+    final picked = _string('naming', 'group');
+    if (picked == null) return null;
+    final (value, at) = picked;
+    final probe = value.replaceAll('{Tag}', 'Tag');
+    if (value.contains('{Tag}') && _identifier.hasMatch(probe)) return value;
+    return _invalid(
+      '"group" must contain {Tag} and give a Dart identifier, such as '
+      '{Tag}Api.',
+      at,
+    );
+  }
+
+  String? _identifierAt(String key) {
+    final picked = _pick(key, 'naming');
+    if (picked == null) return null;
+    final (value, at) = picked;
+    if (value is String && _identifier.hasMatch(value)) return value;
+    return _invalid('"$key" must be a Dart identifier.', at);
+  }
+
+  RegExp? _pattern() {
+    final picked = _string('naming', 'operation_prefix');
+    if (picked == null) return null;
+    final (value, at) = picked;
+    try {
+      return RegExp(value);
+    } on FormatException catch (e) {
+      return _invalid(
+        '"operation_prefix" is not a valid regular expression: '
+        '${e.message}.',
+        at,
+      );
+    }
+  }
+
+  String? _numberType() {
+    final picked = _string('types', 'number');
+    if (picked == null) return null;
+    final (value, at) = picked;
+    return switch (value) {
+      'num' => null,
+      'double' || 'int' => value,
+      _ => _invalid('"number" must be num, double or int.', at),
+    };
+  }
+
+  T? _choice<T extends Enum>(String key, List<T> values) {
+    final picked = _pick(key);
+    if (picked == null) return null;
+    final (value, at) = picked;
+    for (final choice in values) {
+      if (value == choice.name) return choice;
+    }
+    return _invalid(
+      '"$key" must be one of ${values.map((v) => v.name).join(', ')}.',
+      at,
+    );
+  }
+
+  OperationFilter _filter(String key) {
+    final picked = _pick(key);
+    if (picked == null) return const OperationFilter();
+    final (value, at) = picked;
+    if (value is! Map<String, Object?>) {
+      _invalid('"$key" must be a mapping.', at);
+      return const OperationFilter();
+    }
+    _reader.checkKeys(value, _filterKeys, at);
+    List<FilterPattern> patterns(String name) {
+      final list = value[name];
+      if (list == null) return const [];
+      if (list is! List<Object?>) {
+        _invalid('"$name" must be a list of strings.', at.child(name));
+        return const [];
+      }
+      final result = <FilterPattern>[];
+      for (final (i, item) in list.indexed) {
+        final pointer = at.child(name).child(i);
+        if (item is String && item.isNotEmpty) {
+          result.add(FilterPattern(item, pointer, _reader.spanAt(pointer)));
+        } else {
+          _invalid('Each entry must be a non-empty string.', pointer);
+        }
+      }
+      return result;
+    }
+
+    return OperationFilter(
+      tags: patterns('tags'),
+      operations: patterns('operations'),
+      paths: patterns('paths'),
+    );
+  }
+
+  Map<String, DartTypeOverride> _customTypes(String key) {
+    final result = <String, DartTypeOverride>{};
+    for (final (map, at) in _sources) {
+      final types = map['types'];
+      if (types is! Map<String, Object?> || !types.containsKey(key)) {
+        continue;
+      }
+      final pointer = at.child('types').child(key);
+      final entries = types[key];
+      if (entries is! Map<String, Object?>) {
+        _invalid('"$key" must be a mapping.', pointer);
+        continue;
+      }
+      for (final MapEntry(key: name, :value) in entries.entries) {
+        final custom = _customType(value, pointer.child(name));
+        if (custom != null) result[name] = custom;
+      }
+    }
+    return result;
+  }
+
+  DartTypeOverride? _customType(Object? value, JsonPointer at) {
+    if (value is! Map<String, Object?>) {
+      return _invalid('A custom type must be a mapping.', at);
+    }
+    _reader.checkKeys(value, _customTypeKeys, at);
+    final type = value['type'];
+    final import = value['import'];
+    final converter = value['converter'];
+    if (type is! String || type.isEmpty) {
+      return _invalid('A custom type needs "type", a Dart type name.', at);
+    }
+    if (import is! String || import.isEmpty) {
+      return _invalid(
+        'A custom type needs "import", the library that declares "$type".',
+        at,
+      );
+    }
+    if (converter != null && (converter is! String || converter.isEmpty)) {
+      return _invalid(
+        '"converter" must be a non-empty string.',
+        at.child('converter'),
+      );
+    }
+    return DartTypeOverride(
+      type: type,
+      import: import,
+      converter: converter as String?,
+    );
+  }
+
+  /// Reports an invalid value at [at]; returns null.
+  Null _invalid(String message, JsonPointer at) {
+    _reader.invalid(message, at);
+    return null;
   }
 }
