@@ -1,6 +1,9 @@
 import '../model/operation.dart';
 import '../model/spec_node.dart';
+import 'api_ir.dart';
 import 'dart_type.dart';
+
+export 'api_ir.dart';
 
 /// The semantic IR of one client: what the emitters print, with Dart names
 /// and types already chosen.
@@ -560,6 +563,7 @@ final class ParameterIr {
     this.contentType,
     this.description,
     this.deprecated = false,
+    this.defaultValue,
   });
 
   /// The Dart name of the argument.
@@ -598,6 +602,11 @@ final class ParameterIr {
 
   /// `deprecated`.
   final bool deprecated;
+
+  /// `default` of the parameter's schema, as a one-element record: the
+  /// value the server uses when the argument is not sent. It is documented,
+  /// not sent.
+  final (Object?,)? defaultValue;
 }
 
 /// How a body is encoded.
@@ -634,6 +643,7 @@ final class RequestBodyIr {
     this.type,
     this.required = false,
     this.description,
+    this.encoding = const [],
   });
 
   /// How the body is encoded.
@@ -653,6 +663,10 @@ final class RequestBodyIr {
 
   /// `description`.
   final String? description;
+
+  /// The `encoding` of the properties of a form or multipart body, by
+  /// property name.
+  final List<EncodingIr> encoding;
 }
 
 /// A response of an operation.

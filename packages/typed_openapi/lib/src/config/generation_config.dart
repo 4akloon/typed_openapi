@@ -194,7 +194,7 @@ final class GenerationConfig {
   /// key, so that the diagnostics about its patterns (TOA557, TOA558) and
   /// about an empty client (TOA563) are reported at its own place in the
   /// config, not at the place of another client that has the same settings;
-  /// the key has the place of `errors.default_schema` for TOA562 the same
+  /// the key has the place of `errors.default_schema` for TOA652 the same
   /// way.
   String get key => jsonEncode({
     'group': groupTemplate,

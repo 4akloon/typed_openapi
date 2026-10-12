@@ -205,7 +205,7 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   their defaults). `operation_prefix` applies only where its match starts at
   index 0 and is not empty. `GenerationConfig.key` is the run key: custom
   types are sorted, and a client with a filter or an `errors.default_schema`
-  is keyed by where the config has it, so TOA557, TOA558, TOA562 and TOA563
+  is keyed by where the config has it, so TOA557, TOA558, TOA652 and TOA563
   are reported at its own place, not at that of a client with equal
   settings.
 - `ir/` - the semantic IR (M6): `ir.dart` (`ClientIr`, sealed `Declaration`
@@ -223,7 +223,7 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `checkedOverrideName` validates an override name, TOA560, and
   `checkLossyName` reports letters a name lost, TOA559; `defaultErrorSchema`
   is `errors.default_schema` if `components.schemas` has the key, else
-  TOA562), `SchemaShapes` (shape questions the mapper and `DirectionIndex`
+  TOA652), `SchemaShapes` (shape questions the mapper and `DirectionIndex`
   share: null-only, enum values, the one schema a wrapper stands for; an
   `allOf` part with no structure, only annotations and `nullable`, is not a
   merge part and is set aside next to the one `$ref`),
@@ -251,12 +251,19 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   (parameters in location order and then spec order, the names overrides give
   claimed first; a body is JSON first, then multipart, form, text, event
   stream; any other media type is bytes (`Uint8List`) without its schema and
-  the media types that are dropped are named, TOA561, except variants of the
-  chosen type and other JSON types; envelopes; errors, with
+  the media types that are dropped are named, TOA651, except variants of the
+  chosen type and other JSON types; a form or multipart response is bytes,
+  TOA650; a text request body is `String`; the `encoding` of a form or
+  multipart body (`EncodingIr`, a style a query does not allow is TOA564,
+  part headers TOA656); a parameter keeps its schema's `default`
+  (`ParameterIr.defaultValue`, documented only); envelopes; errors, with
   `errors.default_schema` for statuses without a body; header parameters
   `Accept`, `Content-Type` and `Authorization` are dropped as OpenAPI says;
-  a parameter style its `in` does not allow falls back to the default, and
-  an `in: querystring` parameter is skipped, TOA564) and `IrBuilder`
+  a parameter style its `in` does not allow falls back to the default,
+  TOA564, and an `in: querystring` parameter is skipped, TOA565; path
+  variables are `OperationBuilder.pathVariable`, the runtime's
+  `OperationRequest.pathVariable`, which a test keeps equal) and
+  `IrBuilder`
   (operations written as a `$ref` are skipped (TOA107); groups by tag, path
   or one class, with an override `group` (UpperCamelCase, or a value that
   differs only by case or separators) and TOA553-TOA555; the names of custom
@@ -268,7 +275,9 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   out, else at `#/paths`; then everything above). `IrJson` dumps an IR; the
   hidden `typed_openapi ir` command prints it. Naming and mapping codes use
   the second half of each area's hundred: TOA250-TOA256, TOA350-TOA351,
-  TOA450-TOA456, TOA550-TOA564; `generate` has TOA830 (output not owned),
+  TOA450-TOA456, TOA550-TOA565, and media types and errors TOA650-TOA656
+  (TOA561 became TOA650 and TOA651, TOA562 TOA652, the querystring half of
+  TOA564 TOA565); `generate` has TOA830 (output not owned),
   TOA831 (output not written, or its lock held) and TOA832 (an interrupted
   run recovered, or a lock taken over; info). TOA552 on an enum value is an info (an override cannot name enum
   values; `x-enum-varnames` in the spec does), and `unknown` is reserved in

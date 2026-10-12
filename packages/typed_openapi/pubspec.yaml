@@ -27,6 +27,9 @@ dependencies:
 
 dev_dependencies:
   test: ^1.24.0
+  # A test checks that the generator reads path templates as the runtime
+  # does.
+  typed_openapi_runtime: ^0.0.1
   # Tests compare the composer with package:yaml's loader.
   yaml: ^3.1.4
 

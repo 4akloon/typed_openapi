@@ -29,8 +29,6 @@ final class IrBuilder {
   /// `UserController_get` → `get`.
   static final nestjsPrefix = RegExp('^[A-Za-z0-9]*Controller_');
 
-  static final _variable = RegExp(r'\{([^}]*)\}');
-
   final DiagnosticBag _diagnostics;
 
   /// The IR of [spec] generated as [client] says.
@@ -419,7 +417,9 @@ final class IrBuilder {
   /// `getPetsById`.
   static String _pathName(String method, String path) {
     final variables = <String>[];
-    final literal = path.replaceAllMapped(_variable, (match) {
+    final literal = path.replaceAllMapped(OperationBuilder.pathVariable, (
+      match,
+    ) {
       variables.add(match[1]!);
       return ' ';
     });

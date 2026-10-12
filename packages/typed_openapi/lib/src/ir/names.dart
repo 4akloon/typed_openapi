@@ -49,8 +49,10 @@ final class DartNames {
   };
 
   /// Type names a generated library sees without importing them: those of
-  /// `dart:core`, `Uint8List` of `dart:typed_data`, and the names of
-  /// `typed_openapi_runtime` that generated code uses.
+  /// `dart:core`, `Uint8List` of `dart:typed_data`, the names of
+  /// `typed_openapi_runtime` that generated code uses, and `Dio`, the one
+  /// name the API files import from `package:dio` (so its other exports,
+  /// such as `Response`, `Options` and `Headers`, stay free for schemas).
   static const takenTypeNames = {
     // dart:core
     'ArgumentError', 'AssertionError', 'BigInt', 'BidirectionalIterator',
@@ -68,13 +70,18 @@ final class DartNames {
     // typed_openapi_runtime
     'CallOptions', 'Cancelled', 'CookieParameter', 'Date', 'DecodeError',
     'DeepEquality',
-    'DioRequestSender', 'Failure', 'HeaderParameter', 'HttpError',
-    'JsonDecodeException', 'JsonReader', 'JsonValue', 'OperationInfo',
+    'DioRequestSender', 'Failure', 'FileUpload', 'FormBody', 'FormEncoding',
+    'HeaderParameter', 'HttpError',
+    'JsonDecodeException', 'JsonReader', 'JsonValue', 'MultipartBody',
+    'MultipartPart', 'OperationInfo',
     'OperationRequest', 'Patch', 'PatchNull', 'PatchValue', 'PathParameter',
     'PathStyle', 'QueryParameter', 'QueryStyle', 'RawResponse',
-    'ResponseKind', 'Result', 'SseDecoder', 'SseDecodeError',
+    'ResponseKind', 'Result', 'SecurityLocation', 'SecurityScheme',
+    'SecuritySchemeType', 'SecurityUse', 'SseDecoder', 'SseDecodeError',
     'SseDisconnected', 'SseEvent', 'SseItem', 'SseItemDecoder', 'SseMessage',
     'Success', 'TransportError', 'UndocumentedStatus',
+    // package:dio, which the API files import with `show Dio` only.
+    'Dio',
   };
 
   /// Members every Dart object has.

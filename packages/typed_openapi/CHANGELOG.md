@@ -158,20 +158,32 @@
   - TOA560 override-name-invalid (warning): an override `name` or `group` is
     not a valid Dart name; the name made from it is used, or the override is
     ignored when nothing is left.
-  - TOA561 media-type-as-bytes (info): a body whose media type is not JSON, a
-    form, `multipart/form-data`, `text/*` or `text/event-stream` is bytes
-    and its schema is not used; also names the media types of an operation
-    that are dropped for the chosen one (variants of the chosen media type
-    and other JSON types are not reported).
-  - TOA562 default-error-schema-missing (warning): `errors.default_schema` is
-    not a key of `components.schemas`; the setting is ignored.
   - TOA563 client-empty (warning): no operation of the client is generated
     (filtered out, written as `$ref`, or an unbound path variable).
   - TOA564 parameter-style-invalid (warning): a parameter `style` that its
     `in` does not allow (path: `simple`, `label`, `matrix`; query: `form`,
     `spaceDelimited`, `pipeDelimited`, `deepObject`; header: `simple`;
-    cookie: `form`, `cookie`) falls back to the default style of the placement; an
-    `in: querystring` parameter (OpenAPI 3.2) is not generated.
+    cookie: `form`, `cookie`) falls back to the default style of the
+    placement; also a form property's `encoding` style.
+  - TOA565 querystring-not-generated (warning): an `in: querystring`
+    parameter (OpenAPI 3.2) is not generated (TOA564 before M9).
+  - TOA650 media-type-as-bytes (info): a body whose media type is not JSON, a
+    form, `multipart/form-data`, `text/*` or `text/event-stream`, or a form
+    or multipart response, is bytes and its schema is not used (TOA561
+    before M9).
+  - TOA651 media-types-dropped (info): the media types of a body, response
+    or parameter that are dropped for the chosen one (variants of the chosen
+    media type and other JSON types are not reported; TOA561 before M9).
+  - TOA652 default-error-schema-missing (warning): `errors.default_schema` is
+    not a key of `components.schemas`; the setting is ignored (TOA562 before
+    M9).
+  - TOA656 encoding-headers-ignored (info): the `headers` of a multipart
+    part's `encoding` are not sent.
+- An `apiKey` security scheme without `in` is TOA112, as one without `name`.
+- Schemas named `Dio` or like the runtime's new names (`FileUpload`,
+  `FormBody`, `MultipartBody`, `SecurityScheme`, ...) get the `Model` suffix
+  (TOA550); `Response`, `Options` and `Headers` keep their names, because the
+  API files import only `Dio` from `package:dio`.
 - An `allOf` parent that an override excludes is still merged into the flat
   child: the exclude only removes the parent's own declaration, and TOA254
   (info) says so.

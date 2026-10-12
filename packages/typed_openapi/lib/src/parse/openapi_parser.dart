@@ -191,7 +191,9 @@ final class OpenApiParser {
             type: type,
             description: r.string('description'),
             name: field('name', .apiKey),
-            placement: r.choice('in', ApiKeyLocation.values.asNameMap()),
+            placement: type == .apiKey
+                ? r.requiredChoice('in', ApiKeyLocation.values.asNameMap())
+                : r.choice('in', ApiKeyLocation.values.asNameMap()),
             scheme: field('scheme', .http),
             bearerFormat: r.string('bearerFormat'),
             flows: type == .oauth2

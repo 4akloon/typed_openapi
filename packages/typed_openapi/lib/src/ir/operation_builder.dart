@@ -1,6 +1,7 @@
 import '../model/operation.dart';
 import '../model/schema.dart';
 import '../model/spec_node.dart';
+import 'body_encoding.dart';
 import 'dart_type.dart';
 import 'ir.dart';
 import 'ir_context.dart';
@@ -35,10 +36,16 @@ final class SpecOperation {
 /// (R10.3, R10.4, R10.6, R11.4); types come from a [SchemaMapper].
 final class OperationBuilder {
   /// Creates a builder that maps types with [_mapper].
-  OperationBuilder(this._context, this._mapper);
+  OperationBuilder(this._context, this._mapper)
+    : _encoding = BodyEncoding(_context);
 
   static const _names = DartNames();
-  static final _variable = RegExp(r'\{([^}]*)\}');
+
+  /// A variable of a path template: `{name}`, where the name has no brace
+  /// (`{}` is a variable with an empty name). The runtime resolves paths
+  /// with the same pattern (`OperationRequest.pathVariable`), so every
+  /// variable it finds has a parameter.
+  static final pathVariable = RegExp(r'\{([^{}]*)\}');
 
   /// The header parameters OpenAPI says to ignore: the request's own
   /// `Accept`, `Content-Type` and `Authorization` (compared in lower case).
@@ -47,7 +54,7 @@ final class OperationBuilder {
   /// The styles OpenAPI allows for each placement, the default style
   /// first (`style: cookie` is OpenAPI 3.2's second style for cookies); a
   /// `querystring` parameter has none.
-  static const _allowedStyles = {
+  static const allowedStyles = {
     ParameterLocation.path: [
       ParameterStyle.simple,
       ParameterStyle.label,
@@ -65,6 +72,7 @@ final class OperationBuilder {
 
   final IrContext _context;
   final SchemaMapper _mapper;
+  final BodyEncoding _encoding;
 
   /// The IR of [entry], named [name]; null when its path template cannot
   /// be filled.
@@ -114,7 +122,7 @@ final class OperationBuilder {
       byKey[(placement, parameter.name)] = (placement, parameter);
     }
     final variables = [
-      for (final match in _variable.allMatches(entry.path)) match[1]!,
+      for (final match in pathVariable.allMatches(entry.path)) match[1]!,
     ];
     var bound = true;
     for (final variable in variables) {
@@ -167,7 +175,7 @@ final class OperationBuilder {
   }
 
   /// Whether a parameter of [placement] can be sent; a `querystring`
-  /// parameter cannot, and is reported (TOA564).
+  /// parameter cannot, and is reported (TOA565).
   bool _isSendable(
     ParameterLocation placement,
     Parameter parameter,
@@ -175,7 +183,7 @@ final class OperationBuilder {
   ) {
     if (placement != .querystring) return true;
     _context.report(
-      .parameterStyleInvalid,
+      .querystringNotGenerated,
       'Parameter "$wire" is in: querystring (OpenAPI 3.2), which the client '
       'cannot send; the parameter is not generated.',
       parameter.location,
@@ -193,7 +201,7 @@ final class OperationBuilder {
     String wire,
   ) {
     final style = parameter.style;
-    final allowed = _allowedStyles[placement];
+    final allowed = allowedStyles[placement];
     if (style == null || allowed == null || allowed.contains(style)) {
       return style;
     }
@@ -307,8 +315,18 @@ final class OperationBuilder {
       contentType: contentType,
       description: parameter.description,
       deprecated: parameter.deprecated,
+      defaultValue: _defaultOf(schema),
     );
   }
+
+  /// `default` of a parameter's [schema], also through a `$ref`.
+  (Object?,)? _defaultOf(Schema? schema) => switch (schema) {
+    null => null,
+    final schema => switch (_context.model.resolveSchema(schema)) {
+      final SchemaObject target => target.defaultValue,
+      _ => null,
+    },
+  };
 
   RequestBodyIr? _body(Operation operation, String method, String prefix) {
     final written = operation.requestBody;
@@ -322,9 +340,10 @@ final class OperationBuilder {
     );
     final kind = contentType == null ? BodyKind.none : _kind(contentType);
     final schema = media?.schema;
-    // Raw bytes have no model, as in responses.
+    // Raw bytes have no model, as in responses; text is a string.
     final DartType? type = switch ((schema, kind)) {
       (_, .bytes) => const CoreType(.binary),
+      (_, .text || .eventStream) => const CoreType(.string),
       (null, _) => null,
       (final schema?, _) => _mapper.typeOf(
         schema,
@@ -340,6 +359,9 @@ final class OperationBuilder {
       type: type,
       required: body.required,
       description: body.description,
+      encoding: kind == .form || kind == .multipart
+          ? _encoding.of(media!, kind)
+          : const [],
     );
   }
 
@@ -364,7 +386,7 @@ final class OperationBuilder {
     }
     final result = <ResponseIr>[];
     for (final (status, response, (contentType, media)) in responses) {
-      final kind = contentType == null ? BodyKind.none : _kind(contentType);
+      final kind = _responseKind(contentType, response);
       final success = status.startsWith('2');
       final base = _nameBase(status);
       final suffix = (withBody[base] ?? 0) > 1
@@ -399,6 +421,23 @@ final class OperationBuilder {
       );
     }
     return result;
+  }
+
+  /// How the body of [response] in [contentType] is read: a form or a
+  /// multipart response is bytes (TOA650), since a client does not read
+  /// forms.
+  BodyKind _responseKind(String? contentType, Response response) {
+    if (contentType == null) return .none;
+    final kind = _kind(contentType);
+    if (kind != .form && kind != .multipart) return kind;
+    _context.report(
+      .mediaTypeAsBytes,
+      'The response is "$contentType", which the client reads as bytes; its '
+      'schema is not used.',
+      response.location.child('content').child(contentType),
+      fix: 'Use a JSON media type at the source if the schema matters.',
+    );
+    return .bytes;
   }
 
   /// How inline types of a response with [status] are named: `Response`
@@ -459,8 +498,8 @@ final class OperationBuilder {
   /// The media type the client uses: JSON first, then forms, text, event
   /// streams and anything else, each in document order. [location] is the
   /// object that has [content] and [what] says what it is. The media types
-  /// that are dropped are reported, and so is a chosen one that becomes
-  /// bytes and takes its schema with it (TOA561).
+  /// that are dropped are reported (TOA651), and so is a chosen one that
+  /// becomes bytes and takes its schema with it (TOA650).
   (String?, MediaType?) _pick(
     Map<String, RefOr<MediaType>> content,
     SpecLocation location,
@@ -491,7 +530,7 @@ final class OperationBuilder {
         ];
         if (dropped.isNotEmpty) {
           _context.report(
-            .mediaTypeAsBytes,
+            .mediaTypesDropped,
             'The $what offers ${content.length} media types; "$type" is '
             'used and ${_quoted(dropped)} '
             '${dropped.length == 1 ? 'is' : 'are'} dropped.',

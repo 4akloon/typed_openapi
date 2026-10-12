@@ -352,21 +352,6 @@ enum DiagnosticCode {
   /// (`pet-store`) is not reported: it is used as `PetStore`.
   overrideNameInvalid('TOA560', 'override-name-invalid', .warning),
 
-  /// A request or response body has a media type that is not JSON, a form,
-  /// `multipart/form-data`, `text/*` or `text/event-stream`: it is sent or
-  /// read as bytes and its schema is not used. Also reported when an
-  /// operation offers several media types of a body and the others are
-  /// dropped; the message names the chosen one and the dropped ones.
-  mediaTypeAsBytes('TOA561', 'media-type-as-bytes', .info),
-
-  /// `errors.default_schema` names a key that is not in
-  /// `components.schemas`; the setting is ignored.
-  defaultErrorSchemaMissing(
-    'TOA562',
-    'default-error-schema-missing',
-    .warning,
-  ),
-
   /// No operation of a client is generated: all are filtered out, all are
   /// written as a `$ref` (TOA107), or all have an unbound path variable
   /// (TOA556). The message says why.
@@ -375,13 +360,38 @@ enum DiagnosticCode {
   /// A parameter's `style` is not allowed for its `in` (path takes `simple`,
   /// `label` or `matrix`; query `form`, `spaceDelimited`, `pipeDelimited` or
   /// `deepObject`; header `simple`; cookie `form` or `cookie`), so the
-  /// default style of the placement is used. Also reported for an `in: querystring`
-  /// parameter (OpenAPI 3.2), which the client cannot send: the parameter
-  /// is not generated.
+  /// default style of the placement is used.
   parameterStyleInvalid('TOA564', 'parameter-style-invalid', .warning),
+
+  /// A parameter is `in: querystring` (OpenAPI 3.2), which the client cannot
+  /// send yet: the parameter is not generated (TOA564 until M9).
+  querystringNotGenerated('TOA565', 'querystring-not-generated', .warning),
 
   /// `*/*` is used as a media type.
   wildcardMediaType('TOA601', 'wildcard-media-type', .warning),
+
+  /// A request or response body has a media type that is not JSON, a form,
+  /// `multipart/form-data`, `text/*` or `text/event-stream` (or is a form or
+  /// multipart response): it is sent or read as bytes and its schema is not
+  /// used (TOA561 until M9).
+  mediaTypeAsBytes('TOA650', 'media-type-as-bytes', .info),
+
+  /// A request body, a response or a parameter offers several media types;
+  /// the client uses one and the message names the ones it drops (TOA561
+  /// until M9).
+  mediaTypesDropped('TOA651', 'media-types-dropped', .info),
+
+  /// `errors.default_schema` names a key that is not in
+  /// `components.schemas`; the setting is ignored (TOA562 until M9).
+  defaultErrorSchemaMissing(
+    'TOA652',
+    'default-error-schema-missing',
+    .warning,
+  ),
+
+  /// An `encoding` entry of a multipart or form body has `headers`, which
+  /// the client does not send.
+  encodingHeadersIgnored('TOA656', 'encoding-headers-ignored', .info),
 
   /// A normalizer fix or an override was not applied: its file cannot be
   /// read, its target is gone, the spec kept changing after the last pass, or

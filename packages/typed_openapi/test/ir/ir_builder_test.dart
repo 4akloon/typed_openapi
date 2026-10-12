@@ -269,7 +269,7 @@ components:
     // The text alternative of the request body is dropped.
     expect(fixture.codes, [
       (
-        DiagnosticCode.mediaTypeAsBytes,
+        DiagnosticCode.mediaTypesDropped,
         '#/paths/~1pets/post/requestBody/content',
       ),
     ]);

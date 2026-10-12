@@ -105,7 +105,7 @@ final class IrContext {
   late final OverrideSnippet _snippets = OverrideSnippet(model);
 
   /// `errors.default_schema` when `components.schemas` has the key; else
-  /// null, with TOA562 reported the first time this is read.
+  /// null, with TOA652 reported the first time this is read.
   late final String? defaultErrorSchema = _checkedDefaultErrorSchema();
 
   static const _names = DartNames();
