@@ -55,9 +55,12 @@ components:
 ''';
 
 /// The targets of [overrides] in [_spec], and what the resolver reported.
-(List<OverrideTarget>, DiagnosticBag) _resolve(String overrides) {
+(List<OverrideTarget>, DiagnosticBag) _resolve(
+  String overrides, {
+  String spec = _spec,
+}) {
   final setup = DiagnosticBag();
-  final document = SpecLoader(setup).parse(_spec, 'api.yaml')!;
+  final document = SpecLoader(setup).parse(spec, 'api.yaml')!;
   final version = OpenApiVersionDetector(setup).detect(document)!;
   final documents = SpecDocuments(SpecLoader(setup), document);
   final model = SpecReader(
@@ -321,5 +324,44 @@ operations:
       '#/paths/~1pets~1{id}/delete',
       '#/paths/~1pets~1{id}/parameters/0',
     ]);
+  });
+
+  test(r'two status codes that $ref one response are not a conflict', () {
+    final (targets, bag) = _resolve(
+      '''
+operations:
+  getPet:
+    responses:
+      '400': {contentType: application/json}
+      '422': {contentType: application/json}
+''',
+      spec: r'''
+openapi: 3.1.0
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    get:
+      operationId: getPet
+      responses:
+        '400': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+components:
+  responses:
+    Error: {description: bad}
+''',
+    );
+    expect(
+      [for (final d in bag.sorted) (d.code, d.pointer?.value)],
+      [
+        for (final p in [
+          '#/operations/getPet/responses/400',
+          '#/operations/getPet/responses/422',
+        ])
+          (DiagnosticCode.overrideSharedTarget, p),
+      ],
+    );
+    expect(targets, hasLength(3));
+    expect(targets[1].node.location, targets[2].node.location);
+    expect(targets[1].node.pointer.value, '#/components/responses/Error');
   });
 }

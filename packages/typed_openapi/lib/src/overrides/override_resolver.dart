@@ -173,7 +173,9 @@ final class OverrideResolver {
   }
 
   /// [found] without the targets whose node another one names too; those
-  /// are reported, each naming the others.
+  /// are reported, each naming the others. Request bodies and responses are
+  /// kept: they reach a shared node through different keys, and the edits
+  /// they make are checked against each other later.
   List<(T, List<OverrideTarget>)> _unique<T extends OverrideTarget>(
     List<(T, List<OverrideTarget>)> found,
   ) {
@@ -184,7 +186,9 @@ final class OverrideResolver {
     final unique = <(T, List<OverrideTarget>)>[];
     for (final (target, inner) in found) {
       final same = byNode[target.node.location]!;
-      if (same.length == 1) {
+      // Two status codes that `$ref` one component response are different
+      // addresses of a shared node, not one address written twice.
+      if (same.length == 1 || target is ContentTarget) {
         unique.add((target, inner));
       } else {
         _conflict(target, same);
