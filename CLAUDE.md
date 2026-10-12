@@ -262,8 +262,10 @@ that the API composes, including an `implements` fake of a tag class.
   decoder switches on).
 - `dio/` - `DioRequestSender(dio, {isWeb})` (`send`, `openEvents`; requests
   only through `dio.request`, never mutates the user's Dio, never retries;
-  decoding catches only `DioException` and `JsonDecodeException`,
-  `openEvents` also turns an `Exception` raised while reading a non-stream
+  decoding catches only `DioException`, `JsonDecodeException` and, from the
+  user's decoder, `FormatException` (a converter or `Date.parse` rejecting
+  the data: `DecodeError` at the root pointer, `SseDecodeError` in a
+  stream), `openEvents` also turns an `Exception` raised while reading a non-stream
   body into `TransportError`, and an `Error` is never caught; the query is
   built by the runtime, so interceptors see an empty `queryParameters`),
   `CallOptions`. `openEvents` needs its stream listened to or cancelled; a

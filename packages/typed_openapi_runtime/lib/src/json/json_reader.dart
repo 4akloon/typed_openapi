@@ -136,9 +136,8 @@ final class JsonReader {
     } on JsonDecodeException catch (e) {
       throw e.under(segment, schema: schema);
     } on FormatException catch (e) {
-      throw JsonDecodeException(
-        expected: 'a value its decoder accepts',
-        actual: 'a value it rejected: ${e.message}',
+      throw JsonDecodeException.fromFormatException(
+        e,
         path: [segment],
         schema: schema,
       );

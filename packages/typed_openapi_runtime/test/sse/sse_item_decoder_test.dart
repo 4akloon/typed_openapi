@@ -19,6 +19,8 @@ final class Delta {
   final String text;
 }
 
+DateTime _parseDate(SseMessage message) => DateTime.parse(message.data);
+
 void main() {
   const decoder = SseItemDecoder<Delta>(Delta.fromEvent);
 
@@ -49,6 +51,55 @@ void main() {
       'delta 1 b',
       'end closed',
     ]);
+  });
+
+  test('a FormatException of the decoder is an item, not an error', () async {
+    // A user converter or Date.parse rejecting the data of one event.
+    const dates = SseItemDecoder<DateTime>(_parseDate);
+    final errors = <Object>[];
+    final items = await runZonedGuarded(
+      () => dates
+          .bind(
+            Stream.value(
+              utf8.encode(
+                'data: 2024-01-01T00:00:00Z\n\n'
+                'data: soon\n\n'
+                'data: 2025-01-01T00:00:00Z\n\n',
+              ),
+            ),
+          )
+          .toList(),
+      (error, _) => errors.add(error),
+    );
+    expect(errors, isEmpty);
+    expect(
+      items!.map(
+        (item) => switch (item) {
+          SseEvent() => 'event',
+          SseDecodeError() => 'decode error',
+          SseDisconnected() => 'disconnected',
+        },
+      ),
+      ['event', 'decode error', 'event', 'disconnected'],
+    );
+    final failed = items[1] as SseDecodeError<DateTime>;
+    expect(failed.message.data, 'soon');
+    expect(failed.error.pointer, '');
+    expect(failed.error.expected, 'a value its decoder accepts');
+  });
+
+  test('an Error of the decoder still reaches the listener', () async {
+    final seen = <Object>[];
+    final done = Completer<void>();
+    SseItemDecoder<int>((_) => throw StateError('bug'))
+        .bind(Stream.value(utf8.encode('data: x\n\n')))
+        .listen(
+          (_) {},
+          onError: seen.add,
+          onDone: done.complete,
+        );
+    await done.future;
+    expect(seen.single, isA<StateError>());
   });
 
   test('a stream error is the last item and closes the stream', () async {

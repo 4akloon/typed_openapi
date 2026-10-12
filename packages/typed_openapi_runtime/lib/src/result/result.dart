@@ -6,8 +6,9 @@ import '../json/json_decode_exception.dart';
 /// type [T], or a [Failure] whose documented error body has type [E].
 ///
 /// Generated operations never throw for expected problems (HTTP errors,
-/// transport failures, cancellation, bodies that do not match the schema);
-/// errors of the program (`TypeError`, `StateError`) are not caught. There
+/// transport failures, cancellation, bodies that do not match the schema,
+/// including a `FormatException` of a converter or `Date.parse` on the
+/// data); errors of the program (`TypeError`, `StateError`) are not caught. There
 /// are no helper methods: read a result with pattern matching.
 ///
 /// ```dart
@@ -91,7 +92,9 @@ final class UndocumentedStatus<T, E> extends Failure<T, E> {
 }
 
 /// A response body that does not match the schema of its status (success
-/// or documented error), or is not valid JSON. Carries the first mismatch.
+/// or documented error), is not valid JSON, or is rejected by a decoder
+/// with a `FormatException` (a converter, `Date.parse`). Carries the first
+/// mismatch.
 final class DecodeError<T, E> extends Failure<T, E> {
   /// Creates a decode failure.
   const DecodeError(

@@ -28,12 +28,13 @@ import 'call_options.dart';
 ///   response of any status, so the decoder always switches on the status.
 /// - Cancellation is [Cancelled], other Dio failures are [TransportError],
 ///   a body the decoder rejects with [JsonDecodeException] is
-///   [DecodeError]. Nothing else is caught: an [Error] thrown by the decoder,
-///   or thrown in a user interceptor or adapter (Dio wraps it into an
-///   `unknown` [DioException]; it is rethrown with its original stack
-///   trace), reaches the caller. Other causes (`SocketException`,
-///   `HandshakeException`, custom exceptions) are [TransportError]. A
-///   [FormatException] thrown by the decoder reaches the caller too.
+///   [DecodeError], and so is a [FormatException] it throws (a user converter
+///   or `Date.parse` rejecting the data), at the root pointer. Nothing else is
+///   caught: an [Error] thrown by the decoder, or thrown in a user
+///   interceptor or adapter (Dio wraps it into an `unknown` [DioException];
+///   it is rethrown with its original stack trace), reaches the caller. Other
+///   causes (`SocketException`, `HandshakeException`, custom exceptions) are
+///   [TransportError].
 final class DioRequestSender {
   /// Sends requests through [dio].
   ///
@@ -246,14 +247,22 @@ final class DioRequestSender {
     try {
       return decode(raw);
     } on JsonDecodeException catch (e) {
-      return DecodeError(
-        e,
-        statusCode: raw.statusCode,
-        rawBody: raw.body,
-        headers: raw.headers,
-      );
+      return _decodeError(e, raw);
+    } on FormatException catch (e) {
+      // A user converter (R6.8) or `Date.parse` rejecting server data.
+      return _decodeError(JsonDecodeException.fromFormatException(e), raw);
     }
   }
+
+  static DecodeError<T, E> _decodeError<T, E>(
+    JsonDecodeException error,
+    RawResponse raw,
+  ) => DecodeError(
+    error,
+    statusCode: raw.statusCode,
+    rawBody: raw.body,
+    headers: raw.headers,
+  );
 
   /// Reads the whole body of an event-stream response that did not open,
   /// parses it (JSON by content type) and decodes it with [decodeError].

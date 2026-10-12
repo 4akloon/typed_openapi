@@ -7,7 +7,8 @@ import 'sse_message.dart';
 
 /// Decodes a `text/event-stream` body into [SseItem]s: each message goes
 /// through [decode] (a generated function, usually over
-/// [SseMessage.jsonObject]); a [JsonDecodeException] becomes an
+/// [SseMessage.jsonObject]); a [JsonDecodeException] or a [FormatException]
+/// (a converter or `Date.parse` rejecting the data) becomes an
 /// [SseDecodeError] and the stream goes on. The end of the body, or its
 /// first error, becomes [SseDisconnected] and closes the stream, so the
 /// stream never emits errors, with one exception: an [Error] thrown by
@@ -83,6 +84,12 @@ final class SseItemDecoder<T>
       );
     } on JsonDecodeException catch (e) {
       return SseDecodeError(e, message);
+    } on FormatException catch (e) {
+      // A user converter or `Date.parse` rejecting the data of one event.
+      return SseDecodeError(
+        JsonDecodeException.fromFormatException(e),
+        message,
+      );
     }
   }
 }

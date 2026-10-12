@@ -470,21 +470,46 @@ void main() {
   });
 
   test(
-    'only JsonDecodeException is caught; other errors reach the caller',
+    'a FormatException of the decoder is a decode error at the root',
     () async {
-      final adapter = FakeAdapter.json(200, {'id': 7, 'name': 'Rex'});
-      final sender = DioRequestSender(dioWith(adapter));
-      await expectLater(
-        sender.send<Pet, Problem>(request, (_) => throw StateError('bug')),
-        throwsA(isA<StateError>()),
-      );
-      await expectLater(
-        sender.send<DateTime, Never>(
-          request,
-          (r) => r.success(DateTime.parse('soon')),
+      // A user converter (R6.8) or Date.parse rejecting server data.
+      Result<DateTime, Problem> decode(RawResponse r) => switch (r.statusCode) {
+        200 => r.success(DateTime.parse(JsonReader.asString(r.json))),
+        404 => r.error(
+          Problem(int.parse(JsonReader.asString(r.json)).toString()),
         ),
-        throwsA(isA<FormatException>()),
-      );
+        _ => r.undocumented(),
+      };
+      for (final (status, body) in [(200, 'soon'), (404, 'abc')]) {
+        final adapter = FakeAdapter.json(status, body);
+        final result = await DioRequestSender(
+          dioWith(adapter),
+        ).send(request, decode);
+        final error = result as DecodeError<DateTime, Problem>;
+        expect(error.statusCode, status);
+        expect(error.rawBody, body);
+        expect(error.error.pointer, '');
+        expect(error.error.expected, 'a value its decoder accepts');
+        expect(error.error.actual, startsWith('a value it rejected: '));
+        expect(error.headers, isNotEmpty);
+      }
+      final valid = await DioRequestSender(
+        dioWith(FakeAdapter.json(200, '2024-02-03T04:05:06Z')),
+      ).send(request, decode);
+      expect((valid as Success<DateTime, Problem>).data.year, 2024);
     },
   );
+
+  test('an Error of the decoder still reaches the caller', () async {
+    final adapter = FakeAdapter.json(200, {'id': 7, 'name': 'Rex'});
+    final sender = DioRequestSender(dioWith(adapter));
+    await expectLater(
+      sender.send<Pet, Problem>(request, (_) => throw StateError('bug')),
+      throwsA(isA<StateError>()),
+    );
+    await expectLater(
+      sender.send<Pet, Problem>(request, (_) => throw ArgumentError('bug')),
+      throwsA(isA<ArgumentError>()),
+    );
+  });
 }

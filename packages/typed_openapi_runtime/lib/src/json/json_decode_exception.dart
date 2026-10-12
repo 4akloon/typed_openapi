@@ -4,7 +4,8 @@
 /// fail) and turned into a `DecodeError` result by the request sender,
 /// so it never reaches the caller of a generated operation. The message names
 /// the expected and the actual JSON type, never the value itself: values can
-/// be large or private.
+/// be large or private (a [FormatException] of a decoder keeps its own
+/// message, see [JsonDecodeException.fromFormatException]).
 final class JsonDecodeException implements Exception {
   /// Creates an exception at [path] inside the value of [schema].
   JsonDecodeException({
@@ -14,6 +15,19 @@ final class JsonDecodeException implements Exception {
     this.schema,
     this.hint,
   }) : path = List.unmodifiable(path);
+
+  /// A [FormatException] thrown by a decoder (`DateTime.parse`, a user
+  /// converter) on server data, as a decode problem at [path] inside the
+  /// value of [schema]. [actual] carries the exception's message, which a
+  /// decoder should keep free of the value.
+  JsonDecodeException.fromFormatException(
+    FormatException exception, {
+    List<Object> path = const [],
+    this.schema,
+  }) : expected = 'a value its decoder accepts',
+       actual = 'a value it rejected: ${exception.message}',
+       hint = null,
+       path = List.unmodifiable(path);
 
   /// What the schema expects, such as `an integer`.
   final String expected;
