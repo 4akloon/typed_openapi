@@ -18,6 +18,7 @@ final class Diagnostic implements Comparable<Diagnostic> {
     this.pointer,
     this.span,
     this.fix,
+    this.args = const [],
   });
 
   /// The stable code from the catalog.
@@ -41,6 +42,11 @@ final class Diagnostic implements Comparable<Diagnostic> {
   /// What to change in the source to fix the finding.
   final String? fix;
 
+  /// Values from the spec that tell this finding from another of the same
+  /// code at the same place, such as the name of a missing field; part of
+  /// the baseline fingerprint, unlike [message].
+  final List<String> args;
+
   /// The 1-based line of the finding, or null when the position is unknown.
   int? get line {
     final start = span?.start;
@@ -62,6 +68,7 @@ final class Diagnostic implements Comparable<Diagnostic> {
     pointer: pointer,
     span: span,
     fix: fix,
+    args: args,
   );
 
   /// `file:line:column`, `file` when only the file is known, or null.

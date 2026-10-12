@@ -173,6 +173,7 @@ final class OperationParser {
         .missingRequiredField,
         'The required field "content" is missing.',
         r.pointer,
+        args: const ['content'],
       );
     }
     return _context.register(

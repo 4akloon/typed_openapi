@@ -57,6 +57,7 @@ final class DiagnosticBag {
     JsonPointer? pointer,
     SourceSpan? span,
     String? fix,
+    List<String> args = const [],
   }) {
     add(
       Diagnostic(
@@ -67,6 +68,7 @@ final class DiagnosticBag {
         pointer: pointer,
         span: span,
         fix: fix,
+        args: args,
       ),
     );
   }

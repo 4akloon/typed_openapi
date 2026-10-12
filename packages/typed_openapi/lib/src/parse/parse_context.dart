@@ -86,6 +86,7 @@ final class ParseContext {
     String message,
     JsonPointer pointer, {
     String? fix,
+    List<String> args = const [],
   }) {
     diagnostics.report(
       code,
@@ -94,6 +95,7 @@ final class ParseContext {
       pointer: pointer,
       span: document.spanOf(pointer),
       fix: fix,
+      args: args,
     );
   }
 

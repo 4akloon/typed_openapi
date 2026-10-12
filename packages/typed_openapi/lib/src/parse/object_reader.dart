@@ -336,6 +336,7 @@ final class ObjectReader {
       .missingRequiredField,
       'The required field "$key" is missing.',
       pointer,
+      args: [key],
     );
   }
 }
