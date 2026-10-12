@@ -45,8 +45,39 @@
   TOA553 operation-multiple-tags, TOA554 operation-untagged, TOA555
   tags-merged, TOA556 path-variable-unbound, TOA557 filter-matches-nothing,
   TOA558 filter-conflict.
+- More M6 codes, with their default level:
+  - TOA255 oneof-constraints-ignored (info): `oneOf`/`anyOf` branches that
+    only add constraints to an object with `properties` are ignored.
+  - TOA256 composition-parts-ignored (warning): `allOf` parts or properties
+    beside a union, or the union's branches beside a model, are ignored.
+  - TOA351 enum-varnames-invalid (warning): `x-enum-varnames` or
+    `x-enum-descriptions` is not a list of strings as long as the enum; it is
+    ignored.
+  - TOA452 inheritance-polymorphism-deferred (info): a discriminator on an
+    `allOf` base is not used to decode the subtypes yet.
+  - TOA559 name-lossy (info): a schema, property, enum value, tag,
+    `operationId` or parameter name lost letters outside ASCII.
+  - TOA560 override-name-invalid (warning): an override `name` or `group` is
+    not a valid Dart name; the name made from it is used, or the override is
+    ignored when nothing is left.
+  - TOA561 media-type-as-bytes (info): a body whose media type is not JSON, a
+    form, `multipart/form-data`, `text/*` or `text/event-stream` is bytes
+    and its schema is not used; also names the media types of an operation
+    that are dropped for the chosen one.
+  - TOA562 default-error-schema-missing (warning): `errors.default_schema` is
+    not a key of `components.schemas`; the setting is ignored.
+  - TOA563 client-empty (warning): no operation of the client is generated
+    (filtered out, written as `$ref`, or an unbound path variable).
+- An `allOf` parent that an override excludes is still merged into the flat
+  child: the exclude only removes the parent's own declaration, and TOA254
+  (info) says so.
+- `naming.default_group` may not be a reserved word and `naming.input_suffix`
+  and `naming.patch_suffix` must differ (TOA902).
+  `naming.operation_prefix` is removed only from the start of an
+  `operationId`, and not when its match is empty.
 - Hidden `typed_openapi ir [client...]` prints the IR as JSON for debugging;
-  its format may change in any release.
+  its diagnostics go to stderr as text and its exit code is the one `check`
+  gives. Its format may change in any release.
 - `typed_openapi check`: reads every client from `typed_openapi.yaml`, loads
   its spec (JSON or YAML) with source positions, detects the OpenAPI version
   and reports diagnostics with stable codes and JSON pointers, as text or JSON.

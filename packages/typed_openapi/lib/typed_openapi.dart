@@ -47,6 +47,7 @@ export 'src/ir/dart_type.dart'
         CustomType,
         DartType,
         DeclId,
+        DeclVariant,
         ListType,
         MapType,
         NamedType,

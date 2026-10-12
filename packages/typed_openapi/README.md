@@ -93,6 +93,32 @@ defaults:
   errors: {default_schema: ErrorDto}
 ```
 
+How the filters work:
+
+- `include` is a union: an operation is generated when any tag,
+  `operationId` or path pattern of `include` matches it. An empty `include`
+  is no filter.
+- `exclude` wins over `include`. A pattern in both is info `TOA558`, one that
+  matches no operation is a warning `TOA557`.
+- In a path pattern `*` is one segment and `**` any number of segments, `?`
+  one character. `/pets/*` matches `/pets/{id}` and does not match `/pets`;
+  `/pets/**` does not match `/pets` either, so list both to take the
+  collection and everything below it.
+- `operations` match the `operationId` as the spec writes it, before
+  `operation_prefix` is removed (with the `nestjs` preset
+  `UsersController_findAll`, not `findAll`). The prefix is removed only where
+  its match starts at the beginning of the id and is not empty.
+- Tags are case-sensitive, and an operation matches by any of its tags.
+
+Other things `check` tells you instead of guessing: a client that generates
+no operation (everything filtered out, written as `$ref`, or with a path
+variable without a parameter) is a warning `TOA563` that says why; a body
+with a media type that is not JSON, a form, text or an event stream is sent
+and read as bytes without its schema (info `TOA561`, which also names the
+other media types of an operation that are dropped); an
+`errors.default_schema` that is not a key of `components.schemas` is a
+warning `TOA562` and is ignored.
+
 Every finding has a stable code (`TOA011`), a JSON pointer into the spec and,
 for files the parser could position, a line and column. Paths are relative
 to the directory you run the command in. Change the level of a code, by its

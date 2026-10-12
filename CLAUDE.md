@@ -119,8 +119,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   and a null section are no overrides (no diagnostic). Each entry splits
   into spec fields (`spec`, a map where `null` removes the field) and typed
   generation fields (`name`, `exclude`, `group`, `exhaustive`, `dartType`,
-  `triState`) that M4 only keeps for the generator (`sse` is not accepted
-  until M10 settles its shape). A missing file is TOA801, a directory or a
+  `triState`) that the IR builder reads (M6; `sse` is not accepted until M10
+  settles its shape). A missing file is TOA801, a directory or a
   bad value TOA802 (the value is ignored), an unknown key the error TOA803
   with "did you mean" for a known key within Levenshtein distance 2.
   `OverrideResolver` maps entries to model nodes (`OverrideTarget`; a
@@ -167,40 +167,67 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `GenerationConfig` (`naming`, `group_by`, `include`/`exclude`
   (`OperationFilter`, `FilterPattern`), `types`, `tri_state`, `errors`; a
   client's key wins over `defaults`, `naming`/`types`/`errors` key by key).
+  A bad value is TOA902 and the default is used: a `default_group` that is a
+  reserved word, equal `input_suffix` and `patch_suffix` (both go back to
+  their defaults). `operation_prefix` applies only where its match starts at
+  index 0 and is not empty. `GenerationConfig.key` is the run key: custom
+  types are sorted, and a client with a filter or an `errors.default_schema`
+  is keyed by where the config has it, so TOA557, TOA558, TOA562 and TOA563
+  are reported at its own place, not at that of a client with equal
+  settings.
 - `ir/` - the semantic IR (M6): `ir.dart` (`ClientIr`, sealed `Declaration`
   = `ModelDecl` | `EnumDecl` | `UnionDecl`, `FieldIr`, `GroupIr`,
   `OperationIr`, `ParameterIr`, `RequestBodyIr`, `ResponseIr`, sealed
-  `ErrorsIr`), `dart_type.dart` (sealed `DartType`, `DeclId` = schema
+  `ErrorsIr`), `dart_type.dart` (sealed `DartType`; `DeclId` = schema
   location + `DeclVariant` (`base`, `input` for the request model of a
   schema split by direction, `patch` for the PATCH body model of a schema
-  also used elsewhere); types refer to declarations by id), `names.dart` (`DartNames` word splitting and case,
-  reserved sets; `NameScope` gives a name, a suffix for reserved names and
-  `2`, `3`... for collisions), `IrContext`/`IrOverrides` (generation fields of
-  applied overrides by node location), `SchemaMapper` (types, models, enums,
-  unions, `allOf` merge, single-schema collapse, custom types; declarations
-  are created when first reached, so only reachable schemas exist, and named
-  at the end: override names, then component keys, then inline names by
-  depth. A declaration is its `DeclId`: reaching it again (alias used twice,
-  `allOf` base merged into several models, shared path item parameter)
-  gives the same one, named after the first use, and an inline name always
-  resolves to a declaration of the set. A schema a custom type replaces
-  declares and reports nothing: its JSON side is scalars, lists, maps and
-  `JsonValue`. A structural alias that reaches itself with no declaration
-  between is TOA251), `DirectionIndex` (request/response uses for the
-  readOnly/writeOnly split; whether a schema is directional depends on what
-  it reaches, never on the order it is asked in), `OperationSelector` (filters, `exclude`), `OperationBuilder`
-  (parameters, bodies, responses, envelopes, errors) and `IrBuilder` (groups,
-  method names, then everything above). `IrJson` dumps an IR; the hidden
-  `typed_openapi ir` command prints it. Naming and mapping codes use the
-  second half of each area's hundred: TOA250-TOA256, TOA350-TOA351,
-  TOA450-TOA452, TOA550-TOA560.
+  also used elsewhere); types refer to declarations by id, and
+  `CustomType.json` never names one), `names.dart` (`DartNames`: word
+  splitting, case, reserved sets and the name check `NameKind`, `isValid`,
+  `sanitize`, `dropsLetters`; `NameScope` gives a name, a suffix for
+  reserved names and `2`, `3`... for collisions), `IrContext`/`IrOverrides`
+  (generation fields of applied overrides by node location;
+  `checkedOverrideName` validates an override name, TOA560, and
+  `checkLossyName` reports letters a name lost, TOA559; `defaultErrorSchema`
+  is `errors.default_schema` if `components.schemas` has the key, else
+  TOA562), `SchemaMapper` (types, models, enums, unions, `allOf` merge,
+  single-schema collapse, custom types; declarations are created when first
+  reached, so only reachable schemas exist, and named at the end: override
+  names, then component keys, then inline names by depth. A declaration is
+  its `DeclId`: reaching it again gives the same one, named after the first
+  use, and an inline name always resolves to a declaration of the set. A
+  schema a custom type replaces declares and reports nothing: its JSON side
+  is scalars, lists, maps and `JsonValue`. A structural alias that reaches
+  itself with no declaration between is TOA251. An `allOf` parent that an
+  override excludes is still merged into the flat child, TOA254 says so;
+  `oneOf` branches that only add constraints leave a model, TOA255; parts or
+  properties beside a union, or branches beside a model, are lost, TOA256),
+  `DirectionIndex` (request/response uses for the readOnly/writeOnly split,
+  independent of the order it is asked in), `OperationSelector` (`include`
+  is a union of `tags`, `operations` and `paths`, empty means no filter;
+  `exclude` wins, TOA558, a pattern that matches nothing is TOA557; `*` is
+  one path segment, `**` any number; `operationId` filters match the raw
+  id; tags are case-sensitive; overrides' `exclude`), `OperationBuilder`
+  (parameters in location order and then spec order; a body is JSON first,
+  then multipart, form, text, event stream; any other media type is bytes
+  (`Uint8List`) without its schema and the media types that are dropped are
+  named, TOA561; envelopes; errors, with `errors.default_schema` for
+  statuses without a body) and `IrBuilder` (operations written as a `$ref`
+  are skipped (TOA107); groups by tag, path or one class, with an override
+  `group` and TOA553-TOA555; method names, override names first, then
+  `operationId` without the `operation_prefix`, then the path; TOA563 when
+  no operation is generated, at the config client if filters left some
+  out, else at `#/paths`; then everything above). `IrJson` dumps an IR; the
+  hidden `typed_openapi ir` command prints it. Naming and mapping codes use
+  the second half of each area's hundred: TOA250-TOA256, TOA350-TOA351,
+  TOA450-TOA452, TOA550-TOA563.
 - `check/` - `SpecChecker`: config -> load -> version -> overrides ->
   `Normalizer` -> `IrBuilder` once per run (file, preset, rules, overrides
-  file, `GenerationConfig.key`); an
-  overrides file that cannot be used is reported (an error) and the spec is
-  checked without it; `generate` (M9) must skip such a client. Each client
-  then applies its levels (`checkClients` -> `ClientCheck`) and its baseline
-  (`check`).
+  file, `GenerationConfig.key`); an overrides file that cannot be used is
+  reported (an error) and the spec is checked without it; `generate` (M9)
+  must skip such a client. Each client then applies its levels
+  (`checkClients` -> `ClientCheck`) and its baseline (`check`, which also
+  returns the `ClientCheck`s).
 - `baseline/` - `AnchorIndex` (logical addresses of a spec's nodes:
   operation `METHOD /path`, `in:name` parameter, components schema,
   property), `Fingerprints` (anchor, `sha256([code, anchor, args])[:12]`),
@@ -221,14 +248,16 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `--strict-baseline`, client names as positional arguments) and
   `BaselineCommand` (`baseline_command.dart`, subcommands `create` and
   `prune`) and the hidden `IrCommand` (`ir_command.dart`, prints the IR of
-  clients as JSON); `bin/typed_openapi.dart` only calls
+  clients as JSON alone on stdout; the diagnostics of the run go to stderr as
+  text, a client with no IR is named there, and the exit code is the one
+  `check` gives); `bin/typed_openapi.dart` only calls
   `TypedOpenApiCli().run(args)` and sets `exitCode`.
 - `lib/typed_openapi.dart` exports the public API, each with a `show` list:
   `SpecChecker`, `ClientCheck`, `TypedOpenApiCli`, `ConfigLoader`,
   `ClientConfig`, `Preset`, `ProjectConfig`, `GenerationConfig`, `GroupBy`,
   `TriStateRule`, `OperationFilter`, `FilterPattern`, the IR (`IrBuilder`,
   `IrJson`, `ClientIr` and its node classes, `DartType` and its
-  subclasses, `DeclId`), the diagnostics (`Diagnostic`,
+  subclasses, `DeclId`, `DeclVariant`), the diagnostics (`Diagnostic`,
   `RelatedLocation`, `DiagnosticBag`, `DiagnosticCode`, `DisplayPaths`,
   `JsonPointer`, `Severity`, `SeverityLevels` and the reporters), the
   baseline (`AnchorIndex`, `Baseline`, `BaselineEntry`, `BaselineMatch`,
@@ -251,8 +280,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `IrCommand`, `YamlComposer` and `load/yaml/`.
 
 Data flows loader -> parser -> resolver -> overrides -> normalizer -> IR
-builder -> checker, every stage writing problems into one `DiagnosticBag`; reporters
-read the bag at the end.
+builder -> checker, every stage writing problems into one `DiagnosticBag`;
+reporters read the bag at the end.
 
 Rules of the pipeline:
 
