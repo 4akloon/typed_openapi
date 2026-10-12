@@ -19,6 +19,33 @@ paths:
                 base64Encode: {type: string, format: byte}
       responses:
         "204": {description: ok}
+  /profile:
+    post:
+      operationId: sendProfile
+      tags: [wire]
+      description: Parts whose encoding names several media types, a wildcard or XML.
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [history]
+              properties:
+                avatar: {type: string, format: binary}
+                scan: {type: string, format: binary}
+                meta: {type: object, properties: {a: {type: string}}}
+                history: {type: object, properties: {b: {type: string}}}
+                rows: {type: string}
+                note: {type: string}
+            encoding:
+              avatar: {contentType: "image/png, image/jpeg"}
+              scan: {contentType: "image/*"}
+              meta: {contentType: "application/xml, application/json"}
+              history: {contentType: "application/xml; charset=utf-8"}
+              rows: {contentType: "text/csv, text/plain"}
+              note: {contentType: "text/*"}
+      responses:
+        "204": {description: ok}
   /strings:
     post:
       operationId: sendString

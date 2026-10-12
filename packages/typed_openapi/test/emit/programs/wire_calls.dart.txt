@@ -55,6 +55,31 @@ Future<void> main() async {
     multipart.contains('name="base64Encode"\r\ncontent-type: text/plain; charset=utf-8\r\n\r\nBAUG'),
   ]}');
 
+  // A part whose encoding names several media types, a wildcard or XML is
+  // sent with one concrete type, and the call returns a result.
+  adapter.answers
+    ..add(() => empty(204))
+    ..add(() => empty(204));
+  for (final scan in [
+    FileUpload.bytes(Uint8List.fromList([1]), filename: 's.gif'),
+    FileUpload.bytes(Uint8List.fromList([2]),
+        filename: 's.webp', contentType: 'image/webp'),
+  ]) {
+    print(show(await wire.sendProfile(
+      body: SendProfileRequest(
+        avatar: FileUpload.bytes(Uint8List.fromList([3]), filename: 'a.png'),
+        scan: scan,
+        meta: const SendProfileRequestMeta(a: 'm'),
+        history: '<b>h</b>',
+        rows: 'a,b',
+        note: 'n',
+      ),
+    )));
+    final parts = RegExp(r'name="(\w+)"[^\r\n]*\r\n(?:content-type: ([^\r\n]*)\r\n)?\r\n')
+        .allMatches(adapter.bodies.last);
+    print([for (final m in parts) '${m[1]}: ${m[2]}'].join(' | '));
+  }
+
   // A JSON body is JSON text, also a string, an enum and a null.
   for (final send in <Future<Object?> Function()>[
     () => wire.sendString(body: 'hello "q"'),

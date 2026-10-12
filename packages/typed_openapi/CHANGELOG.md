@@ -214,6 +214,14 @@
   - TOA660 default-value-invalid (warning): a parameter's `default` does not
     fit its `enum` or `format` (`date`, `date-time`, `uuid`, `int32`); it is
     not documented as the default.
+  - TOA661 part-media-type-chosen (info): the `contentType` of the `encoding`
+    of a multipart part is a list (`image/png, image/jpeg`), a wildcard
+    (`image/*`) or no media type; the part is sent with one concrete type
+    (the file's own when it has one, else the first concrete type, else
+    `application/octet-stream` for a file and none for text).
+  - TOA662 part-media-type-not-json (warning): an object part whose
+    `contentType` is not JSON (`application/xml`) is a `String` the caller
+    supplies, sent with that media type; it used to make every call throw.
   - Renamed parts, group fields, server members and root client names are
     reported (TOA550, TOA551, TOA552, TOA559); a method named `jsonEncode`,
     `base64Encode`, `int`, `bool`, `double` or `num` gets a suffix (TOA550).

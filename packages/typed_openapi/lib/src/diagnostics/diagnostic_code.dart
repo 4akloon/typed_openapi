@@ -450,6 +450,18 @@ enum DiagnosticCode {
   /// that is not a date): it is not documented as the default.
   defaultValueInvalid('TOA660', 'default-value-invalid', .warning),
 
+  /// The `contentType` of an `encoding` entry of a multipart part is a list
+  /// (`image/png, image/jpeg`), a wildcard (`image/*`) or no media type: the
+  /// part is sent with one concrete type, the file's own when it has one,
+  /// else the first concrete type of the list, else `application/octet-stream`
+  /// for a file and no media type for text.
+  partMediaTypeChosen('TOA661', 'part-media-type-chosen', .info),
+
+  /// An object part of a multipart body has a `contentType` that is not
+  /// JSON (`application/xml`). The client writes JSON only, so the part is
+  /// a `String` the caller supplies, sent with that media type.
+  partMediaTypeNotJson('TOA662', 'part-media-type-not-json', .warning),
+
   /// A normalizer fix or an override was not applied: its file cannot be
   /// read, its target is gone, the spec kept changing after the last pass, or
   /// the change would have no effect in the spec's dialect.

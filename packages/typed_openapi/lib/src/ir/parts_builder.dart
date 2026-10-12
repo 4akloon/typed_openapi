@@ -1,3 +1,4 @@
+import '../model/media_type_name.dart';
 import '../model/operation.dart';
 import '../model/schema.dart';
 import '../model/spec_node.dart';
@@ -5,6 +6,7 @@ import 'dart_type.dart';
 import 'ir.dart';
 import 'ir_context.dart';
 import 'names.dart';
+import 'part_media_type.dart';
 import 'schema_mapper.dart';
 
 /// Builds the parts of a multipart body (R10.4) whose schema is an object:
@@ -17,6 +19,8 @@ final class PartsBuilder {
 
   final IrContext _context;
   final SchemaMapper _mapper;
+
+  PartMediaType get _mediaTypes => PartMediaType(_context);
 
   /// The parts of a multipart body whose [media] has an object schema with
   /// properties, each mapped as a request type; read-only properties are
@@ -44,17 +48,83 @@ final class PartsBuilder {
       for (final MapEntry(key: wire, value: property)
           in resolved.properties.entries)
         if (!_isReadOnly(property))
-          PartIr(
-            name: _claimName(scope, wire, property.location),
-            wireName: wire,
-            type: _partType(property, prefix, wire, resolved),
-            location: property.location,
-            required: resolved.required.contains(wire),
-            contentType: media.encoding[wire]?.contentType,
-            description: _description(property),
-          ),
+          _part(scope, media, resolved, wire, property, prefix),
     ];
   }
+
+  /// The part [wire]: its media type is one concrete type ([PartMediaType]),
+  /// and an object that cannot be sent as JSON is text the caller supplies.
+  PartIr _part(
+    NameScope scope,
+    MediaType media,
+    SchemaObject parent,
+    String wire,
+    Schema property,
+    String prefix,
+  ) {
+    final name = _claimName(scope, wire, property.location);
+    final isRequired = parent.required.contains(wire);
+    final encoding = media.encoding[wire];
+    final declared = encoding?.contentType;
+    final at = encoding?.location.child('contentType');
+    String? chosen(PartPayload payload) => at == null
+        ? null
+        : _mediaTypes.choose(declared, payload, wire: wire, at: at);
+    final objectType = _isObjectLike(property) ? chosen(.object) : null;
+    final DartType type;
+    final String? contentType;
+    if (objectType != null && !MediaTypeName(objectType).isJson) {
+      type = _textInput(property, isRequired);
+      contentType = objectType;
+    } else {
+      type = _partType(property, prefix, wire, parent);
+      contentType = objectType ?? chosen(_isFile(type) ? .file : .text);
+    }
+    return PartIr(
+      name: name,
+      wireName: wire,
+      type: type,
+      location: property.location,
+      required: isRequired,
+      contentType: contentType,
+      description: _description(property),
+    );
+  }
+
+  /// The text of an object (or of each item of an array of objects) that
+  /// is sent in a format other than JSON.
+  DartType _textInput(Schema property, bool isRequired) {
+    const text = CoreType(.string);
+    final isArray = switch (_context.model.resolveSchema(property)) {
+      SchemaObject(:final types) => types.contains(SchemaType.array),
+      _ => false,
+    };
+    final type = isArray ? const ListType(text) : text;
+    return isRequired ? type : type.withNullable(true);
+  }
+
+  /// Whether a value of [property] is written as a JSON object, or is a list
+  /// of them.
+  bool _isObjectLike(Schema property) {
+    final schema = _context.model.resolveSchema(property);
+    if (schema is! SchemaObject) return false;
+    final items = schema.items;
+    if (schema.types.contains(SchemaType.array) && items != null) {
+      return _isObjectLike(items);
+    }
+    return schema.types.contains(SchemaType.object) ||
+        schema.properties.isNotEmpty ||
+        schema.additionalProperties != null ||
+        schema.allOf.isNotEmpty ||
+        schema.oneOf.isNotEmpty ||
+        schema.anyOf.isNotEmpty;
+  }
+
+  static bool _isFile(DartType type) => switch (type) {
+    CoreType(kind: .binary) => true,
+    ListType(item: CoreType(kind: .binary)) => true,
+    _ => false,
+  };
 
   /// The field name of the part [wire]: as an argument is named, with the
   /// same reports (TOA550, TOA551, TOA552, TOA559); a part cannot be named by

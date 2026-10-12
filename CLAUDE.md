@@ -306,7 +306,9 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   body has the name (`ResponseBodyNames`), any other taker of the name gives
   the suffix, TOA551) and the class of
   multipart parts (`RequestBodyIr.parts`, TOA655 when the schema is not an
-  object); `OperationBuilder` keeps security requirements (an alternative
+  object; `PartMediaType` makes each part's `encoding.contentType` one
+  concrete type, TOA661, and an object part that is not JSON a `String` the
+  caller supplies, TOA662); `OperationBuilder` keeps security requirements (an alternative
   that names a scheme `components.securitySchemes` does not define is
   TOA568 and left out as a whole when another alternative can be described;
   when none can, all stay with the scheme of kind `SecurityKind.unknown`
@@ -338,7 +340,7 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   is missing from the dump; the
   hidden `typed_openapi ir` command prints it. Naming and mapping codes use
   the second half of each area's hundred: TOA250-TOA256, TOA350-TOA351,
-  TOA450-TOA456, TOA550-TOA565, and media types and errors TOA650-TOA660
+  TOA450-TOA456, TOA550-TOA565, and media types and errors TOA650-TOA662
   (TOA561 became TOA650 and TOA651, TOA562 TOA652, the querystring half of
   TOA564 TOA565); `generate` has TOA830 (output not owned),
   TOA831 (output not written, or its lock held) and TOA832 (an interrupted
