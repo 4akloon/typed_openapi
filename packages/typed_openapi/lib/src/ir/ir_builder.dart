@@ -8,6 +8,7 @@ import 'ir.dart';
 import 'ir_context.dart';
 import 'names.dart';
 import 'operation_builder.dart';
+import 'operation_selector.dart';
 import 'schema_mapper.dart';
 
 /// Builds the semantic IR of a client from its normalized spec (M6).
@@ -35,8 +36,9 @@ final class IrBuilder {
   ClientIr build(NormalizedSpec spec, ClientConfig client) {
     final context = IrContext(_diagnostics, spec, client);
     final all = _operations(context);
+    final selected = OperationSelector(context).select(all);
     final directions = DirectionIndex(spec.model);
-    for (final entry in all) {
+    for (final entry in selected) {
       directions.addOperation(entry.operation, entry.item, entry.method);
     }
     if (client.generation.defaultErrorSchema case final key?) {
@@ -54,7 +56,7 @@ final class IrBuilder {
     final untagged =
         client.generation.groupBy == .tag &&
         all.every((e) => e.operation.tags.isEmpty);
-    if (untagged && all.isNotEmpty) {
+    if (untagged && selected.isNotEmpty) {
       context.report(
         .operationUntagged,
         'No operation of the spec has a tag, so all operations are in '
@@ -68,7 +70,7 @@ final class IrBuilder {
             'single in the config.',
       );
     }
-    for (final entry in all) {
+    for (final entry in selected) {
       final group = _group(
         context,
         entry,

@@ -191,6 +191,18 @@ final class SchemaMapper {
   DartType _component(SchemaObject schema) {
     final custom = _customSchemaType(schema);
     if (custom != null) return custom;
+    if (_context.overrides.schemaAt(schema.location)?.exclude ?? false) {
+      _context.report(
+        .excludedSchemaReferenced,
+        'This schema is excluded by an override, but a generated type uses '
+        'it; the use is generated as JsonValue.',
+        schema.location,
+        fix:
+            'Exclude what uses the schema too, or give the schema a Dart '
+            'type instead of excluding it.',
+      );
+      return const CoreType(.json);
+    }
     final id = _idOf(schema);
     final pending = _pending[id];
     if (pending != null) return NamedType(id, nullable: _isNullable(schema));

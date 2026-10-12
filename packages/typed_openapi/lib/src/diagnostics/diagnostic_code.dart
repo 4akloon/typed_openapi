@@ -177,6 +177,10 @@ enum DiagnosticCode {
   /// cannot be merged into a model; it is ignored.
   allOfPartIgnored('TOA253', 'allof-part-ignored', .warning),
 
+  /// A schema an override excludes is used by a generated type; the use is
+  /// generated as `JsonValue`.
+  excludedSchemaReferenced('TOA254', 'excluded-schema-referenced', .info),
+
   /// An `enum` repeats a value; the repeats are removed.
   duplicateEnumValue('TOA301', 'duplicate-enum-value', .warning),
 
@@ -253,6 +257,14 @@ enum DiagnosticCode {
   /// A variable of the path template has no path parameter with its exact
   /// name (`{ID}` with a parameter `id`); the operation is not generated.
   pathVariableUnbound('TOA556', 'path-variable-unbound', .error),
+
+  /// A tag, `operationId` or path pattern of the config's `include` or
+  /// `exclude` matches no operation of the spec.
+  filterMatchesNothing('TOA557', 'filter-matches-nothing', .warning),
+
+  /// The config lists the same tag, `operationId` or path pattern in both
+  /// `include` and `exclude`; `exclude` wins.
+  filterConflict('TOA558', 'filter-conflict', .info),
 
   /// `*/*` is used as a media type.
   wildcardMediaType('TOA601', 'wildcard-media-type', .warning),
