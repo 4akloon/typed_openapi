@@ -9,6 +9,7 @@ import '../overrides/override_set.dart';
 import '../overrides/override_snippet.dart';
 import '../resolve/spec_documents.dart';
 import '../resolve/spec_model.dart';
+import 'names.dart';
 
 /// The generation fields of a client's overrides (M4), by the location of
 /// the node each entry names.
@@ -88,6 +89,8 @@ final class IrContext {
 
   late final OverrideSnippet _snippets = OverrideSnippet(model);
 
+  static const _names = DartNames();
+
   /// The spec model.
   SpecModel get model => spec.model;
 
@@ -118,6 +121,87 @@ final class IrContext {
       pointer: at.pointer,
       span: documents[at.document]?.spanOf(at.pointer),
       fix: text,
+    );
+  }
+
+  /// Whether an override leaves the property schema written at [location]
+  /// out of its model.
+  bool isPropertyExcluded(SpecLocation location) =>
+      overrides.propertyAt(location)?.exclude ?? false;
+
+  /// Reports [code] at the `field` of the override [entry], in the
+  /// overrides file.
+  void reportAtOverride(
+    DiagnosticCode code,
+    String message,
+    OverrideEntry entry,
+    String field, {
+    String? fix,
+  }) {
+    final set = spec.overrides;
+    if (set == null) return;
+    final pointer = entry.pointer.child(field);
+    diagnostics.report(
+      code,
+      message,
+      file: set.file,
+      pointer: pointer,
+      span: set.spanOf(pointer),
+      fix: fix,
+    );
+  }
+
+  /// The Dart name of [kind] that the override [entry] gives with its
+  /// `field` set to [value] ([what] says what it names, such as `type`).
+  /// [value] when it is a valid name; else the name made from it, reported
+  /// as TOA560; null, with the same report, when nothing can be made of it
+  /// and the override is ignored.
+  String? checkedOverrideName(
+    OverrideEntry entry,
+    String field,
+    String? value,
+    NameKind kind, {
+    required String what,
+  }) {
+    if (value == null || _names.isValid(value, kind)) return value;
+    final name = _names.sanitize(value, kind);
+    reportAtOverride(
+      .overrideNameInvalid,
+      name == null
+          ? 'The $field "$value" of this override is not a valid Dart $what '
+                'name and has no ASCII letter or digit; the override is '
+                'ignored.'
+          : 'The $field "$value" of this override is not a valid Dart $what '
+                'name; "$name" is used.',
+      entry,
+      field,
+      fix: kind == .type
+          ? 'Write an UpperCamelCase Dart identifier that does not start '
+                'with an underscore.'
+          : 'Write a lowerCamelCase Dart identifier that does not start with '
+                'an underscore.',
+    );
+    return name;
+  }
+
+  /// Reports TOA559 at [at] when [name], made from the spec's [source], lost
+  /// characters; [what] says what [source] names (`Property`). [override]
+  /// is an override that names it.
+  void checkLossyName(
+    String source,
+    String name,
+    SpecLocation at, {
+    required String what,
+    String? override,
+  }) {
+    if (!_names.dropsLetters(source)) return;
+    report(
+      .nameLossy,
+      '$what "$source" lost characters when it became the Dart name '
+      '"$name": letters outside ASCII are dropped.',
+      at,
+      fix: 'Name it explicitly to keep the meaning.',
+      override: override,
     );
   }
 

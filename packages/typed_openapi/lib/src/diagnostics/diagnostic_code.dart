@@ -181,6 +181,16 @@ enum DiagnosticCode {
   /// generated as `JsonValue`.
   excludedSchemaReferenced('TOA254', 'excluded-schema-referenced', .info),
 
+  /// An object with `properties` has a `oneOf` or `anyOf` whose branches
+  /// only add constraints (`required`, `minProperties`, ...); it is
+  /// generated as a model and the branches are ignored.
+  oneOfConstraintsIgnored('TOA255', 'oneof-constraints-ignored', .info),
+
+  /// Parts or properties that sit beside a `oneOf` or `anyOf` union are
+  /// ignored (`allOf` next to a union), or the branches are, when the schema
+  /// is a model made of `allOf` parts or `properties`.
+  allOfBesideUnionIgnored('TOA256', 'allof-beside-union-ignored', .warning),
+
   /// An `enum` repeats a value; the repeats are removed.
   duplicateEnumValue('TOA301', 'duplicate-enum-value', .warning),
 
@@ -191,6 +201,10 @@ enum DiagnosticCode {
   /// An enum mixes values of several JSON types, or has objects or lists
   /// among its values; it is generated as `JsonValue`.
   enumMixedValues('TOA350', 'enum-mixed-values', .warning),
+
+  /// `x-enum-varnames` or `x-enum-descriptions` is not a list of strings as
+  /// long as the enum; it is ignored.
+  enumVarnamesInvalid('TOA351', 'enum-varnames-invalid', .warning),
 
   /// The discriminator property is not required in a variant.
   discriminatorNotRequired('TOA401', 'discriminator-not-required', .info),
@@ -212,6 +226,16 @@ enum DiagnosticCode {
   discriminatorMappingNotVariant(
     'TOA451',
     'discriminator-mapping-not-variant',
+    .info,
+  ),
+
+  /// A `discriminator` sits on a schema that is not a `oneOf` or `anyOf`
+  /// union (a base that other schemas extend with `allOf`): the schemas that
+  /// extend it are flat models for now, and polymorphic decoding is not
+  /// generated.
+  inheritancePolymorphismDeferred(
+    'TOA452',
+    'inheritance-polymorphism-deferred',
     .info,
   ),
 
@@ -265,6 +289,15 @@ enum DiagnosticCode {
   /// The config lists the same tag, `operationId` or path pattern in both
   /// `include` and `exclude`; `exclude` wins.
   filterConflict('TOA558', 'filter-conflict', .info),
+
+  /// A name from the spec lost characters when it became a Dart name
+  /// (`Größe` became `grE`: letters outside ASCII are dropped). Changes of
+  /// case and separators (`my_thing`, `X-Request-ID`) are not reported.
+  nameLossy('TOA559', 'name-lossy', .info),
+
+  /// An override `name` is not a valid Dart name for what it names (`my
+  /// thing`, `1x`, `_private`); the name made from it is used.
+  overrideNameInvalid('TOA560', 'override-name-invalid', .warning),
 
   /// `*/*` is used as a media type.
   wildcardMediaType('TOA601', 'wildcard-media-type', .warning),

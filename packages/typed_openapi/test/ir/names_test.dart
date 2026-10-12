@@ -71,4 +71,37 @@ void main() {
       ('get2', NameChange.collision),
     );
   });
+
+  test('tells a lossy name from a change of case and separators', () {
+    for (final text in ['Größe', 'Über', 'café', 'größe']) {
+      expect(names.dropsLetters(text), isTrue, reason: text);
+    }
+    for (final text in [
+      'my_thing',
+      'X-Request-ID',
+      'pet store',
+      '2fa',
+      'Pet',
+      '+1',
+      '',
+    ]) {
+      expect(names.dropsLetters(text), isFalse, reason: text);
+    }
+  });
+
+  test('validates an override name for its kind', () {
+    expect(names.isValid('Animal', NameKind.type), isTrue);
+    expect(names.isValid(r'$2Fa', NameKind.type), isTrue);
+    expect(names.isValid('my_field', NameKind.member), isTrue);
+    expect(names.isValid('nickName', NameKind.member), isTrue);
+    for (final text in ['my thing', '1x', '_private', 'pet', '', 'a-b']) {
+      expect(names.isValid(text, NameKind.type), isFalse, reason: text);
+    }
+    for (final text in ['my field', '1x', '_private', 'Upper', '', 'a-b']) {
+      expect(names.isValid(text, NameKind.member), isFalse, reason: text);
+    }
+    expect(names.sanitize('my thing', NameKind.type), 'MyThing');
+    expect(names.sanitize('_private', NameKind.member), 'private');
+    expect(names.sanitize('日本', NameKind.type), isNull);
+  });
 }

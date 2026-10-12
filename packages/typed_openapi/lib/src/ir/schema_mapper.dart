@@ -176,11 +176,12 @@ final class SchemaMapper {
         'its type is named "$name".',
         pending.id.location,
         fix: 'Rename the schema at the source, or name its type.',
-        override: _context.schemaOverride(pending.id.location, {'name': name}),
+        override: _typeOverride(pending, name),
       );
       return pending.name = name;
     }
     final (name, change) = scope.claim(candidate);
+    final override = _typeOverride(pending, name);
     if (change != null) {
       _context.report(
         change == .reserved ? .nameReserved : .nameCollision,
@@ -190,12 +191,34 @@ final class SchemaMapper {
             : 'Another type is named "$candidate"; this one is named '
                   '"$name".',
         pending.id.location,
-        fix: 'Name the type explicitly to keep the name stable.',
-        override: _context.schemaOverride(pending.id.location, {'name': name}),
+        fix: override == null
+            ? 'Move the schema to components.schemas and name it there, or '
+                  'rename what it is named after at the source.'
+            : 'Name the type explicitly to keep the name stable.',
+        override: override,
+      );
+    }
+    if (pending.componentKey case final key? when overridden == null) {
+      _context.checkLossyName(
+        key,
+        name,
+        pending.id.location,
+        what: 'Schema',
+        override: override,
       );
     }
     return pending.name = name;
   }
+
+  /// The override that names the type of [pending] [name], when the schema
+  /// has an address in the overrides file: a component's own type. The
+  /// override `name` of a property names its field, an inline type has no
+  /// address, and the PATCH and request models take their names from the
+  /// schema's.
+  String? _typeOverride(_Pending pending, String name) =>
+      pending.id.variant == .base && _componentKey(pending.id.location) != null
+      ? _context.schemaOverride(pending.id.location, {'name': name})
+      : null;
 
   DartType _map(Schema schema, NameHint hint) {
     if (schema is BooleanSchema) return const CoreType(.json);
@@ -233,11 +256,20 @@ final class SchemaMapper {
     if (single == null && _declares(schema)) {
       if (_replacing) return _nothingDeclared(schema);
       final key = _referenceName(schema.location);
+      final override = _context.overrides.schemaAt(schema.location);
       return _declare(
         schema,
         id,
         componentKey: key,
-        overrideName: _context.overrides.schemaAt(schema.location)?.name,
+        overrideName: override == null
+            ? null
+            : _context.checkedOverrideName(
+                override,
+                'name',
+                override.name,
+                .type,
+                what: 'type',
+              ),
       );
     }
     // A structural schema (array, map, scalar) has no declaration of its
@@ -378,9 +410,12 @@ final class SchemaMapper {
       );
       return const CoreType(.json);
     }
+    final (names, descriptions) = values == null
+        ? (null, null)
+        : _enumLabels(schema, values);
     final enumKey = values == null || kind == null || componentKey != null
         ? null
-        : '${kind.name}:${values.join('\u0000')}';
+        : jsonEncode([kind.name, values, names, descriptions]);
     if (enumKey != null) {
       final known = _inlineEnums[enumKey];
       if (known != null) return NamedType(known.id, nullable: nullable);
@@ -398,7 +433,7 @@ final class SchemaMapper {
     _aliases.clear();
     try {
       if (values != null && kind != null) {
-        _enum(schema, pending, values, kind);
+        _enum(schema, pending, values, kind, names, descriptions);
       } else if (_branches(schema) case (final kind, final branches)) {
         _union(schema, pending, kind, branches);
       } else {
@@ -478,7 +513,7 @@ final class SchemaMapper {
               name: _memberName(
                 scope,
                 field.json,
-                field.override?.name,
+                field.override,
                 field.location,
                 owner: name,
               ),
@@ -667,15 +702,24 @@ final class SchemaMapper {
     return written == null ? null : model.resolveSchema(written)?.location;
   }
 
-  /// The Dart name of the member [json] of the type [owner], from [named]
-  /// (an override) or [json].
+  /// The Dart name of the member [json] of the type [owner], from the name
+  /// [override] gives or from [json].
   String _memberName(
     NameScope scope,
     String json,
-    String? named,
+    PropertyOverride? override,
     SpecLocation location, {
     required String owner,
   }) {
+    final named = override == null
+        ? null
+        : _context.checkedOverrideName(
+            override,
+            'name',
+            override.name,
+            .member,
+            what: 'field',
+          );
     final candidate = named ?? _names.camel(json);
     if (candidate == null) {
       final (name, _) = scope.claim('field');
@@ -703,7 +747,51 @@ final class SchemaMapper {
         override: _context.schemaOverride(location, {'name': name}),
       );
     }
+    if (named == null) {
+      _context.checkLossyName(
+        json,
+        name,
+        location,
+        what: 'Property',
+        override: _context.schemaOverride(location, {'name': name}),
+      );
+    }
     return name;
+  }
+
+  /// The `x-enum-varnames` and `x-enum-descriptions` of the enum [schema]
+  /// with [values]: a list of strings with one entry per value, or null when
+  /// the extension is missing or malformed (TOA351). An enum that has `null`
+  /// among its written values may list it too.
+  (List<String>?, List<String>?) _enumLabels(
+    SchemaObject schema,
+    List<Object?> values,
+  ) {
+    List<String>? labels(String key) {
+      final written = schema.extensions[key];
+      if (written == null) return null;
+      final all = schema.enumValues;
+      if (written is List<Object?> && written.every((e) => e is String)) {
+        final strings = written.cast<String>();
+        if (strings.length == values.length) return strings;
+        if (all != null && strings.length == all.length) {
+          return [
+            for (final (i, value) in all.indexed)
+              if (value != null) strings[i],
+          ];
+        }
+      }
+      _context.report(
+        .enumVarnamesInvalid,
+        '$key must be a list of strings with one entry per enum value '
+        '(${values.length}); it is ignored.',
+        schema.location.child(key),
+        fix: 'Write one string for each value of the enum at the source.',
+      );
+      return null;
+    }
+
+    return (labels('x-enum-varnames'), labels('x-enum-descriptions'));
   }
 
   void _enum(
@@ -711,18 +799,9 @@ final class SchemaMapper {
     _Pending pending,
     List<Object?> values,
     EnumKind kind,
+    List<String>? names,
+    List<String>? descriptions,
   ) {
-    final names = switch (schema.extensions['x-enum-varnames']) {
-      final List<Object?> given
-          when given.length == values.length &&
-              given.every((n) => n is String) =>
-        given.cast<String>(),
-      _ => null,
-    };
-    final descriptions = switch (schema.extensions['x-enum-descriptions']) {
-      final List<Object?> given when given.length == values.length => given,
-      _ => null,
-    };
     final exhaustive =
         _context.overrides.schemaAt(schema.location)?.exhaustive ?? true;
     pending.build = (name) {
@@ -742,16 +821,19 @@ final class SchemaMapper {
             EnumValueIr(
               _valueName(scope, names?[i], value!, schema.location, name),
               value,
-              description: switch (descriptions?[i]) {
-                final String text => text,
-                _ => null,
-              },
+              description: descriptions?[i],
             ),
         ],
       );
     };
   }
 
+  static final _numberText = RegExp(r'^-?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?$');
+
+  /// The name of the enum value [value] of [owner]: from its
+  /// `x-enum-varnames` entry [named], else from the value. A number, or a
+  /// string that is one, is `value` and its digits (`valueMinus1`,
+  /// `value0_5`, `value1eMinus7`).
   String _valueName(
     NameScope scope,
     String? named,
@@ -759,14 +841,17 @@ final class SchemaMapper {
     SpecLocation location,
     String owner,
   ) {
-    final candidate =
-        (named == null ? null : _names.camel(named)) ??
-        switch (value) {
-          final num number =>
-            'value${number < 0 ? 'Minus' : ''}'
-                '${'${number.abs()}'.replaceAll('.', '_')}',
-          _ => _names.camel('$value'),
-        };
+    final fromName = named == null ? null : _names.camel(named);
+    final text = '$value';
+    final String? candidate;
+    if (fromName != null) {
+      candidate = fromName;
+    } else if (value is num ||
+        (value is String && _numberText.hasMatch(text))) {
+      candidate = _numberName(text);
+    } else {
+      candidate = _names.camel(text);
+    }
     final (name, change) = scope.claim(candidate ?? 'value');
     if (candidate == null || change != null) {
       _context.report(
@@ -780,7 +865,37 @@ final class SchemaMapper {
         fix: 'Name the values with x-enum-varnames at the source.',
       );
     }
+    if (named != null && fromName == null) {
+      _context.report(
+        .nameUnrepresentable,
+        'The x-enum-varnames entry "$named" of enum $owner has no ASCII '
+        'letter or digit, so the value "$value" is named "$name".',
+        location,
+        fix: 'Write a name with a letter or digit in x-enum-varnames.',
+      );
+    }
+    if (candidate != null && value is! num) {
+      _context.checkLossyName(
+        fromName == null ? text : named!,
+        name,
+        location,
+        what: 'Value',
+      );
+    }
     return name;
+  }
+
+  /// The identifier for the number written as [text]: `value`, `Minus` for
+  /// a sign, `_` for the point, the exponent without a plus.
+  static String _numberName(String text) {
+    final negative = text.startsWith('-');
+    final digits = (negative ? text.substring(1) : text)
+        .replaceAll('.', '_')
+        .replaceAllMapped(
+          RegExp('([eE])([+-]?)'),
+          (m) => '${m[1]}${m[2] == '-' ? 'Minus' : ''}',
+        );
+    return 'value${negative ? 'Minus' : ''}$digits';
   }
 
   /// The non-null values of an enum (`enum`, or `const` as a one-value

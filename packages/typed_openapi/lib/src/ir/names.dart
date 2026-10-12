@@ -1,3 +1,13 @@
+/// What a Dart name is for: types are UpperCamelCase, members (fields,
+/// methods, arguments) lowerCamelCase.
+enum NameKind {
+  /// A class, enum or extension type.
+  type,
+
+  /// A field, method or argument.
+  member,
+}
+
 /// Turns names from a spec into Dart identifiers (R5).
 ///
 /// A name is split into words at characters that are not ASCII letters or
@@ -12,6 +22,12 @@ final class DartNames {
   static final _word = RegExp(
     '[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|[0-9]+',
   );
+  static final _nonAsciiLetter = RegExp(
+    r'(?![A-Za-z0-9])[\p{L}\p{M}\p{N}]',
+    unicode: true,
+  );
+  static final _typeName = RegExp(r'^[A-Z$][A-Za-z0-9_$]*$');
+  static final _memberName = RegExp(r'^[a-z$][A-Za-z0-9_$]*$');
 
   /// Dart reserved words: never an identifier.
   static const reservedWords = {
@@ -54,14 +70,13 @@ final class DartNames {
     'DioRequestSender', 'Failure', 'HeaderParameter', 'HttpError',
     'JsonDecodeException', 'JsonReader', 'JsonValue', 'OperationInfo',
     'OperationRequest', 'Patch', 'PatchNull', 'PatchValue', 'PathParameter',
-    'QueryParameter', 'RawResponse', 'ResponseKind', 'Result', 'SseDecoder',
-    'SseDecodeError', 'SseDisconnected', 'SseEvent', 'SseItem',
-    'SseItemDecoder', 'SseMessage', 'Success', 'TransportError',
-    'UndocumentedStatus',
+    'PathStyle', 'QueryParameter', 'QueryStyle', 'RawResponse',
+    'ResponseKind', 'Result', 'SseDecoder', 'SseDecodeError',
+    'SseDisconnected', 'SseEvent', 'SseItem', 'SseItemDecoder', 'SseMessage',
+    'Success', 'TransportError', 'UndocumentedStatus',
   };
 
-  /// Members every Dart object has, and the members generated models,
-  /// enums and API classes add.
+  /// Members every Dart object has.
   static const objectMembers = {
     'hashCode', 'noSuchMethod', 'runtimeType', 'toString', //
   };
@@ -108,6 +123,23 @@ final class DartNames {
       [parts.first.toLowerCase(), ...parts.skip(1).map(_capitalize)].join(),
     );
   }
+
+  /// Whether [text] has a letter, digit or combining mark outside ASCII:
+  /// [pascal] and [camel] drop it, so the name made from [text] is not the
+  /// text any more. A change of case or of separators is not a loss.
+  bool dropsLetters(String text) => _nonAsciiLetter.hasMatch(text);
+
+  /// Whether [name] is a valid Dart name of [kind] as an override writes it:
+  /// an identifier that starts with an uppercase letter (a type) or a
+  /// lowercase letter (a member), or with `$`, and is not private (a
+  /// leading `_` would make it invisible outside its library).
+  bool isValid(String name, NameKind kind) =>
+      (kind == .type ? _typeName : _memberName).hasMatch(name);
+
+  /// The name of [kind] that [text] stands for: [pascal] or [camel]; null
+  /// when [text] has no ASCII letter or digit.
+  String? sanitize(String text, NameKind kind) =>
+      kind == .type ? pascal(text) : camel(text);
 
   static String _capitalize(String word) =>
       word[0].toUpperCase() + word.substring(1);

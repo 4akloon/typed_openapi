@@ -4,48 +4,10 @@ import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
 import 'package:typed_openapi/src/ir/dart_type.dart';
 import 'package:typed_openapi/src/ir/ir.dart';
 import 'package:typed_openapi/src/ir/ir_json.dart';
-import 'package:typed_openapi/src/ir/names.dart';
-import 'package:typed_openapi/src/ir/schema_mapper.dart';
 import 'package:typed_openapi/src/overrides/override_set.dart';
 
 import '../helpers/ir_fixture.dart';
-
-/// Maps the component schemas [keys] of [fixture]; returns the IR of their
-/// declarations and the types of [keys].
-(ClientIr, Map<String, String>) mapComponents(
-  IrFixture fixture,
-  List<String> keys,
-) {
-  final mapper = SchemaMapper(fixture.context);
-  final schemas = fixture.context.model.document.components!.schemas;
-  final types = {
-    for (final key in keys) key: mapper.typeOfComponent(schemas[key]!),
-  };
-  final scope = NameScope(
-    reserved: {
-      ...DartNames.reservedWords,
-      ...DartNames.builtInIdentifiers,
-      ...DartNames.takenTypeNames,
-    },
-    reservedSuffix: 'Model',
-  );
-  final ir = ClientIr(declarations: mapper.declarations(scope), groups: []);
-  return (
-    ir,
-    {
-      for (final MapEntry(:key, :value) in types.entries)
-        key: value.code(ir.nameOf),
-    },
-  );
-}
-
-/// The fields of the model [name] as `name: type` lines.
-List<String> fieldsOf(ClientIr ir, String name) => [
-  for (final f
-      in (ir.declarations.firstWhere((d) => d.name == name) as ModelDecl)
-          .fields)
-    '${f.name}(${f.jsonKey}): ${f.type.code(ir.nameOf)}',
-];
+import '../helpers/mapping.dart';
 
 void main() {
   test('maps types and formats (R6.2)', () {
@@ -173,7 +135,7 @@ components:
     expect(status.values.map((v) => (v.name, v.value)), [
       ('placed', 'placed'),
       ('inProgress', 'in-progress'),
-      (r'$2', '2'),
+      ('value2', '2'),
     ]);
   });
 
