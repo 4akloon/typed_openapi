@@ -140,6 +140,82 @@ void main() {
     await source.close();
   });
 
+  group('onClose is called exactly once', () {
+    Future<int> closes(
+      Delta Function(SseMessage) decode,
+      void Function(StreamController<List<int>> source) drive, {
+      bool cancelAtEnd = false,
+    }) async {
+      var calls = 0;
+      final source = StreamController<List<int>>();
+      final done = Completer<void>();
+      final subscription = SseItemDecoder<Delta>(decode, onClose: () => calls++)
+          .bind(source.stream)
+          .listen((_) {}, onError: (Object _) {}, onDone: done.complete);
+      drive(source);
+      await done.future;
+      if (cancelAtEnd) await subscription.cancel();
+      await Future<void>.delayed(Duration.zero);
+      await source.close();
+      return calls;
+    }
+
+    final event = utf8.encode('data: {"text": "a"}\n\n');
+
+    test('when the body ends', () async {
+      expect(
+        await closes(Delta.fromEvent, (s) {
+          s
+            ..add(event)
+            ..close();
+        }),
+        1,
+      );
+    });
+
+    test('when the body ends and the listener cancels afterwards', () async {
+      expect(
+        await closes(Delta.fromEvent, (s) {
+          s
+            ..add(event)
+            ..close();
+        }, cancelAtEnd: true),
+        1,
+      );
+    });
+
+    test('when the body fails', () async {
+      expect(
+        await closes(Delta.fromEvent, (s) {
+          s
+            ..add(event)
+            ..addError(StateError('x'));
+        }),
+        1,
+      );
+    });
+
+    test('when the decoder throws an Error', () async {
+      expect(
+        await closes((_) => throw StateError('bug'), (s) => s.add(event)),
+        1,
+      );
+    });
+
+    test('when the listener cancels, however often', () async {
+      var calls = 0;
+      final source = StreamController<List<int>>();
+      final subscription = SseItemDecoder<Delta>(
+        Delta.fromEvent,
+        onClose: () => calls++,
+      ).bind(source.stream).listen((_) {});
+      await subscription.cancel();
+      await subscription.cancel();
+      expect(calls, 1);
+      await source.close();
+    });
+  });
+
   test('items describe themselves', () {
     const message = SseMessage(data: 'x', event: 'e');
     final error = JsonDecodeException(expected: 'a', actual: 'b');

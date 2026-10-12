@@ -23,19 +23,28 @@ final class SseItemDecoder<T>
   /// Reads the data of one event.
   final T Function(SseMessage message) decode;
 
-  /// Called when the stream stops reading the body early: the listener
-  /// cancelled, or [decode] threw an [Error]. Not called when the body
-  /// ends or fails by itself. `openEvents` closes the connection here.
+  /// Called exactly once per listened stream, whichever way it ends: the
+  /// body ended, the body failed, the listener cancelled (however often), or
+  /// [decode] threw an [Error]. Never called for a stream nobody listens to.
+  /// `openEvents` closes the connection here.
   final void Function()? onClose;
 
   @override
   Stream<SseItem<T>> bind(Stream<List<int>> stream) {
     StreamSubscription<SseMessage>? source;
     late final StreamController<SseItem<T>> items;
+    var closed = false;
+    void close() {
+      if (closed) return;
+      closed = true;
+      onClose?.call();
+    }
+
     void end(SseDisconnected<T> last) {
       items
         ..add(last)
         ..close();
+      close();
     }
 
     items = StreamController<SseItem<T>>(
@@ -51,7 +60,7 @@ final class SseItemDecoder<T>
                 } on Error catch (error, stackTrace) {
                   items.addError(error, stackTrace);
                   source?.cancel();
-                  onClose?.call();
+                  close();
                   items.close();
                   return;
                 }
@@ -67,7 +76,7 @@ final class SseItemDecoder<T>
       onPause: () => source?.pause(),
       onResume: () => source?.resume(),
       onCancel: () {
-        onClose?.call();
+        close();
         return source?.cancel();
       },
     );
