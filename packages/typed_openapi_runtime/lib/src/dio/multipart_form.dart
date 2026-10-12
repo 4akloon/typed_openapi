@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 
 import '../request/file_upload.dart';
+import '../request/media_type_text.dart';
 import '../request/multipart_body.dart';
-import 'media_type_text.dart';
 
 /// Builds the Dio `FormData` of a [MultipartBody], in the order of its
 /// parts.

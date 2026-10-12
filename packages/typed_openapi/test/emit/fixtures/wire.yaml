@@ -106,6 +106,17 @@ paths:
         "500":
           description: A JSON string.
           content: {application/json: {schema: {type: string}}}
+  /textjson:
+    get:
+      operationId: getTextJson
+      tags: [wire]
+      responses:
+        "200":
+          description: ok
+          content: {application/json: {schema: {$ref: '#/components/schemas/Report'}}}
+        "400":
+          description: A model sent as text/json.
+          content: {text/json: {schema: {$ref: '#/components/schemas/Report'}}}
 components:
   schemas:
     Report: {type: object, properties: {id: {type: string}}}

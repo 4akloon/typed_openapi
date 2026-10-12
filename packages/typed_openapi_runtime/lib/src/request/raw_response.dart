@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import '../json/json_decode_exception.dart';
 import '../json/json_reader.dart';
 import '../result/result.dart';
+import 'media_type_text.dart';
 
 /// A response before decoding, independent of how it was received: what a
 /// generated decoder switches on.
@@ -122,15 +123,9 @@ final class RawResponse {
 
   /// Whether [headers] name a JSON content type (`application/json`,
   /// `text/json`, `*/*+json`), as Dio decides.
-  static bool isJson(Map<String, List<String>> headers) {
-    final type = headers['content-type']?.firstOrNull
-        ?.split(';')
-        .first
-        .trim()
-        .toLowerCase();
-    return type != null &&
-        (type == 'application/json' ||
-            type == 'text/json' ||
-            type.endsWith('+json'));
-  }
+  static bool isJson(Map<String, List<String>> headers) =>
+      switch (headers['content-type']?.firstOrNull) {
+        final type? => MediaTypeText(type).isJson,
+        null => false,
+      };
 }

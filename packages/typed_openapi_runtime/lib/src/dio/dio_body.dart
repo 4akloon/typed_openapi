@@ -4,9 +4,9 @@ import 'package:dio/dio.dart';
 
 import '../request/file_upload.dart';
 import '../request/form_body.dart';
+import '../request/media_type_text.dart';
 import '../request/multipart_body.dart';
 import '../request/operation_request.dart';
-import 'media_type_text.dart';
 import 'multipart_form.dart';
 
 /// Turns the body of an `OperationRequest` into what Dio sends: form text,

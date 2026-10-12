@@ -1,3 +1,4 @@
+import '../model/media_type_name.dart';
 import '../model/operation.dart';
 import '../model/schema.dart';
 import '../model/spec_node.dart';
@@ -48,7 +49,7 @@ final class MediaTypePicker {
 
   /// Reports the media types of [content] that [type] makes the client
   /// drop (TOA651). A variant of the chosen type (`application/json;
-  /// profile=...`) or another JSON type (also `text/json`) has the same
+  /// profile=...`) or another JSON type has the same
   /// use: nothing is lost.
   void _reportDropped(
     Map<String, RefOr<MediaType>> content,
@@ -59,8 +60,8 @@ final class MediaTypePicker {
     final dropped = [
       for (final other in content.keys)
         if (other != type &&
-            _baseType(other) != _baseType(type) &&
-            !(kindOf(type) == .json && _isJson(other)))
+            MediaTypeName(other).base != MediaTypeName(type).base &&
+            !(kindOf(type) == .json && kindOf(other) == .json))
           other,
     ];
     if (dropped.isEmpty) return;
@@ -120,19 +121,11 @@ final class MediaTypePicker {
     return (media?.schema, type);
   }
 
-  /// [contentType] without its parameters, in lower case.
-  static String _baseType(String contentType) =>
-      contentType.split(';').first.trim().toLowerCase();
-
-  /// Whether [contentType] is JSON, also as `text/json`, which is a text
-  /// type for [kindOf] but is read as JSON by every server that sends it.
-  static bool _isJson(String contentType) =>
-      kindOf(contentType) == .json || _baseType(contentType) == 'text/json';
-
   /// How a body of [contentType] is read and written.
   static BodyKind kindOf(String contentType) {
-    final type = _baseType(contentType);
-    if (type == 'application/json' || type.endsWith('+json')) return .json;
+    final name = MediaTypeName(contentType);
+    if (name.isJson) return .json;
+    final type = name.base;
     if (type == 'multipart/form-data') return .multipart;
     if (type == 'application/x-www-form-urlencoded') return .form;
     if (type == 'text/event-stream') return .eventStream;

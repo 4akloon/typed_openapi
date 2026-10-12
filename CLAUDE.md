@@ -256,7 +256,9 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   claimed first; a body is JSON first, then multipart, form, text, event
   stream; any other media type is bytes (`Uint8List`) without its schema and
   the media types that are dropped are named, TOA651, except variants of the
-  chosen type and other JSON types; a form or multipart response is bytes,
+  chosen type and other JSON types; `MediaTypeName.isJson` (`model/`) is
+  the one definition of a JSON media type, `text/json` included, as Dio
+  and the runtime read it; a form or multipart response is bytes,
   TOA650; a text request body is `String`; the `encoding` of a form or
   multipart body (`EncodingIr`, a style a query does not allow is TOA564,
   part headers TOA656; a media type that is an unresolved `$ref` is
@@ -637,6 +639,8 @@ that the API composes, including an `implements` fake of a tag class.
   `contentType` sends no `Content-Type`, and a generated method passes no
   `contentType` for an absent optional body. A file's own `contentType` is
   checked as a media type (`FormatException`, also on a binary body).
+  `MediaTypeText` (`request/`) is the one definition of a JSON media type
+  (`application/json`, `text/json`, `+json`), also for `RawResponse.isJson`.
   `MultipartForm` (`dio/`) builds the `FormData` in the order of the parts
   (Dio writes fields before files, so a text part stays a field only while
   no file or typed part precedes it; later text parts go as `text/plain`

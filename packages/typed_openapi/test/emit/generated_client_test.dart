@@ -140,6 +140,8 @@ success 200 Report r2
 error 400 text "bad "x""
 error 500 text "boom"
 error 400 text ""
+success 200 Report r3
+error 400 Report e1
 ''';
 
 /// What `bin/calls.dart` prints: each call's request and result.

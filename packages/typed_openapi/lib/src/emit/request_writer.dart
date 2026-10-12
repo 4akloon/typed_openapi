@@ -1,5 +1,6 @@
 import '../ir/dart_type.dart';
 import '../ir/ir.dart';
+import '../model/media_type_name.dart';
 import '../model/operation.dart';
 import 'dart_code.dart';
 import 'dart_writer.dart';
@@ -50,7 +51,7 @@ final class RequestWriter {
         'allowReserved: true',
     ];
     final encoded = switch (parameter.contentType) {
-      final type? when _isJson(type) => _jsonText(parameter),
+      final type? when MediaTypeName(type).isJson => _jsonText(parameter),
       _ => value,
     };
     return '$runtime(${[_code.string(parameter.wireName), encoded, ...options].join(', ')})';
@@ -159,7 +160,7 @@ final class RequestWriter {
         'style: .${style.name}',
       if (encoding.explode case final explode?) 'explode: $explode',
       if (encoding.allowReserved) 'allowReserved: true',
-      if (encoding.contentType case final type? when _isJson(type))
+      if (encoding.contentType case final type? when MediaTypeName(type).isJson)
         'json: true',
     ];
     if (arguments.isEmpty) return null;
@@ -177,12 +178,5 @@ final class RequestWriter {
       .text || .eventStream => 'text/plain',
       _ => 'application/octet-stream',
     };
-  }
-
-  static bool _isJson(String contentType) {
-    final type = contentType.split(';').first.trim().toLowerCase();
-    return type == 'application/json' ||
-        type == 'text/json' ||
-        type.endsWith('+json');
   }
 }

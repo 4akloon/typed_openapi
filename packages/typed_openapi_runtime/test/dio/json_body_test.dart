@@ -76,6 +76,15 @@ void main() {
     });
   });
 
+  group('text/json is JSON, as Dio reads it', () {
+    test('a string is quoted and a map is encoded', () async {
+      final text = await send('{"a":1}', 'text/json');
+      expect(text.bodies.single, r'"{\"a\":1}"');
+      final map = await send({'a': 1}, 'text/json; charset=utf-8');
+      expect(map.bodies.single, '{"a":1}');
+    });
+  });
+
   group('Dio keeps what it encodes right', () {
     test('an interceptor sees the map or list of a JSON body', () async {
       final seen = <Object?>[];
@@ -154,11 +163,6 @@ void main() {
       final adapter = await send('hello "q"', 'text/plain');
       expect(adapter.bodies.single, 'hello "q"');
       expect(adapter.requests.single.contentType, 'text/plain');
-    });
-
-    test('text/json is text', () async {
-      final adapter = await send('{"a":1}', 'text/json');
-      expect(adapter.bodies.single, '{"a":1}');
     });
 
     for (final type in [

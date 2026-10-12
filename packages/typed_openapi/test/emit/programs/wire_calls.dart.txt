@@ -95,4 +95,13 @@ Future<void> main() async {
     adapter.answers.add(answer);
     print(show(await wire.getSingle()));
   }
+
+  // A `text/json` error is JSON, as Dio reads it.
+  for (final answer in <ResponseBody Function()>[
+    () => json(200, {'id': 'r3'}),
+    () => bytes(400, utf8.encode('{"id":"e1"}'), 'text/json'),
+  ]) {
+    adapter.answers.add(answer);
+    print(show(await wire.getTextJson()));
+  }
 }
