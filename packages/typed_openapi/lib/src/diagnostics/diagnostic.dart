@@ -4,6 +4,38 @@ import 'diagnostic_code.dart';
 import 'json_pointer.dart';
 import 'severity.dart';
 
+/// Another place a [Diagnostic] is about, such as the override that
+/// introduced the problem.
+final class RelatedLocation {
+  /// Creates a related location.
+  const RelatedLocation({
+    required this.message,
+    this.file,
+    this.pointer,
+    this.span,
+  });
+
+  /// What this place has to do with the finding.
+  final String message;
+
+  /// The file, as shown to the user.
+  final String? file;
+
+  /// Where in [file] the place is.
+  final JsonPointer? pointer;
+
+  /// The source range in [file], when positions are known.
+  final SourceSpan? span;
+
+  /// `file:line:column`, `file` when only the file is known, or null.
+  String? get location {
+    final file = this.file;
+    if (file == null) return null;
+    final start = span?.start;
+    return start == null ? file : '$file:${start.line + 1}:${start.column + 1}';
+  }
+}
+
 /// One finding about a spec or the configuration.
 ///
 /// Diagnostics are ordered by file, position, pointer, code and message, so
@@ -19,6 +51,7 @@ final class Diagnostic implements Comparable<Diagnostic> {
     this.span,
     this.fix,
     this.args = const [],
+    this.related = const [],
   });
 
   /// The stable code from the catalog.
@@ -47,6 +80,9 @@ final class Diagnostic implements Comparable<Diagnostic> {
   /// the baseline fingerprint, unlike [message].
   final List<String> args;
 
+  /// Other places the finding is about.
+  final List<RelatedLocation> related;
+
   /// The 1-based line of the finding, or null when the position is unknown.
   int? get line {
     final start = span?.start;
@@ -69,6 +105,7 @@ final class Diagnostic implements Comparable<Diagnostic> {
     span: span,
     fix: fix,
     args: args,
+    related: related,
   );
 
   /// `file:line:column`, `file` when only the file is known, or null.

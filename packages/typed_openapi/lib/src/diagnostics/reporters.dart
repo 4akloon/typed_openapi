@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'diagnostic_bag.dart';
+import 'github_actions_reporter.dart';
+import 'sarif_reporter.dart';
 import 'severity.dart';
 
 /// Turns collected diagnostics into the text a user or a tool reads.
@@ -37,14 +39,26 @@ final class TextReporter implements DiagnosticReporter {
       final fix = d.fix;
       // A fix may end with an override snippet on several lines.
       if (fix != null) out.writeln('  fix: ${fix.replaceAll('\n', '\n    ')}');
+      for (final related in d.related) {
+        out.writeln('  related: ${related.message}');
+        final location = related.location;
+        if (location != null) out.writeln('    --> $location');
+        final pointer = related.pointer;
+        if (pointer != null) out.writeln('    at ${pointer.value}');
+      }
     }
-    out.write(
-      'errors: ${diagnostics.count(.error)}, '
-      'warnings: ${diagnostics.count(.warning)}, '
-      'infos: ${diagnostics.count(.info)}',
-    );
-    if (baselined.isNotEmpty) out.write(', baselined: ${baselined.length}');
+    out.write(summary(diagnostics));
     return out.toString();
+  }
+
+  /// The summary line: errors, warnings and infos, and how many diagnostics
+  /// a baseline accepts when there are any.
+  static String summary(DiagnosticBag diagnostics) {
+    final baselined = diagnostics.baselined.length;
+    return 'errors: ${diagnostics.count(.error)}, '
+        'warnings: ${diagnostics.count(.warning)}, '
+        'infos: ${diagnostics.count(.info)}'
+        '${baselined == 0 ? '' : ', baselined: $baselined'}';
   }
 }
 
@@ -76,6 +90,16 @@ final class JsonReporter implements DiagnosticReporter {
             'line': d.line,
             'column': d.column,
             'fix': d.fix,
+            'related': [
+              for (final r in d.related)
+                {
+                  'message': r.message,
+                  'file': r.file,
+                  'pointer': r.pointer?.value,
+                  'line': r.span == null ? null : r.span!.start.line + 1,
+                  'column': r.span == null ? null : r.span!.start.column + 1,
+                },
+            ],
             'baselined': accepted,
           },
       ],
@@ -90,13 +114,26 @@ final class JsonReporter implements DiagnosticReporter {
 /// The output formats the tool can print.
 enum ReportFormat {
   /// Human-readable text.
-  text(TextReporter()),
+  text('text', TextReporter()),
 
   /// Machine-readable JSON.
-  json(JsonReporter());
+  json('json', JsonReporter()),
 
-  const ReportFormat(this.reporter);
+  /// SARIF 2.1.0 for code scanning.
+  sarif('sarif', SarifReporter()),
+
+  /// GitHub Actions annotations.
+  githubActions('github-actions', GitHubActionsReporter());
+
+  const ReportFormat(this.option, this.reporter);
+
+  /// The value of `--format` that selects this format.
+  final String option;
 
   /// The reporter that prints this format.
   final DiagnosticReporter reporter;
+
+  /// The format whose [option] is [value].
+  static ReportFormat byOption(String value) =>
+      values.firstWhere((format) => format.option == value);
 }

@@ -74,6 +74,33 @@ clients:
     });
   });
 
+  test('prints SARIF and GitHub Actions annotations', () async {
+    final (sarifCode, sarif, _) = await run([
+      'check',
+      '-c',
+      configPath,
+      '--format',
+      'sarif',
+    ], workingDirectory: workingDirectory);
+    expect(sarifCode, 1);
+    expect(sarif, contains('"uri": "specs/old.json"'));
+    final (code, out, _) = await run([
+      'check',
+      '-c',
+      configPath,
+      '--format',
+      'github-actions',
+    ], workingDirectory: workingDirectory);
+    expect(code, 1);
+    expect(
+      out,
+      startsWith(
+        '::error file=specs/old.json,line=2,col=14,endLine=2,endColumn=19,'
+        'title=TOA011 unsupported-openapi-version::',
+      ),
+    );
+  });
+
   test('exits 78 when the config file is missing', () async {
     final (code, out, _) = await run([
       'check',

@@ -21,8 +21,8 @@ final class CheckCommand extends Command<int> {
       )
       ..addOption(
         'format',
-        allowed: [for (final format in ReportFormat.values) format.name],
-        defaultsTo: ReportFormat.text.name,
+        allowed: [for (final format in ReportFormat.values) format.option],
+        defaultsTo: ReportFormat.text.option,
         help: 'Report format.',
       )
       ..addFlag(
@@ -79,7 +79,7 @@ final class CheckCommand extends Command<int> {
         strictBaseline: results.flag('strict-baseline'),
       );
     }
-    final format = ReportFormat.values.byName(results.option('format')!);
+    final format = ReportFormat.byOption(results.option('format')!);
     _out.writeln(
       format.reporter.format(
         diagnostics,

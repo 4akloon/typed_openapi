@@ -5,8 +5,10 @@ import 'package:test/test.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_bag.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
+import 'package:typed_openapi/src/diagnostics/github_actions_reporter.dart';
 import 'package:typed_openapi/src/diagnostics/json_pointer.dart';
 import 'package:typed_openapi/src/diagnostics/reporters.dart';
+import 'package:typed_openapi/src/diagnostics/sarif_reporter.dart';
 import 'package:typed_openapi/src/diagnostics/severity.dart';
 
 void main() {
@@ -62,6 +64,7 @@ void main() {
       'line': 2,
       'column': 14,
       'fix': 'Emit OpenAPI 3.',
+      'related': <Object?>[],
       'baselined': false,
     });
     expect(json['summary'], {
@@ -129,5 +132,44 @@ void main() {
   test('ReportFormat maps each format to its reporter', () {
     expect(ReportFormat.text.reporter, isA<TextReporter>());
     expect(ReportFormat.json.reporter, isA<JsonReporter>());
+    expect(ReportFormat.sarif.reporter, isA<SarifReporter>());
+    expect(
+      ReportFormat.byOption('github-actions').reporter,
+      isA<GitHubActionsReporter>(),
+    );
+    expect(ReportFormat.values.map((f) => f.option), [
+      'text',
+      'json',
+      'sarif',
+      'github-actions',
+    ]);
+  });
+
+  test('TextReporter lists related locations under the diagnostic', () {
+    final bag = DiagnosticBag()
+      ..add(
+        Diagnostic(
+          code: DiagnosticCode.binaryObject,
+          severity: Severity.warning,
+          message: 'Binary object.',
+          file: 'api.json',
+          related: [
+            RelatedLocation(
+              message: 'Introduced by this override.',
+              file: 'api.overrides.yaml',
+              pointer: JsonPointer.parse('#/schemas/Pet/type'),
+            ),
+          ],
+        ),
+      );
+    expect(
+      const TextReporter().format(bag),
+      'warning TOA205 binary-object: Binary object.\n'
+      '  --> api.json\n'
+      '  related: Introduced by this override.\n'
+      '    --> api.overrides.yaml\n'
+      '    at #/schemas/Pet/type\n'
+      'errors: 0, warnings: 1, infos: 0',
+    );
   });
 }
