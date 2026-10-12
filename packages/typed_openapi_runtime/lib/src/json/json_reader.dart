@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import '../model/date.dart';
 import '../model/patch.dart';
 import 'json_decode_exception.dart';
@@ -101,6 +104,36 @@ final class JsonReader {
   /// `JsonValue(null)`. A [JsonValue] over `null` is `null` at run time, so
   /// `JsonValue?` could not tell absent from `null` anyway.
   JsonValue optionalValue(String key) => JsonValue(json[key]);
+
+  /// A property that can hold one value only, a `const` or a one-value
+  /// enum: anything but [value] is an error. Absent is an error when
+  /// [required]; an optional property may also be `null`, which reads as
+  /// absent.
+  void constant(String key, Object value, {bool required = true}) {
+    if (required) _checkPresent(key);
+    final actual = json[key];
+    if (actual == value || (!required && actual == null)) return;
+    throw JsonDecodeException(
+      expected: 'the constant ${jsonEncode(value)}',
+      actual:
+          JsonDecodeException.describe(actual) ==
+              JsonDecodeException.describe(value)
+          ? 'another value'
+          : JsonDecodeException.describe(actual),
+      path: [key],
+      schema: schema,
+    );
+  }
+
+  /// The properties whose keys are not in [known], read by [decode]: the
+  /// `additionalProperties` of a model with properties, in JSON order.
+  Map<String, T> additional<T>(
+    Set<String> known,
+    T Function(Object? value) decode,
+  ) => {
+    for (final MapEntry(:key, :value) in json.entries)
+      if (!known.contains(key)) key: _decode(key, value, decode),
+  };
 
   void _checkPresent(String key) {
     if (json.containsKey(key)) return;
@@ -250,6 +283,20 @@ final class JsonReader {
 
   /// Any JSON value.
   static JsonValue asValue(Object? value) => JsonValue(value);
+
+  /// A base64 string (`format: byte`) as bytes. The URL-safe alphabet and
+  /// missing padding are accepted, as RFC 4648 decoders commonly do.
+  static Uint8List asBytes(Object? value) {
+    final text = asString(value);
+    try {
+      return base64.decode(base64.normalize(text));
+    } on FormatException {
+      throw JsonDecodeException(
+        expected: 'a base64 string',
+        actual: 'a string in another format',
+      );
+    }
+  }
 
   /// A decoder of a JSON object that a generated or user `fromJson` reads,
   /// such as `JsonReader.objectOf(Tag.fromJson)`.

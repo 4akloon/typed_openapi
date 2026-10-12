@@ -12,3 +12,6 @@
 - `DioRequestSender` and `CallOptions`: requests through the user's Dio.
 - `SseDecoder` (WHATWG event stream format), `SseItemDecoder` and the
   `SseItem` stream items; `DioRequestSender.openEvents`.
+- For generated models: `DeepEquality` (deep `==` and `hashCode` of lists,
+  maps and patches), `JsonReader.constant`, `JsonReader.additional`,
+  `JsonReader.asBytes`, and `immutable` re-exported from `package:meta`.

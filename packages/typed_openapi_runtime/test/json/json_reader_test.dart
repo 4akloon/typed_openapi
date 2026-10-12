@@ -422,6 +422,59 @@ void main() {
     });
   });
 
+  group('constants, additional properties and bytes', () {
+    test('a constant must hold its one value', () {
+      const r = JsonReader({'kind': 'cat', 'n': 1}, schema: 'Cat');
+      r.constant('kind', 'cat');
+      r.constant('n', 1.0);
+      final wrong = failure(() => r.constant('kind', 'dog'));
+      expect(wrong.pointer, '/kind');
+      expect(wrong.expected, 'the constant "dog"');
+      expect(wrong.actual, 'another value');
+      expect(wrong.schema, 'Cat');
+      expect(
+        failure(() => r.constant('n', 'one')).actual,
+        'a number',
+      );
+      expect(failure(() => r.constant('gone', 'x')).actual, 'no value');
+    });
+
+    test('an optional constant may be absent or null', () {
+      const r = JsonReader({'kind': null}, schema: 'Cat');
+      r.constant('kind', 'cat', required: false);
+      r.constant('gone', 'cat', required: false);
+      expect(
+        failure(() => r.constant('kind', 'cat')).actual,
+        'null',
+      );
+    });
+
+    test('additional properties are the keys the schema does not list', () {
+      const r = JsonReader({'id': 1, 'b': 2, 'a': 3}, schema: 'Counts');
+      final rest = r.additional({'id'}, JsonReader.asInt);
+      expect(rest, {'b': 2, 'a': 3});
+      expect(rest.keys, ['b', 'a']);
+      final wrong = failure(
+        () => const JsonReader({
+          'x': 'no',
+        }, schema: 'Counts').additional(const {}, JsonReader.asInt),
+      );
+      expect(wrong.pointer, '/x');
+      expect(wrong.schema, 'Counts');
+    });
+
+    test('bytes are base64, standard or URL-safe, padded or not', () {
+      expect(JsonReader.asBytes('AQID'), [1, 2, 3]);
+      expect(JsonReader.asBytes('-_8'), [251, 255]);
+      expect(JsonReader.asBytes('+/8='), [251, 255]);
+      expect(
+        failure(() => JsonReader.asBytes('a')).expected,
+        'a base64 string',
+      );
+      expect(failure(() => JsonReader.asBytes(1)).actual, 'a number');
+    });
+  });
+
   group('JsonValue', () {
     test('wraps any JSON value and encodes as is', () {
       const value = JsonValue({
