@@ -328,6 +328,26 @@ void main() {
     },
   );
 
+  test(
+    'a text FormatException source is a decode error on the web only',
+    () async {
+      Future<Result<Pet, Problem>> run({required bool isWeb}) {
+        final adapter = FakeAdapter(
+          (_) => throw const FormatException('bad', '{"id": 7,'),
+        );
+        return DioRequestSender(
+          dioWith(adapter),
+          isWeb: isWeb,
+        ).send(request, decodePet);
+      }
+
+      final web = await run(isWeb: true) as DecodeError<Pet, Problem>;
+      expect(web.statusCode, isNull);
+      expect(web.rawBody, '{"id": 7,');
+      expect(await run(isWeb: false), isA<TransportError<Pet, Problem>>());
+    },
+  );
+
   test('header entries with a null value are not sent', () async {
     final adapter = FakeAdapter.json(200, {'id': 7, 'name': 'Rex'});
     await DioRequestSender(dioWith(adapter)).send(

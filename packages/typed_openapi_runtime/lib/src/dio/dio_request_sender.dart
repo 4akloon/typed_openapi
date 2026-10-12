@@ -32,10 +32,21 @@ import 'call_options.dart';
 ///   [FormatException] thrown by the decoder reaches the caller too.
 final class DioRequestSender {
   /// Sends requests through [dio].
-  const DioRequestSender(this.dio);
+  ///
+  /// [isWeb] tells whether the program runs in a browser, where Dio's JSON
+  /// parser reports a failure with the body text instead of its bytes; it is
+  /// detected by default and set by tests only.
+  const DioRequestSender(this.dio, {this.isWeb = _runsOnWeb});
+
+  /// `true` when compiled to JavaScript, where `0` and `0.0` are the same
+  /// value.
+  static const bool _runsOnWeb = identical(0, 0.0);
 
   /// The user's Dio instance.
   final Dio dio;
+
+  /// Whether the program runs in a browser.
+  final bool isWeb;
 
   /// Sends [request] and decodes the response of any status with [decode].
   Future<Result<T, E>> send<T, E>(
@@ -153,11 +164,13 @@ final class DioRequestSender {
   /// - Dio drops the response when its JSON parser fails (`unknown` with a
   ///   [FormatException]). That is a decode error without a status when the
   ///   request reads JSON and the exception reports the bytes of the body
-  ///   (what Dio's default transformer does): the raw body is that text
-  ///   (for a body Dio read in chunks, only the chunk that failed). A
-  ///   [FormatException] from anywhere else (`Uri.parse` in an interceptor,
-  ///   a custom transformer that reports text) stays a [TransportError].
-  static Failure<T, E> _failure<T, E>(
+  ///   (what Dio's default transformer does on the VM): the raw body is that
+  ///   text (for a body Dio read in chunks, only the chunk that failed). On
+  ///   the web ([isWeb]) Dio's parser reports the text itself, so a text
+  ///   source counts too. A [FormatException] from anywhere else
+  ///   (`Uri.parse` in an interceptor, a custom transformer that reports
+  ///   text on the VM) stays a [TransportError].
+  Failure<T, E> _failure<T, E>(
     DioException e,
     StackTrace stackTrace,
   ) {
@@ -167,17 +180,21 @@ final class DioRequestSender {
       case DioException(type: .unknown, error: final Error cause):
         Error.throwWithStackTrace(cause, e.stackTrace);
       case DioException(
-        type: .unknown,
-        response: null,
-        requestOptions: RequestOptions(responseType: .json),
-        error: FormatException(source: final List<int> bytes),
-      ):
+            type: .unknown,
+            response: null,
+            requestOptions: RequestOptions(responseType: .json),
+            error: FormatException(:final source),
+          )
+          when source is List<int> || isWeb && source is String:
         return DecodeError(
           JsonDecodeException(
             expected: 'a JSON body',
             actual: 'text that is not JSON',
           ),
-          rawBody: utf8.decode(bytes, allowMalformed: true),
+          rawBody: switch (source) {
+            final List<int> bytes => utf8.decode(bytes, allowMalformed: true),
+            _ => source,
+          },
         );
       default:
         return TransportError(e, stackTrace);
