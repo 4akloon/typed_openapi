@@ -38,6 +38,9 @@ final class Success<T, E> extends Result<T, E> {
 
   /// The response headers, names in lower case.
   final Map<String, List<String>> headers;
+
+  @override
+  String toString() => 'Success($statusCode)';
 }
 
 /// Any outcome but [Success].

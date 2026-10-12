@@ -391,6 +391,28 @@ void main() {
     expect(headers['X-B'], 'b');
   });
 
+  test(
+    'the operation content type wins over one in CallOptions.headers',
+    () async {
+      final adapter = FakeAdapter.json(200, {'id': 7, 'name': 'Rex'});
+      await DioRequestSender(dioWith(adapter)).send(
+        const OperationRequest(
+          getPet,
+          path: [PathParameter('petId', 7)],
+          body: {'name': 'Rex'},
+          contentType: 'application/json',
+        ),
+        decodePet,
+        call: const CallOptions(
+          headers: {'content-type': 'application/merge-patch+json', 'X-A': 'a'},
+        ),
+      );
+      final sent = adapter.requests.single;
+      expect(sent.contentType, 'application/json');
+      expect(sent.headers['X-A'], 'a');
+    },
+  );
+
   test('cancellation is its own outcome', () async {
     final adapter = FakeAdapter.json(200, {'id': 7, 'name': 'Rex'});
     final token = CancelToken()..cancel('user left');

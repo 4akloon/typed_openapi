@@ -311,6 +311,33 @@ void main() {
     );
   });
 
+  test('an empty streamStatuses is a bug of the generated code', () async {
+    final adapter = FakeAdapter((_) => eventStream(const Stream.empty()));
+    await expectLater(
+      DioRequestSender(
+        Dio()..httpClientAdapter = adapter,
+      ).openEvents<Delta, Problem>(
+        const OperationRequest(
+          OperationInfo(
+            operationId: 'chat',
+            method: 'POST',
+            pathTemplate: '/chat',
+          ),
+        ),
+        Delta.fromEvent,
+        decodeError,
+      ),
+      throwsA(
+        isA<AssertionError>().having(
+          (e) => e.message,
+          'message',
+          contains('bug of the generated code'),
+        ),
+      ),
+    );
+    expect(adapter.requests, isEmpty);
+  });
+
   test(
     'on the web the default adapter is refused with an explanation',
     () async {

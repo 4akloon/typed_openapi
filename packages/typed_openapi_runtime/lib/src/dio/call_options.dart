@@ -21,7 +21,11 @@ final class CallOptions {
   final CancelToken? cancelToken;
 
   /// Headers added to the request; they win over the headers the operation
-  /// sends for its header parameters.
+  /// sends for its header parameters, case-insensitively. The one exception
+  /// is `Content-Type`: the operation's own content type
+  /// (`OperationRequest.contentType`, set for a request body) wins over a
+  /// `Content-Type` given here, so it cannot be used to pick another media
+  /// type such as `application/merge-patch+json`.
   final Map<String, Object?> headers;
 
   /// Data for interceptors, merged into `RequestOptions.extra`.

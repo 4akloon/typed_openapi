@@ -90,12 +90,22 @@ final class DioRequestSender {
   /// exception: an [Error] thrown by [decodeEvent] is a bug of the program,
   /// so it reaches the listener as a stream error and the stream closes.
   /// Problems with the data are items ([SseDecodeError]), never errors.
+  ///
+  /// [OperationRequest.streamStatuses] must not be empty (checked by an
+  /// `assert`): a generated method always sets it.
   Future<Result<Stream<SseItem<T>>, E>> openEvents<T, E>(
     OperationRequest request,
     T Function(SseMessage message) decodeEvent,
     Result<Stream<SseItem<T>>, E> Function(RawResponse response) decodeError, {
     CallOptions? call,
   }) async {
+    assert(
+      request.streamStatuses.isNotEmpty,
+      'openEvents needs OperationRequest.streamStatuses (the documented '
+      'success statuses of the event stream): without them every status is '
+      'read to the end as an error body, so an endless stream would fill '
+      'memory. This is a bug of the generated code.',
+    );
     if (isWeb && _hasDefaultAdapter) {
       final exception = DioException(
         requestOptions: RequestOptions(

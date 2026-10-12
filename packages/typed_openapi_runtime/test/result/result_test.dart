@@ -54,6 +54,13 @@ void main() {
     ]);
   });
 
+  test('a success describes itself by its status, not its data', () {
+    expect(
+      '${const Success<String, Never>('private', statusCode: 201)}',
+      'Success(201)',
+    );
+  });
+
   test('failures describe themselves', () {
     expect(failures.map((f) => '$f'), [
       'HttpError(404)',
