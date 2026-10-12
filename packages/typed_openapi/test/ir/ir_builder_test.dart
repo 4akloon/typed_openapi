@@ -792,10 +792,10 @@ openapi: 3.1.0
 info: {title: t, version: "1"}
 paths:
   /pets/{id}:
-    parameters: [{name: id, in: path, required: true, schema: {type: string}}]
     get:
       operationId: getPet
       tags: [pets]
+      parameters: [{name: id, in: path, required: true, schema: {type: string}}]
       responses:
         "200":
           description: ok

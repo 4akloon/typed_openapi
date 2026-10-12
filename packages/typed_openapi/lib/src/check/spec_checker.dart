@@ -4,6 +4,7 @@ import '../baseline/anchor_index.dart';
 import '../baseline/baseline.dart';
 import '../baseline/baseline_loader.dart';
 import '../baseline/fingerprints.dart';
+import '../config/generation_config.dart';
 import '../config/project_config.dart';
 import '../diagnostics/diagnostic.dart';
 import '../diagnostics/diagnostic_bag.dart';
@@ -154,13 +155,13 @@ final class SpecChecker {
   /// overrides and normalized with the client's rules and preset. An
   /// overrides file that cannot be used is reported and the spec is checked
   /// without it. Then the client's IR is built (M6), which reports naming,
-  /// mapping and filter problems. [only] limits the run to clients with these names; empty
-  /// means all. A file shared by several clients is checked once per
-  /// distinct preset, set of disabled rules and overrides file; each client
-  /// then gives the diagnostics of that run its own levels
-  /// ([ClientConfig.severity]), because levels change how a finding is
-  /// reported, not what a run finds. Diagnostics name files relative to the
-  /// working directory (see [DisplayPaths]).
+  /// mapping and filter problems. [only] limits the run to clients with these
+  /// names; empty means all. A file shared by several clients is checked once
+  /// per distinct preset, set of disabled rules, overrides file and
+  /// [GenerationConfig.key]; each client then gives the diagnostics of that
+  /// run its own levels ([ClientConfig.severity]), because levels change how
+  /// a finding is reported, not what a run finds. Diagnostics name files
+  /// relative to the working directory (see [DisplayPaths]).
   List<ClientCheck> checkClients(
     ProjectConfig config, {
     Set<String> only = const {},
