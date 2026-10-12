@@ -28,6 +28,8 @@ final class ClientCheck {
     this.anchors, {
     this.ir,
     this.irJson,
+    this.sources = const [],
+    this.errors = 0,
   });
 
   /// The client.
@@ -46,6 +48,15 @@ final class ClientCheck {
   /// Writes [ir] as JSON, naming files as the diagnostics do.
   final IrJson? irJson;
 
+  /// The files the run read, by absolute path: the documents of the spec,
+  /// then the overrides file; what the generated code is made from besides
+  /// the config.
+  final List<String> sources;
+
+  /// The errors the client reports after its levels and its baseline;
+  /// `generate` skips a client that has any (M8).
+  final int errors;
+
   /// The errors that say the spec, or a file it is read with, could not be
   /// read (diagnostics of [DiagnosticCode.fixedCodes]). Without them the
   /// run found too little: no entry of a baseline may be called stale, and
@@ -56,6 +67,17 @@ final class ClientCheck {
           DiagnosticCode.fixedCodes.contains(d.code))
         d,
   ];
+
+  /// This result with [errors] reported errors.
+  ClientCheck withErrors(int errors) => ClientCheck(
+    client,
+    diagnostics,
+    anchors,
+    ir: ir,
+    irJson: irJson,
+    sources: sources,
+    errors: errors,
+  );
 
   /// The fingerprints of [diagnostics] for the client's baseline file at
   /// [baselineFile]; [paths] reads the file names of the diagnostics.
@@ -95,11 +117,19 @@ final class SpecChecker {
     bool strictBaseline = false,
   }) {
     final checks = checkClients(config, only: only);
+    final results = <ClientCheck>[];
     for (final result in checks) {
       final client = result.client;
       final path = client.baseline;
+      var errors = 0;
+      void add(Diagnostic diagnostic) {
+        if (diagnostic.severity == .error) errors++;
+        _diagnostics.add(diagnostic);
+      }
+
       if (path == null) {
-        result.diagnostics.forEach(_diagnostics.add);
+        result.diagnostics.forEach(add);
+        results.add(result.withErrors(errors));
         continue;
       }
       final problems = DiagnosticBag();
@@ -107,13 +137,13 @@ final class SpecChecker {
         problems,
       ).load(path, displayPath: _paths.of(path));
       if (baseline == null) {
-        result.diagnostics.forEach(_diagnostics.add);
+        result.diagnostics.forEach(add);
       } else {
         final match = baseline.match(
           result.diagnostics,
           result.fingerprints(path, _paths),
         );
-        match.shown.forEach(_diagnostics.add);
+        match.shown.forEach(add);
         match.baselined.forEach(_diagnostics.addBaselined);
         for (final (entry, found)
             in result.readErrors.isEmpty
@@ -140,10 +170,11 @@ final class SpecChecker {
         final reported = strictBaseline && problem.code == .baselineEntryStale
             ? problem.withSeverity(.error)
             : client.severity.apply(problem);
-        if (reported != null) _diagnostics.add(reported);
+        if (reported != null) add(reported);
       }
+      results.add(result.withErrors(errors));
     }
-    return checks;
+    return results;
   }
 
   /// Checks the spec of every client in [config]; returns what each client
@@ -196,6 +227,7 @@ final class SpecChecker {
     run.anchors,
     ir: run.ir,
     irJson: run.irJson,
+    sources: run.sources,
   );
 
   /// Checks the spec of [client] and builds its IR; returns what the run
@@ -228,6 +260,11 @@ final class SpecChecker {
       AnchorIndex(normalized.model, normalized.documents),
       ir: ir,
       irJson: IrJson(normalized.documents.displayPath),
+      sources: [
+        for (final document in normalized.documents.loaded)
+          if (document.uri.scheme == 'file') p.fromUri(document.uri),
+        ?overridesPath,
+      ],
     );
   }
 }

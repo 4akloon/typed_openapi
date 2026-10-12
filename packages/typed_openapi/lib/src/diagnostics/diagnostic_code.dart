@@ -404,6 +404,15 @@ enum DiagnosticCode {
   /// The baseline file cannot be written.
   baselineNotWritten('TOA823', 'baseline-not-written', .error),
 
+  /// `generate` refuses a client's output directory, which it would own:
+  /// it holds a `pubspec.yaml`, is the `lib` directory of a package, holds
+  /// an input of the run, or holds files but no manifest. Nothing is
+  /// written for the client.
+  outputNotOwned('TOA830', 'output-not-owned', .error),
+
+  /// `generate` cannot write a client's output directory.
+  outputNotWritten('TOA831', 'output-not-written', .error),
+
   /// The configuration file does not exist.
   configNotFound('TOA901', 'config-not-found', .error),
 
@@ -447,6 +456,8 @@ enum DiagnosticCode {
     baselineNotFound,
     invalidBaseline,
     baselineNotWritten,
+    outputNotOwned,
+    outputNotWritten,
     ...configCodes,
   };
 

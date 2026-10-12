@@ -40,6 +40,8 @@ export 'src/diagnostics/reporters.dart'
 export 'src/diagnostics/sarif_reporter.dart' show SarifReporter;
 export 'src/diagnostics/severity.dart' show Severity;
 export 'src/diagnostics/severity_levels.dart' show SeverityLevels;
+export 'src/emit/model_library.dart' show ModelLibrary;
+export 'src/generate/output_writer.dart' show OutputChanges, OutputWriter;
 export 'src/ir/dart_type.dart'
     show
         CoreKind,
@@ -56,6 +58,7 @@ export 'src/ir/ir.dart'
     show
         BodyKind,
         ClientIr,
+        ConstraintsIr,
         Declaration,
         EnumDecl,
         EnumKind,
@@ -73,6 +76,7 @@ export 'src/ir/ir.dart'
         ResponseIr,
         SingleError,
         UnionDecl,
+        UnionDispatch,
         UnionKind,
         UnionVariantIr;
 export 'src/ir/ir_builder.dart' show IrBuilder;
@@ -124,7 +128,8 @@ export 'src/overrides/override_set.dart'
         ParameterOverride,
         PropertyOverride,
         ResponseOverride,
-        SchemaOverride;
+        SchemaOverride,
+        UnionMode;
 export 'src/resolve/spec_documents.dart' show SpecDocuments;
 export 'src/resolve/spec_model.dart' show SpecModel;
 export 'src/resolve/spec_reader.dart' show SpecReader;
