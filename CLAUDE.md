@@ -22,6 +22,7 @@ dart pub get                                 # repo root, once and after pubspec
 dart analyze packages                        # repo root; must print "No issues found!"
 cd packages/typed_openapi && dart test       # also in typed_openapi_runtime
 cd packages/typed_openapi && dart format lib test bin   # a second run must change 0 files
+cd packages/typed_openapi_runtime && dart format lib test # the same
 cd packages/<package> && dart pub publish --dry-run # before publishing
 ```
 
@@ -229,6 +230,50 @@ Rules of the pipeline:
   stdout, usage errors to stderr. Codes: `0` ok, `1` errors found, `64` usage,
   `78` the config file could not be loaded (TOA904 and per-client TOA902 exit
   `1`). Diagnostics a baseline accepts do not count.
+
+## Runtime (`packages/typed_openapi_runtime/lib/src/`)
+
+The only package generated clients depend on (dependencies: `dio`, `meta`).
+Pure Dart, works on the web except SSE with Dio's default browser adapter.
+Generated code is expected to look like `test/helpers/pets_api.dart`
+(illustrative, not a contract); `test/generated_client_test.dart` checks
+that the API composes, including a `implements` fake of a tag class.
+
+- `json/` - `JsonReader` (strict reads for generated `fromJson`: the only
+  widening is int where a number is expected; `null` is an error only in a
+  required non-nullable property, an optional one reads it as absent; RFC
+  3339 date-times need an offset, dates are `Date`; a `FormatException` of a
+  decoder becomes a `JsonDecodeException` at the property; `checkDepth`
+  works without recursion, 1000 levels), `JsonDecodeException` (pointer,
+  expected, actual, schema, hint; the first mismatch only, never the value),
+  `JsonValue` (extension type over `Object?`, accessors never throw).
+- `model/` - `Patch<T>` (`PatchValue`, `PatchNull`; a field is `Patch<T>?`),
+  `Date` (`format: date`, no time or zone).
+- `result/` - sealed `Result<T, E>`: `Success`, `Failure` (`HttpError`,
+  `UndocumentedStatus`, `DecodeError`, `TransportError`, `Cancelled`); no
+  helper methods, pattern matching only. `E = Never` still needs
+  `case Failure()`.
+- `params/` - `PathParameter`, `QueryParameter`, `HeaderParameter`,
+  `CookieParameter` (OAS styles, RFC 6570 expansion, RFC 3986
+  percent-encoding); internal `ParameterValue`, `PercentEncoder`.
+- `request/` - `OperationInfo` (put into `RequestOptions.extra`),
+  `OperationRequest` (resolves the path and the query itself;
+  `streamStatuses` for event streams), `RawResponse` (what a generated
+  decoder switches on).
+- `dio/` - `DioRequestSender(dio, {isWeb})` (`send`, `openEvents`; requests
+  only through `dio.request`, never mutates the user's Dio, never retries;
+  catches only `DioException` and `JsonDecodeException`, an `Error` reaches
+  the caller; the query is built by the runtime, so interceptors see an
+  empty `queryParameters`), `CallOptions`. `openEvents` needs its stream
+  listened to or cancelled; a listener cancel cancels the request.
+- `sse/` - `SseDecoder` (WHATWG, bytes -> `SseMessage`), `SseItemDecoder`
+  (-> `SseEvent` / `SseDecodeError` / `SseDisconnected`; data problems are
+  items, an `Error` from the user's decoder is the only stream error). Use
+  `transformer.bind(stream)`, not `stream.transform`: Dio gives a
+  `Stream<Uint8List>`.
+
+Runtime tests never touch the network: Dio gets `FakeAdapter`
+(`test/helpers/fake_adapter.dart`).
 
 ## Code rules
 
