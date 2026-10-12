@@ -45,6 +45,20 @@ final class OverrideApplier {
 
   static const _equality = DeepCollectionEquality();
 
+  /// Keys a null branch may have besides `type`.
+  static const _annotations = {
+    'type',
+    'description',
+    'title',
+    r'$comment',
+    'default',
+    'deprecated',
+    'example',
+    'examples',
+    'readOnly',
+    'writeOnly',
+  };
+
   /// Schema fields replaced as they are, in the order they are applied.
   static const _plainFields = [
     'format',
@@ -336,9 +350,9 @@ final class OverrideApplier {
   };
 
   /// The nullable form of [raw] for the document's dialect: a `$ref` in
-  /// `allOf` next to `nullable: true` in 3.0, one branch and a
-  /// `{type: 'null'}` in `anyOf` or `oneOf` from 3.1; any other keys are
-  /// siblings. Null for any other schema.
+  /// `allOf` next to `nullable: true` in 3.0; from 3.1 an `anyOf` or `oneOf`
+  /// of one or more branches and a null schema; any other keys are siblings.
+  /// Null for any other schema.
   _NullableShape? _nullableShape(Map<String, Object?> raw) {
     if (_version == .v30) {
       final list = raw['allOf'];
@@ -351,24 +365,39 @@ final class OverrideApplier {
       return branch is Map<String, Object?> &&
               branch.length == 1 &&
               branch[r'$ref'] is String
-          ? _NullableShape(raw, 'allOf', branch)
+          ? _NullableShape(raw, 'allOf', [branch])
           : null;
     }
     for (final key in ['anyOf', 'oneOf']) {
       final list = raw[key];
-      if (list is! List<Object?> || list.length != 2) continue;
-      final nulls = [
-        for (var i = 0; i < 2; i++)
-          if (_equality.equals(list[i], const {'type': 'null'})) i,
-      ];
-      if (nulls.length != 1) continue;
-      final branch = list[1 - nulls.single];
-      if (branch is Map<String, Object?>) {
-        return _NullableShape(raw, key, branch);
+      if (list is! List<Object?> || list.length < 2) continue;
+      final branches = <Map<String, Object?>>[];
+      var nulls = 0;
+      for (final item in list) {
+        if (item is! Map<String, Object?>) {
+          nulls = 0;
+          break;
+        }
+        if (_isNullSchema(item)) {
+          nulls++;
+        } else {
+          branches.add(item);
+        }
+      }
+      if (nulls > 0 && branches.isNotEmpty) {
+        return _NullableShape(raw, key, branches);
       }
     }
     return null;
   }
+
+  /// Whether [schema] allows only `null`: `type: 'null'`, with no keys but
+  /// annotations.
+  static bool _isNullSchema(Map<String, Object?> schema) =>
+      schema['type'] == 'null' &&
+      schema.keys.every(
+        (key) => _annotations.contains(key) || key.startsWith('x-'),
+      );
 
   Iterable<OverrideEdit> _typeAndNullable30(
     OverrideEntry entry,
@@ -592,11 +621,11 @@ final class OverrideApplier {
   }
 }
 
-/// A nullable schema whose nullability is a branch or a flag next to one
-/// other branch, with the keys around them.
+/// A nullable schema: a `$ref` with `nullable: true` (3.0), or one or more
+/// branches next to a null branch (3.1), with the keys around them.
 final class _NullableShape {
-  /// Reads the shape of [raw] whose nullable form is [key] with [branch].
-  const _NullableShape(this.raw, this.key, this.branch);
+  /// Reads the shape of [raw] whose nullable form is [key] with [branches].
+  const _NullableShape(this.raw, this.key, this.branches);
 
   /// The schema.
   final Map<String, Object?> raw;
@@ -604,12 +633,12 @@ final class _NullableShape {
   /// `allOf` (3.0), `anyOf` or `oneOf` (3.1).
   final String key;
 
-  /// The one branch that is not `null`.
-  final Map<String, Object?> branch;
+  /// The branches that are not `null`.
+  final List<Map<String, Object?>> branches;
 
-  /// The schema without nullability: the branch merged with the other keys,
-  /// less a `default` that is `null`. Null when the branch and the other keys
-  /// set one key to different values.
+  /// The schema without nullability, less a `default` that is `null`: one
+  /// branch is merged with the other keys, several stay under [key]. Null
+  /// when one branch and the other keys set one key to different values.
   Map<String, Object?>? withoutNull() {
     final siblings = {
       for (final MapEntry(:key, :value) in raw.entries)
@@ -618,12 +647,21 @@ final class _NullableShape {
             !(key == 'default' && value == null))
           key: value,
     };
-    for (final MapEntry(:key, :value) in branch.entries) {
+    if (branches.length > 1) {
+      return {
+        for (final MapEntry(:key, :value) in raw.entries)
+          if (key == this.key)
+            key: branches
+          else if (siblings.containsKey(key))
+            key: value,
+      };
+    }
+    for (final MapEntry(:key, :value) in branches.single.entries) {
       if (siblings.containsKey(key) &&
           !const DeepCollectionEquality().equals(siblings[key], value)) {
         return null;
       }
     }
-    return {...branch, ...siblings};
+    return {...branches.single, ...siblings};
   }
 }

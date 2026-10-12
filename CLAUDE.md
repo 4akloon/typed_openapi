@@ -132,11 +132,12 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   fields into `SpecEdit`s with set semantics (a value replaces the spec's
   value, `null` removes it), dialect-aware `nullable` (3.0 `nullable`, 3.1+
   `null` in `type`; a nullable reference is `allOf` + `nullable` in 3.0 and
-  `anyOf` with `{type: 'null'}` from 3.1). From 3.1 a schema with exactly
-  one non-null branch and a `{type: 'null'}` in `anyOf` or `oneOf` is
-  nullable, with or without sibling keys (`default`, `title`, ...):
-  `nullable: true` on it is TOA807, `nullable: false` unwraps the branch and
-  keeps the siblings except a `default: null`. A `nullable` override without `$ref`
+  `anyOf` with `{type: 'null'}` from 3.1). From 3.1 a schema whose `anyOf`
+  or `oneOf` has a null branch (`type: 'null'`, annotations allowed) and
+  one or more other branches is nullable, with or without sibling keys
+  (`default`, `title`, ...): `nullable: true` on it is TOA807,
+  `nullable: false` removes the null branch, unwraps a single remaining
+  branch and keeps the siblings except a `default: null`. A `nullable` override without `$ref`
   keeps every other key of a `$ref` node (the siblings stay next to the new
   nullable form); one with `$ref` replaces the node. `type: null` on a
   nullable 3.1 schema also drops its nullability (TOA809, info). A field the

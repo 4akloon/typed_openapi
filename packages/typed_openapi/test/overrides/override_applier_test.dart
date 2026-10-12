@@ -950,4 +950,68 @@ components:
       r'$ref': '#/components/schemas/Status',
     });
   });
+
+  group('3.1 nullable union with several branches or a described null', () {
+    const spec = '''
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        id:
+          anyOf: [{type: integer}, {type: string}, {type: 'null'}]
+          default: null
+          title: Id
+        tag:
+          oneOf:
+            - {type: string}
+            - {type: 'null', description: no tag}
+          description: t
+        two:
+          anyOf: [{type: integer}, {type: string}]
+''';
+    const props = '#/components/schemas/Pet/properties';
+
+    test('"nullable: true" says it is already nullable', () {
+      final run = _Run('$_header31$spec', '''
+schemas:
+  Pet:
+    properties:
+      id: {nullable: true}
+      tag: {nullable: true}
+''');
+      expect(run.overrideDiagnostics, [
+        for (final name in ['id', 'tag'])
+          (
+            DiagnosticCode.overrideUnchanged,
+            '#/schemas/Pet/properties/$name/nullable',
+          ),
+      ]);
+    });
+
+    test('"nullable: false" removes only the null branch', () {
+      final run = _Run('$_header31$spec', '''
+schemas:
+  Pet:
+    properties:
+      id: {nullable: false}
+      tag: {nullable: false}
+      two: {nullable: false}
+''');
+      expect(run.overrideDiagnostics, [
+        (
+          DiagnosticCode.overrideUnchanged,
+          '#/schemas/Pet/properties/two/nullable',
+        ),
+      ]);
+      expect(run.at('$props/id'), {
+        'anyOf': [
+          {'type': 'integer'},
+          {'type': 'string'},
+        ],
+        'title': 'Id',
+      });
+      expect(run.at('$props/tag'), {'type': 'string', 'description': 't'});
+    });
+  });
 }

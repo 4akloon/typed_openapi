@@ -72,9 +72,10 @@
   `discriminator`, `$ref`, parameter `required`/`schema`, body and response
   `contentType`/`schema`) replace the spec's values before the normalizer
   runs (`null` removes a field; `nullable` follows the document's dialect:
-  from 3.1 a schema with one non-null branch and a `{type: 'null'}` in
-  `anyOf` or `oneOf`, with or without siblings, is nullable, and
-  `nullable: false` unwraps it and keeps the siblings; a `nullable` override
+  from 3.1 a schema whose `anyOf` or `oneOf` has a null branch and one or
+  more other branches, with or without siblings, is nullable, and
+  `nullable: false` removes the null branch (one branch left is unwrapped)
+  and keeps the siblings; a `nullable` override
   without `$ref` keeps the other keys of a `$ref` node; `type: null` on a
   nullable 3.1 schema drops its nullability, TOA809 info; in OpenAPI 3.0 a
   field other than `nullable` (and a property's `required`) that would sit
