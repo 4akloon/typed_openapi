@@ -213,6 +213,55 @@ void main() {
       expect(tree('specs').keys, ['.typed_openapi.json', 'pets.yaml']);
     });
 
+    test("another client's spec in this client's output", () async {
+      dir
+        ..write('bspecs/.typed_openapi.json', manifest)
+        ..write('bspecs/pets.yaml', _spec);
+      final (code, out) = await generate(
+        '  a: {input: specs/pets.yaml, output: bspecs}\n'
+        '  b: {input: bspecs/pets.yaml, output: gen/b}\n',
+      );
+      expect(code, 1);
+      expect(out, contains('error TOA830 output-not-owned'));
+      expect(out, contains('Skipped a: see the error above.'));
+      expect(out, contains('Generated b in'));
+      expect(tree('bspecs').keys, ['.typed_openapi.json', 'pets.yaml']);
+    });
+
+    test("another client's overrides file in this client's output", () async {
+      dir
+        ..write('gen2/.typed_openapi.json', manifest)
+        ..write('gen2/ov.yaml', 'schemas: {}\n');
+      final (code, out) = await generate(
+        '  a: {input: specs/pets.yaml, output: gen2}\n'
+        '  b: {input: specs/pets.yaml, output: gen/b, overrides: gen2/ov.yaml}\n',
+      );
+      expect(code, 1);
+      expect(out, contains('error TOA830 output-not-owned'));
+      expect(tree('gen2').keys, ['.typed_openapi.json', 'ov.yaml']);
+    });
+
+    test('a client that is not selected is protected too', () async {
+      dir
+        ..write('bspecs/.typed_openapi.json', manifest)
+        ..write('bspecs/pets.yaml', _spec);
+      dir.write(
+        'typed_openapi.yaml',
+        'clients:\n'
+            '  a: {input: specs/pets.yaml, output: bspecs}\n'
+            '  b: {input: bspecs/pets.yaml, output: gen/b, baseline: bspecs/base.yaml}\n',
+      );
+      final out = StringBuffer();
+      final code = await TypedOpenApiCli(
+        out: out,
+        err: out,
+        workingDirectory: dir.path,
+      ).run(['generate', 'a']);
+      expect(code, 1);
+      expect(out.toString(), contains('error TOA830 output-not-owned'));
+      expect(tree('bspecs').keys, ['.typed_openapi.json', 'pets.yaml']);
+    });
+
     test('the config file, found through a link', () async {
       dir
         ..write('gen/.typed_openapi.json', manifest)

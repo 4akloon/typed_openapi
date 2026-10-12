@@ -22,7 +22,8 @@ import 'check_command.dart';
 ///
 /// A client whose check reports an error, including an overrides file that
 /// cannot be used, is skipped; so is one whose output directory the
-/// generator may not own (TOA830). The report and a line per client go to
+/// generator may not own (TOA830), which includes a directory that holds a
+/// file the config makes any client read. The report and a line per client go to
 /// stdout, and the exit code is the one `check` gives.
 final class GenerateCommand extends Command<int> {
   /// Creates the command; reports go to [_out], and files are named as
@@ -68,6 +69,17 @@ final class GenerateCommand extends Command<int> {
       final checks = SpecChecker(diagnostics, _paths).check(config, only: only);
       final writer = OutputWriter(diagnostics, _paths);
       final overlapping = _overlapping(config.clients);
+      // Every file any client of the config reads, also one that is not run:
+      // an output directory must not hold one, or the run would delete it.
+      final protected = {
+        _paths.absolute(configPath),
+        for (final client in config.clients) ...[
+          client.input,
+          ?client.overrides,
+          ?client.baseline,
+        ],
+        for (final check in checks) ...check.sources,
+      }.toList()..sort();
       for (final check in checks) {
         final client = check.client;
         final ir = check.ir;
@@ -90,11 +102,7 @@ final class GenerateCommand extends Command<int> {
           client,
           files,
           inputs: inputsOf(check),
-          protected: [
-            _paths.absolute(configPath),
-            ...check.sources,
-            ?client.baseline,
-          ],
+          protected: protected,
         );
         lines.add(
           changes == null
