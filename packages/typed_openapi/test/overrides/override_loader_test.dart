@@ -123,6 +123,54 @@ schemas:
     expect(bag.all, isEmpty);
   });
 
+  test('an empty or comment-only file is an empty set', () {
+    for (final text in ['', '\n', '# nothing yet\n\n  # still nothing\n']) {
+      final bag = DiagnosticBag();
+      expect(parse(bag, text)!.isEmpty, isTrue, reason: text);
+      expect(bag.all, isEmpty, reason: text);
+    }
+  });
+
+  test('an empty file on disk is an empty set', () {
+    final dir = TempDir();
+    final path = dir.write('o.yaml', '# all overrides removed\n');
+    final bag = DiagnosticBag();
+    expect(
+      OverrideLoader(bag).load(path, displayPath: 'o.yaml')!.isEmpty,
+      isTrue,
+    );
+    expect(bag.all, isEmpty);
+  });
+
+  test('a section without entries is empty', () {
+    final bag = DiagnosticBag();
+    final set = parse(bag, '''
+operations:
+  # getPet: {name: x}
+schemas:
+''')!;
+    expect(set.isEmpty, isTrue);
+    expect(bag.all, isEmpty);
+    final other = parse(bag, '''
+operations:
+  getPet: {name: fetchPet}
+schemas:
+''')!;
+    expect(other.operations.single.name, 'fetchPet');
+    expect(other.schemas, isEmpty);
+    expect(bag.all, isEmpty);
+  });
+
+  test('a root that is not an object is an invalid file', () {
+    final bag = DiagnosticBag();
+    expect(parse(bag, '[1]'), isNull);
+    expect(parse(bag, 'text\n', file: 'p.yaml'), isNull);
+    expect(bag.all.map((d) => d.code), [
+      DiagnosticCode.invalidOverride,
+      DiagnosticCode.invalidOverride,
+    ]);
+  });
+
   test('reports a missing file', () {
     final bag = DiagnosticBag();
     expect(OverrideLoader(bag).load('/nope/o.yaml'), isNull);

@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:path/path.dart' as p;
+
 import '../diagnostics/diagnostic_bag.dart';
 import '../diagnostics/diagnostic_code.dart';
 import '../diagnostics/json_pointer.dart';
@@ -46,6 +48,8 @@ final class OverrideLoader {
       );
       return null;
     }
+    final String? text = _readText(path);
+    if (text != null && _isBlank(text, file)) return _empty(file, path);
     final scratch = DiagnosticBag();
     final document = SpecLoader(scratch).load(path, displayPath: file);
     _forward(scratch);
@@ -55,6 +59,7 @@ final class OverrideLoader {
   /// Reads overrides from [text]; [file] names it in diagnostics and tells
   /// JSON from YAML by its extension.
   OverrideSet? parse(String text, String file) {
+    if (_isBlank(text, file)) return _empty(file, file);
     final scratch = DiagnosticBag();
     final document = SpecLoader(scratch).parse(text, file);
     _forward(scratch);
@@ -64,6 +69,37 @@ final class OverrideLoader {
   /// Reads the overrides in an already loaded [document].
   OverrideSet read(SpecDocument document) =>
       _OverrideReader(_diagnostics, document).read();
+
+  /// The text of the file at [path], or null when it cannot be read; the
+  /// spec loader then reports why.
+  static String? _readText(String path) {
+    try {
+      return File(path).readAsStringSync();
+    } on FileSystemException {
+      return null;
+    }
+  }
+
+  /// Whether [text] has nothing but whitespace, and for YAML comments and
+  /// document markers: a file with no override yet.
+  static bool _isBlank(String text, String file) {
+    final json = p.extension(file).toLowerCase() == '.json';
+    return text.split('\n').every((line) {
+      final t = line.trim();
+      return t.isEmpty ||
+          (!json && (t.startsWith('#') || t == '---' || t == '...'));
+    });
+  }
+
+  /// A set with no override, for a file that has no content.
+  static OverrideSet _empty(String file, String path) => OverrideSet(
+    SpecDocument(
+      file: file,
+      uri: p.toUri(p.normalize(p.absolute(path))),
+      root: const {},
+      spans: const {},
+    ),
+  );
 
   /// Reports what the spec loader said about the file as problems of the
   /// overrides file.
@@ -424,6 +460,8 @@ final class _OverrideReader {
     String key,
     JsonPointer at,
   ) {
+    // A section whose entries are all commented out reads as null.
+    if (parent.containsKey(key) && parent[key] == null) return const [];
     final section = _map(parent, key, at);
     if (section == null) return const [];
     final p = at.child(key);
