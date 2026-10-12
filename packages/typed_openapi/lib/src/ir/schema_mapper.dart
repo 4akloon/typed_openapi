@@ -5,6 +5,7 @@ import '../model/schema.dart';
 import '../model/spec_node.dart';
 import '../overrides/override_set.dart';
 import 'dart_type.dart';
+import 'direction_index.dart';
 import 'ir.dart';
 import 'ir_context.dart';
 import 'names.dart';
@@ -35,28 +36,78 @@ final class NameHint {
 /// schemas are named after their parent, and collisions get a suffix with a
 /// diagnostic (R5.2).
 final class SchemaMapper {
-  /// Creates a mapper for the spec of [_context].
-  SchemaMapper(this._context);
+  /// Creates a mapper for the spec of [_context]; [directions] tells which
+  /// schemas are split into response and request models.
+  SchemaMapper(this._context, [DirectionIndex? directions])
+    : _directions = directions ?? DirectionIndex(_context.model);
 
   static const _names = DartNames();
   static const _fallbackName = 'Schema';
 
+  /// The extension that makes a property tri-state with
+  /// `tri_state: extension` (R7.2).
+  static const triStateExtension = 'x-typed-tri-state';
+
   final IrContext _context;
+  final DirectionIndex _directions;
   final Map<DeclId, _Pending> _pending = {};
+  ModelDirection _direction = .both;
+  SpecLocation? _patchTarget;
   final Map<String, _Pending> _inlineEnums = {};
   final Set<SpecLocation> _aliases = {};
 
-  /// The type of [schema]; an inline declaration it needs is named by
-  /// [hint].
-  DartType typeOf(Schema schema, NameHint hint) => _map(schema, hint);
+  /// The type of [schema] used in [direction]; an inline declaration it
+  /// needs is named by [hint]. For the request body of a PATCH operation
+  /// ([patchBody]), the model's fields follow the tri-state rule (R7.2); a
+  /// schema also used elsewhere gets a model of its own for this
+  /// (`PetPatch`).
+  DartType typeOf(
+    Schema schema,
+    NameHint hint, {
+    ModelDirection direction = .both,
+    bool patchBody = false,
+  }) {
+    _direction = direction;
+    _patchTarget = patchBody
+        ? _context.model.resolveSchema(schema)?.location
+        : null;
+    final type = _map(schema, hint);
+    _patchTarget = null;
+    if (patchBody && type is NamedType) _pending[type.id]?.patchBody = true;
+    return type;
+  }
 
-  /// The type of the `components.schemas` entry [schema], as a `$ref` to it
-  /// would have.
-  DartType typeOfComponent(Schema schema) =>
-      switch (_context.model.resolveSchema(schema)) {
-        final SchemaObject target => _component(target),
-        _ => const CoreType(.json),
-      };
+  /// The type of the `components.schemas` entry [schema] used in
+  /// [direction], as a `$ref` to it would have.
+  DartType typeOfComponent(
+    Schema schema, {
+    ModelDirection direction = .both,
+  }) {
+    _direction = direction;
+    return switch (_context.model.resolveSchema(schema)) {
+      final SchemaObject target => _component(target),
+      _ => const CoreType(.json),
+    };
+  }
+
+  /// The id of the declaration of [schema] in the current direction: the
+  /// PATCH body model when [schema] is the body being mapped and is used
+  /// elsewhere too, the request model of a split schema in a request, the
+  /// schema's own declaration otherwise.
+  DeclId _idOf(SchemaObject schema) {
+    if (schema.location == _patchTarget) {
+      _patchTarget = null;
+      if (_directions.separatesPatch(schema)) {
+        return DeclId(schema.location, variant: .patch);
+      }
+    }
+    return DeclId(
+      schema.location,
+      variant: _direction == .request && _directions.splits(schema)
+          ? .input
+          : .base,
+    );
+  }
 
   /// The declarations created so far, named in [scope]: overridden names
   /// first, then component keys, then inline names, each by location.
@@ -77,14 +128,22 @@ final class SchemaMapper {
 
   String _claim(NameScope scope, _Pending pending) {
     final overridden = pending.overrideName;
+    final suffix = switch (pending.id.variant) {
+      .base => '',
+      .input => _context.config.inputSuffix,
+      .patch => _context.config.patchSuffix,
+    };
     final String? candidate;
     if (overridden != null) {
-      candidate = overridden;
+      candidate = '$overridden$suffix';
     } else if (pending.componentKey case final key?) {
-      candidate = _names.pascal(key);
+      candidate = switch (_names.pascal(key)) {
+        final name? => '$name$suffix',
+        null => null,
+      };
     } else {
       final parent = pending.hint!._parent?.name ?? pending.hint!.prefix!;
-      candidate = '$parent${pending.hint!.suffix}';
+      candidate = '$parent${pending.hint!.suffix}$suffix';
     }
     if (candidate == null) {
       final (name, _) = scope.claim(_fallbackName);
@@ -132,7 +191,7 @@ final class SchemaMapper {
   DartType _component(SchemaObject schema) {
     final custom = _customSchemaType(schema);
     if (custom != null) return custom;
-    final id = DeclId(schema.location);
+    final id = _idOf(schema);
     final pending = _pending[id];
     if (pending != null) return NamedType(id, nullable: _isNullable(schema));
     final key = _componentKey(schema.location);
@@ -188,7 +247,7 @@ final class SchemaMapper {
           }
         }
       }
-      return _declare(schema, DeclId(schema.location), (p) => p.hint = hint);
+      return _declare(schema, _idOf(schema), (p) => p.hint = hint);
     }
     return _structural(schema, hint);
   }
@@ -275,10 +334,23 @@ final class SchemaMapper {
   void _model(SchemaObject schema, _Pending pending) {
     final fields = <_Field>[];
     final (properties, required) = _merged(schema);
+    final direction = pending.id.variant != .base
+        ? ModelDirection.request
+        : _directions.splits(schema)
+        ? ModelDirection.response
+        : _directions.onlyDirection(schema) ?? ModelDirection.both;
     for (final MapEntry(key: json, value: property) in properties.entries) {
       final override = _context.overrides.propertyAt(property.location);
       if (override?.exclude ?? false) continue;
       final resolved = _resolved(property);
+      final readOnly =
+          (resolved?.readOnly ?? false) ||
+          (property is SchemaObject && property.readOnly);
+      final writeOnly =
+          (resolved?.writeOnly ?? false) ||
+          (property is SchemaObject && property.writeOnly);
+      if (direction == .request && readOnly) continue;
+      if (direction == .response && writeOnly) continue;
       final suffix = _names.pascal(json) ?? 'Field';
       final custom = override?.dartType;
       final mapped = _map(property, NameHint._under(pending, suffix));
@@ -289,8 +361,11 @@ final class SchemaMapper {
           location: property.location,
           valueType: custom == null ? mapped : _custom(custom, mapped),
           required: required.contains(json),
-          readOnly: resolved?.readOnly ?? false,
-          writeOnly: resolved?.writeOnly ?? false,
+          readOnly: readOnly,
+          writeOnly: writeOnly,
+          marked:
+              property is SchemaObject &&
+              property.extensions[triStateExtension] == true,
           defaultValue: resolved?.defaultValue,
           description: resolved?.description,
           deprecated: resolved?.deprecated ?? false,
@@ -312,6 +387,7 @@ final class SchemaMapper {
         description: schema.description,
         deprecated: schema.deprecated,
         additionalProperties: additional,
+        direction: direction,
         fields: [
           for (final field in fields)
             FieldIr(
@@ -326,7 +402,7 @@ final class SchemaMapper {
               valueType: field.valueType,
               location: field.location,
               required: field.required,
-              triState: field.override?.triState ?? false,
+              triState: field.override?.triState ?? _isTriState(field, pending),
               readOnly: field.readOnly,
               writeOnly: field.writeOnly,
               defaultValue: field.defaultValue,
@@ -337,6 +413,15 @@ final class SchemaMapper {
       );
     };
   }
+
+  /// Whether [field] tells "absent" from `null` by the config's rule (R7.2).
+  bool _isTriState(_Field field, _Pending pending) =>
+      switch (_context.config.triState) {
+        .patch =>
+          pending.patchBody && !field.required && field.valueType.nullable,
+        .optional => pending.patchBody && !field.required,
+        .extension => field.marked,
+      };
 
   /// The properties and required names of [schema] with its `allOf` parts
   /// merged in, parts first and in order (R6.3). A property that a later
@@ -772,6 +857,7 @@ final class _Pending {
   String? overrideName;
   NameHint? hint;
   int depth = 0;
+  bool patchBody = false;
   String? name;
   Declaration Function(String name)? build;
 
@@ -794,6 +880,7 @@ final class _Field {
     required this.required,
     required this.readOnly,
     required this.writeOnly,
+    required this.marked,
     required this.defaultValue,
     required this.description,
     required this.deprecated,
@@ -806,6 +893,9 @@ final class _Field {
   final bool required;
   final bool readOnly;
   final bool writeOnly;
+
+  /// Whether the property has `x-typed-tri-state: true`.
+  final bool marked;
   final (Object?,)? defaultValue;
   final String? description;
   final bool deprecated;

@@ -2,6 +2,7 @@ import 'package:test/test.dart';
 import 'package:typed_openapi/src/config/generation_config.dart';
 import 'package:typed_openapi/src/config/project_config.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
+import 'package:typed_openapi/src/ir/dart_type.dart';
 import 'package:typed_openapi/src/ir/ir.dart';
 import 'package:typed_openapi/src/ir/ir_builder.dart';
 import 'package:typed_openapi/src/ir/ir_json.dart';
@@ -411,6 +412,250 @@ components:
       'ApiError',
       'Pet',
       'PetStatus',
+    ]);
+  });
+
+  test('splits a model by direction only when it needs to (spec 4)', () {
+    final fixture = IrFixture(r'''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /owners:
+    post:
+      operationId: createOwner
+      tags: [owners]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Owner'}}}}
+      responses:
+        "201": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Owner'}}}}
+  /audit:
+    get:
+      operationId: audit
+      tags: [owners]
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Audit'}}}}
+components:
+  schemas:
+    Owner:
+      type: object
+      properties:
+        name: {type: string}
+        pet: {$ref: '#/components/schemas/Pet'}
+        tag: {$ref: '#/components/schemas/Tag'}
+    Pet:
+      type: object
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        password: {type: string, writeOnly: true}
+    Tag:
+      type: object
+      properties:
+        label: {type: string}
+    Audit:
+      type: object
+      properties:
+        id: {type: integer, readOnly: true}
+''');
+    final ir = build(fixture);
+    expect(fixture.reported, isEmpty);
+    List<String> fields(String name) => [
+      for (final f
+          in (ir.declarations.firstWhere((d) => d.name == name) as ModelDecl)
+              .fields)
+        '${f.name}: ${f.type.code(ir.nameOf)}',
+    ];
+    expect(ir.declarations.map((d) => (d.name, (d as ModelDecl).direction)), [
+      ('Audit', ModelDirection.response),
+      ('Owner', ModelDirection.response),
+      ('OwnerInput', ModelDirection.request),
+      ('Pet', ModelDirection.response),
+      ('PetInput', ModelDirection.request),
+      ('Tag', ModelDirection.both),
+    ]);
+    expect(fields('Pet'), ['id: int?', 'name: String?']);
+    expect(fields('PetInput'), ['name: String?', 'password: String?']);
+    expect(fields('OwnerInput'), [
+      'name: String?',
+      'pet: PetInput?',
+      'tag: Tag?',
+    ]);
+    expect(fields('Audit'), ['id: int?']);
+    expect(operationJson(ir, 'createOwner')['body'], {
+      'kind': 'json',
+      'contentType': 'application/json',
+      'type': 'OwnerInput',
+    });
+  });
+
+  test('makes PATCH body fields tri-state by the configured rule (R7.2)', () {
+    const spec = r'''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /pets/{id}:
+    parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+    patch:
+      operationId: updatePet
+      tags: [pets]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/UpdatePet'}}}
+      responses: {"204": {description: ok}}
+    put:
+      operationId: replacePet
+      tags: [pets]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}
+      responses: {"204": {description: ok}}
+components:
+  schemas:
+    UpdatePet:
+      type: object
+      required: [owner]
+      properties:
+        tag: {type: [string, "null"]}
+        name: {type: string}
+        owner: {type: [string, "null"]}
+        note: {type: [string, "null"], x-typed-tri-state: true}
+    Pet:
+      type: object
+      properties:
+        tag: {type: [string, "null"]}
+''';
+    List<String> fields(ClientIr ir, String name) => [
+      for (final f
+          in (ir.declarations.firstWhere((d) => d.name == name) as ModelDecl)
+              .fields)
+        '${f.name}: ${f.type.code(ir.nameOf)}',
+    ];
+    final byDefault = build(IrFixture(spec));
+    expect(fields(byDefault, 'UpdatePet'), [
+      'tag: Patch<String>?',
+      'name: String?',
+      'owner: String?',
+      'note: Patch<String>?',
+    ]);
+    expect(fields(byDefault, 'Pet'), ['tag: String?']);
+    final optional = build(
+      IrFixture(
+        spec,
+        generation: const GenerationConfig(triState: TriStateRule.optional),
+      ),
+    );
+    expect(fields(optional, 'UpdatePet'), [
+      'tag: Patch<String>?',
+      'name: Patch<String>?',
+      'owner: String?',
+      'note: Patch<String>?',
+    ]);
+    final extension = build(
+      IrFixture(
+        spec,
+        generation: const GenerationConfig(triState: TriStateRule.extension),
+        overrides: '''
+schemas:
+  Pet:
+    properties:
+      tag: {triState: true}
+''',
+      ),
+    );
+    expect(fields(extension, 'UpdatePet'), [
+      'tag: String?',
+      'name: String?',
+      'owner: String?',
+      'note: Patch<String>?',
+    ]);
+    expect(fields(extension, 'Pet'), ['tag: Patch<String>?']);
+  });
+
+  test('gives a PATCH body schema used elsewhere a model of its own', () {
+    const spec = r'''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /pets:
+    post:
+      operationId: createPet
+      tags: [pets]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses:
+        "201": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+  /pets/{id}:
+    parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+    patch:
+      operationId: updatePet
+      tags: [pets]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+      responses: {"204": {description: ok}}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+        tag: {type: [string, "null"]}
+        owner: {$ref: '#/components/schemas/Owner'}
+    Owner:
+      type: object
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+''';
+    List<String> fields(ClientIr ir, String name) => [
+      for (final f
+          in (ir.declarations.firstWhere((d) => d.name == name) as ModelDecl)
+              .fields)
+        '${f.name}: ${f.type.code(ir.nameOf)}',
+    ];
+    final fixture = IrFixture(spec);
+    final ir = build(fixture);
+    expect(fixture.reported, isEmpty);
+    expect(ir.declarations.map((d) => (d.name, d.id.variant)), [
+      ('Owner', DeclVariant.base),
+      ('OwnerInput', DeclVariant.input),
+      ('Pet', DeclVariant.base),
+      ('PetInput', DeclVariant.input),
+      ('PetPatch', DeclVariant.patch),
+    ]);
+    expect(fields(ir, 'Pet'), [
+      'id: int?',
+      'name: String',
+      'tag: String?',
+      'owner: Owner?',
+    ]);
+    expect(fields(ir, 'PetInput'), [
+      'name: String',
+      'tag: String?',
+      'owner: OwnerInput?',
+    ]);
+    expect(fields(ir, 'PetPatch'), [
+      'name: String',
+      'tag: Patch<String>?',
+      'owner: OwnerInput?',
+    ]);
+    expect(operationJson(ir, 'updatePet')['body'], {
+      'kind': 'json',
+      'contentType': 'application/json',
+      'type': 'PetPatch',
+    });
+
+    final renamed = build(
+      IrFixture(
+        spec,
+        generation: const GenerationConfig(patchSuffix: 'Changes'),
+        overrides: 'schemas:\n  Pet: {name: Animal}\n',
+      ),
+    );
+    expect(renamed.declarations.map((d) => d.name), [
+      'Animal',
+      'AnimalChanges',
+      'AnimalInput',
+      'Owner',
+      'OwnerInput',
     ]);
   });
 }

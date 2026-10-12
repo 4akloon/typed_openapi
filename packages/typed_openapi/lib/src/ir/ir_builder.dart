@@ -3,6 +3,7 @@ import '../diagnostics/diagnostic_bag.dart';
 import '../diagnostics/json_pointer.dart';
 import '../model/spec_node.dart';
 import '../normalize/normalizer.dart';
+import 'direction_index.dart';
 import 'ir.dart';
 import 'ir_context.dart';
 import 'names.dart';
@@ -33,12 +34,22 @@ final class IrBuilder {
   /// The IR of [spec] generated as [client] says.
   ClientIr build(NormalizedSpec spec, ClientConfig client) {
     final context = IrContext(_diagnostics, spec, client);
-    final mapper = SchemaMapper(context);
+    final all = _operations(context);
+    final directions = DirectionIndex(spec.model);
+    for (final entry in all) {
+      directions.addOperation(entry.operation, entry.item, entry.method);
+    }
+    if (client.generation.defaultErrorSchema case final key?) {
+      directions.add(
+        spec.model.document.components?.schemas[key],
+        .response,
+      );
+    }
+    final mapper = SchemaMapper(context, directions);
     final operations = OperationBuilder(context, mapper);
     final groups = <String, List<SpecOperation>>{};
     final groupSites = <String, SpecLocation>{};
     final tagOfGroup = <String, String>{};
-    final all = _operations(context);
     // A spec without any tag gets one TOA554, not one per operation.
     final untagged =
         client.generation.groupBy == .tag &&

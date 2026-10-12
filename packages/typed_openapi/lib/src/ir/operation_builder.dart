@@ -62,7 +62,7 @@ final class OperationBuilder {
       description: operation.description,
       deprecated: operation.deprecated,
       parameters: parameters,
-      body: _body(operation, prefix),
+      body: _body(operation, entry.method, prefix),
       responses: responses,
       errors: _errors(responses),
     );
@@ -160,7 +160,11 @@ final class OperationBuilder {
     };
     final mapped = schema == null
         ? const CoreType(.json)
-        : _mapper.typeOf(schema, NameHint(prefix, _names.pascal(wire) ?? ''));
+        : _mapper.typeOf(
+            schema,
+            NameHint(prefix, _names.pascal(wire) ?? ''),
+            direction: .request,
+          );
     final custom = override?.dartType;
     final type = custom == null
         ? mapped
@@ -187,7 +191,7 @@ final class OperationBuilder {
     );
   }
 
-  RequestBodyIr? _body(Operation operation, String prefix) {
+  RequestBodyIr? _body(Operation operation, String method, String prefix) {
     final written = operation.requestBody;
     if (written == null) return null;
     final body = _context.model.resolve(written);
@@ -195,13 +199,19 @@ final class OperationBuilder {
     final (contentType, media) = _pick(body.content);
     final kind = contentType == null ? BodyKind.none : _kind(contentType);
     final schema = media?.schema;
+    final type = schema == null
+        ? null
+        : _mapper.typeOf(
+            schema,
+            NameHint(prefix, 'Request'),
+            direction: .request,
+            patchBody: method.toLowerCase() == 'patch',
+          );
     return RequestBodyIr(
       kind: kind,
       location: body.location,
       contentType: contentType,
-      type: schema == null
-          ? null
-          : _mapper.typeOf(schema, NameHint(prefix, 'Request')),
+      type: type,
       required: body.required,
       description: body.description,
     );
@@ -242,6 +252,7 @@ final class OperationBuilder {
         (final schema?, _) => _mapper.typeOf(
           envelope ?? schema,
           NameHint(prefix, suffix),
+          direction: .response,
         ),
         _ => null,
       };
@@ -312,7 +323,7 @@ final class OperationBuilder {
     if (key == null) return null;
     final schema = _context.model.document.components?.schemas[key];
     if (schema == null) return null;
-    return _mapper.typeOfComponent(schema);
+    return _mapper.typeOfComponent(schema, direction: .response);
   }
 
   /// The media type the client uses: JSON first, then forms, text, event
