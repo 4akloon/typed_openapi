@@ -13,6 +13,9 @@ export 'src/params/parameters.dart'
         PathStyle,
         QueryParameter,
         QueryStyle;
+export 'src/request/operation_info.dart' show OperationInfo;
+export 'src/request/operation_request.dart' show OperationRequest, ResponseKind;
+export 'src/request/raw_response.dart' show RawResponse;
 export 'src/result/result.dart'
     show
         Cancelled,
