@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import '../diagnostics/json_pointer.dart';
 import '../model/schema.dart';
 import '../model/spec_node.dart';
 import '../overrides/override_set.dart';
@@ -133,7 +136,8 @@ final class SchemaMapper {
     final pending = _pending[id];
     if (pending != null) return NamedType(id, nullable: _isNullable(schema));
     final key = _componentKey(schema.location);
-    if (_declares(schema)) {
+    final single = _single(schema);
+    if (single == null && _declares(schema)) {
       return _declare(
         schema,
         id,
@@ -156,16 +160,23 @@ final class SchemaMapper {
       return const CoreType(.json);
     }
     try {
-      return _structural(
-        schema,
-        NameHint(_names.pascal(key ?? '') ?? _fallbackName, ''),
-      );
+      final hint = NameHint(_names.pascal(key ?? '') ?? _fallbackName, '');
+      if (single != null) {
+        final type = _map(single, hint);
+        return type.withNullable(type.nullable || _isNullable(schema));
+      }
+      return _structural(schema, hint);
     } finally {
       _aliases.remove(schema.location);
     }
   }
 
   DartType _inline(SchemaObject schema, NameHint hint) {
+    final single = _single(schema);
+    if (single != null) {
+      final type = _map(single, hint);
+      return type.withNullable(type.nullable || _isNullable(schema));
+    }
     if (_declares(schema)) {
       if (_enumValues(schema) case final values?) {
         final kind = _enumKind(schema, values);
@@ -182,10 +193,52 @@ final class SchemaMapper {
     return _structural(schema, hint);
   }
 
-  /// Whether [schema] gets a declaration: an object with properties or an
-  /// enum.
+  /// Whether [schema] gets a declaration: an enum, a union, an object with
+  /// properties or the merge of an `allOf`.
   bool _declares(SchemaObject schema) =>
-      _enumValues(schema) != null || schema.properties.isNotEmpty;
+      _enumValues(schema) != null ||
+      _branches(schema) != null ||
+      schema.properties.isNotEmpty ||
+      schema.allOf.isNotEmpty;
+
+  /// The one schema [schema] stands for (R6.3, rules carried from M3): the
+  /// part of an `allOf` with one part, or the branch of a `oneOf`/`anyOf`
+  /// with one branch besides `null`; null when there is none.
+  Schema? _single(SchemaObject schema) {
+    if (schema.properties.isNotEmpty || _enumValues(schema) != null) {
+      return null;
+    }
+    final branches = [...schema.oneOf, ...schema.anyOf];
+    if (schema.allOf.length == 1 && branches.isEmpty) return schema.allOf.first;
+    if (schema.allOf.isNotEmpty) return null;
+    final nonNull = [
+      for (final branch in branches)
+        if (!_isNullOnly(branch)) branch,
+    ];
+    return nonNull.length == 1 && (schema.oneOf.isEmpty || schema.anyOf.isEmpty)
+        ? nonNull.single
+        : null;
+  }
+
+  /// The kind and the non-null branches of a union: a `oneOf` (or else an
+  /// `anyOf`) with more than one branch besides `null`.
+  (UnionKind, List<Schema>)? _branches(SchemaObject schema) {
+    final (kind, branches) = schema.oneOf.isNotEmpty
+        ? (UnionKind.oneOf, schema.oneOf)
+        : (UnionKind.anyOf, schema.anyOf);
+    final nonNull = [
+      for (final branch in branches)
+        if (!_isNullOnly(branch)) branch,
+    ];
+    return nonNull.length > 1 ? (kind, nonNull) : null;
+  }
+
+  static bool _isNullOnly(Schema schema) =>
+      schema is SchemaObject &&
+      schema.ref == null &&
+      ((schema.types.length == 1 && schema.types.single == .nullType) ||
+          (schema.enumValues != null &&
+              schema.enumValues!.every((v) => v == null)));
 
   DartType _declare(
     SchemaObject schema,
@@ -211,6 +264,8 @@ final class SchemaMapper {
     _pending[id] = pending;
     if (values != null && kind != null) {
       _enum(schema, pending, values, kind);
+    } else if (_branches(schema) case (final kind, final branches)) {
+      _union(schema, pending, kind, branches);
     } else {
       _model(schema, pending);
     }
@@ -219,8 +274,8 @@ final class SchemaMapper {
 
   void _model(SchemaObject schema, _Pending pending) {
     final fields = <_Field>[];
-    for (final MapEntry(key: json, value: property)
-        in schema.properties.entries) {
+    final (properties, required) = _merged(schema);
+    for (final MapEntry(key: json, value: property) in properties.entries) {
       final override = _context.overrides.propertyAt(property.location);
       if (override?.exclude ?? false) continue;
       final resolved = _resolved(property);
@@ -233,7 +288,7 @@ final class SchemaMapper {
           override: override,
           location: property.location,
           valueType: custom == null ? mapped : _custom(custom, mapped),
-          required: schema.required.contains(json),
+          required: required.contains(json),
           readOnly: resolved?.readOnly ?? false,
           writeOnly: resolved?.writeOnly ?? false,
           defaultValue: resolved?.defaultValue,
@@ -281,6 +336,166 @@ final class SchemaMapper {
         ],
       );
     };
+  }
+
+  /// The properties and required names of [schema] with its `allOf` parts
+  /// merged in, parts first and in order (R6.3). A property that a later
+  /// part defines again with another schema is reported; the later one is
+  /// used.
+  (Map<String, Schema>, Set<String>) _merged(SchemaObject schema) {
+    final properties = <String, Schema>{};
+    final required = <String>{};
+    final seen = <SpecLocation>{};
+    void add(SchemaObject part) {
+      if (!seen.add(part.location)) return;
+      for (final written in part.allOf) {
+        final resolved = _resolved(written);
+        if (resolved == null) continue;
+        if (resolved.properties.isEmpty &&
+            resolved.allOf.isEmpty &&
+            (_enumValues(resolved) != null ||
+                _branches(resolved) != null ||
+                resolved.types.any((t) => t != .object && t != .nullType))) {
+          _context.report(
+            .allOfPartIgnored,
+            'This allOf part is not an object, so it cannot be merged into a '
+            'model; it is ignored.',
+            written.location,
+            fix: 'Make every allOf part an object schema at the source.',
+          );
+          continue;
+        }
+        add(resolved);
+      }
+      for (final MapEntry(key: name, value: property)
+          in part.properties.entries) {
+        final earlier = properties[name];
+        if (earlier != null && !_same(earlier, property)) {
+          _context.report(
+            .allOfPropertyConflict,
+            'Property "$name" is defined again by another allOf part; this '
+            'definition is used.',
+            property.location,
+            fix: 'Define each property in one allOf part at the source.',
+          );
+        }
+        properties[name] = property;
+      }
+      required.addAll(part.required);
+    }
+
+    add(schema);
+    return (properties, required);
+  }
+
+  /// Whether two property schemas are the same: one schema through
+  /// `$ref`s, or equal as written.
+  bool _same(Schema a, Schema b) {
+    final x = _context.model.resolveSchema(a)?.location;
+    final y = _context.model.resolveSchema(b)?.location;
+    if (x == y) return true;
+    if (x == null || y == null) return false;
+    final raw = _context.documents[x.document]?.valueAt(x.pointer);
+    final other = _context.documents[y.document]?.valueAt(y.pointer);
+    return raw != null &&
+        other != null &&
+        jsonEncode(raw.$1) == jsonEncode(other.$1);
+  }
+
+  void _union(
+    SchemaObject schema,
+    _Pending pending,
+    UnionKind kind,
+    List<Schema> branches,
+  ) {
+    final variants = <(DartType, SpecLocation?, SpecLocation)>[
+      for (final (i, branch) in branches.indexed)
+        (
+          _map(branch, NameHint._under(pending, 'Variant${i + 1}')),
+          branch is SchemaObject && branch.ref != null
+              ? _resolved(branch)?.location
+              : null,
+          branch.location,
+        ),
+    ];
+    final discriminator = schema.discriminator;
+    final property = discriminator?.propertyName;
+    final values = <SpecLocation, List<String>>{};
+    DartType? fallback;
+    if (discriminator != null && property != null) {
+      final targets = {for (final (_, target, _) in variants) ?target};
+      for (final MapEntry(key: value, value: ref)
+          in discriminator.mapping.entries) {
+        final target = _mappingTarget(ref, schema.location.document);
+        if (target == null) continue;
+        if (!targets.contains(target)) {
+          _context.report(
+            .discriminatorMappingNotVariant,
+            'Discriminator value "$value" maps to a schema that is not a '
+            'variant of this union; it is ignored.',
+            discriminator.location.child('mapping').child(value),
+            fix: "Map the value to one of the union's variants.",
+          );
+          continue;
+        }
+        (values[target] ??= []).add(value);
+      }
+      for (final (_, target, at) in variants) {
+        if (target == null) {
+          _context.report(
+            .discriminatorValueMissing,
+            'This variant is written inline, so no discriminator value '
+            'selects it.',
+            at,
+            fix: r'Make the variant a component schema and $ref it.',
+          );
+          continue;
+        }
+        if (values.containsKey(target)) continue;
+        if (_componentKey(target) case final key?) values[target] = [key];
+      }
+      if (discriminator.defaultMapping case final ref?) {
+        final target = _mappingTarget(ref, schema.location.document);
+        for (final (type, at, _) in variants) {
+          if (at != null && at == target) fallback = type;
+        }
+      }
+    }
+    final exhaustive =
+        _context.overrides.schemaAt(schema.location)?.exhaustive ?? true;
+    pending.build = (name) => UnionDecl(
+      id: pending.id,
+      name: name,
+      kind: kind,
+      discriminator: property,
+      defaultVariant: fallback,
+      exhaustive: exhaustive,
+      description: schema.description,
+      deprecated: schema.deprecated,
+      variants: [
+        for (final (type, target, _) in variants)
+          UnionVariantIr(
+            type,
+            discriminatorValues: [...?values[target]]..sort(),
+          ),
+      ],
+    );
+  }
+
+  /// The schema a discriminator `mapping` value names: a
+  /// `components.schemas` key or a `$ref` in the document of the union.
+  SpecLocation? _mappingTarget(String ref, Uri document) {
+    final model = _context.model;
+    final Schema? written;
+    if (ref.startsWith('#/')) {
+      final node = model.nodeAt(SpecLocation(document, JsonPointer.parse(ref)));
+      written = node is Schema ? node : null;
+    } else if (!ref.contains('#') && !ref.contains('/')) {
+      written = model.document.components?.schemas[ref];
+    } else {
+      written = null;
+    }
+    return written == null ? null : model.resolveSchema(written)?.location;
   }
 
   /// The Dart name of the member [json] of the type [owner], from [named]
@@ -543,7 +758,9 @@ final class SchemaMapper {
   static bool _isNullable(SchemaObject schema) =>
       (schema.nullable ?? false) ||
       schema.types.contains(SchemaType.nullType) ||
-      (schema.enumValues?.contains(null) ?? false);
+      (schema.enumValues?.contains(null) ?? false) ||
+      schema.oneOf.any(_isNullOnly) ||
+      schema.anyOf.any(_isNullOnly);
 }
 
 /// A declaration whose name is not given yet.

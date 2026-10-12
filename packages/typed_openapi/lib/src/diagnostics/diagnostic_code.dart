@@ -169,6 +169,14 @@ enum DiagnosticCode {
   /// `JsonValue`.
   recursiveAlias('TOA251', 'recursive-alias', .warning),
 
+  /// Two `allOf` parts define the same property with different schemas;
+  /// the later part's is used.
+  allOfPropertyConflict('TOA252', 'allof-property-conflict', .info),
+
+  /// An `allOf` part is not an object (a scalar, an enum or a union), so it
+  /// cannot be merged into a model; it is ignored.
+  allOfPartIgnored('TOA253', 'allof-part-ignored', .warning),
+
   /// An `enum` repeats a value; the repeats are removed.
   duplicateEnumValue('TOA301', 'duplicate-enum-value', .warning),
 
@@ -189,6 +197,18 @@ enum DiagnosticCode {
     'TOA402',
     'discriminator-mapping-unresolved',
     .error,
+  ),
+
+  /// A variant of a union with a discriminator is written inline, so no
+  /// discriminator value selects it.
+  discriminatorValueMissing('TOA450', 'discriminator-value-missing', .warning),
+
+  /// A `discriminator.mapping` value names a schema that is not a variant of
+  /// the union; it is ignored.
+  discriminatorMappingNotVariant(
+    'TOA451',
+    'discriminator-mapping-not-variant',
+    .info,
   ),
 
   /// A variable of the path template has no path parameter; one is added.
