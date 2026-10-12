@@ -1,6 +1,7 @@
 import 'package:test/test.dart';
 import 'package:typed_openapi/src/config/generation_config.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
+import 'package:typed_openapi/src/diagnostics/severity.dart';
 import 'package:typed_openapi/src/ir/ir.dart';
 import 'package:typed_openapi/src/ir/ir_builder.dart';
 import 'package:typed_openapi/src/overrides/override_set.dart';
@@ -443,7 +444,7 @@ components:
       ]);
     });
 
-    test('an excluded allOf parent is not merged, TOA254 says so (T8 1)', () {
+    test('an excluded allOf parent is still merged, TOA254 says so (T8 1)', () {
       final fixture = IrFixture(
         r'''
 openapi: 3.1.0
@@ -463,14 +464,21 @@ schemas:
 ''',
       );
       final (ir, _) = mapComponents(fixture, ['Child']);
-      expect(fieldsOf(ir, 'Child'), ['c(c): String?']);
-      expect(ir.declarations.map((d) => d.name), ['Child']);
+      expect(fieldsOf(ir, 'Child'), [
+        'a(a): String?',
+        'dep(dep): Dep?',
+        'c(c): String?',
+      ]);
+      // X has no declaration of its own, its dependency has.
+      expect(ir.declarations.map((d) => d.name), ['Child', 'Dep']);
       expect(fixture.codes, [
         (
           DiagnosticCode.excludedSchemaReferenced,
           '#/components/schemas/Child/allOf/0',
         ),
       ]);
+      expect(fixture.reported.single.severity, Severity.info);
+      expect(fixture.reported.single.message, contains('merged'));
     });
 
     test(

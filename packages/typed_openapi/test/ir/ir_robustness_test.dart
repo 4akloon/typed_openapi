@@ -64,7 +64,12 @@ List<ProbeCase> sourceCases() {
       Directory('test')
           .listSync(recursive: true)
           .whereType<File>()
-          .where((f) => f.path.endsWith('_test.dart'))
+          .where(
+            (f) =>
+                f.path.endsWith('_test.dart') &&
+                // Its own doc comment shows the pattern.
+                !f.path.endsWith('ir_robustness_test.dart'),
+          )
           .toList()
         ..sort((a, b) => a.path.compareTo(b.path));
   for (final file in files) {
@@ -144,9 +149,12 @@ void main() {
   final probes = probeCases();
   final fixtures = sourceCases();
 
+  // The extraction finds 134 probes and 150 fixtures. The floors are 80% of
+  // that, so a few fixtures can move or go without failing this test, while
+  // an extraction that stops finding the files does fail it.
   test('has probes and fixtures to build', () {
-    expect(probes.length, greaterThan(100));
-    expect(fixtures.length, greaterThan(100));
+    expect(probes.length, greaterThanOrEqualTo(107));
+    expect(fixtures.length, greaterThanOrEqualTo(120));
   });
 
   for (final (label, cases) in [('probe', probes), ('fixture', fixtures)]) {
@@ -170,7 +178,8 @@ void main() {
           );
         }
       }
-      expect(built, greaterThan(cases.length));
+      // Every spec is valid enough to load, and is built in every config.
+      expect(built, cases.length * configs.length);
     });
   }
 }

@@ -219,6 +219,11 @@ final class CustomType extends DartType {
   final String? converter;
 
   /// The type of the value in JSON, from the schema: `S` of `fromJson(S)`.
+  ///
+  /// It never names a declaration: a replaced schema is not generated, so
+  /// [json] is made of scalars, lists and maps, with `JsonValue` for
+  /// whatever would have been a model, an enum or a union (`List<JsonValue>`
+  /// for an array alias of models).
   final DartType json;
 
   @override

@@ -647,8 +647,9 @@ final class SchemaMapper {
   /// with its `allOf` parts merged in, parts first and in order (R6.3). A
   /// property, or `additionalProperties`, that a later part defines again
   /// with another schema is reported; the later one is used. A part an
-  /// override excludes is left out (TOA254), and a discriminator on a part
-  /// is not used (TOA452).
+  /// override excludes is merged all the same, because the model is flat and
+  /// the exclude only removes the part's own declaration (TOA254 says so),
+  /// and a discriminator on a part is not used (TOA452).
   (Map<String, Schema>, Set<String>, Schema?) _merged(SchemaObject schema) {
     final properties = <String, Schema>{};
     final required = <String>{};
@@ -662,14 +663,14 @@ final class SchemaMapper {
         if (_context.overrides.schemaAt(resolved.location)?.exclude ?? false) {
           _context.report(
             .excludedSchemaReferenced,
-            'This allOf part is excluded by an override, so its properties '
-            'are not merged into the model.',
+            'This allOf part is excluded by an override, which only leaves '
+            'out its own declaration; its properties are merged into this '
+            'model, which does not refer to the part.',
             written.location,
             fix:
-                'Exclude what uses the schema too, or remove the exclude of '
-                'the schema.',
+                'Exclude the properties that should not be here, or remove '
+                'the exclude of the schema.',
           );
-          continue;
         }
         if (resolved.properties.isEmpty &&
             resolved.allOf.isEmpty &&
