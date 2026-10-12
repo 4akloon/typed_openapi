@@ -38,10 +38,10 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
 - `diagnostics/` - `Diagnostic` (with `RelatedLocation`s, preset `hints` as
   `(preset, text)` and fingerprint `args`), `DiagnosticCode` (stable `TOAnnn`
   catalog; the config codes TOA901-TOA904 cannot be changed at all, and
-  `fixedCodes` - read errors, TOA801-TOA803, TOA820/821/823 - can be raised
-  but not lowered), `Severity` (declared from most to least serious; level
-  comparison uses its order), `SeverityLevels` (a client's `severity`
-  config), `JsonPointer`, `DiagnosticBag` (baselined diagnostics kept
+  `fixedCodes` - read errors, TOA801-TOA803, TOA820/821/823, TOA830-TOA832 -
+  can be raised but not lowered), `Severity` (declared from most to least
+  serious; level comparison uses its order), `SeverityLevels` (a client's
+  `severity` config), `JsonPointer`, `DiagnosticBag` (baselined diagnostics kept
   apart), `DisplayPaths` (files relative to the working directory, absolute
   outside it), and the reporters (`DiagnosticReporter`, `TextReporter`,
   `JsonReporter`, `SarifReporter`, `GitHubActionsReporter`, `ReportFormat`).
@@ -122,8 +122,9 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   and a null section are no overrides (no diagnostic). Each entry splits
   into spec fields (`spec`, a map where `null` removes the field) and typed
   generation fields (`name`, `exclude`, `group`, `exhaustive`, `dartType`,
-  `triState`) that the IR builder reads (M6; `sse` is not accepted until M10
-  settles its shape). A missing file is TOA801, a directory or a
+  `triState`, and `union`, `raw` or `structural`, on a schema or a property)
+  that the IR builder reads (M6, M8; `sse` is not accepted until M10 settles
+  its shape). A missing file is TOA801, a directory or a
   bad value TOA802 (the value is ignored), an unknown key the error TOA803
   with "did you mean" for a known key within Levenshtein distance 2.
   `OverrideResolver` maps entries to model nodes (`OverrideTarget`; a
@@ -168,8 +169,11 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   a value cannot be written as YAML (non-finite numbers).
 - `config/` - `ConfigLoader`, `ProjectConfig`, `ClientConfig`, `Preset`,
   `GenerationConfig` (`naming`, `group_by`, `include`/`exclude`
-  (`OperationFilter`, `FilterPattern`), `types`, `tri_state`, `errors`; a
-  client's key wins over `defaults`, `naming`/`types`/`errors` key by key).
+  (`OperationFilter`, `FilterPattern`), `types`, `tri_state`, `union`
+  (`raw`, the default, or `structural`: how a `oneOf`/`anyOf` without a
+  discriminator whose variants share a JSON type is generated, TOA453; an
+  override `union` wins), `errors`; a client's key wins over `defaults`,
+  `naming`/`types`/`errors` key by key).
   A bad value is TOA902 and the default is used: a `default_group` that is a
   reserved word, equal `input_suffix` and `patch_suffix` (both go back to
   their defaults). `operation_prefix` applies only where its match starts at
@@ -238,70 +242,117 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   out, else at `#/paths`; then everything above). `IrJson` dumps an IR; the
   hidden `typed_openapi ir` command prints it. Naming and mapping codes use
   the second half of each area's hundred: TOA250-TOA256, TOA350-TOA351,
-  TOA450-TOA456, TOA550-TOA564. TOA552 on an enum value is an info (an
-  override cannot name enum values; `x-enum-varnames` in the spec does), and
-  `unknown` is reserved in the enum value scope (`unknown_`).
-- `emit/` - the model emitter (M8): `DartCode` (string literals,
-  constants, interpolation, doc comment text: `[`, `]`, `<`, `>`, `\`
-  escaped outside code spans, wrapped at the width), `DartWriter` (own
-  layout: indentation, one-line-or-one-item-a-line lists, `&&` chains),
-  `Imports` (`dart:`, `package:` with sorted `show` lists, relative files),
-  `TypeCodec` (type names, known-enum types for request constructors,
-  decoders, encoders, `DeepEquality` need, JSON patterns of union
-  variants), `ModelEmitter`, `EnumEmitter`, `UnionEmitter` and
-  `ModelLibrary` (`models/<snake>.dart` per declaration, names that clash
-  get `2`, `3`...; the barrel `models.dart`; header
-  `// GENERATED CODE - DO NOT MODIFY BY HAND.` + `// dart format off`).
-  The IR is the only input: constants (`FieldIr.constValue`), constraints
-  (`ConstraintsIr`), the name of the additional properties field and the
-  helper types (`EnumDecl.knownName`/`unknownName`,
-  `UnionVariantIr.name`, `UnionDecl.unknownName`, named after the groups)
-  come from `SchemaMapper`. `UnionDispatch` is `discriminator`, `jsonType`
-  (by JSON type, `int` before `num`; the variants of a JSON type several
-  share are one variant of `JsonValue`, `UnionVariantIr.jsonKinds`, with
-  TOA453) or `structural` (`union: structural`); a union where every
-  variant shares its type is `JsonValue` (TOA453), duplicate variant types
-  are dropped (TOA454); two variants selected by one discriminator value
-  are TOA456 (the earlier one decodes it). A nested union without a
+  TOA450-TOA456, TOA550-TOA564; `generate` has TOA830 (output not owned),
+  TOA831 (output not written) and TOA832 (an interrupted run recovered,
+  info). TOA552 on an enum value is an info (an override cannot name enum
+  values; `x-enum-varnames` in the spec does), and `unknown` is reserved in
+  the enum value scope (`unknown_`).
+- `emit/` - the model emitter (M8), whose only input is the IR (it never
+  reads the spec): `DartCode` (string literals: `\`, `'`, `$`, line breaks
+  including U+0085, U+2028 and U+2029, controls, bidirectional controls and
+  lone surrogates are escaped; one-line code spans `docSpan`/`jsonSpan`;
+  `docLines` for spec text: `[`, `]`, `<`, `>`, `\` and `{@` escaped outside
+  code spans, controls dropped, wrapped at the width, fenced blocks kept;
+  `proseLines` for the generator's own sentences, which never breaks a code
+  span), `DartWriter` (own layout: indentation, `doc`, `prose`,
+  one-line-or-one-item-a-line lists, `&&` chains; `line` asserts that the
+  text has no line break), `Imports` (`dart:`, `package:` with sorted `show`
+  lists wrapped at the width, relative files), `TypeCodec` (type names,
+  known-enum types for request constructors, decoders, encoders,
+  `DeepEquality` need, JSON patterns of union variants), `ModelEmitter`,
+  `EnumEmitter`, `UnionEmitter` and `ModelLibrary` (`models/<snake>.dart`
+  per declaration, names that clash get `2`, `3`...; the barrel
+  `models.dart`; the header is `// GENERATED CODE - DO NOT MODIFY BY HAND.`
+  and, on the second line, `// dart format off`). Generated classes are
+  `class`, not `final class` (users may extend them); union bases are
+  `sealed` (`abstract interface` when not exhaustive) and every class is
+  `@immutable`. Every spec string is escaped at every site it reaches: a
+  literal, a comment or an identifier (names come from the IR only).
+  Constants (`FieldIr.constValue`), constraints (`ConstraintsIr`), the name
+  of the additional properties field and the helper types
+  (`EnumDecl.knownName`/`unknownName`, `UnionVariantIr.name`,
+  `UnionDecl.unknownName`, named after the groups) come from `SchemaMapper`.
+  `UnionDispatch` is `discriminator`, `jsonType` (by JSON type, `int`
+  before `num`; the variants of a JSON type several share are one variant
+  of `JsonValue`, `UnionVariantIr.jsonKinds`, with TOA453) or `structural`
+  (`union: structural`, tries the variants); a union where every variant
+  shares its type is `JsonValue` (TOA453), also when a variant takes any
+  JSON, which makes the union structural with TOA453; duplicate variant
+  types are dropped (TOA454); two variants selected by one discriminator
+  value are TOA456 (the earlier one decodes it). A nested union without a
   discriminator counts as holding several JSON types, also when the user
   made it `structural`. In a union without a discriminator an inline enum
-  or `const` of a primitive type next to a branch of that type
-  that has all its values (`anyOf: [string, {enum: ['']}]`; the other
-  branch has no `format`, `pattern`, `enum` or `const`, may be a `$ref`,
-  and its length and range constraints are met by every enum value) is
-  dropped (TOA455, info; `SchemaShapes.subsumedBranches`, before the
-  dispatch is decided), and a union left with one branch is that branch's
-  type; an integer enum is also covered by a plain `number`, not the other
-  way round. The dropped values go to `FieldIr.knownValues`, which the
-  field's doc comment lists (`Known values: ...`). A component with a discriminator that other
-  components extend with `allOf` (directly or deeper) is, where it is used
-  as a type, a union of their flat models (`_subtypes`; a mapping to the
-  base itself is TOA451 and decodes as unknown; one that nothing extends
-  is TOA452); a subtype that is only `allOf: [$ref: Base]` stays a model.
-  A wrapper whose model has no discriminator property keeps the value it
-  was decoded with (`discriminator`); one made in code writes the first
-  mapping value. `toString` prints `<redacted>` for `FieldIr.sensitive`
-  (`writeOnly` or `format: password`).
+  or `const` of a primitive type next to a branch of that type that has all
+  its values (`anyOf: [string, {enum: ['']}]`) is dropped (TOA455, info;
+  `SchemaShapes.subsumedBranches`, before the dispatch is decided), and a
+  union left with one branch is that branch's type. The other branch is
+  plain when it has no `format`, `pattern`, `enum`, `const` or keyword the
+  rule does not model (`if`, `not`, `dependentSchemas`, ...), may be a
+  `$ref`, and its length and range constraints are met by every enum value
+  (`multipleOf` on the exact decimal numbers, `Decimal`); from 3.1 the
+  keywords next to a `$ref` are the branch's own and held to the same rule
+  (`RefFollower.siblings`; 3.0 ignores them). An integer enum is also
+  covered by a plain `number`, not the other way round. For `oneOf` the
+  collapse accepts a value both branches take, which the spec's `oneOf`
+  would reject (the Stripe idiom). The dropped values go to
+  `FieldIr.knownValues`, which the field's doc comment lists (`Known
+  values: ...`), also through a wrapper of a `$ref` (`allOf`, a nullable
+  `anyOf`) and not for a union that stays `JsonValue`.
+  A component with a discriminator that other components extend with
+  `allOf` (directly or deeper; the `components.schemas` of the root
+  document, and the root and `components.schemas` of every other file the
+  spec reads, so a file nothing refers to is not searched) is, where it is
+  used as a type, a union of their models (`_subtypes`; a mapping to the base
+  itself is TOA451 and decodes
+  as unknown; a discriminator on a schema nothing extends is TOA452 and the
+  schema stays a model); a subtype that is only `allOf: [$ref: Base]` stays
+  a model. A wrapper whose variant has no discriminator property (a model
+  without it, or a nested union that does not dispatch by the same
+  property) keeps the value it was decoded with (`discriminator`) and
+  writes it, next to an object only when the variant is a union; one made
+  in code writes the first mapping value. Wrappers are equal when the
+  effective value (the remembered one, else the first mapping value) is, so
+  `PetCat(c) == Pet.fromJson(PetCat(c).toJson())`. A variant no value
+  selects (TOA450) has no private constructor. `toString` prints
+  `<redacted>` for a secret (`FieldIr.sensitive`,
+  `ModelDecl.additionalSensitive`, `UnionVariantIr.sensitive`): `writeOnly` or
+  `format: password` on the property, its `$ref` target, an annotation-only
+  `allOf` part or the one non-null branch of a nullable `anyOf`/`oneOf`
+  (Pydantic's `Optional[SecretStr]`), and a secret as array items, map
+  values or a branch of a union (`SchemaShapes.annotationSources`,
+  `carriesSecret`; the direction split reads the same flags); the unknown
+  variant of a union with a secret variant prints it too.
 - `generate/` - `OutputWriter` (atomic per run: the whole tree and the
-  manifest `.typed_openapi.json` are built in a temp sibling directory,
-  then the old directory is renamed to a backup, the new one to the output,
-  the backup removed; a failure restores the backup, a failed first run
-  leaves nothing, a run that changes nothing does not swap; refuses with
-  TOA830 an output that holds a `pubspec.yaml`, is a package's `lib`, holds
-  a symbolic link, holds an input of the run, or holds files without a
-  manifest that parses as JSON and names `typed_openapi` as its generator;
-  I/O errors, also an unreadable directory, are TOA831) and `RealPaths`
-  (paths compared with symbolic links resolved and case ignored where the
-  file system ignores it, found by a probe; `ConfigLoader` uses it for
-  TOA904 too). An input of the run is also found by file identity
+  manifest `.typed_openapi.json` (generator, hash of the inputs, every file
+  with its hash) are built in a staging directory next to the output, made
+  with the umask mode and given the mode of the old output, then the old
+  directory is renamed to a backup, the staging one to the output, and the
+  backup removed; a failure restores the backup, and when that fails too
+  TOA831 names the backup that holds the old tree; a failed first run
+  leaves nothing; a run that changes nothing does not swap; refuses with
+  TOA830 an output that holds a `pubspec.yaml`, is a package's `lib`, is or
+  holds a symbolic link, is not a directory, holds a file the config makes
+  any client read, or holds files without a manifest that parses as JSON
+  and names `typed_openapi` as its generator; I/O errors, also an
+  unreadable directory, are TOA831). A run killed between the renames
+  leaves `.<output>.typed_openapi-*` directories: the next run puts the
+  backup back when the output is missing, removes the directories (a backup
+  only once the output holds a manifest) and reports TOA832 (info).
+  `OutputWriter.beforeInstall` is a test seam (`@visibleForTesting`).
+  `RealPaths` compares paths with symbolic links resolved and case ignored
+  where the file system ignores it (found by a probe; `ConfigLoader` uses it
+  for TOA904 too). An input of the run is also found by file identity
   (`FileSystemEntity.identical`) among the files about to be deleted, so a
-  hard link or a case-different name never gets an input deleted. A client
+  hard link or a case-different name never gets an input deleted. The
+  protected files are those of every client in the config, also one that
+  was not selected: the declared input, overrides and baseline, the `$ref`'d
+  files of the clients that were checked, and the config itself. A client
   whose output overlaps another's (TOA904) is skipped by `generate`.
 - `check/` - `SpecChecker`: config -> load -> version -> overrides ->
   `Normalizer` -> `IrBuilder` once per run (file, preset, rules, overrides
   file, `GenerationConfig.key`); an overrides file that cannot be used is
-  reported (an error) and the spec is checked without it; `generate` (M9)
-  must skip such a client. Each client then applies its levels
+  reported (an error) and the spec is checked without it; `generate` skips
+  such a client. Each client then applies its levels
   (`checkClients` -> `ClientCheck`) and its baseline (`check`, which also
   returns the `ClientCheck`s).
 - `baseline/` - `AnchorIndex` (logical addresses of a spec's nodes:
@@ -324,10 +375,11 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `--strict-baseline`, client names as positional arguments) and
   `BaselineCommand` (`baseline_command.dart`, subcommands `create` and
   `prune`), `GenerateCommand` (`generate_command.dart`: checks like
-  `check`, skips a client with errors (`ClientCheck.errors`), writes the
-  models with `ModelLibrary` and `OutputWriter`, the inputs hash from
-  `ClientCheck.sources` and the client's settings; text report, then a
-  line per client; exit code as `check`) and the hidden `IrCommand` (`ir_command.dart`, prints the IR of
+  `check`, skips a client with errors (`ClientCheck.errors`) or an output
+  that overlaps another's, writes the models with `ModelLibrary` and
+  `OutputWriter`, the inputs hash from `ClientCheck.sources` and the
+  client's settings; text report, then a line per client; exit code as
+  `check`) and the hidden `IrCommand` (`ir_command.dart`, prints the IR of
   clients as JSON alone on stdout; the errors and warnings of the run go to
   stderr as text with the count of the infos, a client with no IR is named
   there, and the exit code is the one `check` gives);
@@ -336,9 +388,11 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
 - `lib/typed_openapi.dart` exports the public API, each with a `show` list:
   `SpecChecker`, `ClientCheck`, `TypedOpenApiCli`, `ConfigLoader`,
   `ClientConfig`, `Preset`, `ProjectConfig`, `GenerationConfig`, `GroupBy`,
-  `TriStateRule`, `OperationFilter`, `FilterPattern`, the IR (`IrBuilder`,
+  `TriStateRule`, `OperationFilter`, `FilterPattern`, `ModelLibrary`,
+  `OutputWriter`, `OutputChanges`, the IR (`IrBuilder`,
   `IrJson`, `ClientIr` and its node classes, `DartType` and its
-  subclasses, `DeclId`, `DeclVariant`), the diagnostics (`Diagnostic`,
+  subclasses, `DeclId`, `DeclVariant`, `UnionDispatch`, `UnionKind`,
+  `UnionVariantIr`), the diagnostics (`Diagnostic`,
   `RelatedLocation`, `DiagnosticBag`, `DiagnosticCode`, `DisplayPaths`,
   `JsonPointer`, `Severity`, `SeverityLevels` and the reporters), the
   baseline (`AnchorIndex`, `Baseline`, `BaselineEntry`, `BaselineMatch`,
@@ -350,16 +404,19 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   (`Normalizer`, `NormalizedSpec`, `NormalizerRule`, `RuleContext`,
   `Finding`, `SpecEdit`, `EditOperation`) and the overrides file
   (`OverrideLoader`, `OverrideSet`, `OverrideEntry` and its subclasses,
-  `DartTypeOverride`). Not exported: `CheckCommand`, `BaselineCommand`, the
+  `DartTypeOverride`, `UnionMode`). Not exported: `CheckCommand`,
+  `BaselineCommand`, `GenerateCommand`, `RealPaths`, the emitters
+  (`DartCode`, `DartWriter`, `Imports`, `TypeCodec`, `ModelEmitter`,
+  `EnumEmitter`, `UnionEmitter`), the
   internals of `parse/` (`OpenApiParser`, `OperationParser`, `SchemaParser`,
   `ObjectReader`, `ParseContext`, `SpecIndex`, `DialectChecker`), `resolve/`
   (`RefTarget`, `RefResolver`), `normalize/` (`TreeEditor`, the rule
   classes), `overrides/` (`OverrideResolver`, `OverrideApplier`,
   `OverrideSnippet`), `ir/` internals (`IrContext`, `IrOverrides`,
-  `SchemaMapper`, `SchemaShapes`, `NameHint`, `DirectionIndex`,
+  `SchemaMapper`, `SchemaShapes`, `RefFollower`, `Decimal`, `NameHint`,
+  `DirectionIndex`,
   `OperationSelector`, `OperationBuilder`, `SpecOperation`, `DartNames`,
-  `NameScope`),
-  `IrCommand`, `YamlComposer` and `load/yaml/`.
+  `NameScope`), `IrCommand`, `YamlComposer` and `load/yaml/`.
 
 Data flows loader -> parser -> resolver -> overrides -> normalizer -> IR
 builder -> checker, every stage writing problems into one `DiagnosticBag`;
@@ -402,8 +459,9 @@ that the API composes, including an `implements` fake of a tag class.
   `Date` (`format: date`, no time or zone), `DeepEquality` (deep `==` and
   `hashCode` of lists, maps and patches for generated models). The barrel
   re-exports `immutable` from `package:meta`, so generated code imports only
-  the runtime. `JsonReader` also has `constant`, `additional`, `patchValue`,
-  `asBytes` and `attempt` for generated code.
+  the runtime. `JsonReader` also has `constant`, `additional` (the keys a
+  model does not list, as an unmodifiable map), `patchValue`, `asBytes` and
+  `attempt` for generated code.
 - `result/` - sealed `Result<T, E>`: `Success`, `Failure` (`HttpError`,
   `UndocumentedStatus`, `DecodeError`, `TransportError`, `Cancelled`); no
   helper methods, pattern matching only. `E = Never` still needs
@@ -422,8 +480,9 @@ that the API composes, including an `implements` fake of a tag class.
   decoding catches only `DioException`, `JsonDecodeException` and, from the
   user's decoder, `FormatException` (a converter or `Date.parse` rejecting
   the data: `DecodeError` at the root pointer, `SseDecodeError` in a
-  stream), `openEvents` also turns an `Exception` raised while reading a non-stream
-  body into `TransportError`, and an `Error` is never caught; the query is
+  stream), `openEvents` also turns an `Exception` raised while reading a
+  non-stream body into `TransportError`, and an `Error` is never caught; the
+  query is
   built by the runtime, so interceptors see an empty `queryParameters`),
   `CallOptions`. `openEvents` needs its stream listened to or cancelled; a
   listener cancel cancels the request.
