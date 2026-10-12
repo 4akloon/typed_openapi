@@ -132,14 +132,22 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   fields into `SpecEdit`s with set semantics (a value replaces the spec's
   value, `null` removes it), dialect-aware `nullable` (3.0 `nullable`, 3.1+
   `null` in `type`; a nullable reference is `allOf` + `nullable` in 3.0 and
-  `anyOf` with `{type: 'null'}` from 3.1; `nullable: true` on an
-  already-nullable reference is TOA807); a field the spec already has is
-  TOA807 (info), and two different edits of one node by different entries
-  are TOA806. In 3.0 a field other than `nullable`/`description` that would
-  sit beside a `$ref` is not written (TOA800 warning: override the
-  referenced schema by name); 3.1+ writes it. `Normalizer.normalize(...,
-  overrides:)` applies the edits once before its passes, so rules see the
-  overridden spec; `NormalizedSpec` carries the `OverrideSet`.
+  `anyOf` with `{type: 'null'}` from 3.1). From 3.1 a schema with exactly
+  one non-null branch and a `{type: 'null'}` in `anyOf` or `oneOf` is
+  nullable, with or without sibling keys (`default`, `title`, ...):
+  `nullable: true` on it is TOA807, `nullable: false` unwraps the branch and
+  keeps the siblings except a `default: null`. A `nullable` override without `$ref`
+  keeps every other key of a `$ref` node (the siblings stay next to the new
+  nullable form); one with `$ref` replaces the node. `type: null` on a
+  nullable 3.1 schema also drops its nullability (TOA809, info). A field the
+  spec already has is TOA807 (info), and two different edits of one node by
+  different entries are TOA806. In 3.0 a field other than `nullable` (and a
+  property's `required`) that would sit beside a `$ref` is not written
+  (TOA800 warning: override the referenced schema by name); 3.1+ writes it.
+  A `$ref` that is not a string is no reference here (the parser reports
+  it). `Normalizer.normalize(..., overrides:)` applies the edits once
+  before its passes, so rules see the overridden spec; `NormalizedSpec`
+  carries the `OverrideSet` (null without an overrides file).
   `OverrideSnippet` turns a schema location back into an override address
   and block YAML; rules use it through `RuleContext.withOverride`
   (TOA203-TOA206, TOA303; TOA204 only for a format whose element type is
@@ -175,8 +183,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `OverrideSnippet`), `YamlComposer` and `load/yaml/`.
 
 Data flows loader -> parser -> resolver -> overrides -> normalizer ->
-checker, every stage
-writing problems into one `DiagnosticBag`; reporters read the bag at the end.
+checker, every stage writing problems into one `DiagnosticBag`; reporters
+read the bag at the end.
 
 Rules of the pipeline:
 

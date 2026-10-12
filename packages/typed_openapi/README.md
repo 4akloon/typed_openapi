@@ -69,8 +69,8 @@ An override whose target is gone is a warning, one the spec already matches
 is an info that it can be removed, and a misspelled key is an error that
 suggests the closest known one. Fields for the generator (`name`, `exclude`,
 `group`, `exhaustive`, `dartType`, `triState`) are checked now and used once
-code generation lands. Hints of rules that cannot fix a
-defect themselves end with the override to copy.
+code generation lands. Hints of rules that cannot fix a defect themselves
+end with the override to copy.
 
 Every finding has a stable code (`TOA011`), a JSON pointer into the spec and,
 for files the parser could position, a line and column. Exit code `1` means

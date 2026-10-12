@@ -71,10 +71,15 @@
   `format`, `nullable`, `required`, `items`, `additionalProperties`, `enum`,
   `discriminator`, `$ref`, parameter `required`/`schema`, body and response
   `contentType`/`schema`) replace the spec's values before the normalizer
-  runs (`null` removes a field; `nullable` follows the document's dialect;
-  in OpenAPI 3.0 a field other than `nullable` or `description` that would
-  sit beside a `$ref` is not written, TOA800: override the referenced schema
-  by name). Generation fields (`name`, `exclude`, `group`, `exhaustive`,
+  runs (`null` removes a field; `nullable` follows the document's dialect:
+  from 3.1 a schema with one non-null branch and a `{type: 'null'}` in
+  `anyOf` or `oneOf`, with or without siblings, is nullable, and
+  `nullable: false` unwraps it and keeps the siblings; a `nullable` override
+  without `$ref` keeps the other keys of a `$ref` node; `type: null` on a
+  nullable 3.1 schema drops its nullability, TOA809 info; in OpenAPI 3.0 a
+  field other than `nullable` (and a property's `required`) that would sit
+  beside a `$ref` is not written, TOA800: override the referenced schema by
+  name). Generation fields (`name`, `exclude`, `group`, `exhaustive`,
   `dartType`, `triState`) are checked and kept for the generator. Every
   entry may have a `reason`, printed in diagnostics about it. An empty file
   is no overrides. A missing overrides file is TOA801, a directory or an
@@ -95,4 +100,4 @@
   `OperationOverride`, `ParameterOverride`, `BodyOverride`,
   `ResponseOverride`, `SchemaOverride`, `PropertyOverride`,
   `DartTypeOverride`; `Normalizer.normalize` takes `overrides:` and
-  `NormalizedSpec.overrides` returns them.
+  `NormalizedSpec.overrides` is the set, or null without an overrides file.
