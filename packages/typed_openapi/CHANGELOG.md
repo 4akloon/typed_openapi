@@ -3,37 +3,67 @@
 ### Added
 - Models (M8): `generate` writes the models of every client without check
   errors into its `output` directory: a file per model, enum and union in
-  `models/` and the barrel `models.dart`, all starting with
-  `// dart format off` and clean under `package:lints/recommended` and
-  `flutter_lints`. Models are `final` and `@immutable`, with `fromJson`,
+  `models/` and the barrel `models.dart`. Every file starts with
+  `// GENERATED CODE - DO NOT MODIFY BY HAND.` and has `// dart format off`
+  on the second line, and the code is clean under `package:lints/recommended`
+  and `flutter_lints` with no `ignore_for_file`. Classes are `class` (not
+  `final`, so they can be extended) and `@immutable`, with `fromJson`,
   `toJson`, deep `==`/`hashCode` and `toString`; a `const` property is a
   constant getter, `additionalProperties` a map field, constraints, defaults
   and descriptions doc comments, `deprecated` `@Deprecated`. Enums are open
   (`Status`, `StatusKnown`, `StatusUnknown`); request models take only known
-  values. Unions wrap their variants (`PetCat(Cat value)`) and pick one by
-  the discriminator, by the JSON type, or, with `union: structural` (config
-  key or schema override), by trying them; a union whose variants cannot be
-  told apart is `JsonValue` (TOA453). The output directory is owned by the
-  generator: files it did not write are deleted, a directory that holds a
-  package, an input or foreign files is refused (TOA830), and
-  `.typed_openapi.json` lists the generator, a hash of the inputs and the
-  files.
-- A schema with a discriminator that other schemas extend with `allOf` is
-  a union of their models where it is used as a type. A union without a
-  discriminator dispatches the variants whose JSON type is their own and
-  keeps the rest in one `JsonValue` variant (`PetJson`, TOA453). A wrapper
-  writes back the discriminator value it was decoded with, so aliases
-  survive a round trip. `toString` does not print `writeOnly` and
-  `format: password` fields.
+  values. Unions are `sealed` and wrap their variants (`PetCat(Cat value)`),
+  and pick one by the discriminator, by the JSON type, or, with
+  `union: structural` (config key or schema or property override), by trying
+  them. A union that cannot be told apart by JSON type (variants of one JSON
+  type) keeps the raw JSON of those variants in one `JsonValue` variant
+  (`PetJson`) or, when no variant has a type of its own, is `JsonValue`
+  (TOA453). A variant that takes any JSON makes the union structural, still
+  with TOA453.
+- `generate` owns the output directory: it builds the tree and the manifest
+  `.typed_openapi.json` (the generator, a hash of the inputs and the files)
+  in a temporary directory next to it and swaps it in, so a failed run keeps
+  the previous output and a failed first run leaves nothing. A run that
+  changes nothing does not touch the directory, and files it did not
+  generate are deleted with the old directory. It refuses a directory that
+  holds a package, a symbolic link, a file that any client of the config
+  reads (also through links or another letter case) or foreign files
+  (TOA830). A run killed while it swapped is recovered by the next one
+  (TOA832). Outputs that overlap are skipped (TOA904).
+- A schema with a discriminator that other schemas extend with `allOf`
+  (also from other files the spec reads) is a union of their models where it
+  is used as a type. A wrapper writes back the discriminator value it was
+  decoded with, so aliases survive a round trip, also across a nested
+  hierarchy (`Pet` -> `Dog` -> `Lab` writes every level); wrappers are
+  equal when that value, or the first mapping value for one made in code,
+  is. `toString` prints `<redacted>` for a secret: a `writeOnly` or
+  `format: password` property, also through a `$ref`, an annotation part,
+  the one branch of a nullable `anyOf`/`oneOf` (Pydantic's
+  `Optional[SecretStr]`), array items, map values and union variants.
 - A `oneOf` or `anyOf` without a discriminator drops an inline enum or
   `const` of a primitive type (string, integer, number, boolean) when
-  another branch (inline or a `$ref`) is that type with no `format` or
-  `pattern` and length or range constraints that every enum value meets, as
-  in Stripe's `anyOf: [{type: string, maxLength: 5000}, {enum: ['']}]`
+  another branch (inline or a `$ref`) is that type with no `format`,
+  `pattern`, `enum`, `const` or keyword the rule does not model (`if`,
+  `not`, `dependentSchemas`, ...), and length or range constraints that
+  every enum value meets (`multipleOf` on exact decimal numbers), as in
+  Stripe's `anyOf: [{type: string, maxLength: 5000}, {enum: ['']}]`
   (TOA455, info); a union left with one branch is that branch's type
-  (`String`) and no longer `JsonValue` (TOA453). An integer enum is also
-  covered by a plain `number`. The dropped values are listed in the doc
-  comment of the field (`Known values: ...`).
+  (`String`) and no longer `JsonValue` (TOA453). From OpenAPI 3.1 the
+  keywords next to the `$ref` of a branch count as its own; 3.0 ignores
+  them. An integer enum is also covered by a plain `number`. For `oneOf`
+  the type accepts a value both branches take (`''` for
+  `oneOf: [string, {const: ''}]`), which the spec's `oneOf` would reject:
+  this is accepted on purpose, since the idiom means "any of these". The
+  dropped values are listed in the doc comment of the field
+  (`Known values: ...`), also through a wrapper of a `$ref`, and not for a
+  union that stays `JsonValue`.
+- M8 codes, with their default level: TOA452 discriminator-without-subtypes
+  (info, renamed from inheritance-polymorphism-deferred: a discriminator on
+  a schema nothing extends; it stays a model), TOA453 union-undiscriminated
+  (warning), TOA454 union-variant-duplicate (info), TOA455
+  union-branch-subsumed (info), TOA456 discriminator-value-duplicate
+  (warning), TOA830 output-not-owned (error), TOA831 output-not-written
+  (error), TOA832 output-recovered (info). TOA830-TOA832 cannot be lowered.
 - Semantic IR (M6): `check` builds each client's IR (`IrBuilder`,
   `ClientIr`) from the normalized spec and reports naming and mapping
   problems. Types follow R6.2 (`integer` -> `int`, `number` -> `num` or
@@ -98,8 +128,9 @@
   - TOA351 enum-varnames-invalid (warning): `x-enum-varnames` or
     `x-enum-descriptions` is not a list of strings as long as the enum; it is
     ignored.
-  - TOA452 inheritance-polymorphism-deferred (info): a discriminator on an
-    `allOf` base is not used to decode the subtypes yet.
+  - TOA452 discriminator-without-subtypes (info): a `discriminator` on a
+    schema that is neither a union nor extended by other schemas is not
+    used; the schema is a model.
   - TOA559 name-lossy (info): a schema, property, enum value, tag,
     `operationId` or parameter name lost letters outside ASCII.
   - TOA560 override-name-invalid (warning): an override `name` or `group` is
