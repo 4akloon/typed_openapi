@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:crypto/crypto.dart';
 import 'package:meta/meta.dart';
@@ -148,7 +149,7 @@ final class OutputWriter {
         missing.createSync();
         created.add(missing);
       }
-      staging = parent.createTempSync('.${p.basename(root)}.typed_openapi-');
+      staging = _createStaging(parent, root);
       for (final path in keys) {
         _writeFile(p.join(staging.path, path), files[path]!);
       }
@@ -214,8 +215,8 @@ final class OutputWriter {
   /// Cleans up after a run that was killed while it swapped: when [root] is
   /// missing and an earlier run left its backup (`.<name>.typed_openapi-*-old`,
   /// the newest if there are several), the backup becomes [root] again; every
-  /// other directory with such a name is removed. Reports TOA832 when it did
-  /// anything.
+  /// other directory with such a name is removed, a backup only when [root]
+  /// holds a generated tree. Reports TOA832 when it did anything.
   void _recover(ClientConfig client, String root) {
     final parent = Directory(p.dirname(root));
     if (!parent.existsSync()) return;
@@ -241,12 +242,17 @@ final class OutputWriter {
       );
       restored.renameSync(root);
     }
+    // A backup is the only copy of the old tree until the output holds a
+    // finished one (a manifest), so it is kept otherwise.
+    final installed = File(p.join(root, manifest)).existsSync();
     var removed = 0;
     for (final directory in leftovers) {
       if (directory.path == restored?.path) continue;
+      if (backups.contains(directory) && !installed) continue;
       directory.deleteSync(recursive: true);
       removed++;
     }
+    if (restored == null && removed == 0) return;
     _diagnostics.report(
       .outputRecovered,
       'An earlier run for client "${client.name}" was interrupted while it '
@@ -256,6 +262,35 @@ final class OutputWriter {
       '${removed == 1 ? 'directory' : 'directories'} it left.',
       file: _paths.of(root),
     );
+  }
+
+  /// Creates the directory the new tree is built in, next to [root] (so the
+  /// swap is a rename). It is made like any directory, with the mode the
+  /// umask gives (a temp directory would be private, `drwx------`), and gets
+  /// the mode of [root] when that exists, so the swap keeps the permissions
+  /// of the output. Ownership, ACLs and extended attributes are not copied.
+  static Directory _createStaging(Directory parent, String root) {
+    const letters =
+        'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    final random = Random.secure();
+    Directory staging;
+    do {
+      final suffix = [
+        for (var i = 0; i < 8; i++) letters[random.nextInt(letters.length)],
+      ].join();
+      staging = Directory(
+        p.join(parent.path, '.${p.basename(root)}.typed_openapi-$suffix'),
+      );
+    } while (staging.existsSync() ||
+        FileSystemEntity.typeSync(staging.path, followLinks: false) !=
+            FileSystemEntityType.notFound);
+    staging.createSync();
+    if (!Platform.isWindows && Directory(root).existsSync()) {
+      final mode = Directory(root).statSync().mode & 0xfff;
+      // Best effort: a directory that keeps another mode still works.
+      Process.runSync('chmod', [mode.toRadixString(8), staging.path]);
+    }
+    return staging;
   }
 
   /// Swaps [staging] in as [root]; the old directory, if [hasOld], goes to a
@@ -269,7 +304,18 @@ final class OutputWriter {
       beforeInstall?.call();
       staging.renameSync(root);
     } on Object {
-      if (hasOld) backup.renameSync(root);
+      if (hasOld) {
+        try {
+          backup.renameSync(root);
+        } on FileSystemException catch (e) {
+          throw FileSystemException(
+            'the previous output could not be put back and is in '
+            '${_paths.of(backup.path)}; move it to ${_paths.of(root)} by '
+            'hand (${e.message})',
+            e.path,
+          );
+        }
+      }
       rethrow;
     }
     if (hasOld) {

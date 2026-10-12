@@ -84,6 +84,29 @@ void main() {
       expect(everything(), before);
     });
 
+    test('when the old directory cannot be put back, TOA831 names it', () {
+      write(old);
+      final changes = write(
+        {'a.dart': '// new'},
+        // Something takes the place of the output: neither the new tree nor
+        // the backup can be renamed to it.
+        beforeInstall: () => dir.write('gen/pets/in_the_way.txt', 'x'),
+      );
+      expect(changes, isNull);
+      final backups = Directory(
+        p.dirname(client.output),
+      ).listSync().where((e) => p.basename(e.path).endsWith('-old')).toList();
+      expect(backups, hasLength(1));
+      final message = bag.all.single.message;
+      expect(bag.all.single.code, DiagnosticCode.outputNotWritten);
+      expect(message, contains(p.basename(backups.single.path)));
+      expect(message, contains('the previous output'));
+      expect(
+        File(p.join(backups.single.path, 'sub/b.dart')).readAsStringSync(),
+        '// b',
+      );
+    });
+
     test('a failure of the first swap leaves nothing', () {
       final changes = write(
         old,
@@ -123,6 +146,26 @@ void main() {
         unorderedEquals(['.typed_openapi.json', 'a.dart', 'new.dart']),
       );
     });
+  });
+
+  group('the permissions of the output directory', () {
+    int mode(String path) => FileStat.statSync(path).mode & 0xfff;
+
+    test('a new directory gets the default mode, as one made normally', () {
+      write(old);
+      final normal = Directory(p.join(dir.path, 'gen', 'normal'))..createSync();
+      expect(mode(client.output), mode(normal.path));
+      expect(mode(p.join(client.output, 'sub')), mode(normal.path));
+    }, skip: Platform.isWindows ? 'no POSIX modes' : false);
+
+    test('the mode of the previous directory is kept', () {
+      write(old);
+      Process.runSync('chmod', ['775', client.output]);
+      final group = int.parse('775', radix: 8);
+      expect(mode(client.output), group);
+      write({'a.dart': '// changed'});
+      expect(mode(client.output), group);
+    }, skip: Platform.isWindows ? 'no POSIX modes' : false);
   });
 
   group('the leftovers of a killed run', () {
@@ -183,6 +226,22 @@ void main() {
         ['pets'],
       );
       expect(bag.all.single.code, DiagnosticCode.outputRecovered);
+    });
+
+    test('a backup is kept while the output is not a generated tree', () {
+      write(old);
+      Directory(client.output).renameSync(
+        p.join(p.dirname(client.output), '.pets.typed_openapi-Ab12Cd-old'),
+      );
+      dir.write('gen/pets/in_the_way.txt', 'x');
+      expect(write(old), isNull);
+      expect(bag.all.single.code, DiagnosticCode.outputNotOwned);
+      expect(
+        File(
+          p.join(dir.path, 'gen/.pets.typed_openapi-Ab12Cd-old/a.dart'),
+        ).readAsStringSync(),
+        '// a',
+      );
     });
 
     test('the restored tree is then updated by the run', () {
