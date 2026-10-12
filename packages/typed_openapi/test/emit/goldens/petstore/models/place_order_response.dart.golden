@@ -1,0 +1,43 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND.
+// dart format off
+
+import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'
+    show DeepEquality, JsonReader, immutable;
+
+import 'status.dart';
+
+@immutable
+class PlaceOrderResponse {
+  /// Creates a [PlaceOrderResponse].
+  const PlaceOrderResponse({this.id, this.status});
+
+  /// Decodes a [PlaceOrderResponse] from [json]; throws a `JsonDecodeException`
+  /// when it does not match the schema.
+  factory PlaceOrderResponse.fromJson(Map<String, Object?> json) {
+    final r = JsonReader(json, schema: 'PlaceOrderResponse');
+    return PlaceOrderResponse(
+      id: r.optional('id', JsonReader.asInt),
+      status: r.optional('status', Status.fromJson),
+    );
+  }
+
+  final int? id;
+
+  final Status? status;
+
+  /// Encodes this [PlaceOrderResponse]; optional fields that are not set are
+  /// not sent.
+  Map<String, Object?> toJson() => {'id': ?id, 'status': ?status?.toJson()};
+
+  @override
+  bool operator ==(Object other) =>
+      other is PlaceOrderResponse &&
+      other.id == id &&
+      other.status == status;
+
+  @override
+  int get hashCode => const DeepEquality().hash([id, status]);
+
+  @override
+  String toString() => 'PlaceOrderResponse(id: $id, status: $status)';
+}

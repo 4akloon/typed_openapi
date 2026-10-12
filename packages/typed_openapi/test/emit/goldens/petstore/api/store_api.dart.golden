@@ -1,0 +1,98 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND.
+// dart format off
+
+import 'package:dio/dio.dart' show Dio;
+import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'
+    show
+        CallOptions,
+        DioRequestSender,
+        FormBody,
+        FormEncoding,
+        JsonReader,
+        JsonValue,
+        OperationInfo,
+        OperationRequest,
+        RawResponse,
+        Result,
+        SecurityScheme,
+        SecurityUse;
+
+import '../models/place_order_request.dart';
+import '../models/place_order_response.dart';
+import '../models/problem.dart';
+import '../models/send_note_error.dart';
+
+/// The operations of the `StoreApi` group.
+class StoreApi {
+  /// Sends the requests through [dio], which it uses as it is.
+  StoreApi(Dio dio) : _sender = DioRequestSender(dio);
+
+  final DioRequestSender _sender;
+
+  static const _placeOrder = OperationInfo(
+    operationId: 'placeOrder',
+    method: 'POST',
+    pathTemplate: '/store/orders',
+    tags: ['store'],
+    security: [
+      [
+        SecurityUse(SecurityScheme('apiKey', .apiKey, parameterName: 'X-Api-Key', location: .header)),
+      ],
+      [],
+    ],
+  );
+
+  static const _sendNote = OperationInfo(
+    operationId: 'sendNote',
+    method: 'POST',
+    pathTemplate: '/store/notes',
+    tags: ['store'],
+    security: [
+      [
+        SecurityUse(SecurityScheme('bearer', .http, scheme: 'bearer', bearerFormat: 'JWT')),
+      ],
+    ],
+  );
+
+  /// `POST /store/orders` (`placeOrder`).
+  Future<Result<PlaceOrderResponse, Problem>> placeOrder({
+    PlaceOrderRequest? body,
+    CallOptions? call,
+  }) => _sender.send(
+    OperationRequest(
+      _placeOrder,
+      body: body == null ? null : FormBody(body.toJson(), {'meta': FormEncoding(style: .deepObject, explode: true), 'tags': FormEncoding(explode: false)}),
+      contentType: 'application/x-www-form-urlencoded',
+    ),
+    _decodePlaceOrder,
+    call: call,
+  );
+
+  static Result<PlaceOrderResponse, Problem> _decodePlaceOrder(RawResponse r) =>
+      switch (r.statusCode) {
+        200 => r.success(PlaceOrderResponse.fromJson(JsonReader.asObject(r.json))),
+        400 => r.error(Problem.fromJson(JsonReader.asObject(r.json))),
+        _ => r.undocumented(),
+      };
+
+  /// `POST /store/notes` (`sendNote`).
+  Future<Result<JsonValue, SendNoteError>> sendNote({
+    String? body,
+    CallOptions? call,
+  }) => _sender.send(
+    OperationRequest(
+      _sendNote,
+      body: body,
+      contentType: 'text/plain',
+    ),
+    _decodeSendNote,
+    call: call,
+  );
+
+  static Result<JsonValue, SendNoteError> _decodeSendNote(RawResponse r) =>
+      switch (r.statusCode) {
+        >= 200 && < 300 => r.success(JsonValue(r.json)),
+        < 200 || >= 300 => r.error(SendNoteError.fromJson(JsonReader.asObject(r.json))),
+        _ => r.undocumented(),
+      };
+}

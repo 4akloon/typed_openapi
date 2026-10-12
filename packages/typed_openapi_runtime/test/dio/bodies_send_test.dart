@@ -72,6 +72,19 @@ void main() {
             'stream',
             FileUpload.stream(Stream.value(utf8.encode('de')), length: 2),
           ),
+          MultipartPart.file(
+            'typed',
+            FileUpload.bytes(Uint8List.fromList(utf8.encode('f'))),
+            contentType: 'image/png',
+          ),
+          MultipartPart.file(
+            'own',
+            FileUpload.bytes(
+              Uint8List.fromList(utf8.encode('g')),
+              contentType: 'image/gif',
+            ),
+            contentType: 'image/png',
+          ),
         ]),
         contentType: 'multipart/form-data',
       ),
@@ -107,6 +120,8 @@ void main() {
         'de\r\n',
       ),
     );
+    expect(body, contains('name="typed"\r\ncontent-type: image/png\r\n'));
+    expect(body, contains('name="own"\r\ncontent-type: image/gif\r\n'));
   });
 
   test('a file body sends its bytes or stream and its own type', () async {

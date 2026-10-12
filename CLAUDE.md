@@ -375,6 +375,30 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   over every branch it keeps); `UnionDecl.unknownSensitive` (a secret
   anywhere in any branch) and a secret variant make the unknown variant
   print `<redacted>`.
+- `emit/` for operations (M9): `ApiLibrary` writes the whole client: the
+  files of `ModelLibrary`, a file per group in `api/` (snake case of the
+  class, its own name scope, so model files never move), the barrel
+  `api.dart` and the root `<client>.dart` (`_client` added when that is a
+  barrel's name), which exports both barrels and holds the root class
+  (`ClientIr.root`: a field per group, servers as `static const` or a
+  `static String` method of the URL variables; it never sets a base URL).
+  `OperationEmitter` writes a group: a plain `class` with
+  `{Group}(Dio dio)`, a private `OperationInfo` (tags, security) and a
+  static decoder per operation (private names apart in their own scope),
+  methods with named arguments only (`required` for required ones; enum
+  arguments take the known values), `body`, then `CallOptions? call`,
+  returning `Future<Result<T, E>>` from `DioRequestSender.send`; the
+  decoder switches on the status: codes, then ranges, then `default`
+  (every status but 2xx), `_` is `undocumented()`; Dio reads JSON unless
+  every success with a body is text (`text`) or something else is
+  (`bytes`), and then error bodies go through `RawResponse.parsedJson`.
+  Bodies: JSON (`toJson`), `FormBody` with `FormEncoding`s, the parts class
+  (`toParts()`, `FileUpload` for binary strings and lists of them,
+  `encoding` media types) or `MultipartBody.fromJson` (TOA655),
+  `FileUpload` for binary, `String` for text; a wildcard media type is sent
+  as a concrete one. It writes the sealed status types (variants extend the
+  base and wrap `body`, equal by value) and the parts classes after the
+  group class. Only `Dio` is imported from `package:dio`.
 - `generate/` - `OutputWriter` (atomic per run: the whole tree and the
   manifest `.typed_openapi.json` (generator, `format` 2, hash of the inputs,
   every file with its hash) are built in a staging directory next to the

@@ -1,0 +1,68 @@
+openapi: 3.1.0
+info: {title: "t */ injected", version: "1"}
+servers:
+  - url: "https://x.example.com/'; injected(); '/{v}/{missing}"
+    description: "*/ injected() /* {@macro x}"
+    variables:
+      v: {default: "'$x\n injected", enum: ["a'b", "‮"]}
+      class: {description: "Line\ninjected();"}
+security: [{"k'ey": ["scope'\n injected"]}]
+paths:
+  "/a/{id}/'$x":
+    get:
+      operationId: "get\ninjected(); //"
+      summary: "Line one\n*/ injected() /* {@macro x} ‮"
+      description: "[link] <b> $dollar \\ `code` ``` fence"
+      tags: ["Pets\n injected", other]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+        - {name: class, in: query, schema: {type: string, default: "*/ injected"}, description: "*/ injected()"}
+        - {name: body, in: query, schema: {type: string}}
+        - {name: call, in: header, schema: {type: string}}
+        - {name: "X-'$y\ninjected", in: header, schema: {type: string}}
+        - {name: e, in: query, schema: {type: string, enum: []}}
+        - {name: big, in: cookie, schema: {type: integer, enum: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]}}
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Response'}}}}
+        "4XX": {description: bad, content: {application/json: {schema: {$ref: '#/components/schemas/Options'}}}}
+        "5XX": {description: down, content: {application/json: {schema: {$ref: '#/components/schemas/Headers'}}}}
+  /b:
+    post:
+      operationId: "$dollar"
+      tags: [class]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/Node'}}}
+      responses:
+        "201": {description: x, content: {application/json: {schema: {oneOf: [{type: string}, {type: integer}]}}}}
+        "202": {description: y, content: {application/json: {schema: {$ref: '#/components/schemas/Node'}}}}
+        "404": {description: z, content: {application/json: {schema: {$ref: '#/components/schemas/Dio'}}}}
+        "500": {description: "*/ injected"}
+  /c:
+    put:
+      operationId: toString
+      tags: [class]
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                "*/ injected": {type: string, format: binary}
+                toParts: {type: string}
+                hashCode: {type: integer}
+      responses:
+        "204": {description: ok}
+components:
+  securitySchemes:
+    "k'ey": {type: apiKey, name: "X-'$k", in: header}
+  schemas:
+    Response: {type: object, properties: {a: {type: string}}}
+    Options: {type: object, properties: {b: {type: string}}}
+    Headers: {type: object, properties: {c: {type: string}}}
+    Dio: {type: object, properties: {d: {type: string}}}
+    Node:
+      type: object
+      properties:
+        next: {$ref: '#/components/schemas/Node'}
+        value: {type: string}

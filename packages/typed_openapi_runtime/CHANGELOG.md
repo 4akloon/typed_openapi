@@ -18,7 +18,9 @@
 - For generated operations: `FileUpload` (bytes or a stream, with a file
   name and a media type), `FormBody` and `FormEncoding`
   (`application/x-www-form-urlencoded` with the spec's `encoding`),
-  `MultipartBody` and `MultipartPart`; `DioRequestSender` turns them into
+  `MultipartBody` (also `MultipartBody.fromJson`) and `MultipartPart`
+  (a file part takes the spec's media type when the file has none);
+  `DioRequestSender` turns them into
   what Dio sends, so generated signatures have no Dio types.
 - Security metadata for interceptors: `OperationInfo.security` with
   `SecurityUse`, `SecurityScheme`, `SecuritySchemeType` and

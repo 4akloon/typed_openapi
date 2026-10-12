@@ -1,0 +1,49 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND.
+// dart format off
+
+import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'
+    show DeepEquality, JsonReader, immutable;
+
+@immutable
+class PlaceOrderRequest {
+  /// Creates a [PlaceOrderRequest].
+  const PlaceOrderRequest({this.petId, this.tags, this.meta});
+
+  /// Decodes a [PlaceOrderRequest] from [json]; throws a `JsonDecodeException`
+  /// when it does not match the schema.
+  factory PlaceOrderRequest.fromJson(Map<String, Object?> json) {
+    final r = JsonReader(json, schema: 'PlaceOrderRequest');
+    return PlaceOrderRequest(
+      petId: r.optional('petId', JsonReader.asInt),
+      tags: r.optional('tags', JsonReader.listOf(JsonReader.asString)),
+      meta: r.optional('meta', JsonReader.mapOf(JsonReader.asString)),
+    );
+  }
+
+  final int? petId;
+
+  final List<String>? tags;
+
+  final Map<String, String>? meta;
+
+  /// Encodes this [PlaceOrderRequest]; optional fields that are not set are not
+  /// sent.
+  Map<String, Object?> toJson() => {
+    'petId': ?petId,
+    'tags': ?tags,
+    'meta': ?meta,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is PlaceOrderRequest &&
+      other.petId == petId &&
+      const DeepEquality().equals(other.tags, tags) &&
+      const DeepEquality().equals(other.meta, meta);
+
+  @override
+  int get hashCode => const DeepEquality().hash([petId, tags, meta]);
+
+  @override
+  String toString() => 'PlaceOrderRequest(petId: $petId, tags: $tags, meta: $meta)';
+}

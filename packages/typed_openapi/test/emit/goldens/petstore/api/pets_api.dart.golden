@@ -1,0 +1,457 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND.
+// dart format off
+
+import 'dart:convert' show jsonEncode;
+import 'dart:typed_data' show Uint8List;
+
+import 'package:dio/dio.dart' show Dio;
+import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'
+    show
+        CallOptions,
+        CookieParameter,
+        DioRequestSender,
+        FileUpload,
+        HeaderParameter,
+        JsonReader,
+        MultipartBody,
+        MultipartPart,
+        OperationInfo,
+        OperationRequest,
+        PathParameter,
+        QueryParameter,
+        RawResponse,
+        Result,
+        SecurityScheme,
+        SecurityUse,
+        immutable;
+
+import '../models/job.dart';
+import '../models/pet.dart';
+import '../models/problem.dart';
+import '../models/status.dart';
+
+/// The operations of the `PetsApi` group.
+class PetsApi {
+  /// Sends the requests through [dio], which it uses as it is.
+  PetsApi(Dio dio) : _sender = DioRequestSender(dio);
+
+  final DioRequestSender _sender;
+
+  static const _createPet = OperationInfo(
+    operationId: 'createPet',
+    method: 'POST',
+    pathTemplate: '/pets',
+    tags: ['pets'],
+    security: [
+      [
+        SecurityUse(SecurityScheme('bearer', .http, scheme: 'bearer', bearerFormat: 'JWT')),
+      ],
+    ],
+  );
+
+  static const _deletePet = OperationInfo(
+    operationId: 'deletePet',
+    method: 'DELETE',
+    pathTemplate: '/pets/{petId}',
+    tags: ['pets'],
+  );
+
+  static const _getNote = OperationInfo(
+    operationId: 'getNote',
+    method: 'GET',
+    pathTemplate: '/pets/{petId}/note',
+    tags: ['pets'],
+    security: [
+      [
+        SecurityUse(SecurityScheme('bearer', .http, scheme: 'bearer', bearerFormat: 'JWT')),
+      ],
+    ],
+  );
+
+  static const _getPet = OperationInfo(
+    operationId: 'getPet',
+    method: 'GET',
+    pathTemplate: '/pets/{petId}',
+    tags: ['pets'],
+    security: [
+      [
+        SecurityUse(SecurityScheme('bearer', .http, scheme: 'bearer', bearerFormat: 'JWT')),
+      ],
+    ],
+  );
+
+  static const _getPhoto = OperationInfo(
+    operationId: 'getPhoto',
+    method: 'GET',
+    pathTemplate: '/pets/{petId}/photo',
+    tags: ['pets'],
+    security: [
+      [
+        SecurityUse(SecurityScheme('bearer', .http, scheme: 'bearer', bearerFormat: 'JWT')),
+      ],
+    ],
+  );
+
+  static const _listPets = OperationInfo(
+    operationId: 'listPets',
+    method: 'GET',
+    pathTemplate: '/pets',
+    tags: ['pets'],
+    security: [
+      [
+        SecurityUse(SecurityScheme('bearer', .http, scheme: 'bearer', bearerFormat: 'JWT')),
+      ],
+    ],
+  );
+
+  static const _putPhoto = OperationInfo(
+    operationId: 'putPhoto',
+    method: 'PUT',
+    pathTemplate: '/pets/{petId}/photo',
+    tags: ['pets'],
+    security: [
+      [
+        SecurityUse(SecurityScheme('bearer', .http, scheme: 'bearer', bearerFormat: 'JWT')),
+      ],
+    ],
+  );
+
+  static const _uploadPhoto = OperationInfo(
+    operationId: 'uploadPhoto',
+    method: 'POST',
+    pathTemplate: '/pets/{petId}/photo',
+    tags: ['pets'],
+    security: [
+      [
+        SecurityUse(SecurityScheme('bearer', .http, scheme: 'bearer', bearerFormat: 'JWT')),
+      ],
+    ],
+  );
+
+  /// `POST /pets` (`createPet`).
+  Future<Result<CreatePetResponse, CreatePetError>> createPet({
+    required Pet body,
+    CallOptions? call,
+  }) => _sender.send(
+    OperationRequest(
+      _createPet,
+      body: body.toJson(),
+      contentType: 'application/json',
+    ),
+    _decodeCreatePet,
+    call: call,
+  );
+
+  static Result<CreatePetResponse, CreatePetError> _decodeCreatePet(RawResponse r) =>
+      switch (r.statusCode) {
+        200 => r.success(CreatePetResponseOk(Pet.fromJson(JsonReader.asObject(r.json)))),
+        201 => r.success(CreatePetResponseCreated(Job.fromJson(JsonReader.asObject(r.json)))),
+        204 => r.success(const CreatePetResponseNoContent()),
+        404 => r.error(CreatePetErrorNotFound(Problem.fromJson(JsonReader.asObject(r.json)))),
+        503 => r.error(const CreatePetErrorServiceUnavailable()),
+        >= 400 && < 500 => r.error(CreatePetErrorClientError(Job.fromJson(JsonReader.asObject(r.json)))),
+        _ => r.undocumented(),
+      };
+
+  /// `DELETE /pets/{petId}` (`deletePet`).
+  Future<Result<void, Never>> deletePet({
+    required int petId,
+    String? reason,
+    CallOptions? call,
+  }) => _sender.send(
+    OperationRequest(
+      _deletePet,
+      path: [PathParameter('petId', petId)],
+      headers: [HeaderParameter('reason', reason)],
+    ),
+    _decodeDeletePet,
+    call: call,
+  );
+
+  static Result<void, Never> _decodeDeletePet(RawResponse r) =>
+      switch (r.statusCode) {
+        204 => r.success(null),
+        _ => r.undocumented(),
+      };
+
+  /// `GET /pets/{petId}/note` (`getNote`).
+  Future<Result<String, Problem>> getNote({
+    required List<int> petId,
+    CallOptions? call,
+  }) => _sender.send(
+    OperationRequest(
+      _getNote,
+      path: [PathParameter('petId', petId, style: .matrix, explode: true)],
+      responseKind: .text,
+    ),
+    _decodeGetNote,
+    call: call,
+  );
+
+  static Result<String, Problem> _decodeGetNote(RawResponse r) =>
+      switch (r.statusCode) {
+        200 => r.success(r.text),
+        404 => r.error(Problem.fromJson(JsonReader.asObject(r.parsedJson))),
+        _ => r.undocumented(),
+      };
+
+  /// `GET /pets/{petId}` (`getPet`).
+  @Deprecated('Deprecated in the API spec.')
+  Future<Result<Pet, Problem>> getPet({
+    required int petId,
+    CallOptions? call,
+  }) => _sender.send(
+    OperationRequest(
+      _getPet,
+      path: [PathParameter('petId', petId)],
+    ),
+    _decodeGetPet,
+    call: call,
+  );
+
+  static Result<Pet, Problem> _decodeGetPet(RawResponse r) =>
+      switch (r.statusCode) {
+        200 => r.success(JsonReader.of(r.json, schema: 'envelope').required('data', JsonReader.objectOf(Pet.fromJson))),
+        404 => r.error(Problem.fromJson(JsonReader.asObject(r.json))),
+        _ => r.undocumented(),
+      };
+
+  /// `GET /pets/{petId}/photo` (`getPhoto`).
+  Future<Result<Uint8List, Problem>> getPhoto({
+    required int petId,
+    CallOptions? call,
+  }) => _sender.send(
+    OperationRequest(
+      _getPhoto,
+      path: [PathParameter('petId', petId, style: .label)],
+      responseKind: .bytes,
+    ),
+    _decodeGetPhoto,
+    call: call,
+  );
+
+  static Result<Uint8List, Problem> _decodeGetPhoto(RawResponse r) =>
+      switch (r.statusCode) {
+        200 => r.success(r.bytes),
+        404 => r.error(Problem.fromJson(JsonReader.asObject(r.parsedJson))),
+        _ => r.undocumented(),
+      };
+
+  /// Lists pets.
+  ///
+  /// `GET /pets` (`listPets`).
+  ///
+  /// [limit], when not sent, is `20` on the server:
+  /// How many.
+  Future<Result<List<Pet>, Problem>> listPets({
+    int? limit,
+    List<String>? tags,
+    List<StatusKnown>? status,
+    Map<String, String>? filter,
+    String? next,
+    Map<String, int>? where,
+    required String xTrace,
+    String? session,
+    CallOptions? call,
+  }) => _sender.send(
+    OperationRequest(
+      _listPets,
+      query: [
+        QueryParameter('limit', limit),
+        QueryParameter('tags', tags, style: .pipeDelimited),
+        QueryParameter('status', status == null ? null : [for (final e0 in status) e0.toJson()], explode: false),
+        QueryParameter('filter', filter, style: .deepObject, explode: true),
+        QueryParameter('next', next, allowReserved: true),
+        QueryParameter('where', where == null ? null : jsonEncode(where)),
+      ],
+      headers: [HeaderParameter('X-Trace', xTrace)],
+      cookies: [CookieParameter('session', session)],
+    ),
+    _decodeListPets,
+    call: call,
+  );
+
+  static Result<List<Pet>, Problem> _decodeListPets(RawResponse r) =>
+      switch (r.statusCode) {
+        200 => r.success(JsonReader.listOf(JsonReader.objectOf(Pet.fromJson))(r.json)),
+        < 200 || >= 300 => r.error(Problem.fromJson(JsonReader.asObject(r.json))),
+        _ => r.undocumented(),
+      };
+
+  /// `PUT /pets/{petId}/photo` (`putPhoto`).
+  Future<Result<void, Never>> putPhoto({
+    required int petId,
+    required FileUpload body,
+    CallOptions? call,
+  }) => _sender.send(
+    OperationRequest(
+      _putPhoto,
+      path: [PathParameter('petId', petId, style: .label)],
+      body: body,
+      contentType: 'application/octet-stream',
+    ),
+    _decodePutPhoto,
+    call: call,
+  );
+
+  static Result<void, Never> _decodePutPhoto(RawResponse r) =>
+      switch (r.statusCode) {
+        204 => r.success(null),
+        _ => r.undocumented(),
+      };
+
+  /// `POST /pets/{petId}/photo` (`uploadPhoto`).
+  Future<Result<void, Never>> uploadPhoto({
+    required int petId,
+    required UploadPhotoRequest body,
+    CallOptions? call,
+  }) => _sender.send(
+    OperationRequest(
+      _uploadPhoto,
+      path: [PathParameter('petId', petId, style: .label)],
+      body: MultipartBody(body.toParts()),
+      contentType: 'multipart/form-data',
+    ),
+    _decodeUploadPhoto,
+    call: call,
+  );
+
+  static Result<void, Never> _decodeUploadPhoto(RawResponse r) =>
+      switch (r.statusCode) {
+        204 => r.success(null),
+        _ => r.undocumented(),
+      };
+}
+
+/// The successes of [PetsApi.createPet], by status: a `switch` names every one.
+sealed class CreatePetResponse {
+  /// Creates the value.
+  const CreatePetResponse();
+}
+
+/// The `200` response of [PetsApi.createPet].
+class CreatePetResponseOk extends CreatePetResponse {
+  /// Wraps [body].
+  const CreatePetResponseOk(this.body);
+
+  /// The body of the response.
+  final Pet body;
+
+  @override
+  bool operator ==(Object other) =>
+      other is CreatePetResponseOk &&
+      other.body == body;
+
+  @override
+  int get hashCode => body.hashCode;
+}
+
+/// The `201` response of [PetsApi.createPet].
+class CreatePetResponseCreated extends CreatePetResponse {
+  /// Wraps [body].
+  const CreatePetResponseCreated(this.body);
+
+  /// The body of the response.
+  final Job body;
+
+  @override
+  bool operator ==(Object other) =>
+      other is CreatePetResponseCreated &&
+      other.body == body;
+
+  @override
+  int get hashCode => body.hashCode;
+}
+
+/// The `204` response of [PetsApi.createPet], which has no body.
+class CreatePetResponseNoContent extends CreatePetResponse {
+  /// Creates the value.
+  const CreatePetResponseNoContent();
+
+  @override
+  bool operator ==(Object other) => other is CreatePetResponseNoContent;
+
+  @override
+  int get hashCode => (CreatePetResponseNoContent).hashCode;
+}
+
+/// The errors of [PetsApi.createPet], by status: a `switch` names every one.
+sealed class CreatePetError {
+  /// Creates the value.
+  const CreatePetError();
+}
+
+/// The `404` response of [PetsApi.createPet].
+class CreatePetErrorNotFound extends CreatePetError {
+  /// Wraps [body].
+  const CreatePetErrorNotFound(this.body);
+
+  /// The body of the response.
+  final Problem body;
+
+  @override
+  bool operator ==(Object other) =>
+      other is CreatePetErrorNotFound &&
+      other.body == body;
+
+  @override
+  int get hashCode => body.hashCode;
+}
+
+/// The `4XX` response of [PetsApi.createPet].
+class CreatePetErrorClientError extends CreatePetError {
+  /// Wraps [body].
+  const CreatePetErrorClientError(this.body);
+
+  /// The body of the response.
+  final Job body;
+
+  @override
+  bool operator ==(Object other) =>
+      other is CreatePetErrorClientError &&
+      other.body == body;
+
+  @override
+  int get hashCode => body.hashCode;
+}
+
+/// The `503` response of [PetsApi.createPet], which has no body.
+class CreatePetErrorServiceUnavailable extends CreatePetError {
+  /// Creates the value.
+  const CreatePetErrorServiceUnavailable();
+
+  @override
+  bool operator ==(Object other) => other is CreatePetErrorServiceUnavailable;
+
+  @override
+  int get hashCode => (CreatePetErrorServiceUnavailable).hashCode;
+}
+
+/// The parts of the `multipart/form-data` body of [PetsApi.uploadPhoto].
+@immutable
+class UploadPhotoRequest {
+  /// Creates the parts.
+  const UploadPhotoRequest({
+    required this.file,
+    this.extra,
+    this.caption,
+    this.meta,
+  });
+
+  /// The photo.
+  final FileUpload file;
+
+  final List<FileUpload>? extra;
+
+  final String? caption;
+
+  final Job? meta;
+
+  /// The parts, in the order of the schema.
+  List<MultipartPart> toParts() => [
+    MultipartPart.file('file', file, contentType: 'image/png'),
+    for (final file in [...?extra]) MultipartPart.file('extra', file),
+    MultipartPart.value('caption', caption),
+    MultipartPart.value('meta', meta?.toJson()),
+  ];
+}

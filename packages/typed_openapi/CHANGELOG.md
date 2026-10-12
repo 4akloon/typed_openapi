@@ -1,6 +1,17 @@
 ## 0.0.1 - Unreleased
 
 ### Added
+- Operations (M9): an API class per group in `api/` (`PetsApi(Dio dio)`, a
+  plain class that `implements` can mock), the barrel `api.dart` and the
+  root client in `<client>.dart` (`PetstoreClient(Dio dio)` with a field per
+  group, the servers as constants or methods of their variables), which
+  exports the models and the API. Methods take named arguments, `body` and
+  `CallOptions? call`, and return `Future<Result<T, E>>`: JSON, text and
+  binary successes, sealed types for several successes or errors with
+  different bodies, envelopes, typed errors, `UndocumentedStatus`; bodies
+  are JSON, forms with their `encoding`, multipart parts with `FileUpload`
+  files, binary `FileUpload`s and text. Every request carries its
+  `OperationInfo` with tags and security metadata.
 - Models (M8): `generate` writes the models of every client without check
   errors into its `output` directory: a file per model, enum and union in
   `models/` and the barrel `models.dart`. Every file starts with

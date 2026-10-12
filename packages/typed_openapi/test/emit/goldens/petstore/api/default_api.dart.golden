@@ -1,0 +1,48 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND.
+// dart format off
+
+import 'package:dio/dio.dart' show Dio;
+import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'
+    show
+        CallOptions,
+        DioRequestSender,
+        OperationInfo,
+        OperationRequest,
+        RawResponse,
+        Result,
+        SecurityScheme,
+        SecurityUse;
+
+/// The operations of the `DefaultApi` group.
+class DefaultApi {
+  /// Sends the requests through [dio], which it uses as it is.
+  DefaultApi(Dio dio) : _sender = DioRequestSender(dio);
+
+  final DioRequestSender _sender;
+
+  static const _health = OperationInfo(
+    operationId: 'health',
+    method: 'GET',
+    pathTemplate: '/health',
+    security: [
+      [
+        SecurityUse(SecurityScheme('bearer', .http, scheme: 'bearer', bearerFormat: 'JWT')),
+      ],
+    ],
+  );
+
+  /// `GET /health` (`health`).
+  Future<Result<void, Never>> health({CallOptions? call}) => _sender.send(
+    OperationRequest(
+      _health,
+    ),
+    _decodeHealth,
+    call: call,
+  );
+
+  static Result<void, Never> _decodeHealth(RawResponse r) =>
+      switch (r.statusCode) {
+        200 => r.success(null),
+        _ => r.undocumented(),
+      };
+}

@@ -1,0 +1,52 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND.
+// dart format off
+
+import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'
+    show DeepEquality, JsonReader, immutable;
+
+import 'status.dart';
+
+@immutable
+class Pet {
+  /// Creates a [Pet].
+  const Pet({required this.id, required this.name, StatusKnown? this.status});
+
+  const Pet._({required this.id, required this.name, this.status});
+
+  /// Decodes a [Pet] from [json]; throws a `JsonDecodeException` when it does
+  /// not match the schema.
+  factory Pet.fromJson(Map<String, Object?> json) {
+    final r = JsonReader(json, schema: 'Pet');
+    return Pet._(
+      id: r.required('id', JsonReader.asInt),
+      name: r.required('name', JsonReader.asString),
+      status: r.optional('status', Status.fromJson),
+    );
+  }
+
+  final int id;
+
+  final String name;
+
+  final Status? status;
+
+  /// Encodes this [Pet]; optional fields that are not set are not sent.
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'name': name,
+    'status': ?status?.toJson(),
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is Pet &&
+      other.id == id &&
+      other.name == name &&
+      other.status == status;
+
+  @override
+  int get hashCode => const DeepEquality().hash([id, name, status]);
+
+  @override
+  String toString() => 'Pet(id: $id, name: $name, status: $status)';
+}

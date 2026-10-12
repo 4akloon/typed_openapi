@@ -11,10 +11,13 @@ final class MultipartPart {
   const MultipartPart.value(this.name, this.value, {this.contentType})
     : file = null;
 
-  /// A file part.
-  const MultipartPart.file(this.name, FileUpload this.file)
-    : value = null,
-      contentType = null;
+  /// A file part; [contentType], the spec's `encoding` for the property,
+  /// is the media type when [file] has none.
+  const MultipartPart.file(
+    this.name,
+    FileUpload this.file, {
+    this.contentType,
+  }) : value = null;
 
   /// The name of the part (the property name).
   final String name;
@@ -25,7 +28,7 @@ final class MultipartPart {
   /// The file of a file part.
   final FileUpload? file;
 
-  /// The media type of a value part, from the spec's `encoding`.
+  /// The media type of the part, from the spec's `encoding`.
   final String? contentType;
 }
 
@@ -34,6 +37,22 @@ final class MultipartPart {
 final class MultipartBody {
   /// Creates the body.
   const MultipartBody(this.parts);
+
+  /// The body of [json], the JSON of a body whose schema has no parts of
+  /// its own: a value part for each property, in order; `null` has none.
+  /// Anything but an object throws [ArgumentError].
+  factory MultipartBody.fromJson(Object? json) => switch (json) {
+    null => const MultipartBody([]),
+    final Map<String, Object?> object => MultipartBody([
+      for (final MapEntry(:key, :value) in object.entries)
+        MultipartPart.value(key, value),
+    ]),
+    final other => throw ArgumentError.value(
+      other,
+      'json',
+      'A multipart body must be a JSON object',
+    ),
+  };
 
   /// The parts, in order.
   final List<MultipartPart> parts;

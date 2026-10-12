@@ -1,0 +1,186 @@
+openapi: 3.1.0
+info: {title: Petstore, version: "1"}
+servers:
+  - url: https://{region}.pets.example.com/v1
+    description: Production.
+    variables:
+      region: {default: eu, enum: [eu, us], description: The region.}
+  - url: http://localhost:8080
+security: [{bearer: []}]
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      tags: [pets]
+      summary: Lists pets.
+      parameters:
+        - {name: limit, in: query, schema: {type: integer, default: 20}, description: How many.}
+        - {name: tags, in: query, style: pipeDelimited, schema: {type: array, items: {type: string}}}
+        - {name: status, in: query, explode: false, schema: {type: array, items: {$ref: '#/components/schemas/Status'}}}
+        - {name: filter, in: query, style: deepObject, explode: true, schema: {type: object, additionalProperties: {type: string}}}
+        - {name: next, in: query, allowReserved: true, schema: {type: string}}
+        - {name: where, in: query, content: {application/json: {schema: {type: object, additionalProperties: {type: integer}}}}}
+        - {name: X-Trace, in: header, required: true, schema: {type: string}}
+        - {name: session, in: cookie, schema: {type: string}}
+      responses:
+        "200":
+          description: The pets.
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: '#/components/schemas/Pet'}}
+        default:
+          description: An error.
+          content:
+            application/json: {schema: {$ref: '#/components/schemas/Problem'}}
+    post:
+      operationId: createPet
+      tags: [pets]
+      requestBody:
+        required: true
+        content:
+          application/json: {schema: {$ref: '#/components/schemas/Pet'}}
+      responses:
+        "200": {description: Exists., content: {application/json: {schema: {$ref: '#/components/schemas/Pet'}}}}
+        "201": {description: Created., content: {application/json: {schema: {$ref: '#/components/schemas/Job'}}}}
+        "204": {description: Queued.}
+        "404": {description: Gone., content: {application/json: {schema: {$ref: '#/components/schemas/Problem'}}}}
+        "4XX": {description: Bad., content: {application/json: {schema: {$ref: '#/components/schemas/Job'}}}}
+        "503": {description: Down.}
+  /pets/{petId}:
+    parameters:
+      - {name: petId, in: path, required: true, schema: {type: integer}}
+    get:
+      operationId: getPet
+      tags: [pets]
+      deprecated: true
+      responses:
+        "200":
+          description: The pet, in an envelope.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: {$ref: '#/components/schemas/Pet'}
+        "404": {description: Gone., content: {application/json: {schema: {$ref: '#/components/schemas/Problem'}}}}
+    delete:
+      operationId: deletePet
+      tags: [pets]
+      security: []
+      parameters:
+        - {name: reason, in: header, schema: {type: string}, deprecated: true}
+      responses:
+        "204": {description: Deleted.}
+  /pets/{petId}/photo:
+    parameters:
+      - {name: petId, in: path, required: true, style: label, schema: {type: integer}}
+    get:
+      operationId: getPhoto
+      tags: [pets]
+      responses:
+        "200": {description: The photo., content: {image/png: {schema: {type: string, format: binary}}}}
+        "404": {description: Gone., content: {application/json: {schema: {$ref: '#/components/schemas/Problem'}}}}
+    put:
+      operationId: putPhoto
+      tags: [pets]
+      requestBody:
+        required: true
+        content:
+          image/*: {schema: {type: string, format: binary}}
+      responses:
+        "204": {description: Stored.}
+    post:
+      operationId: uploadPhoto
+      tags: [pets]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: {type: string, format: binary, description: The photo.}
+                extra: {type: array, items: {type: string, format: binary}}
+                caption: {type: string}
+                meta: {$ref: '#/components/schemas/Job'}
+            encoding:
+              file: {contentType: image/png}
+      responses:
+        "204": {description: Stored.}
+  /pets/{petId}/note:
+    get:
+      operationId: getNote
+      tags: [pets]
+      parameters:
+        - {name: petId, in: path, required: true, style: matrix, explode: true, schema: {type: array, items: {type: integer}}}
+      responses:
+        "200": {description: The note., content: {text/plain: {schema: {type: string}}}}
+        "404": {description: Gone., content: {application/json: {schema: {$ref: '#/components/schemas/Problem'}}}}
+  /store/orders:
+    post:
+      operationId: placeOrder
+      tags: [store]
+      security: [{apiKey: []}, {}]
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                petId: {type: integer}
+                tags: {type: array, items: {type: string}}
+                meta: {type: object, additionalProperties: {type: string}}
+            encoding:
+              tags: {explode: false}
+              meta: {style: deepObject, explode: true}
+      responses:
+        "200":
+          description: The order.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: {type: integer}
+                  status: {$ref: '#/components/schemas/Status'}
+        "400": {description: Bad., content: {application/json: {schema: {$ref: '#/components/schemas/Problem'}}}}
+  /store/notes:
+    post:
+      operationId: sendNote
+      tags: [store]
+      requestBody:
+        content:
+          text/plain: {schema: {type: string}}
+      responses:
+        default: {description: Anything., content: {application/json: {schema: {type: object, properties: {ok: {type: boolean}}}}}}
+  /health:
+    get:
+      operationId: health
+      responses:
+        "200": {description: Up.}
+components:
+  securitySchemes:
+    bearer: {type: http, scheme: bearer, bearerFormat: JWT}
+    apiKey: {type: apiKey, name: X-Api-Key, in: header}
+  schemas:
+    Status:
+      type: string
+      enum: [available, sold]
+    Pet:
+      type: object
+      required: [id, name]
+      properties:
+        id: {type: integer}
+        name: {type: string}
+        status: {$ref: '#/components/schemas/Status'}
+    Job:
+      type: object
+      properties:
+        id: {type: string}
+    Problem:
+      type: object
+      required: [code]
+      properties:
+        code: {type: string}

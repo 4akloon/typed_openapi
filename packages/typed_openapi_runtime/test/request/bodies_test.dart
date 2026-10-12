@@ -56,6 +56,25 @@ void main() {
     });
   });
 
+  group('MultipartBody', () {
+    test('a JSON object gives a value part per property', () {
+      final body = MultipartBody.fromJson({
+        'a': 1,
+        'b': [true],
+      });
+      expect([for (final p in body.parts) p.name], ['a', 'b']);
+      expect(
+        [for (final p in body.parts) p.value],
+        [
+          1,
+          [true],
+        ],
+      );
+      expect(MultipartBody.fromJson(null).parts, isEmpty);
+      expect(() => MultipartBody.fromJson([1]), throwsArgumentError);
+    });
+  });
+
   group('FileUpload', () {
     test('holds bytes or a stream with its length', () {
       final bytes = FileUpload.bytes(
