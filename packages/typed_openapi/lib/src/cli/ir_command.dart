@@ -14,8 +14,9 @@ import 'check_command.dart';
 /// the names and types the generator will emit and to write overrides
 /// before code generation exists.
 ///
-/// The JSON is alone on stdout. The diagnostics of the run, as `check` finds
-/// them, go to stderr as text, and the exit code is the one `check` gives.
+/// The JSON is alone on stdout. The errors and warnings of the run, as
+/// `check` finds them, go to stderr as text, with the count of the infos
+/// (`check` lists them), and the exit code is the one `check` gives.
 /// The command is hidden: its output is for inspection and may change in any
 /// release.
 final class IrCommand extends Command<int> {
@@ -72,9 +73,7 @@ final class IrCommand extends Command<int> {
         client.name: ir == null || irJson == null ? null : irJson.toJson(ir),
     };
     _out.writeln(const JsonEncoder.withIndent('  ').convert(json));
-    if (diagnostics.all.isNotEmpty) {
-      _err.writeln(const TextReporter().format(diagnostics));
-    }
+    _printDiagnostics(diagnostics);
     for (final MapEntry(:key, :value) in json.entries) {
       if (value == null) {
         _err.writeln(
@@ -86,5 +85,31 @@ final class IrCommand extends Command<int> {
     return json.values.contains(null) || diagnostics.hasErrors
         ? CheckCommand.exitHasErrors
         : ExitCode.success.code;
+  }
+
+  /// Writes the errors and warnings of [diagnostics] to stderr, then the
+  /// summary of all of them and how many infos are not listed.
+  void _printDiagnostics(DiagnosticBag diagnostics) {
+    if (diagnostics.all.isEmpty) return;
+    final shown = DiagnosticBag();
+    var infos = 0;
+    for (final diagnostic in diagnostics.all) {
+      if (diagnostic.severity == .info) {
+        infos++;
+      } else {
+        shown.add(diagnostic);
+      }
+    }
+    const reporter = TextReporter();
+    final listing = reporter.format(shown);
+    final summary = TextReporter.summary(shown);
+    _err.write(listing.substring(0, listing.length - summary.length));
+    _err.writeln(TextReporter.summary(diagnostics));
+    if (infos > 0) {
+      _err.writeln(
+        '$infos info diagnostic${infos == 1 ? '' : 's'} not shown; run '
+        '`check` to see ${infos == 1 ? 'it' : 'them'}.',
+      );
+    }
   }
 }
