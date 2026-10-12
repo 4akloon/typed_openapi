@@ -93,6 +93,14 @@ final class JsonReader {
         : PatchValue(_decode(key, value, decode));
   }
 
+  /// A three-state property of any JSON value: absent gives `null`, `null`
+  /// gives [Patch.nullValue], any other value [Patch.value].
+  Patch<JsonValue>? patchValue(String key) {
+    if (!json.containsKey(key)) return null;
+    final value = json[key];
+    return value == null ? const PatchNull() : PatchValue(JsonValue(value));
+  }
+
   /// A required property of any JSON value (a schema without
   /// constraints); `null` is a value. Absent is an error.
   JsonValue requiredValue(String key) {
@@ -295,6 +303,20 @@ final class JsonReader {
         expected: 'a base64 string',
         actual: 'a string in another format',
       );
+    }
+  }
+
+  /// Runs [decode] and returns its value, or null when the JSON does not
+  /// match: a [JsonDecodeException], or a [FormatException] of a decoder.
+  /// A union without a discriminator tries its variants with it
+  /// (`union: structural`).
+  static T? attempt<T extends Object>(T Function() decode) {
+    try {
+      return decode();
+    } on JsonDecodeException {
+      return null;
+    } on FormatException {
+      return null;
     }
   }
 

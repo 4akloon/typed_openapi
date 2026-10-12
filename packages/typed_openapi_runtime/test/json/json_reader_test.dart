@@ -475,6 +475,25 @@ void main() {
     });
   });
 
+  group('unions and patches of any JSON', () {
+    test('attempt returns null when the JSON does not match', () {
+      expect(JsonReader.attempt(() => JsonReader.asInt(1)), 1);
+      expect(JsonReader.attempt(() => JsonReader.asInt('1')), isNull);
+      expect(JsonReader.attempt(() => Date.parse('2024-02-30')), isNull);
+      expect(
+        () => JsonReader.attempt<int>(() => throw StateError('bug')),
+        throwsStateError,
+      );
+    });
+
+    test('patchValue tells absent, null and a value apart', () {
+      const r = JsonReader({'a': null, 'b': 1}, schema: 'Body');
+      expect(r.patchValue('gone'), isNull);
+      expect(r.patchValue('a'), const Patch<JsonValue>.nullValue());
+      expect(r.patchValue('b'), const Patch.value(JsonValue(1)));
+    });
+  });
+
   group('JsonValue', () {
     test('wraps any JSON value and encodes as is', () {
       const value = JsonValue({

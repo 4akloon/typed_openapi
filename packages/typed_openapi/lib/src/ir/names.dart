@@ -82,9 +82,16 @@ final class DartNames {
     'hashCode', 'noSuchMethod', 'runtimeType', 'toString', //
   };
 
-  /// Members a model's fields must not shadow.
+  /// The lowercase type names of `dart:core`: a member named like one
+  /// would hide the type inside its class.
+  static const lowercaseTypes = {'bool', 'double', 'int', 'num'};
+
+  /// Members a model's fields must not shadow: the class's own members,
+  /// the lowercase types and `base64Encode`, which its `toJson` calls.
   static const modelMembers = {
     ...objectMembers,
+    ...lowercaseTypes,
+    'base64Encode',
     'copyWith',
     'fromJson',
     'toJson',
@@ -94,8 +101,8 @@ final class DartNames {
   /// emitters add an `unknown` member for a value the spec does not list
   /// (R8.1).
   static const enumMembers = {
-    ...objectMembers, 'fromJson', 'index', 'name', 'toJson', 'unknown', //
-    'value', 'values',
+    ...objectMembers, ...lowercaseTypes, 'fromJson', 'index', 'name', //
+    'toJson', 'unknown', 'value', 'values',
   };
 
   /// Names of a method's arguments that generated code uses itself: the
