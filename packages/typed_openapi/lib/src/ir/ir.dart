@@ -800,7 +800,7 @@ final class SingleError extends ErrorsIr {
   /// The body type of every error.
   final DartType type;
 
-  /// The documented error statuses.
+  /// The documented error statuses; empty means every 4xx and 5xx one.
   final List<String> statuses;
 }
 

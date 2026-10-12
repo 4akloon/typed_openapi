@@ -31,7 +31,7 @@ dart run typed_openapi check core_api   # one client
 dart run typed_openapi check --format json   # also: sarif, github-actions
 ```
 
-Generate the models of the clients whose check has no errors (a client with
+Generate the clients whose check has no errors (a client with
 errors is skipped, and the exit code is the one `check` gives):
 
 ```sh
@@ -93,6 +93,51 @@ you can extend them); a union base is `sealed`.
   or the `...Unknown` class of a union) is printed as `<redacted>` too when
   its schema could carry a secret: any model or union variant it may hold,
   at any depth, has a secret property.
+
+The operations of a client are in `api/<group>.dart`, one plain class per
+group (`PetsApi`), exported by `api.dart`; the root `<client>.dart`
+(`petstore.dart`, `api_client.dart` for a client named `api` or `models`)
+exports the models and the API and holds the root class:
+
+```dart
+final client = PetstoreClient(dio); // naming.client renames it
+switch (await client.pets.getPet(petId: 1)) {
+  case Success(:final data):
+    print(data.name);
+  case HttpError(:final body):
+    print(body.code);
+  case Failure():
+    print('another failure');
+}
+```
+
+- Every argument is named, required ones are `required`, the request body is
+  `body` and the last argument is `CallOptions? call` (cancel token, extra
+  headers, progress, `extra` for interceptors). A method returns
+  `Future<Result<T, E>>` and never throws for a response: a documented error
+  is `HttpError` with the decoded body, any other status
+  `UndocumentedStatus`, a body that does not decode `DecodeError`, a network
+  failure `TransportError`, a cancelled call `Cancelled`.
+- `T` is the one success body (`void` without one, `JsonValue` when no 2xx
+  is documented, TOA653), or a sealed type when 2xx responses differ
+  (`CreatePetResponseOk`, `...Created`). `E` is `Never` without documented
+  errors, the one error body, or a sealed type by status
+  (`CreatePetErrorNotFound`, `...ClientError` for `4XX`, `...Other` for
+  `default`). Text successes are `String`, binary ones `Uint8List`; their
+  JSON error bodies are decoded too.
+- Bodies: JSON models; forms with the spec's `encoding`; multipart parts as a
+  class (`UploadPhotoRequest`) whose binary properties are `FileUpload`s
+  (`FileUpload.bytes`, which works on the web, or `FileUpload.stream`); a
+  binary body is a `FileUpload`. Event streams come with M10 (TOA654).
+- The client never changes your Dio: set the base URL there, from the root
+  class's server constants (`PetstoreClient.server`, or a method such as
+  `PetstoreClient.server1(region: 'eu')` for a URL with variables). When the
+  query holds `//` (an `allowReserved` value) and the base URL is absolute,
+  the runtime joins them itself, because Dio would collapse the `//`; a
+  relative base URL is left to Dio, which then collapses it.
+- Every request carries an `OperationInfo` in `RequestOptions.extra`
+  (`OperationInfo.of(options)`): the `operationId`, tags and the security
+  requirements with their schemes, for an interceptor that adds credentials.
 
 `generate` writes each output directory as a whole. It builds the new tree and
 a manifest (`.typed_openapi.json`: the generator, the manifest format, a hash

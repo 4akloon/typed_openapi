@@ -486,7 +486,7 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `BaselineCommand` (`baseline_command.dart`, subcommands `create` and
   `prune`), `GenerateCommand` (`generate_command.dart`: checks like
   `check`, skips a client with errors (`ClientCheck.errors`) or an output
-  that overlaps another's, writes the models with `ModelLibrary` and
+  that overlaps another's, writes the whole client with `ApiLibrary` and
   `OutputWriter`, the inputs hash from `ClientCheck.sources` and the
   client's settings; text report, then a line per client; exit code as
   `check`) and the hidden `IrCommand` (`ir_command.dart`, prints the IR of

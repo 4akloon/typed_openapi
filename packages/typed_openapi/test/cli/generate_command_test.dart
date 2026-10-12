@@ -29,6 +29,16 @@ components:
         status: {type: string, enum: [a, b]}
 ''';
 
+/// The files `generate` writes for [_spec]: models, API and the root.
+const _written = [
+  'api.dart',
+  'api/default_api.dart',
+  'models.dart',
+  'models/pet.dart',
+  'models/pet_status.dart',
+  'pets.dart',
+];
+
 void main() {
   late TempDir dir;
 
@@ -64,36 +74,27 @@ void main() {
     };
   }
 
-  test('writes the models and the manifest, then nothing new', () async {
+  test('writes the client and the manifest, then nothing new', () async {
     const client = '  pets: {input: specs/pets.yaml, output: gen/pets}\n';
     final (code, out) = await generate(client);
     expect(code, 0);
     expect(
       out,
       endsWith(
-        'Generated pets in ${p.join('gen', 'pets')}: 3 files, 3 written, '
+        'Generated pets in ${p.join('gen', 'pets')}: 6 files, 6 written, '
         '0 deleted.\n',
       ),
     );
     final first = tree('gen/pets');
-    expect(first.keys, [
-      '.typed_openapi.json',
-      'models.dart',
-      'models/pet.dart',
-      'models/pet_status.dart',
-    ]);
+    expect(first.keys, ['.typed_openapi.json', ..._written]);
     final manifest =
         jsonDecode(first['.typed_openapi.json']!) as Map<String, Object?>;
     expect(manifest['generator'], OutputWriter.generator);
     expect(manifest['inputs'], hasLength(64));
-    expect((manifest['files']! as Map<String, Object?>).keys, [
-      'models.dart',
-      'models/pet.dart',
-      'models/pet_status.dart',
-    ]);
+    expect((manifest['files']! as Map<String, Object?>).keys, _written);
     final (again, log) = await generate(client);
     expect(again, 0);
-    expect(log, contains('3 files, 0 written, 0 deleted.'));
+    expect(log, contains('6 files, 0 written, 0 deleted.'));
     expect(tree('gen/pets'), first);
   });
 
@@ -110,11 +111,14 @@ void main() {
     );
     final (code, out) = await generate(client);
     expect(code, 0);
-    expect(out, contains('2 files, 2 written, 1 deleted.'));
+    expect(out, contains('5 files, 2 written, 1 deleted.'));
     expect(tree('gen/pets').keys, [
       '.typed_openapi.json',
+      'api.dart',
+      'api/default_api.dart',
       'models.dart',
       'models/pet.dart',
+      'pets.dart',
     ]);
   });
 
@@ -126,7 +130,7 @@ void main() {
     ).createSync(recursive: true);
     final (code, out) = await generate(client);
     expect(code, 0);
-    expect(out, contains('3 files, 0 written, 0 deleted.'));
+    expect(out, contains('6 files, 0 written, 0 deleted.'));
     expect(Directory(p.join(dir.path, 'gen/pets/stale')).existsSync(), isFalse);
   });
 
@@ -311,12 +315,7 @@ void main() {
       expect(out, contains('info TOA833 output-file-replaced'));
       expect(out, contains('notes.txt'));
       expect(out, contains('models/pet.dart'));
-      expect(tree('gen/pets').keys, [
-        '.typed_openapi.json',
-        'models.dart',
-        'models/pet.dart',
-        'models/pet_status.dart',
-      ]);
+      expect(tree('gen/pets').keys, ['.typed_openapi.json', ..._written]);
       expect(tree('gen/pets')['models/pet.dart'], isNot('// my change\n'));
     });
 
@@ -326,7 +325,7 @@ void main() {
       final (code, out) = await generate(client, args: ['--force']);
       expect(code, 0);
       expect(out, isNot(contains('replaced')));
-      expect(out, contains('3 files, 0 written, 0 deleted.'));
+      expect(out, contains('6 files, 0 written, 0 deleted.'));
       expect(tree('gen/pets'), before);
     });
 
