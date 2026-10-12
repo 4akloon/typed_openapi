@@ -19,7 +19,9 @@
   name and a media type), `FormBody` and `FormEncoding`
   (`application/x-www-form-urlencoded` with the spec's `encoding`),
   `MultipartBody` (also `MultipartBody.fromJson`) and `MultipartPart`
-  (a file part takes the spec's media type when the file has none);
+  (a file part takes the spec's media type when the file has none; the
+  parts are sent in order; a value that cannot be a part is
+  `ArgumentError`);
   `DioRequestSender` turns them into
   what Dio sends, so generated signatures have no Dio types.
 - Security metadata for interceptors: `OperationInfo.security` with

@@ -175,4 +175,49 @@ void main() {
     expect(result, isA<HttpError<Uint8List, Object?>>());
     expect((result as HttpError<Uint8List, Object?>).body, 'gone');
   });
+
+  test('an interceptor reads the security metadata of the operation', () async {
+    const bearer = SecurityScheme('bearer', .http, scheme: 'bearer');
+    const key = SecurityScheme(
+      'key',
+      .apiKey,
+      location: .query,
+      parameterName: 'k',
+    );
+    const secured = OperationInfo(
+      operationId: 'secured',
+      method: 'GET',
+      pathTemplate: '/x',
+      security: [
+        [
+          SecurityUse(bearer, ['read']),
+        ],
+        [SecurityUse(key)],
+      ],
+    );
+    final seen = <String>[];
+    final dio = Dio()
+      ..httpClientAdapter = noContent()
+      ..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            final info = OperationInfo.of(options)!;
+            for (final alternative in info.security) {
+              for (final use in alternative) {
+                seen.add(
+                  '${use.scheme.type.name} ${use.scheme.scheme ?? ''} '
+                  '${use.scheme.location?.name ?? ''} '
+                  '${use.scheme.parameterName ?? ''} ${use.scopes}',
+                );
+              }
+            }
+            handler.next(options);
+          },
+        ),
+      );
+    await DioRequestSender(
+      dio,
+    ).send(const OperationRequest(secured), decodeVoid);
+    expect(seen, ['http bearer   [read]', 'apiKey  query k []']);
+  });
 }

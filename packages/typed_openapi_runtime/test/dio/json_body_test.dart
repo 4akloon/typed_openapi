@@ -76,6 +76,79 @@ void main() {
     });
   });
 
+  group('Dio keeps what it encodes right', () {
+    test('an interceptor sees the map or list of a JSON body', () async {
+      final seen = <Object?>[];
+      final adapter = FakeAdapter((_) => ResponseBody.fromString('', 204));
+      final dio = Dio()
+        ..httpClientAdapter = adapter
+        ..interceptors.add(
+          InterceptorsWrapper(
+            onRequest: (options, handler) {
+              seen.add(options.data);
+              handler.next(options);
+            },
+          ),
+        );
+      final sender = DioRequestSender(dio);
+      for (final body in <Object?>[
+        {'name': 'Rex', 'tags': <Object?>[]},
+        [1, 2],
+        7,
+        true,
+      ]) {
+        await sender.send(
+          OperationRequest(
+            operation,
+            body: body,
+            contentType: 'application/merge-patch+json',
+          ),
+          decodeVoid,
+        );
+      }
+      expect(seen, [
+        {'name': 'Rex', 'tags': <Object?>[]},
+        [1, 2],
+        7,
+        true,
+      ]);
+      expect(adapter.bodies, [
+        '{"name":"Rex","tags":[]}',
+        '[1,2]',
+        '7',
+        'true',
+      ]);
+    });
+
+    test('an interceptor sees the string and null that are encoded', () async {
+      final seen = <Object?>[];
+      final dio = Dio()
+        ..httpClientAdapter = FakeAdapter(
+          (_) => ResponseBody.fromString('', 204),
+        )
+        ..interceptors.add(
+          InterceptorsWrapper(
+            onRequest: (options, handler) {
+              seen.add(options.data);
+              handler.next(options);
+            },
+          ),
+        );
+      final sender = DioRequestSender(dio);
+      for (final body in <Object?>['a"b', null]) {
+        await sender.send(
+          OperationRequest(
+            operation,
+            body: body,
+            contentType: 'application/json',
+          ),
+          decodeVoid,
+        );
+      }
+      expect(seen, [r'"a\"b"', 'null']);
+    });
+  });
+
   group('a body that is not JSON stays as it is', () {
     test('text is sent unquoted', () async {
       final adapter = await send('hello "q"', 'text/plain');
@@ -87,6 +160,29 @@ void main() {
       final adapter = await send('{"a":1}', 'text/json');
       expect(adapter.bodies.single, '{"a":1}');
     });
+
+    for (final type in [
+      'application/json',
+      'text/plain',
+      'application/octet-stream',
+      'application/x-www-form-urlencoded',
+      'multipart/form-data',
+    ]) {
+      test('an absent body sends no Content-Type as $type', () async {
+        final adapter = await send(null, type);
+        if (type == 'application/json') {
+          // A JSON null is a value: a required nullable body.
+          expect(adapter.bodies.single, 'null');
+          return;
+        }
+        expect(adapter.bodies.single, '');
+        expect(adapter.requests.single.contentType, isNull);
+        expect(
+          adapter.requests.single.headers.keys,
+          isNot(contains('content-type')),
+        );
+      });
+    }
 
     test('no body and no content type sends nothing', () async {
       final adapter = await send(null, null);

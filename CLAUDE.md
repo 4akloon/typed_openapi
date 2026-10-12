@@ -628,11 +628,20 @@ that the API composes, including an `implements` fake of a tag class.
   `FormBody`/`FormEncoding` and `MultipartBody`/`MultipartPart`, which
   `DioBody` (`dio/`) turns into form text, `FormData` and bytes or a
   stream for `DioRequestSender`. A body sent as `application/json` or
-  `+json` is always JSON text made by `DioBody` (Dio sends a `String` as it
-  is and a `null` as no body, so `"a"` and `null` would be wrong), never a
-  value left to Dio's transformer; a `null` body with a JSON `contentType`
-  is the JSON `null` of a required nullable body, so a generated method
-  passes no `contentType` for an absent optional body.
+  `+json` is encoded by `DioBody` only where Dio gets it wrong: a `String`
+  (Dio sends it unquoted) and a `null` (Dio sends no body) become JSON
+  text; a map, list, number or boolean stays Dio's data, so an interceptor
+  sees the object. A `null` body with a JSON `contentType` is the JSON
+  `null` of a required nullable body; a `null` body with any other
+  `contentType` sends no `Content-Type`, and a generated method passes no
+  `contentType` for an absent optional body. A file's own `contentType` is
+  checked as a media type (`FormatException`, also on a binary body).
+  `MultipartForm` (`dio/`) builds the `FormData` in the order of the parts
+  (Dio writes fields before files, so a text part stays a field only while
+  no file or typed part precedes it; later text parts go as `text/plain`
+  parts); a value that is not a finite JSON scalar, a list in a list, a
+  non-JSON value in a JSON part, or an object with a media type that is not
+  JSON is `ArgumentError`, never stringified.
 - `dio/` - `DioRequestSender(dio, {isWeb})` (`send`, `openEvents`; requests
   only through `dio.request`, never mutates the user's Dio, never retries;
   decoding catches only `DioException`, `JsonDecodeException` and, from the

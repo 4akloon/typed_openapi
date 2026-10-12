@@ -49,12 +49,15 @@ final class OperationRequest {
 
   /// The body: a JSON value (`toJson()`, also a string, a number or a
   /// boolean), text, a [FormBody], a [MultipartBody] or a [FileUpload];
-  /// `null` for no body. The request sender writes a JSON value as JSON
-  /// text and turns the other bodies into what the HTTP client sends.
+  /// `null` for no body. The request sender writes a string or `null` as
+  /// JSON text (the HTTP client would get them wrong), leaves a map, list,
+  /// number or boolean to the HTTP client's JSON encoding and turns the
+  /// other bodies into what the HTTP client sends.
   final Object? body;
 
   /// The `Content-Type` of [body]; `null` for no body. A `null` [body] with
-  /// a JSON content type is the JSON value `null`.
+  /// a JSON content type is the JSON value `null`; with another content
+  /// type no `Content-Type` is sent.
   final String? contentType;
 
   /// How the response body is read.

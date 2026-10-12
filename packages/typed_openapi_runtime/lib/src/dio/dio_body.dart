@@ -6,6 +6,8 @@ import '../request/file_upload.dart';
 import '../request/form_body.dart';
 import '../request/multipart_body.dart';
 import '../request/operation_request.dart';
+import 'media_type_text.dart';
+import 'multipart_form.dart';
 
 /// Turns the body of an `OperationRequest` into what Dio sends: form text,
 /// `FormData` built for this request, the bytes or the stream of a file, JSON
@@ -26,106 +28,45 @@ final class DioBody {
   /// The `Content-Type` of [request]: a file's own media type wins over the
   /// spec's, and Dio sets the one of form data with its boundary.
   String? contentType(OperationRequest request) => switch (request.body) {
-    FileUpload(contentType: final type?) => type,
+    FileUpload(contentType: final type?) => _mediaType(type),
     MultipartBody() => null,
+    null when !_isJsonBody(request) => null,
     _ => request.contentType,
   };
 
   /// What Dio sends for the body of [request].
   ///
-  /// A JSON body (`application/json` or `+json`) is always sent as JSON
-  /// text made here: Dio sends a `String` as it is, so the string `a"b`
-  /// would go out unquoted, and it sends `null` as no body. A `null` body
-  /// with a JSON `Content-Type` is the JSON value `null` (a required
-  /// nullable body); with no `Content-Type` it is no body.
+  /// A JSON body (`application/json` or `+json`) is encoded here only
+  /// where Dio gets it wrong: Dio sends a `String` as it is, so the string
+  /// `a"b` would go out unquoted, and it sends `null` as no body. A `null`
+  /// body with a JSON `Content-Type` is the JSON value `null` (a required
+  /// nullable body). A map, list, number or boolean stays as it is, and
+  /// Dio's transformer (and so an interceptor) sees the object itself.
+  /// With no body and no JSON `Content-Type` nothing is sent.
   Object? data(OperationRequest request) => switch (request.body) {
     final FormBody form => form.encode(),
-    final MultipartBody multipart => _formData(multipart),
+    final MultipartBody multipart => const MultipartForm().build(multipart),
     FileUpload(:final bytes?) => bytes,
     FileUpload(:final stream?) => stream,
-    final body when _isJsonBody(request) => jsonEncode(body),
+    final body when _isJsonBody(request) && _needsEncoding(body) => jsonEncode(
+      body,
+    ),
     final body => body,
   };
 
   static bool _isJsonBody(OperationRequest request) {
     final type = request.contentType;
-    return type != null && _isJson(type);
+    return type != null && MediaTypeText(type).isJson;
   }
 
-  FormData _formData(MultipartBody body) {
-    final data = FormData();
-    for (final part in body.parts) {
-      switch (part.file) {
-        case final file?:
-          data.files.add(MapEntry(part.name, _file(file, part.contentType)));
-        case null:
-          _addValue(data, part.name, part.value, part.contentType);
-      }
-    }
-    return data;
+  /// Whether Dio would send [body] wrongly as JSON: a string goes out as it
+  /// is, without quotes, and `null` goes out as no body.
+  static bool _needsEncoding(Object? body) => body == null || body is String;
+
+  /// [type] when it is a media type; throws [FormatException] otherwise, as a
+  /// part's media type does.
+  static String _mediaType(String type) {
+    DioMediaType.parse(type);
+    return type;
   }
-
-  /// A file part: the file's own media type wins over the spec's.
-  static MultipartFile _file(FileUpload file, String? specType) {
-    final type = file.contentType ?? specType;
-    final contentType = type == null ? null : DioMediaType.parse(type);
-    return switch (file) {
-      FileUpload(:final bytes?) => MultipartFile.fromBytes(
-        bytes,
-        filename: file.filename,
-        contentType: contentType,
-      ),
-      _ => MultipartFile.fromStream(
-        () => file.stream!,
-        file.length,
-        filename: file.filename,
-        contentType: contentType,
-      ),
-    };
-  }
-
-  /// Adds the value parts of [value]: none for `null`, a part per item of a
-  /// list, JSON for an object or a JSON [contentType], text otherwise.
-  static void _addValue(
-    FormData data,
-    String name,
-    Object? value,
-    String? contentType,
-  ) {
-    switch (value) {
-      case null:
-        return;
-      case final List<Object?> items:
-        for (final item in items) {
-          _addValue(data, name, item, contentType);
-        }
-      case _ when contentType != null && _isJson(contentType):
-        data.files.add(MapEntry(name, _text(jsonEncode(value), contentType)));
-      case Map<Object?, Object?>():
-        data.files.add(
-          MapEntry(name, _text(jsonEncode(value), 'application/json')),
-        );
-      case _ when contentType != null:
-        data.files.add(MapEntry(name, _text(_scalar(value), contentType)));
-      default:
-        data.fields.add(MapEntry(name, _scalar(value)));
-    }
-  }
-
-  static MultipartFile _text(String text, String contentType) =>
-      MultipartFile.fromString(
-        text,
-        contentType: DioMediaType.parse(contentType),
-      );
-
-  static bool _isJson(String contentType) {
-    final type = contentType.split(';').first.trim().toLowerCase();
-    return type == 'application/json' || type.endsWith('+json');
-  }
-
-  /// The text of a scalar JSON value of a part.
-  static String _scalar(Object? value) => switch (value) {
-    final String text => text,
-    _ => '$value',
-  };
 }

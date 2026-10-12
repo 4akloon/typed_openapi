@@ -178,7 +178,7 @@ application/octet-stream png
 success 204 null
 image/gif gif
 success 204 null
-multipart [true, true, true, true]
+multipart [true, true, true, true, true]
 success 200 Order 3 pending
 POST https://pets.example.com/v1/store/orders [placeOrder; apiKey|] application/x-www-form-urlencoded petId=1&tags=a,b&meta%5Bk%5D=v
 success 200 json {"any":true}

@@ -7,7 +7,10 @@ final class MultipartPart {
   /// JSON; each item of a list as a part of its own with this [name]; `null`
   /// is not sent. [contentType] is the `encoding` of the spec for the
   /// property: a JSON media type sends any value as JSON, another one is the
-  /// media type of the text.
+  /// media type of the text. Sending throws [ArgumentError] for a value that
+  /// cannot be a part (a number that is not finite, an object that is not
+  /// JSON, a list inside a list) and for an object with a media type that is
+  /// not JSON.
   const MultipartPart.value(this.name, this.value, {this.contentType})
     : file = null;
 
@@ -33,7 +36,9 @@ final class MultipartPart {
 }
 
 /// A `multipart/form-data` body: its parts in order. The request sender
-/// builds the HTTP client's form data from it for each request.
+/// builds the HTTP client's form data from it for each request and sends the
+/// parts in this order. A text part that follows a file or a part with a
+/// media type is sent with `Content-Type: text/plain; charset=utf-8`.
 final class MultipartBody {
   /// Creates the body.
   const MultipartBody(this.parts);
