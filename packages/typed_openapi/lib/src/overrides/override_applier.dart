@@ -126,65 +126,96 @@ final class OverrideApplier {
     final entry = target.entry;
     final at = target.node.location;
     final raw = _object(at) ?? const {};
-    final content = switch (raw['content']) {
-      final Map<String, Object?> content => content,
-      _ => const <String, Object?>{},
-    };
+    final content = _mediaTypes(raw);
     final type = entry.spec['contentType'] as String?;
     final hasSchema = entry.spec.containsKey('schema');
-    final String key;
-    if (type != null) {
-      key = type;
-    } else if (content.length == 1) {
-      key = content.keys.single;
-    } else {
-      if (hasSchema) {
-        _report(
-          content.isEmpty ? .invalidOverride : .overrideTargetAmbiguous,
-          entry,
-          'schema',
-          content.isEmpty
-              ? 'This has no media type to put the schema in.'
-              : 'This has the media types ${content.keys.join(', ')}; it is '
-                    'not clear which schema to replace.',
-          fix: 'Add "contentType" to the override.',
-        );
-      }
-      return;
-    }
-    final Map<String, Object?> next;
-    if (content.containsKey(key) || content.isEmpty || content.length == 1) {
-      next = {key: content[key] ?? content.values.firstOrNull ?? {}};
-    } else {
-      _report(
-        .overrideTargetAmbiguous,
-        entry,
-        'contentType',
-        'This has the media types ${content.keys.join(', ')} and none is '
-            '$key; it is not clear which one to replace.',
-        fix: 'Set "contentType" to one of them.',
-      );
-      return;
-    }
+    final key = _mediaKey(entry, content, type);
+    if (key == null) return;
+    final next = _contentWith(entry, content, key);
+    if (next == null) return;
     if (type != null && _equality.equals(content.keys.toList(), [key])) {
       _unchanged(entry, 'contentType');
     }
     if (entry.spec case {'schema': final Object schema}) {
-      final media = switch (next[key]) {
-        final Map<String, Object?> media => media,
-        _ => const <String, Object?>{},
-      };
-      if (_equality.equals(media['schema'], schema)) {
-        _unchanged(entry, 'schema');
-      } else {
-        next[key] = {...media, 'schema': schema};
-      }
+      _setMediaSchema(entry, next, key, schema);
     }
     if (_equality.equals(next, raw['content'])) return;
     yield OverrideEdit(SpecEdit.add(at.child('content'), next), [
       if (type != null) (entry, 'contentType'),
       if (hasSchema) (entry, 'schema'),
     ]);
+  }
+
+  /// The `content` map of [raw], empty when there is none.
+  static Map<String, Object?> _mediaTypes(Map<String, Object?> raw) =>
+      switch (raw['content']) {
+        final Map<String, Object?> content => content,
+        _ => const <String, Object?>{},
+      };
+
+  /// The media type an override of [entry] changes: [type] if it names one,
+  /// else the only one of [content]. Null, with a report when a schema is
+  /// to be set, when there is none or several to choose from.
+  String? _mediaKey(
+    OverrideEntry entry,
+    Map<String, Object?> content,
+    String? type,
+  ) {
+    if (type != null) return type;
+    if (content.length == 1) return content.keys.single;
+    if (entry.spec.containsKey('schema')) {
+      _report(
+        content.isEmpty ? .invalidOverride : .overrideTargetAmbiguous,
+        entry,
+        'schema',
+        content.isEmpty
+            ? 'This has no media type to put the schema in.'
+            : 'This has the media types ${content.keys.join(', ')}; it is '
+                  'not clear which schema to replace.',
+        fix: 'Add "contentType" to the override.',
+      );
+    }
+    return null;
+  }
+
+  /// A new `content` map with [key] only, taken from [content]; null, with a
+  /// report, when [content] has other media types and none is [key].
+  Map<String, Object?>? _contentWith(
+    OverrideEntry entry,
+    Map<String, Object?> content,
+    String key,
+  ) {
+    if (content.containsKey(key) || content.isEmpty || content.length == 1) {
+      return {key: content[key] ?? content.values.firstOrNull ?? {}};
+    }
+    _report(
+      .overrideTargetAmbiguous,
+      entry,
+      'contentType',
+      'This has the media types ${content.keys.join(', ')} and none is '
+          '$key; it is not clear which one to replace.',
+      fix: 'Set "contentType" to one of them.',
+    );
+    return null;
+  }
+
+  /// Sets the `schema` of the media type [key] in [next], or reports that
+  /// the spec already has it.
+  void _setMediaSchema(
+    OverrideEntry entry,
+    Map<String, Object?> next,
+    String key,
+    Object schema,
+  ) {
+    final media = switch (next[key]) {
+      final Map<String, Object?> media => media,
+      _ => const <String, Object?>{},
+    };
+    if (_equality.equals(media['schema'], schema)) {
+      _unchanged(entry, 'schema');
+    } else {
+      next[key] = {...media, 'schema': schema};
+    }
   }
 
   Iterable<OverrideEdit> _schema(
@@ -212,25 +243,40 @@ final class OverrideApplier {
         spec.containsKey('nullable') && (rawRef != null || shape != null);
     if (toRef) {
       yield* _reference(entry, at, raw, property, rawRef, shape);
-      return;
+    } else if (_version == .v30 && rawRef != null) {
+      _reportIgnoredSiblings(entry, property);
+    } else {
+      yield* _fields(entry, at, raw, property);
     }
-    if (_version == .v30 && rawRef != null) {
-      for (final field in ['type', ..._plainFields]) {
-        if (!spec.containsKey(field) || property && field == 'required') {
-          continue;
-        }
-        _report(
-          .fixNotApplied,
-          entry,
-          field,
-          'This override was not applied: in OpenAPI 3.0 the siblings of '
-          '"\$ref" are ignored, so "$field" would have no effect on a '
-          'schema that is a reference.',
-          fix: 'Override the referenced schema by its name under "schemas".',
-        );
+  }
+
+  /// Reports every field of [entry] that 3.0 would ignore on a reference.
+  void _reportIgnoredSiblings(OverrideEntry entry, bool property) {
+    for (final field in ['type', ..._plainFields]) {
+      if (!entry.spec.containsKey(field) || property && field == 'required') {
+        continue;
       }
-      return;
+      _report(
+        .fixNotApplied,
+        entry,
+        field,
+        'This override was not applied: in OpenAPI 3.0 the siblings of '
+        '"\$ref" are ignored, so "$field" would have no effect on a '
+        'schema that is a reference.',
+        fix: 'Override the referenced schema by its name under "schemas".',
+      );
     }
+  }
+
+  /// The edits of `type`, `nullable` and the plain fields of a schema that
+  /// is not a reference.
+  Iterable<OverrideEdit> _fields(
+    OverrideEntry entry,
+    SpecLocation at,
+    Map<String, Object?> raw,
+    bool property,
+  ) sync* {
+    final spec = entry.spec;
     if (spec.containsKey('type') || spec.containsKey('nullable')) {
       yield* _version == .v30
           ? _typeAndNullable30(entry, at, raw)
@@ -267,42 +313,77 @@ final class OverrideApplier {
           field,
     ];
     if (others.isNotEmpty) {
-      _report(
-        .invalidOverride,
+      _reportOtherField(
         entry,
         others.first,
-        specRef is String || rawRef != null
-            ? '"${others.first}" cannot be set on a schema that is a '
-                  'reference.'
-            : '"${others.first}" cannot be set together with "nullable" on '
-                  'a schema that is nullable through "anyOf" or "oneOf".',
-        fix: specRef is String || rawRef != null
-            ? r'Replace the reference with "$ref" and "nullable" only.'
-            : 'Override "nullable" alone, or the schema by its name.',
+        specRef is String || rawRef != null,
       );
-      return;
+    } else if (specRef is String) {
+      yield* _replaceWithReference(entry, at, raw, specRef);
+    } else {
+      yield* _changeNullability(entry, at, raw, rawRef, shape);
     }
+  }
+
+  /// Reports [field], which cannot be set where the node becomes (or is) a
+  /// reference or a nullable union.
+  void _reportOtherField(
+    OverrideEntry entry,
+    String field,
+    bool isReference,
+  ) {
+    _report(
+      .invalidOverride,
+      entry,
+      field,
+      isReference
+          ? '"$field" cannot be set on a schema that is a reference.'
+          : '"$field" cannot be set together with "nullable" on a schema that '
+                'is nullable through "anyOf" or "oneOf".',
+      fix: isReference
+          ? r'Replace the reference with "$ref" and "nullable" only.'
+          : 'Override "nullable" alone, or the schema by its name.',
+    );
+  }
+
+  /// The edit that makes the node at [at] the (nullable) reference [specRef].
+  Iterable<OverrideEdit> _replaceWithReference(
+    OverrideEntry entry,
+    SpecLocation at,
+    Map<String, Object?> raw,
+    String specRef,
+  ) sync* {
+    final spec = entry.spec;
     final nullable = spec['nullable'] == true;
-    if (specRef is String) {
-      final next = <String, Object?>{
-        if (!nullable) r'$ref': specRef,
-        ..._nullableForm(specRef, nullable),
-      };
-      final fields = [
-        for (final field in [r'$ref', 'nullable'])
-          if (spec.containsKey(field)) field,
-      ];
-      if (_equality.equals(raw, next)) {
-        for (final field in fields) {
-          _unchanged(entry, field);
-        }
-        return;
+    final next = <String, Object?>{
+      if (!nullable) r'$ref': specRef,
+      ..._nullableForm(specRef, nullable),
+    };
+    final fields = [
+      for (final field in [r'$ref', 'nullable'])
+        if (spec.containsKey(field)) field,
+    ];
+    if (_equality.equals(raw, next)) {
+      for (final field in fields) {
+        _unchanged(entry, field);
       }
-      yield OverrideEdit(SpecEdit.replace(at, next), [
-        for (final field in fields) (entry, field),
-      ]);
       return;
     }
+    yield OverrideEdit(SpecEdit.replace(at, next), [
+      for (final field in fields) (entry, field),
+    ]);
+  }
+
+  /// The edit that adds or removes the nullability of a reference
+  /// ([rawRef]) or of a nullable schema ([shape]), keeping the other keys.
+  Iterable<OverrideEdit> _changeNullability(
+    OverrideEntry entry,
+    SpecLocation at,
+    Map<String, Object?> raw,
+    String? rawRef,
+    _NullableShape? shape,
+  ) sync* {
+    final nullable = entry.spec['nullable'] == true;
     if (nullable == (shape != null)) {
       _unchanged(entry, 'nullable');
       return;
@@ -317,20 +398,24 @@ final class OverrideApplier {
     } else {
       final merged = shape.withoutNull();
       if (merged == null) {
-        _report(
-          .fixNotApplied,
-          entry,
-          'nullable',
-          'This override was not applied: the schema and the "'
-              '${shape.key}" branch both set the same key to different values, '
-              'so they cannot be merged.',
-          fix: 'Override the schema by its name.',
-        );
+        _reportUnmergeable(entry, shape);
         return;
       }
       next = merged;
     }
     yield OverrideEdit(SpecEdit.replace(at, next), [(entry, 'nullable')]);
+  }
+
+  void _reportUnmergeable(OverrideEntry entry, _NullableShape shape) {
+    _report(
+      .fixNotApplied,
+      entry,
+      'nullable',
+      'This override was not applied: the schema and the "'
+          '${shape.key}" branch both set the same key to different values, '
+          'so they cannot be merged.',
+      fix: 'Override the schema by its name.',
+    );
   }
 
   /// The keys that make [ref] nullable in the document's dialect; none when
@@ -451,49 +536,77 @@ final class OverrideApplier {
     var failed = false;
     if (nullable && nextBase.isEmpty) {
       failed = true;
-      _report(
-        .invalidOverride,
-        entry,
-        'nullable',
-        'From OpenAPI 3.1, a schema is nullable through "null" in its '
-            '"type", and this schema has no type.',
-        fix: 'Add "type" to the override.',
-      );
+      _reportNullableWithoutType(entry);
       if (!spec.containsKey('type')) return;
       nullable = false;
     }
-    final types = [...nextBase, if (nullable) 'null'];
-    final fields = [
-      if (spec.containsKey('type')) 'type',
-      if (spec.containsKey('nullable') && !failed) 'nullable',
-    ];
-    if (spec.containsKey('type') && _equality.equals(base, nextBase)) {
-      _unchanged(entry, 'type');
-      fields.remove('type');
-    }
-    if (fields.contains('nullable') && wasNullable == nullable) {
-      _unchanged(entry, 'nullable');
-      fields.remove('nullable');
-    }
+    final fields = _changedFields(
+      entry,
+      sameType: _equality.equals(base, nextBase),
+      sameNullable: wasNullable == nullable,
+      nullableFailed: failed,
+    );
     if (fields.isEmpty) return;
     if (spec.containsKey('type') &&
         spec['type'] == null &&
         wasNullable &&
         !spec.containsKey('nullable')) {
-      _report(
-        .overrideNullabilityDropped,
-        entry,
-        'type',
-        'From OpenAPI 3.1, nullability is the "null" in "type"; removing the '
-            'type also makes the schema non-nullable.',
-      );
+      _reportDroppedNullability(entry);
     }
-    final sources = [for (final field in fields) (entry, field)];
-    yield OverrideEdit(switch (types) {
-      [] => SpecEdit.remove(at.child('type')),
-      [final type] => SpecEdit.add(at.child('type'), type),
-      _ => SpecEdit.add(at.child('type'), types),
-    }, sources);
+    final types = [...nextBase, if (nullable) 'null'];
+    yield OverrideEdit(
+      switch (types) {
+        [] => SpecEdit.remove(at.child('type')),
+        [final type] => SpecEdit.add(at.child('type'), type),
+        _ => SpecEdit.add(at.child('type'), types),
+      },
+      [for (final field in fields) (entry, field)],
+    );
+  }
+
+  /// The fields of [entry] that change the `type` list, after reporting the
+  /// ones that do not.
+  List<String> _changedFields(
+    OverrideEntry entry, {
+    required bool sameType,
+    required bool sameNullable,
+    required bool nullableFailed,
+  }) {
+    final spec = entry.spec;
+    final fields = [
+      if (spec.containsKey('type')) 'type',
+      if (spec.containsKey('nullable') && !nullableFailed) 'nullable',
+    ];
+    if (spec.containsKey('type') && sameType) {
+      _unchanged(entry, 'type');
+      fields.remove('type');
+    }
+    if (fields.contains('nullable') && sameNullable) {
+      _unchanged(entry, 'nullable');
+      fields.remove('nullable');
+    }
+    return fields;
+  }
+
+  void _reportNullableWithoutType(OverrideEntry entry) {
+    _report(
+      .invalidOverride,
+      entry,
+      'nullable',
+      'From OpenAPI 3.1, a schema is nullable through "null" in its '
+          '"type", and this schema has no type.',
+      fix: 'Add "type" to the override.',
+    );
+  }
+
+  void _reportDroppedNullability(OverrideEntry entry) {
+    _report(
+      .overrideNullabilityDropped,
+      entry,
+      'type',
+      'From OpenAPI 3.1, nullability is the "null" in "type"; removing the '
+          'type also makes the schema non-nullable.',
+    );
   }
 
   /// The edits of the `required` list of the schema at [owner] for the
@@ -568,22 +681,27 @@ final class OverrideApplier {
           continue;
         }
         dropped.add(a);
-        for (final (entry, field) in a.sources) {
-          final other = b.sources.first.$1.pointer.child(b.sources.first.$2);
-          _report(
-            .overrideConflict,
-            entry,
-            field,
-            'This changes ${a.edit.location.pointer.value}, which the '
-            'override at ${other.value} changes too; neither is applied.',
-            fix: 'Keep one of them.',
-          );
-        }
+        _reportConflict(a, b);
         break;
       }
       if (!dropped.contains(a)) kept.add(a);
     }
     return kept;
+  }
+
+  /// Reports the sources of [a], which changes a node [b] changes too.
+  void _reportConflict(OverrideEdit a, OverrideEdit b) {
+    for (final (entry, field) in a.sources) {
+      final other = b.sources.first.$1.pointer.child(b.sources.first.$2);
+      _report(
+        .overrideConflict,
+        entry,
+        field,
+        'This changes ${a.edit.location.pointer.value}, which the '
+        'override at ${other.value} changes too; neither is applied.',
+        fix: 'Keep one of them.',
+      );
+    }
   }
 
   Map<String, Object?>? _object(SpecLocation at) =>
