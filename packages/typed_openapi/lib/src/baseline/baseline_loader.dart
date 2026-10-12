@@ -97,10 +97,15 @@ final class BaselineLoader {
     if (version != Baseline.version) {
       _invalid(
         document,
-        root.containsKey('version')
-            ? 'Unsupported baseline version $version; this tool reads '
-                  'version ${Baseline.version}.'
-            : 'The baseline has no "version".',
+        switch (version) {
+          _ when !root.containsKey('version') =>
+            'The baseline has no "version".',
+          int() =>
+            'Unsupported baseline version $version; this tool reads '
+                'version ${Baseline.version}.',
+          _ =>
+            'The baseline "version" must be the integer ${Baseline.version}.',
+        },
         root.containsKey('version') ? JsonPointer.root.child('version') : .root,
         fix: 'Write the file again with `typed_openapi baseline create`.',
       );

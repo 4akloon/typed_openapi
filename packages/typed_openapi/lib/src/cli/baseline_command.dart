@@ -102,14 +102,23 @@ abstract base class _BaselineSubcommand extends Command<int> {
     return named.isEmpty ? withBaseline : named;
   }
 
-  /// Writes [baseline] to [path]; returns whether it was written.
+  /// Writes [baseline] to [path] through a temporary file in the same
+  /// directory, so an interrupted write never leaves a broken baseline;
+  /// returns whether it was written.
   bool write(Baseline baseline, String path, DiagnosticBag diagnostics) {
+    final target = File(path);
+    final temp = File('$path.tmp');
     try {
-      File(path)
-        ..parent.createSync(recursive: true)
-        ..writeAsStringSync(baseline.toYaml());
+      target.parent.createSync(recursive: true);
+      temp.writeAsStringSync(baseline.toYaml());
+      temp.renameSync(path);
       return true;
     } on FileSystemException catch (e) {
+      try {
+        if (temp.existsSync()) temp.deleteSync();
+      } on FileSystemException {
+        // Nothing more can be done about a leftover temporary file.
+      }
       diagnostics.report(
         .baselineNotWritten,
         'Cannot write ${baseline.file}: ${e.message}.',
@@ -137,6 +146,11 @@ final class BaselineCreateCommand extends _BaselineSubcommand {
     final lines = <String>[];
     for (final result in results) {
       final path = result.client.baseline!;
+      if (result.readErrors.isNotEmpty) {
+        // The run found too little to write a baseline from.
+        result.readErrors.forEach(diagnostics.add);
+        continue;
+      }
       final baseline = Baseline.of(
         _paths.of(path),
         result.diagnostics,
@@ -177,6 +191,11 @@ final class BaselinePruneCommand extends _BaselineSubcommand {
     final lines = <String>[];
     for (final result in results) {
       final path = result.client.baseline!;
+      if (result.readErrors.isNotEmpty) {
+        // Every entry would look stale; keep the file as it is.
+        result.readErrors.forEach(diagnostics.add);
+        continue;
+      }
       final baseline = BaselineLoader(
         diagnostics,
       ).load(path, displayPath: _paths.of(path));

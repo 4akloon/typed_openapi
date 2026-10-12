@@ -34,8 +34,9 @@ final class CheckCommand extends Command<int> {
         'strict-baseline',
         negatable: false,
         help:
-            'Fail on baseline entries that no longer match: run '
-            '`baseline prune` to remove them.',
+            'Fail on baseline entries that no longer match, whatever level '
+            'the config gives baseline-entry-stale: run `baseline prune` to '
+            'remove them.',
       );
   }
 

@@ -475,6 +475,59 @@ entries:
       expect(bag.baselined.length, 2);
     });
 
+    test('strict applies after the levels of the config', () {
+      const stale = '''
+version: 1
+entries:
+  - {fingerprint: "000000000000", code: TOA201, anchor: "@/schemas/Gone#"}
+''';
+      for (final level in ['off', 'info']) {
+        final dir = TempDir();
+        dir.write('api.yaml', spec);
+        dir.write('api.baseline.yaml', stale);
+        final path = dir.write('typed_openapi.yaml', '''
+clients:
+  api:
+    input: api.yaml
+    output: lib/api
+    baseline: api.baseline.yaml
+    severity: {baseline-entry-stale: $level}
+''');
+        final bag = DiagnosticBag();
+        SpecChecker(
+          bag,
+          DisplayPaths(dir.path),
+        ).check(ConfigLoader(bag).load(path)!, strictBaseline: true);
+        expect(
+          bag.all
+              .where((d) => d.code == DiagnosticCode.baselineEntryStale)
+              .map((d) => d.severity),
+          [Severity.error],
+          reason: level,
+        );
+      }
+    });
+
+    test('an unreadable spec reports its error and no stale entries', () {
+      final dir = TempDir();
+      dir.write('api.yaml', 'openapi: [3\n');
+      dir.write('api.baseline.yaml', '''
+version: 1
+entries:
+  - {fingerprint: "000000000000", code: TOA201, anchor: "@/schemas/Gone#"}
+''');
+      final path = dir.write('typed_openapi.yaml', '''
+clients:
+  api: {input: api.yaml, output: lib/api, baseline: api.baseline.yaml}
+''');
+      final bag = DiagnosticBag();
+      SpecChecker(
+        bag,
+        DisplayPaths(dir.path),
+      ).check(ConfigLoader(bag).load(path)!);
+      expect(bag.all.map((d) => d.code), [DiagnosticCode.parseError]);
+    });
+
     test('a broken baseline file hides nothing', () {
       final bag = check('version: 2\nentries: []\n');
       expect(bag.all.map((d) => d.code), [

@@ -348,6 +348,53 @@ clients:
       expect(out, contains('error TOA820 baseline-not-found'));
     });
 
+    test('write leaves no temporary file behind', () async {
+      await inDir(['baseline', 'create']);
+      await inDir(['baseline', 'prune']);
+      expect(
+        Directory(dir.path).listSync().where((e) => e.path.endsWith('.tmp')),
+        isEmpty,
+      );
+    });
+
+    for (final (label, breakSpec) in <(String, void Function(File))>[
+      ('a broken', (f) => f.writeAsStringSync('openapi: [3\n')),
+      ('a deleted', (f) => f.deleteSync()),
+    ]) {
+      group('$label spec', () {
+        late String before;
+
+        setUp(() async {
+          await inDir(['baseline', 'create']);
+          before = File(
+            p.join(dir.path, 'api.baseline.yaml'),
+          ).readAsStringSync();
+          breakSpec(File(p.join(dir.path, 'api.yaml')));
+        });
+
+        for (final command in ['create', 'prune']) {
+          test('keeps the baseline on baseline $command', () async {
+            final (code, out, _) = await inDir(['baseline', command]);
+            expect(code, 1);
+            expect(out, contains('error TOA'));
+            expect(out, isNot(contains('Wrote')));
+            expect(out, isNot(contains('Pruned')));
+            expect(
+              File(p.join(dir.path, 'api.baseline.yaml')).readAsStringSync(),
+              before,
+            );
+          });
+        }
+
+        test('check shows the read error, not stale entries', () async {
+          final (code, out, _) = await inDir(['check']);
+          expect(code, 1);
+          expect(out, contains('error TOA'));
+          expect(out, isNot(contains('TOA822')));
+        });
+      });
+    }
+
     test('a client without a baseline is a usage error', () async {
       final path = dir.write(
         'other.yaml',

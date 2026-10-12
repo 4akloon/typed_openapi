@@ -47,4 +47,19 @@ void main() {
       isTrue,
     );
   });
+
+  test('the baseline file codes are fixed, except stale entries', () {
+    expect(
+      DiagnosticCode.fixedCodes.containsAll([
+        DiagnosticCode.baselineNotFound,
+        DiagnosticCode.invalidBaseline,
+        DiagnosticCode.baselineNotWritten,
+      ]),
+      isTrue,
+    );
+    expect(
+      DiagnosticCode.fixedCodes.contains(DiagnosticCode.baselineEntryStale),
+      isFalse,
+    );
+  });
 }

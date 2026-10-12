@@ -165,6 +165,13 @@ void main() {
       ]);
     });
 
+    test('a version that is not an integer must be the integer 1', () {
+      final bag = DiagnosticBag();
+      BaselineLoader(bag).parse('version: "1"\nentries: []\n', 'b.yaml');
+      expect(bag.all.single.message, contains('must be the integer 1'));
+      expect(bag.all.single.pointer?.value, '#/version');
+    });
+
     test('skips bad entries and warns about unknown keys and repeats', () {
       expect(
         problems('''

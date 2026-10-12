@@ -1,12 +1,15 @@
 import 'package:path/path.dart' as p;
 
 import '../baseline/anchor_index.dart';
+import '../baseline/baseline.dart';
 import '../baseline/baseline_loader.dart';
 import '../baseline/fingerprints.dart';
 import '../config/project_config.dart';
 import '../diagnostics/diagnostic.dart';
 import '../diagnostics/diagnostic_bag.dart';
+import '../diagnostics/diagnostic_code.dart';
 import '../diagnostics/display_paths.dart';
+import '../diagnostics/severity.dart';
 import '../load/openapi_version.dart';
 import '../load/spec_loader.dart';
 import '../normalize/normalizer.dart';
@@ -26,6 +29,17 @@ final class ClientCheck {
 
   /// The logical addresses of the client's spec, for baseline anchors.
   final AnchorIndex anchors;
+
+  /// The errors that say the spec, or a file it is read with, could not be
+  /// read (diagnostics of [DiagnosticCode.fixedCodes]). Without them the
+  /// run found too little: no entry of a baseline may be called stale, and
+  /// no baseline may be rewritten from it.
+  List<Diagnostic> get readErrors => [
+    for (final d in diagnostics)
+      if (d.severity == Severity.error &&
+          DiagnosticCode.fixedCodes.contains(d.code))
+        d,
+  ];
 
   /// The fingerprints of [diagnostics] for the client's baseline file at
   /// [baselineFile]; [paths] reads the file names of the diagnostics.
@@ -53,7 +67,11 @@ final class SpecChecker {
   /// the accepted ones go to [DiagnosticBag.addBaselined]. An entry that
   /// accepts more than the check finds is `baseline-entry-stale`: a warning,
   /// or an error with [strictBaseline]. A baseline file that cannot be read
-  /// is reported, and every diagnostic of the client is shown.
+  /// is reported, and every diagnostic of the client is shown. Stale entries
+  /// are not reported for a client whose spec could not be read: the read
+  /// error says what is wrong. [strictBaseline] applies after the client's
+  /// levels, so it makes a stale entry an error even if the config lowered or
+  /// turned off `baseline-entry-stale`.
   void check(
     ProjectConfig config, {
     Set<String> only = const {},
@@ -79,7 +97,10 @@ final class SpecChecker {
         );
         match.shown.forEach(_diagnostics.add);
         match.baselined.forEach(_diagnostics.addBaselined);
-        for (final (entry, found) in match.stale) {
+        for (final (entry, found)
+            in result.readErrors.isEmpty
+                ? match.stale
+                : const <(BaselineEntry, int)>[]) {
           final what =
               '${entry.code ?? 'A diagnostic'} at '
               '${entry.anchor ?? entry.fingerprint}';
@@ -90,7 +111,6 @@ final class SpecChecker {
                       'is gone.'
                 : 'This entry accepts ${entry.count} diagnostics ($what), '
                       'but the check finds $found.',
-            severity: strictBaseline ? .error : null,
             file: baseline.file,
             pointer: entry.pointer,
             span: baseline.spanOf(entry.pointer),
@@ -99,7 +119,9 @@ final class SpecChecker {
         }
       }
       for (final problem in problems.all) {
-        final reported = client.severity.apply(problem);
+        final reported = strictBaseline && problem.code == .baselineEntryStale
+            ? problem.withSeverity(.error)
+            : client.severity.apply(problem);
         if (reported != null) _diagnostics.add(reported);
       }
     }
