@@ -9,6 +9,7 @@ import 'direction_index.dart';
 import 'ir.dart';
 import 'ir_context.dart';
 import 'names.dart';
+import 'schema_shapes.dart';
 
 /// How an inline schema's declaration is named (R5.4): after its parent
 /// declaration or a fixed prefix (an operation), followed by [suffix].
@@ -277,7 +278,7 @@ final class SchemaMapper {
       }
     }
     final id = _idOf(schema);
-    final single = singleOf(schema);
+    final single = SchemaShapes.singleOf(schema);
     if (single == null && _declares(schema)) {
       if (_replacing) return _nothingDeclared(schema);
       final key = _referenceName(schema.location);
@@ -357,7 +358,7 @@ final class SchemaMapper {
   }
 
   DartType _inline(SchemaObject schema, NameHint hint) {
-    final single = singleOf(schema);
+    final single = SchemaShapes.singleOf(schema);
     if (single != null) {
       final type = _map(single, hint);
       return type.withNullable(type.nullable || _isNullable(schema));
@@ -389,29 +390,10 @@ final class SchemaMapper {
   /// Whether [schema] gets a declaration: an enum, a union, an object with
   /// properties or the merge of an `allOf`.
   bool _declares(SchemaObject schema) =>
-      _enumValues(schema) != null ||
+      SchemaShapes.enumValues(schema) != null ||
       _branches(schema) != null ||
       schema.properties.isNotEmpty ||
       schema.allOf.isNotEmpty;
-
-  /// The one schema [schema] stands for (R6.3, rules carried from M3): the
-  /// part of an `allOf` with one part, or the branch of a `oneOf`/`anyOf`
-  /// with one branch besides `null`; null when there is none.
-  static Schema? singleOf(SchemaObject schema) {
-    if (schema.properties.isNotEmpty || _enumValues(schema) != null) {
-      return null;
-    }
-    final branches = [...schema.oneOf, ...schema.anyOf];
-    if (schema.allOf.length == 1 && branches.isEmpty) return schema.allOf.first;
-    if (schema.allOf.isNotEmpty) return null;
-    final nonNull = [
-      for (final branch in branches)
-        if (!_isNullOnly(branch)) branch,
-    ];
-    return nonNull.length == 1 && (schema.oneOf.isEmpty || schema.anyOf.isEmpty)
-        ? nonNull.single
-        : null;
-  }
 
   /// The kind and the non-null branches of a union: a `oneOf` (or else an
   /// `anyOf`) with more than one branch besides `null`.
@@ -421,40 +403,30 @@ final class SchemaMapper {
         : (UnionKind.anyOf, schema.anyOf);
     final nonNull = [
       for (final branch in branches)
-        if (!_isNullOnly(branch)) branch,
+        if (!SchemaShapes.isNullOnly(branch)) branch,
     ];
     // Branches that only add constraints (`required`, ...) or only hold one
     // value each (an enum) do not make a union.
     if (nonNull.length < 2 ||
         nonNull.every(_addsOnlyConstraints) ||
-        _enumValues(schema) != null) {
+        SchemaShapes.enumValues(schema) != null) {
       return null;
     }
     return (kind, nonNull);
   }
 
-  static bool _isNullOnly(Schema schema) =>
-      schema is SchemaObject &&
-      schema.ref == null &&
-      ((schema.types.length == 1 && schema.types.single == .nullType) ||
-          (schema.enumValues != null &&
-              schema.enumValues!.every((v) => v == null)) ||
-          (schema.enumValues == null &&
-              schema.constValue != null &&
-              schema.constValue!.$1 == null));
-
   /// Whether [schema] is written inline and only validates: `required`,
-  /// `minProperties` and the like, with no `type`, `properties`, items,
-  /// values, `allOf` or union of its own.
+  /// `minProperties` and the like, with no `type` (or only `type: object`),
+  /// `properties`, items, values, `allOf` or union of its own.
   static bool _addsOnlyConstraints(Schema schema) =>
       schema is SchemaObject &&
       schema.ref == null &&
-      schema.types.isEmpty &&
+      schema.types.every((t) => t == .object) &&
       schema.properties.isEmpty &&
       schema.items == null &&
       schema.additionalProperties == null &&
       schema.format == null &&
-      _enumValues(schema) == null &&
+      SchemaShapes.enumValues(schema) == null &&
       schema.allOf.isEmpty &&
       schema.oneOf.isEmpty &&
       schema.anyOf.isEmpty;
@@ -473,7 +445,7 @@ final class SchemaMapper {
     final nullable = _isNullable(schema);
     final existing = _pending[id];
     if (existing != null) return NamedType(id, nullable: nullable);
-    final values = _enumValues(schema);
+    final values = SchemaShapes.enumValues(schema);
     final kind = values == null ? null : _enumKind(schema, values);
     if (values != null && kind == null) {
       _context.report(
@@ -674,7 +646,7 @@ final class SchemaMapper {
         }
         if (resolved.properties.isEmpty &&
             resolved.allOf.isEmpty &&
-            (_enumValues(resolved) != null ||
+            (SchemaShapes.enumValues(resolved) != null ||
                 _branches(resolved) != null ||
                 resolved.types.any((t) => t != .object && t != .nullType))) {
           _context.report(
@@ -693,8 +665,8 @@ final class SchemaMapper {
         _context.report(
           .inheritancePolymorphismDeferred,
           'This discriminator is on a schema that is not a oneOf or anyOf '
-          'union, so it is not used: the schemas that extend it are flat '
-          'models, and a value of this type is not decoded into them.',
+          'union, so it is not used: the schemas that extend it, if any, are '
+          'flat models, and a value of this type is not decoded into them.',
           discriminator.location,
           fix:
               'Polymorphic decoding of an allOf base is not generated yet; '
@@ -746,7 +718,7 @@ final class SchemaMapper {
     ]) {
       final real = [
         for (final branch in branches)
-          if (!_isNullOnly(branch)) branch,
+          if (!SchemaShapes.isNullOnly(branch)) branch,
       ];
       if (real.isEmpty) continue;
       if (real.every(_addsOnlyConstraints)) {
@@ -972,18 +944,21 @@ final class SchemaMapper {
 
   /// The `x-enum-varnames` and `x-enum-descriptions` of the enum [schema]
   /// with [values]: a list of strings with one entry per value, or null when
-  /// the extension is missing or malformed (TOA351). An enum that has `null`
-  /// among its written values may list it too.
-  (List<String>?, List<String>?) _enumLabels(
+  /// the extension is missing or malformed (TOA351); a description may be
+  /// `null`, which is no description. An enum that has `null` among its
+  /// written values may list it too.
+  (List<String>?, List<String?>?) _enumLabels(
     SchemaObject schema,
     List<Object?> values,
   ) {
-    List<String>? labels(String key) {
+    // A description may be `null`: that value has none.
+    List<String?>? labels(String key, {bool allowNull = false}) {
       final written = schema.extensions[key];
       if (written == null) return null;
       final all = schema.enumValues;
-      if (written is List<Object?> && written.every((e) => e is String)) {
-        final strings = written.cast<String>();
+      if (written is List<Object?> &&
+          written.every((e) => e is String || (allowNull && e == null))) {
+        final strings = written.cast<String?>();
         if (strings.length == values.length) return strings;
         if (all != null && strings.length == all.length) {
           return [
@@ -1002,7 +977,10 @@ final class SchemaMapper {
       return null;
     }
 
-    return (labels('x-enum-varnames'), labels('x-enum-descriptions'));
+    return (
+      labels('x-enum-varnames')?.cast<String>(),
+      labels('x-enum-descriptions', allowNull: true),
+    );
   }
 
   void _enum(
@@ -1011,7 +989,7 @@ final class SchemaMapper {
     List<Object?> values,
     EnumKind kind,
     List<String>? names,
-    List<String>? descriptions,
+    List<String?>? descriptions,
   ) {
     final exhaustive =
         _context.overrides.schemaAt(schema.location)?.exhaustive ?? true;
@@ -1091,6 +1069,7 @@ final class SchemaMapper {
         name,
         location,
         what: 'Value',
+        fix: 'Name it with x-enum-varnames at the source.',
       );
     }
     return name;
@@ -1107,47 +1086,6 @@ final class SchemaMapper {
           (m) => '${m[1]}${m[2] == '-' ? 'Minus' : ''}',
         );
     return 'value${negative ? 'Minus' : ''}$digits';
-  }
-
-  /// The non-null values of an enum, or null when [schema] is not one: its
-  /// `enum`, its `const` as a one-value enum, or the values of a `oneOf` or
-  /// `anyOf` whose branches are all `const`s or enums written inline
-  /// (`oneOf: [{const: red}, {const: green}]`).
-  static List<Object?>? _enumValues(SchemaObject schema) =>
-      _ownValues(schema) ?? _branchValues(schema);
-
-  static List<Object?>? _ownValues(SchemaObject schema) {
-    final values = [
-      ...?schema.enumValues,
-      if (schema.enumValues == null) ?schema.constValue?.$1,
-    ];
-    final nonNull = [for (final v in values) ?v];
-    return nonNull.isEmpty ? null : nonNull;
-  }
-
-  static List<Object?>? _branchValues(SchemaObject schema) {
-    if (schema.properties.isNotEmpty ||
-        schema.allOf.isNotEmpty ||
-        schema.oneOf.isNotEmpty == schema.anyOf.isNotEmpty) {
-      return null;
-    }
-    final values = <Object?>[];
-    for (final branch in [...schema.oneOf, ...schema.anyOf]) {
-      if (_isNullOnly(branch)) continue;
-      if (branch is! SchemaObject || branch.ref != null) return null;
-      if (branch.properties.isNotEmpty ||
-          branch.allOf.isNotEmpty ||
-          branch.oneOf.isNotEmpty ||
-          branch.anyOf.isNotEmpty) {
-        return null;
-      }
-      final own = _ownValues(branch);
-      if (own == null) return null;
-      for (final value in own) {
-        if (!values.contains(value)) values.add(value);
-      }
-    }
-    return values.isEmpty ? null : values;
   }
 
   static EnumKind? _enumKind(SchemaObject schema, List<Object?> values) {
@@ -1324,8 +1262,8 @@ final class SchemaMapper {
       (schema.nullable ?? false) ||
       schema.types.contains(SchemaType.nullType) ||
       (schema.enumValues?.contains(null) ?? false) ||
-      schema.oneOf.any(_isNullOnly) ||
-      schema.anyOf.any(_isNullOnly);
+      schema.oneOf.any(SchemaShapes.isNullOnly) ||
+      schema.anyOf.any(SchemaShapes.isNullOnly);
 }
 
 /// A declaration whose name is not given yet.

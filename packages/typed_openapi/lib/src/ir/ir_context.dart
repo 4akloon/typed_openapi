@@ -216,6 +216,7 @@ final class IrContext {
     SpecLocation at, {
     required String what,
     String? override,
+    String fix = 'Name it explicitly to keep the meaning.',
   }) {
     if (!_names.dropsLetters(source)) return;
     report(
@@ -223,7 +224,7 @@ final class IrContext {
       '$what "$source" lost characters when it became the Dart name '
       '"$name": letters outside ASCII are dropped.',
       at,
-      fix: 'Name it explicitly to keep the meaning.',
+      fix: fix,
       override: override,
     );
   }

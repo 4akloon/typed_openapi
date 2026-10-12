@@ -62,6 +62,8 @@ schemas:
     properties:
       "größe":
         name: grE''');
+      // The only fix of an enum value is at the source.
+      expect(fixture.reported[2].fix, contains('x-enum-varnames'));
     });
 
     test('is silent for changes of case and separators', () {
@@ -151,6 +153,41 @@ components:
   });
 
   group('x-enum-varnames and x-enum-descriptions (TOA351)', () {
+    test('a null description is no description, the rest is kept', () {
+      final fixture = IrFixture('''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Nulls:
+      type: integer
+      enum: [1, 2, 3]
+      x-enum-varnames: [one, two, three]
+      x-enum-descriptions: [First, null, Third]
+    Bad:
+      type: integer
+      enum: [1, 2]
+      x-enum-descriptions: [First, 2]
+''');
+      final (ir, _) = mapComponents(fixture, ['Nulls', 'Bad']);
+      expect(
+        [
+          for (final v
+              in (ir.declarations.firstWhere((d) => d.name == 'Nulls')
+                      as EnumDecl)
+                  .values)
+            v.description,
+        ],
+        ['First', null, 'Third'],
+      );
+      expect(fixture.codes, [
+        (
+          DiagnosticCode.enumVarnamesInvalid,
+          '#/components/schemas/Bad/x-enum-descriptions',
+        ),
+      ]);
+    });
+
     test('reports a list that is not strings of the enum length (I7)', () {
       final fixture = IrFixture('''
 openapi: 3.1.0

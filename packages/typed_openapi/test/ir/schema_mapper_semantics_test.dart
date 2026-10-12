@@ -117,6 +117,40 @@ schemas:
   });
 
   group('oneOf and anyOf beside properties (T5 I1)', () {
+    test('a type: object branch without properties adds only constraints', () {
+      final fixture = IrFixture('''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Pick:
+      type: object
+      properties: {a: {type: string}, b: {type: string}}
+      anyOf:
+        - {type: object, required: [a]}
+        - {type: object, required: [b]}
+    Real:
+      type: object
+      properties: {a: {type: string}}
+      oneOf:
+        - {type: object, properties: {x: {type: string}}}
+        - {type: object, properties: {y: {type: string}}}
+''');
+      final (ir, types) = mapComponents(fixture, ['Pick', 'Real']);
+      expect(types['Pick'], 'Pick');
+      expect(fieldsOf(ir, 'Pick'), ['a(a): String?', 'b(b): String?']);
+      expect(fixture.codes, [
+        (
+          DiagnosticCode.oneOfConstraintsIgnored,
+          '#/components/schemas/Pick/anyOf',
+        ),
+        (
+          DiagnosticCode.compositionPartsIgnored,
+          '#/components/schemas/Real/properties',
+        ),
+      ]);
+    });
+
     test('branches that only add constraints leave a model (TOA255)', () {
       final fixture = IrFixture('''
 openapi: 3.1.0
@@ -403,6 +437,23 @@ components:
           '#/components/schemas/Pet/discriminator',
         ),
       ]);
+    });
+
+    test('TOA452 does not say a base without subtypes is extended', () {
+      final fixture = IrFixture('''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties: {kind: {type: string}}
+      discriminator: {propertyName: kind}
+''');
+      mapComponents(fixture, ['Pet']);
+      final found = fixture.reported.single;
+      expect(found.code, DiagnosticCode.inheritancePolymorphismDeferred);
+      expect(found.message, contains('if any'));
     });
 
     test('a discriminator on a union is not TOA452', () {

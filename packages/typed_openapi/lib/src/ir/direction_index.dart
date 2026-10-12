@@ -3,7 +3,7 @@ import '../model/schema.dart';
 import '../model/spec_node.dart';
 import '../resolve/spec_model.dart';
 import 'ir.dart';
-import 'schema_mapper.dart';
+import 'schema_shapes.dart';
 
 /// Where each schema is used, requests or responses, to split models by
 /// direction (spec decision 4).
@@ -85,7 +85,7 @@ final class DirectionIndex {
     final seen = <SpecLocation>{};
     var current = _model.resolveSchema(schema);
     while (current is SchemaObject && seen.add(current.location)) {
-      final single = SchemaMapper.singleOf(current);
+      final single = SchemaShapes.singleOf(current);
       if (single == null) return current;
       current = _model.resolveSchema(single);
     }

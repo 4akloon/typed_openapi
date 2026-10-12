@@ -178,7 +178,8 @@ enum DiagnosticCode {
   allOfPartIgnored('TOA253', 'allof-part-ignored', .warning),
 
   /// A schema an override excludes is used by a generated type; the use is
-  /// generated as `JsonValue`.
+  /// generated as `JsonValue`. An excluded `allOf` part is the exception: it
+  /// is merged into the flat model all the same, and this says so.
   excludedSchemaReferenced('TOA254', 'excluded-schema-referenced', .info),
 
   /// An object with `properties` has a `oneOf` or `anyOf` whose branches
@@ -296,8 +297,12 @@ enum DiagnosticCode {
   /// case and separators (`my_thing`, `X-Request-ID`) are not reported.
   nameLossy('TOA559', 'name-lossy', .info),
 
-  /// An override `name` is not a valid Dart name for what it names (`my
-  /// thing`, `1x`, `_private`); the name made from it is used.
+  /// An override `name` (of a schema, property, operation, parameter) or
+  /// `group` is not a valid Dart name for what it names (`my thing`, `1x`,
+  /// `_private`), or loses characters when it is made one; the name made
+  /// from it is used, or the override is ignored when nothing is left. A
+  /// `group` that differs from UpperCamelCase only by case or separators
+  /// (`pet-store`) is not reported: it is used as `PetStore`.
   overrideNameInvalid('TOA560', 'override-name-invalid', .warning),
 
   /// A request or response body has a media type that is not JSON, a form,
