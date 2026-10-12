@@ -31,10 +31,14 @@ final class NameHint {
 /// (R6.1–R6.3, R6.8).
 ///
 /// Declarations are created when a schema is first mapped, so only schemas
-/// reachable from what is mapped are generated (R4.2). Names are given at
-/// the end ([declarations]): component schemas keep their key, inline
-/// schemas are named after their parent, and collisions get a suffix with a
-/// diagnostic (R5.2).
+/// reachable from what is mapped are generated (R4.2). A declaration's
+/// identity is its schema location and variant ([DeclId]): reaching it again
+/// (a structural alias used twice, an `allOf` base merged into several
+/// models, a path item parameter shared by operations) gives the same
+/// declaration, named after the first use. Names are given at the end
+/// ([declarations]): component schemas keep their key, inline schemas are
+/// named after their parent, and collisions get a suffix with a diagnostic
+/// (R5.2).
 final class SchemaMapper {
   /// Creates a mapper for the spec of [_context]; [directions] tells which
   /// schemas are split into response and request models.
@@ -54,7 +58,16 @@ final class SchemaMapper {
   ModelDirection _direction = .both;
   SpecLocation? _patchTarget;
   final Map<String, _Pending> _inlineEnums = {};
+
+  /// The structural aliases being mapped, innermost last, since the last
+  /// declaration was entered: meeting one again is a cycle no declaration
+  /// breaks.
   final Set<SpecLocation> _aliases = {};
+
+  /// Whether the schema being mapped is replaced by a custom type, so only
+  /// the JSON side of it is wanted: nothing is declared, reported or
+  /// replaced again (R4.2, R6.8).
+  bool _replacing = false;
 
   /// The type of [schema] used in [direction]; an inline declaration it
   /// needs is named by [hint]. For the request body of a PATCH operation
@@ -121,12 +134,18 @@ final class SchemaMapper {
         return a.id.compareTo(b.id);
       });
     for (final pending in ordered) {
-      pending.name = _claim(scope, pending);
+      _claim(scope, pending);
     }
-    return [for (final pending in ordered) pending.build!(pending.name!)];
+    return [
+      for (final pending in ordered) pending.build(_claim(scope, pending)),
+    ];
   }
 
+  /// Claims the name of [pending] once; an inline declaration's parent is
+  /// named first, whatever the order.
   String _claim(NameScope scope, _Pending pending) {
+    final named = pending.name;
+    if (named != null) return named;
     final overridden = pending.overrideName;
     final suffix = switch (pending.id.variant) {
       .base => '',
@@ -142,8 +161,12 @@ final class SchemaMapper {
         null => null,
       };
     } else {
-      final parent = pending.hint!._parent?.name ?? pending.hint!.prefix!;
-      candidate = '$parent${pending.hint!.suffix}$suffix';
+      final hint = pending.hint;
+      final parent = hint?._parent;
+      final start = parent != null
+          ? _claim(scope, parent)
+          : hint?.prefix ?? _fallbackName;
+      candidate = '$start${hint?.suffix ?? ''}$suffix';
     }
     if (candidate == null) {
       final (name, _) = scope.claim(_fallbackName);
@@ -155,7 +178,7 @@ final class SchemaMapper {
         fix: 'Rename the schema at the source, or name its type.',
         override: _context.schemaOverride(pending.id.location, {'name': name}),
       );
-      return name;
+      return pending.name = name;
     }
     final (name, change) = scope.claim(candidate);
     if (change != null) {
@@ -171,7 +194,7 @@ final class SchemaMapper {
         override: _context.schemaOverride(pending.id.location, {'name': name}),
       );
     }
-    return name;
+    return pending.name = name;
   }
 
   DartType _map(Schema schema, NameHint hint) {
@@ -189,49 +212,43 @@ final class SchemaMapper {
 
   /// The type of a schema a `$ref` points to.
   DartType _component(SchemaObject schema) {
-    final custom = _customSchemaType(schema);
-    if (custom != null) return custom;
-    if (_context.overrides.schemaAt(schema.location)?.exclude ?? false) {
-      _context.report(
-        .excludedSchemaReferenced,
-        'This schema is excluded by an override, but a generated type uses '
-        'it; the use is generated as JsonValue.',
-        schema.location,
-        fix:
-            'Exclude what uses the schema too, or give the schema a Dart '
-            'type instead of excluding it.',
-      );
-      return const CoreType(.json);
+    if (!_replacing) {
+      final custom = _customSchemaType(schema);
+      if (custom != null) return custom;
+      if (_context.overrides.schemaAt(schema.location)?.exclude ?? false) {
+        _context.report(
+          .excludedSchemaReferenced,
+          'This schema is excluded by an override, but a generated type uses '
+          'it; the use is generated as JsonValue.',
+          schema.location,
+          fix:
+              'Exclude what uses the schema too, or give the schema a Dart '
+              'type instead of excluding it.',
+        );
+        return const CoreType(.json);
+      }
     }
     final id = _idOf(schema);
-    final pending = _pending[id];
-    if (pending != null) return NamedType(id, nullable: _isNullable(schema));
-    final key = _referenceName(schema.location);
     final single = _single(schema);
     if (single == null && _declares(schema)) {
+      if (_replacing) return _nothingDeclared(schema);
+      final key = _referenceName(schema.location);
       return _declare(
         schema,
         id,
-        (p) => p
-          ..componentKey = key
-          ..overrideName = _context.overrides.schemaAt(schema.location)?.name,
+        componentKey: key,
+        overrideName: _context.overrides.schemaAt(schema.location)?.name,
       );
     }
     // A structural schema (array, map, scalar) has no declaration of its
-    // own: each use gets its type. One that refers back to itself cannot be
-    // spelled out.
-    if (!_aliases.add(schema.location)) {
-      _context.report(
-        .recursiveAlias,
-        'This schema refers to itself without an object between; the '
-        'reference is generated as JsonValue.',
-        schema.location,
-        fix: 'Make the recursive part an object schema at the source.',
-      );
-      return const CoreType(.json);
-    }
+    // own: each use gets its type. One that refers back to itself without
+    // a declaration in between cannot be spelled out.
+    if (!_enterAlias(schema.location)) return const CoreType(.json);
     try {
-      final hint = NameHint(_names.pascal(key) ?? _fallbackName, '');
+      final hint = NameHint(
+        _names.pascal(_referenceName(schema.location)) ?? _fallbackName,
+        '',
+      );
       if (single != null) {
         final type = _map(single, hint);
         return type.withNullable(type.nullable || _isNullable(schema));
@@ -242,6 +259,22 @@ final class SchemaMapper {
     }
   }
 
+  /// Marks the structural alias at [location] as being mapped; false, with
+  /// a report unless a custom type replaces it, when it already is.
+  bool _enterAlias(SpecLocation location) {
+    if (_aliases.add(location)) return true;
+    if (!_replacing) {
+      _context.report(
+        .recursiveAlias,
+        'This schema refers to itself without an object between; the '
+        'reference is generated as JsonValue.',
+        location,
+        fix: 'Make the recursive part an object schema at the source.',
+      );
+    }
+    return false;
+  }
+
   DartType _inline(SchemaObject schema, NameHint hint) {
     final single = _single(schema);
     if (single != null) {
@@ -249,25 +282,27 @@ final class SchemaMapper {
       return type.withNullable(type.nullable || _isNullable(schema));
     }
     if (_declares(schema)) {
-      // An inline schema shared by several uses (a path item parameter, a
-      // `$ref`'d response) is declared once, named after its first use.
-      final id = _idOf(schema);
-      if (_pending.containsKey(id)) {
-        return NamedType(id, nullable: _isNullable(schema));
-      }
-      if (_enumValues(schema) case final values?) {
-        final kind = _enumKind(schema, values);
-        if (kind != null) {
-          final key = '${kind.name}:${values.join('\u0000')}';
-          final known = _inlineEnums[key];
-          if (known != null) {
-            return NamedType(known.id, nullable: _isNullable(schema));
-          }
-        }
-      }
-      return _declare(schema, id, (p) => p.hint = hint);
+      if (_replacing) return _nothingDeclared(schema);
+      return _declare(schema, _idOf(schema), hint: hint);
     }
     return _structural(schema, hint);
+  }
+
+  /// The type of a declaring [schema] inside a replaced schema: `JsonValue`.
+  DartType _nothingDeclared(SchemaObject schema) =>
+      const CoreType(.json).withNullable(_isNullable(schema));
+
+  /// The JSON side of [schema], which a custom type replaces (R6.8): scalars,
+  /// lists and maps; a schema that would be a declaration is `JsonValue`, so
+  /// nothing under the replaced schema is declared or reported (R4.2).
+  DartType _replaced(Schema schema, NameHint hint) {
+    final before = _replacing;
+    _replacing = true;
+    try {
+      return _map(schema, hint);
+    } finally {
+      _replacing = before;
+    }
   }
 
   /// Whether [schema] gets a declaration: an enum, a union, an object with
@@ -317,11 +352,20 @@ final class SchemaMapper {
           (schema.enumValues != null &&
               schema.enumValues!.every((v) => v == null)));
 
+  /// The declaration of [schema] with identity [id]: the one it has already
+  /// when it is reached again, else a new one named by [hint] (an inline
+  /// schema) or by [componentKey] and [overrideName]. An inline enum equal
+  /// to an earlier one is that enum.
   DartType _declare(
     SchemaObject schema,
-    DeclId id,
-    void Function(_Pending) setUp,
-  ) {
+    DeclId id, {
+    NameHint? hint,
+    String? componentKey,
+    String? overrideName,
+  }) {
+    final nullable = _isNullable(schema);
+    final existing = _pending[id];
+    if (existing != null) return NamedType(id, nullable: nullable);
     final values = _enumValues(schema);
     final kind = values == null ? null : _enumKind(schema, values);
     if (values != null && kind == null) {
@@ -334,19 +378,38 @@ final class SchemaMapper {
       );
       return const CoreType(.json);
     }
-    final pending = _Pending(id);
-    setUp(pending);
-    final parent = pending.hint?._parent;
-    pending.depth = parent == null ? 0 : parent.depth + 1;
-    _pending[id] = pending;
-    if (values != null && kind != null) {
-      _enum(schema, pending, values, kind);
-    } else if (_branches(schema) case (final kind, final branches)) {
-      _union(schema, pending, kind, branches);
-    } else {
-      _model(schema, pending);
+    final enumKey = values == null || kind == null || componentKey != null
+        ? null
+        : '${kind.name}:${values.join('\u0000')}';
+    if (enumKey != null) {
+      final known = _inlineEnums[enumKey];
+      if (known != null) return NamedType(known.id, nullable: nullable);
     }
-    return NamedType(id, nullable: _isNullable(schema));
+    final pending = _Pending(id)
+      ..hint = hint
+      ..componentKey = componentKey
+      ..overrideName = overrideName;
+    pending.depth = (hint?._parent?.depth ?? -1) + 1;
+    _pending[id] = pending;
+    if (enumKey != null) _inlineEnums[enumKey] = pending;
+    // A cycle that goes through this declaration ends at it, so what is
+    // mapped below starts with no alias open.
+    final aliases = {..._aliases};
+    _aliases.clear();
+    try {
+      if (values != null && kind != null) {
+        _enum(schema, pending, values, kind);
+      } else if (_branches(schema) case (final kind, final branches)) {
+        _union(schema, pending, kind, branches);
+      } else {
+        _model(schema, pending);
+      }
+    } finally {
+      _aliases
+        ..clear()
+        ..addAll(aliases);
+    }
+    return NamedType(id, nullable: nullable);
   }
 
   void _model(SchemaObject schema, _Pending pending) {
@@ -371,7 +434,10 @@ final class SchemaMapper {
       if (direction == .response && writeOnly) continue;
       final suffix = _names.pascal(json) ?? 'Field';
       final custom = override?.dartType;
-      final mapped = _map(property, NameHint._under(pending, suffix));
+      final hint = NameHint._under(pending, suffix);
+      final mapped = custom == null
+          ? _map(property, hint)
+          : _replaced(property, hint);
       fields.add(
         _Field(
           json: json,
@@ -646,9 +712,6 @@ final class SchemaMapper {
     List<Object?> values,
     EnumKind kind,
   ) {
-    if (pending.componentKey == null) {
-      _inlineEnums['${kind.name}:${values.join('\u0000')}'] = pending;
-    }
     final names = switch (schema.extensions['x-enum-varnames']) {
       final List<Object?> given
           when given.length == values.length &&
@@ -750,18 +813,24 @@ final class SchemaMapper {
         if (type != SchemaType.nullType) type,
     ];
     if (types.length > 1) {
-      _context.report(
-        .mixedTypeSchema,
-        'This schema allows ${types.map((t) => t.wire).join(', ')}; it is '
-        'generated as JsonValue.',
-        schema.location,
-        fix:
-            'Give the schema one type at the source, or a Dart type with an '
-            'override.',
-        override: _context.schemaOverride(schema.location, {
-          'dartType': {'type': 'MyType', 'import': 'package:app/my_type.dart'},
-        }),
-      );
+      // A custom type replaces the schema, so it has nothing to report.
+      if (!_replacing) {
+        _context.report(
+          .mixedTypeSchema,
+          'This schema allows ${types.map((t) => t.wire).join(', ')}; it is '
+          'generated as JsonValue.',
+          schema.location,
+          fix:
+              'Give the schema one type at the source, or a Dart type with an '
+              'override.',
+          override: _context.schemaOverride(schema.location, {
+            'dartType': {
+              'type': 'MyType',
+              'import': 'package:app/my_type.dart',
+            },
+          }),
+        );
+      }
       return const CoreType(.json);
     }
     final type =
@@ -823,10 +892,18 @@ final class SchemaMapper {
     final custom =
         override ?? (key == null ? null : _context.config.schemas[key]);
     if (custom == null) return null;
-    final json = _declares(schema)
-        ? const CoreType(.json)
-        : _structural(schema, NameHint(_names.pascal(key ?? '') ?? '', ''));
-    return _custom(custom, json).withNullable(_isNullable(schema));
+    // The schema is an alias open while its JSON side is built, so a cycle
+    // through it ends there.
+    _aliases.add(schema.location);
+    try {
+      final json = _replaced(
+        schema,
+        NameHint(_names.pascal(key ?? '') ?? _fallbackName, ''),
+      );
+      return _custom(custom, json).withNullable(_isNullable(schema));
+    } finally {
+      _aliases.remove(schema.location);
+    }
   }
 
   static CustomType _custom(DartTypeOverride custom, DartType json) =>
@@ -890,7 +967,7 @@ final class _Pending {
   int depth = 0;
   bool patchBody = false;
   String? name;
-  Declaration Function(String name)? build;
+  late Declaration Function(String name) build;
 
   /// Overridden names are claimed first, then component keys, then inline
   /// names.

@@ -180,8 +180,15 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   unions, `allOf` merge, single-schema collapse, custom types; declarations
   are created when first reached, so only reachable schemas exist, and named
   at the end: override names, then component keys, then inline names by
-  depth), `DirectionIndex` (request/response uses for the readOnly/writeOnly
-  split), `OperationSelector` (filters, `exclude`), `OperationBuilder`
+  depth. A declaration is its `DeclId`: reaching it again (alias used twice,
+  `allOf` base merged into several models, shared path item parameter)
+  gives the same one, named after the first use, and an inline name always
+  resolves to a declaration of the set. A schema a custom type replaces
+  declares and reports nothing: its JSON side is scalars, lists, maps and
+  `JsonValue`. A structural alias that reaches itself with no declaration
+  between is TOA251), `DirectionIndex` (request/response uses for the
+  readOnly/writeOnly split; whether a schema is directional depends on what
+  it reaches, never on the order it is asked in), `OperationSelector` (filters, `exclude`), `OperationBuilder`
   (parameters, bodies, responses, envelopes, errors) and `IrBuilder` (groups,
   method names, then everything above). `IrJson` dumps an IR; the hidden
   `typed_openapi ir` command prints it. Naming and mapping codes use the

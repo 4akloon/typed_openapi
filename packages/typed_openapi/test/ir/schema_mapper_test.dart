@@ -567,4 +567,242 @@ components:
       ),
     ]);
   });
+
+  group('declaration identity', () {
+    test('declares the inline types of a structural alias once, however '
+        'often it is used', () {
+      final fixture = IrFixture(r'''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Tags:
+      type: array
+      items:
+        type: object
+        properties:
+          kind: {type: string, enum: [a, b]}
+    U:
+      type: object
+      properties:
+        a: {$ref: '#/components/schemas/Tags'}
+        b: {$ref: '#/components/schemas/Tags'}
+''');
+      final (ir, types) = mapComponents(fixture, ['U', 'Tags']);
+      expect(fixture.reported, isEmpty);
+      expect(types, {'U': 'U', 'Tags': 'List<TagsItem>'});
+      expect(ir.declarations.map((d) => d.name), [
+        'TagsItem',
+        'TagsItemKind',
+        'U',
+      ]);
+      expect(fieldsOf(ir, 'U'), [
+        'a(a): List<TagsItem>?',
+        'b(b): List<TagsItem>?',
+      ]);
+    });
+
+    test('declares the inline types of an allOf base once for every model '
+        'that merges it', () {
+      final fixture = IrFixture(r'''
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Base:
+      type: object
+      properties:
+        addr:
+          type: object
+          properties:
+            kind: {type: string, enum: [home, work]}
+    Pet:
+      allOf:
+        - {$ref: '#/components/schemas/Base'}
+        - {type: object, properties: {tag: {type: string}}}
+    Cat:
+      allOf:
+        - {$ref: '#/components/schemas/Base'}
+        - {type: object, properties: {lives: {type: integer}}}
+''');
+      final (ir, _) = mapComponents(fixture, ['Pet', 'Cat']);
+      expect(fixture.reported, isEmpty);
+      expect(ir.declarations.map((d) => d.name), [
+        'Cat',
+        'Pet',
+        'PetAddr',
+        'PetAddrKind',
+      ]);
+      expect(fieldsOf(ir, 'Pet'), [
+        'addr(addr): PetAddr?',
+        'tag(tag): String?',
+      ]);
+      expect(fieldsOf(ir, 'Cat'), [
+        'addr(addr): PetAddr?',
+        'lives(lives): int?',
+      ]);
+    });
+
+    test('declares the inline part of a collapsed allOf alias once', () {
+      final fixture = IrFixture(r'''
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components:
+  schemas:
+    E:
+      allOf:
+        - type: object
+          properties:
+            a: {type: string, enum: [a, b]}
+    U:
+      type: object
+      properties:
+        e: {$ref: '#/components/schemas/E'}
+        e2: {$ref: '#/components/schemas/E'}
+''');
+      final (ir, types) = mapComponents(fixture, ['U', 'E']);
+      expect(fixture.reported, isEmpty);
+      expect(types, {'U': 'U', 'E': 'E'});
+      expect(ir.declarations.map((d) => d.name), ['E', 'EA', 'U']);
+      expect(fieldsOf(ir, 'U'), ['e(e): E?', 'e2(e2): E?']);
+    });
+
+    test('names an inline enum after a declaration that exists', () {
+      // Two uses of one list alias whose item is an object with an enum, and
+      // a second owner of an equal enum: every hint resolves to a declared
+      // parent, in either mapping order.
+      const spec = r'''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Tags:
+      type: array
+      items:
+        type: object
+        properties:
+          kind: {type: string, enum: [a, b]}
+    Other:
+      type: object
+      properties:
+        kind: {type: string, enum: [a, b]}
+    U:
+      type: object
+      properties:
+        a: {$ref: '#/components/schemas/Tags'}
+        o: {$ref: '#/components/schemas/Other'}
+        b: {$ref: '#/components/schemas/Tags'}
+''';
+      for (final order in [
+        ['U', 'Tags', 'Other'],
+        ['Tags', 'Other', 'U'],
+        ['Other', 'U', 'Tags'],
+      ]) {
+        final (ir, _) = mapComponents(IrFixture(spec), order);
+        final names = ir.declarations.map((d) => d.name).toList();
+        expect(names.toSet().length, names.length, reason: '$order');
+        expect(names, contains('Other'), reason: '$order');
+        expect(names, contains('TagsItem'), reason: '$order');
+        expect(names.where((n) => n.endsWith('Kind')), hasLength(1));
+      }
+    });
+
+    test('does not declare what a property dartType replaces (R4.2)', () {
+      final fixture = IrFixture(
+        r'''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        price: {type: object, properties: {amount: {type: string}}}
+        kind: {type: string, enum: [cat, dog]}
+        owner: {$ref: '#/components/schemas/Owner'}
+        mixed: {type: [string, integer]}
+        plain: {type: string}
+    Owner: {type: object, properties: {name: {type: string}}}
+''',
+        overrides: '''
+schemas:
+  Pet:
+    properties:
+      price: {dartType: {type: Money, import: 'package:app/money.dart'}}
+      kind: {dartType: {type: Kind, import: 'package:app/kind.dart'}}
+      owner: {dartType: {type: Person, import: 'package:app/person.dart'}}
+      mixed: {dartType: {type: Either, import: 'package:app/either.dart'}}
+''',
+      );
+      final (ir, _) = mapComponents(fixture, ['Pet']);
+      expect(ir.declarations.map((d) => d.name), ['Pet']);
+      // Nothing under a replaced schema is reported either (TOA250).
+      expect(fixture.reported, isEmpty);
+      expect(fieldsOf(ir, 'Pet'), [
+        'price(price): Money?',
+        'kind(kind): Kind?',
+        'owner(owner): Person?',
+        'mixed(mixed): Either?',
+        'plain(plain): String?',
+      ]);
+      final owner = (ir.declarations.single as ModelDecl).fields[2].valueType;
+      expect((owner as CustomType).json, const CoreType(.json));
+    });
+
+    test('maps a recursive structural alias with a custom type without '
+        'overflowing', () {
+      final fixture = IrFixture(
+        r'''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Tree: {type: array, items: {$ref: '#/components/schemas/Tree'}}
+    Forest: {type: object, additionalProperties: {$ref: '#/components/schemas/Forest'}}
+    Holder:
+      type: object
+      properties:
+        tree: {$ref: '#/components/schemas/Tree'}
+        forest: {$ref: '#/components/schemas/Forest'}
+''',
+        generation: const GenerationConfig(
+          schemas: {
+            'Tree': DartTypeOverride(type: 'Tree', import: 'package:a/t.dart'),
+          },
+        ),
+        overrides: '''
+schemas:
+  Forest: {dartType: {type: Forest, import: 'package:a/f.dart'}}
+''',
+      );
+      final (ir, types) = mapComponents(fixture, ['Holder', 'Tree', 'Forest']);
+      expect(types['Tree'], 'Tree');
+      expect(types['Forest'], 'Forest');
+      expect(fieldsOf(ir, 'Holder'), [
+        'tree(tree): Tree?',
+        'forest(forest): Forest?',
+      ]);
+      // The custom types replace the aliases, so there is nothing to fix.
+      expect(fixture.reported, isEmpty);
+    });
+
+    test('types a recursion through an allOf alias of a declared model', () {
+      final fixture = IrFixture(r'''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Base:
+      type: object
+      properties:
+        kids: {type: array, items: {$ref: '#/components/schemas/Node'}}
+    Node:
+      allOf: [{$ref: '#/components/schemas/Base'}]
+''');
+      final (ir, types) = mapComponents(fixture, ['Node']);
+      expect(fixture.reported, isEmpty);
+      expect(types, {'Node': 'Base'});
+      expect(fieldsOf(ir, 'Base'), ['kids(kids): List<Base>?']);
+    });
+  });
 }
