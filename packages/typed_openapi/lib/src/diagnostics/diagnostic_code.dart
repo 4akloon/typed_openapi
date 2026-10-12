@@ -240,6 +240,20 @@ enum DiagnosticCode {
   /// be made from it; a generic name is used.
   nameUnrepresentable('TOA552', 'name-unrepresentable', .warning),
 
+  /// An operation has several tags; it is generated once, in the group of
+  /// its first tag.
+  operationMultipleTags('TOA553', 'operation-multiple-tags', .info),
+
+  /// An operation has no tag; it is generated in the default group.
+  operationUntagged('TOA554', 'operation-untagged', .info),
+
+  /// Two tags differ only in case or separators, so they give one group.
+  tagsMerged('TOA555', 'tags-merged', .info),
+
+  /// A variable of the path template has no path parameter with its exact
+  /// name (`{ID}` with a parameter `id`); the operation is not generated.
+  pathVariableUnbound('TOA556', 'path-variable-unbound', .error),
+
   /// `*/*` is used as a media type.
   wildcardMediaType('TOA601', 'wildcard-media-type', .warning),
 
