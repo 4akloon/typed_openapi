@@ -36,6 +36,11 @@ code depends on. Dependencies: `dio` and `meta`.
 - `Date` for `format: date` (`YYYY-MM-DD`, no time or time zone), read with
   `JsonReader.asDate` and written with `Date.toJson()`; `Date.parse` throws a
   `FormatException`, `Date.tryParse` returns `null`.
+- For generated models: `DeepEquality` (deep `==` and `hashCode` of lists,
+  maps and patches), `JsonReader.constant`, `additional` (the keys a model
+  does not list, as an unmodifiable map) and `asBytes`, and `immutable`
+  re-exported from `package:meta`, so generated code imports only this
+  package.
 - Parameter encoders for the OpenAPI styles (`simple`, `label`, `matrix`,
   `form`, `spaceDelimited`, `pipeDelimited`, `deepObject`, headers,
   cookies) with RFC 3986 percent-encoding.

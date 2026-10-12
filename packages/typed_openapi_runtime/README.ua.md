@@ -36,6 +36,11 @@ Runtime для клієнтів, згенерованих
 - `Date` для `format: date` (`YYYY-MM-DD`, без часу і часового поясу):
   читається через `JsonReader.asDate`, пишеться через `Date.toJson()`;
   `Date.parse` кидає `FormatException`, `Date.tryParse` повертає `null`.
+- Для згенерованих моделей: `DeepEquality` (глибокі `==` і `hashCode` списків,
+  map-ів і patch-ів), `JsonReader.constant`, `additional` (ключі, яких модель
+  не перелічує, як незмінна map) і `asBytes`, а також `immutable`, що
+  реекспортується з `package:meta`, тож згенерований код імпортує лише цей
+  пакет.
 - Кодувальники стилів параметрів OpenAPI (`simple`, `label`, `matrix`,
   `form`, `spaceDelimited`, `pipeDelimited`, `deepObject`, заголовки,
   cookie) з percent-кодуванням за RFC 3986.

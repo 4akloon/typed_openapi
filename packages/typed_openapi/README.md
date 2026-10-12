@@ -29,18 +29,84 @@ Check the specs without generating anything:
 dart run typed_openapi check            # all clients
 dart run typed_openapi check core_api   # one client
 dart run typed_openapi check --format json   # also: sarif, github-actions
-dart run typed_openapi generate          # models of every client without errors
 ```
 
-`generate` owns each output directory: it writes the whole new tree and a
-manifest (`.typed_openapi.json`) next to it and swaps it in, so a failed run
-leaves the previous output (or nothing) and never a half tree, and it deletes
-every file there it did not write. It refuses a directory (TOA830) that holds
-a `pubspec.yaml`, is a package's `lib`, holds an input of the run (the config,
-the spec, its `$ref`'d files, the overrides or the baseline; also through
-symbolic links or another letter case), holds a symbolic link, or holds files
-but no manifest of its own. Clients whose output directories overlap are all
-skipped (TOA904). TOA830, TOA831 and TOA904 cannot be lowered.
+Generate the models of the clients whose check has no errors (a client with
+errors is skipped, and the exit code is the one `check` gives):
+
+```sh
+dart run typed_openapi generate          # every client
+dart run typed_openapi generate core_api # one client
+```
+
+### What `generate` writes
+
+Each client gets `models.dart` (it exports every model) and
+`models/<name>.dart`, one file per class, with the header
+`// GENERATED CODE - DO NOT MODIFY BY HAND.` and `// dart format off` on the
+second line. The code is clean under `package:lints/recommended` and the
+`flutter_lints` rules without `ignore_for_file`, and the same spec and
+config give the same bytes. The classes are plain `class`es (not `final`, so
+you can extend them); a union base is `sealed`.
+
+- Models have `fromJson(Map<String, Object?>)` and `toJson()`, `==`,
+  `hashCode` and `toString`. `fromJson` throws a `JsonDecodeException` with
+  the pointer of the first property that does not match. A property the
+  schema does not list goes to `additionalProperties` when the schema allows
+  it. `date` is the runtime's `Date`, `date-time` a `DateTime` (RFC 3339 with
+  an offset), `byte` and `binary` bytes. An optional nullable property of a
+  PATCH body is `Patch<T>?` with the `tri_state` setting.
+- Enums are open: a known value is `Status.active`, a value the spec does
+  not list is `StatusUnknown` with the raw value, and it is written back as
+  it came.
+- Unions are `sealed` classes with a class per variant (`PetCat`) and an
+  unknown variant (`PetUnknown`) with the raw JSON. With a `discriminator`
+  the value picks the variant; a model that has no property for it gets it
+  written by its wrapper, with the value it was decoded with (an alias such
+  as `kitty` for `cat` is kept). A schema with a discriminator that other
+  schemas extend with `allOf` (the whole hierarchy, also in other files the
+  spec reads) is a union of those models. Without a discriminator the
+  variants are told apart by their JSON type; variants that share one
+  (TOA453) are one variant that keeps the raw JSON, unless you ask the
+  generator to try each variant in order:
+
+  ```yaml
+  defaults:
+    union: structural        # raw (the default) or structural; per client too
+  ```
+
+  The same key is an override for one schema or property
+  (`union: structural` under it in the overrides file) and wins over the
+  config. A discriminator at the source is better than either.
+- An enum or `const` branch next to a plain branch of the same type
+  (`anyOf: [string, {enum: ['']}]`) adds no value and is dropped (info
+  `TOA455`); the field's doc comment lists the dropped values as "Known
+  values". For `oneOf` this accepts a value both branches take (`''`), which
+  the spec's `oneOf` would reject; this is on purpose, as the idiom means
+  "any of these".
+- A secret is never printed: `toString` writes `<redacted>` for a property
+  that is `writeOnly` or has `format: password` (also through a `$ref`, a
+  nullable `anyOf` such as Pydantic's `Optional[SecretStr]`, array items,
+  map values or a union variant).
+
+`generate` owns each output directory. It builds the whole new tree and a
+manifest (`.typed_openapi.json`: the generator, a hash of the inputs and the
+hash of every file) next to the output and swaps it in, so a failed run
+leaves the previous output (or nothing) and never a half tree, and **it
+replaces the whole directory and deletes every file there that it did not
+generate**. A run that would change nothing does not touch the directory. A
+run that was killed while it swapped leaves `.<output>.typed_openapi-*`
+directories; the next run puts the previous output back if it is missing,
+removes them and says so (info `TOA832`).
+
+It refuses a directory (error `TOA830`, nothing is written) that holds a
+`pubspec.yaml`, is a package's `lib`, holds a file that any client of the
+config reads (the config, a spec, its `$ref`'d files, the overrides or the
+baseline; also through symbolic links, hard links or another letter case),
+holds a symbolic link, or holds files but no manifest of its own. A
+directory that cannot be written is `TOA831`. Clients whose output
+directories overlap are all skipped (`TOA904`). TOA830, TOA831, TOA832 and
+TOA904 cannot be lowered.
 
 `check` reads the whole spec, follows its `$ref`s (also into other local
 files) and reports unknown keys, wrong value types, broken or looping
@@ -79,8 +145,8 @@ Overrides change the spec before the normalizer runs; `null` removes a field.
 An override whose target is gone is a warning, one the spec already matches
 is an info that it can be removed, and a misspelled key is an error that
 suggests the closest known one. Fields for the generator (`name`, `exclude`,
-`group`, `exhaustive`, `dartType`, `triState`) name, leave out, group and
-type what is generated. A `group` is written in UpperCamelCase like the
+`group`, `exhaustive`, `dartType`, `triState`, `union`) name, leave out,
+group and type what is generated. A `group` is written in UpperCamelCase like the
 name of a class (`pet-store` is used as `PetStore`); a `name` of a method,
 argument or schema must be a valid Dart name, otherwise `TOA560` says which
 name is used instead. Hints of rules that cannot fix a defect themselves
@@ -104,6 +170,7 @@ defaults:
     formats: {decimal: {type: Decimal, import: 'package:decimal/decimal.dart'}}
     schemas: {Money: {type: Money, import: 'package:app/money.dart', converter: MoneyConverter}}
   tri_state: patch               # optional nullable PATCH fields are Patch<T>?
+  union: raw                     # unions without a discriminator, see above
   errors: {default_schema: ErrorDto}
 ```
 
@@ -141,7 +208,8 @@ Every finding has a stable code (`TOA011`), a JSON pointer into the spec and,
 for files the parser could position, a line and column. Paths are relative
 to the directory you run the command in. Change the level of a code, by its
 id or name, in `defaults` or per client; `off` drops it. Codes that say a
-spec, overrides or baseline file cannot be read cannot be lowered:
+spec, overrides or baseline file cannot be read, and the codes of `generate`
+(TOA830-TOA832), cannot be lowered:
 
 ```yaml
 defaults:
