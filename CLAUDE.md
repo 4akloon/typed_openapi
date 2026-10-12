@@ -255,7 +255,9 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   chosen type and other JSON types; a form or multipart response is bytes,
   TOA650; a text request body is `String`; the `encoding` of a form or
   multipart body (`EncodingIr`, a style a query does not allow is TOA564,
-  part headers TOA656); a parameter keeps its schema's `default`
+  part headers TOA656; a media type that is an unresolved `$ref` is
+  reported by the resolver and leaves the body without schema, encoding and
+  parts); a parameter keeps its schema's `default`
   (`ParameterIr.defaultValue`, documented only); envelopes; errors, with
   `errors.default_schema` for statuses without a body; header parameters
   `Accept`, `Content-Type` and `Authorization` are dropped as OpenAPI says;

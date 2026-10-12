@@ -10,10 +10,13 @@ final class BodyEncoding {
 
   final IrContext _context;
 
-  /// The `encoding` of a form or multipart body, by property name. A style
-  /// a query parameter does not allow is reported (TOA564) and left out;
-  /// headers of a part cannot be sent and are reported (TOA656).
-  List<EncodingIr> of(MediaType media, BodyKind kind) {
+  /// The `encoding` of a form or multipart body of [kind], by property name;
+  /// another kind, or no [media] (an unresolved one is reported already),
+  /// has none. A style a query parameter does not allow is reported (TOA564)
+  /// and left out; headers of a part cannot be sent and are reported
+  /// (TOA656).
+  List<EncodingIr> of(MediaType? media, BodyKind kind) {
+    if (media == null || kind != .form && kind != .multipart) return const [];
     final allowed = OperationBuilder.allowedStyles[ParameterLocation.query]!;
     return [
       for (final property in media.encoding.keys.toList()..sort())

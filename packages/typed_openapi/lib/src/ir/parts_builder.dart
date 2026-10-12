@@ -17,22 +17,16 @@ final class PartsBuilder {
   final IrContext _context;
   final SchemaMapper _mapper;
 
-  /// The parts of a multipart body whose [schema] is an object with
+  /// The parts of a multipart body whose [media] has an object schema with
   /// properties, each mapped as a request type; read-only properties are
-  /// left out. Another schema is reported (TOA655) and gives null.
-  List<PartIr>? of(Schema schema, MediaType media, String prefix) {
+  /// left out. Another schema is reported (TOA655) and gives null, as does
+  /// no [media] (an unresolved one is reported already) or no schema.
+  List<PartIr>? of(MediaType? media, String prefix) {
+    final schema = media?.schema;
+    if (media == null || schema == null) return null;
     final resolved = _context.model.resolveSchema(schema);
     if (resolved is! SchemaObject || !_hasParts(resolved)) {
-      _context.report(
-        .multipartNotObject,
-        'The multipart body is not an object with properties, so it has no '
-        'class of parts: each property of its JSON is sent as a part, and '
-        'binary strings as base64 text.',
-        schema.location,
-        fix:
-            'Describe the body as an object with a property for each part at '
-            'the source.',
-      );
+      _reportNotObject(schema);
       return null;
     }
     final scope = NameScope(
@@ -58,6 +52,19 @@ final class PartsBuilder {
             description: _description(property),
           ),
     ];
+  }
+
+  void _reportNotObject(Schema schema) {
+    _context.report(
+      .multipartNotObject,
+      'The multipart body is not an object with properties, so it has no '
+      'class of parts: each property of its JSON is sent as a part, and '
+      'binary strings as base64 text.',
+      schema.location,
+      fix:
+          'Describe the body as an object with a property for each part at '
+          'the source.',
+    );
   }
 
   /// Whether [schema] is a plain object with properties.

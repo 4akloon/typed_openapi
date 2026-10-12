@@ -372,9 +372,7 @@ final class OperationBuilder {
     );
     final kind = contentType == null ? BodyKind.none : _kind(contentType);
     final schema = media?.schema;
-    final parts = kind == .multipart && schema != null
-        ? _parts.of(schema, media!, prefix)
-        : null;
+    final parts = kind == .multipart ? _parts.of(media, prefix) : null;
     // Parts are a class of their own.
     final type = parts == null ? _bodyType(schema, kind, prefix, method) : null;
     return RequestBodyIr(
@@ -384,9 +382,7 @@ final class OperationBuilder {
       type: type,
       required: body.required,
       description: body.description,
-      encoding: kind == .form || kind == .multipart
-          ? _encoding.of(media!, kind)
-          : const [],
+      encoding: _encoding.of(media, kind),
       parts: parts,
     );
   }
