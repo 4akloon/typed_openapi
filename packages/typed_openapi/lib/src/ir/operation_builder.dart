@@ -1,10 +1,10 @@
 import '../model/operation.dart';
 import '../model/schema.dart';
-import '../model/spec_node.dart';
 import 'body_encoding.dart';
 import 'dart_type.dart';
 import 'ir.dart';
 import 'ir_context.dart';
+import 'media_type_picker.dart';
 import 'names.dart';
 import 'operation_checks.dart';
 import 'parts_builder.dart';
@@ -49,7 +49,8 @@ final class OperationBuilder {
       _encoding = BodyEncoding(_context),
       _defaults = SchemaDefaults(_context),
       _secrets = ResponseSecrets(_context),
-      _statuses = ResponseStatuses(_context);
+      _statuses = ResponseStatuses(_context),
+      _picker = MediaTypePicker(_context);
 
   static const _names = DartNames();
 
@@ -91,6 +92,7 @@ final class OperationBuilder {
   final PartsBuilder _parts;
   final BodyEncoding _encoding;
   final SchemaDefaults _defaults;
+  final MediaTypePicker _picker;
 
   /// How many operations [build] left out because a success is an event
   /// stream (TOA654).
@@ -321,7 +323,7 @@ final class OperationBuilder {
     }
     final (schema, contentType) = switch (parameter.schema) {
       final schema? => (schema, null),
-      null => _content(parameter.content, parameter.location),
+      null => _picker.content(parameter.content, parameter.location),
     };
     final mapped = schema == null
         ? const CoreType(.json)
@@ -362,12 +364,14 @@ final class OperationBuilder {
     if (written == null) return null;
     final body = _context.model.resolve(written);
     if (body == null) return null;
-    final (contentType, media) = _pick(
+    final (contentType, media) = _picker.pick(
       body.content,
       body.location,
       'request body',
     );
-    final kind = contentType == null ? BodyKind.none : _kind(contentType);
+    final kind = contentType == null
+        ? BodyKind.none
+        : MediaTypePicker.kindOf(contentType);
     final schema = media?.schema;
     final parts = kind == .multipart ? _parts.of(media, prefix) : null;
     // Parts are a class of their own.
@@ -412,7 +416,7 @@ final class OperationBuilder {
           (
             status,
             response,
-            _pick(response.content, response.location, 'response'),
+            _picker.pick(response.content, response.location, 'response'),
           ),
     ];
     // Inline names carry the status only when several responses of the
@@ -469,7 +473,7 @@ final class OperationBuilder {
   /// forms.
   BodyKind _responseKind(String? contentType, Response response) {
     if (contentType == null) return .none;
-    final kind = _kind(contentType);
+    final kind = MediaTypePicker.kindOf(contentType);
     if (kind != .form && kind != .multipart) return kind;
     _context.report(
       .mediaTypeAsBytes,
@@ -527,112 +531,5 @@ final class OperationBuilder {
     final schema = _context.model.document.components?.schemas[key];
     if (schema == null) return null;
     return _mapper.typeOfComponent(schema, direction: .response);
-  }
-
-  /// The media type the client uses: JSON first, then forms, text, event
-  /// streams and anything else, each in document order. [location] is the
-  /// object that has [content] and [what] says what it is. The media types
-  /// that are dropped are reported (TOA651), and so is a chosen one that
-  /// becomes bytes and takes its schema with it (TOA650).
-  (String?, MediaType?) _pick(
-    Map<String, RefOr<MediaType>> content,
-    SpecLocation location,
-    String what,
-  ) {
-    if (content.isEmpty) return (null, null);
-    const preference = [
-      BodyKind.json,
-      BodyKind.multipart,
-      BodyKind.form,
-      BodyKind.text,
-      BodyKind.eventStream,
-      BodyKind.bytes,
-    ];
-    for (final kind in preference) {
-      for (final MapEntry(key: type, value: written) in content.entries) {
-        if (_kind(type) != kind) continue;
-        final media = _context.model.resolve(written);
-        // A variant of the chosen type (`application/json; profile=...`) or
-        // another JSON type (also `text/json`) has the same use: nothing is
-        // lost.
-        final dropped = [
-          for (final other in content.keys)
-            if (other != type &&
-                _baseType(other) != _baseType(type) &&
-                !(kind == .json && _isJson(other)))
-              other,
-        ];
-        if (dropped.isNotEmpty) {
-          _context.report(
-            .mediaTypesDropped,
-            'The $what offers ${content.length} media types; "$type" is '
-            'used and ${_quoted(dropped)} '
-            '${dropped.length == 1 ? 'is' : 'are'} dropped.',
-            location.child('content'),
-            fix:
-                'Offer one media type at the source if the client should '
-                'use another.',
-          );
-        }
-        final schema = media?.schema;
-        if (kind == .bytes && schema != null && !_isPlain(schema)) {
-          _context.report(
-            .mediaTypeAsBytes,
-            'The media type "$type" of the $what is not JSON, a form, text '
-            'or an event stream, so it is sent as bytes and its schema is '
-            'not used.',
-            location.child('content').child(type),
-            fix:
-                'Use a JSON media type at the source if the schema '
-                'matters.',
-          );
-        }
-        return (type, media);
-      }
-    }
-    return (null, null);
-  }
-
-  static String _quoted(List<String> types) =>
-      [for (final type in types) '"$type"'].join(', ');
-
-  /// Whether [schema] says no more than "bytes": nothing, a boolean or a
-  /// string of any format.
-  bool _isPlain(Schema schema) {
-    final resolved = _context.model.resolveSchema(schema);
-    if (resolved is! SchemaObject) return true;
-    return resolved.types.every((t) => t == .string || t == .nullType) &&
-        resolved.properties.isEmpty &&
-        resolved.allOf.isEmpty &&
-        resolved.oneOf.isEmpty &&
-        resolved.anyOf.isEmpty &&
-        resolved.items == null;
-  }
-
-  (Schema?, String?) _content(
-    Map<String, RefOr<MediaType>> content,
-    SpecLocation location,
-  ) {
-    final (type, media) = _pick(content, location, 'parameter');
-    return (media?.schema, type);
-  }
-
-  /// [contentType] without its parameters, in lower case.
-  static String _baseType(String contentType) =>
-      contentType.split(';').first.trim().toLowerCase();
-
-  /// Whether [contentType] is JSON, also as `text/json`, which is a text
-  /// type for [_kind] but is read as JSON by every server that sends it.
-  static bool _isJson(String contentType) =>
-      _kind(contentType) == .json || _baseType(contentType) == 'text/json';
-
-  static BodyKind _kind(String contentType) {
-    final type = _baseType(contentType);
-    if (type == 'application/json' || type.endsWith('+json')) return .json;
-    if (type == 'multipart/form-data') return .multipart;
-    if (type == 'application/x-www-form-urlencoded') return .form;
-    if (type == 'text/event-stream') return .eventStream;
-    if (type.startsWith('text/')) return .text;
-    return .bytes;
   }
 }

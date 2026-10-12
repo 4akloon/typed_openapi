@@ -302,7 +302,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   less than the spec: no operation reads as open or as optional), skips event-stream operations (TOA654) and reports
   operation servers (TOA566), callbacks and webhooks (TOA567) and a missing
   2xx (TOA653) through collaborators (`SecurityBuilder`, `PartsBuilder`,
-  `BodyEncoding`, `OperationChecks`); `ApiNames.client` assembles the
+  `BodyEncoding`, `OperationChecks`, `MediaTypePicker`, which picks the media
+  type of a body, response or parameter and tells its `BodyKind`); `ApiNames.client` assembles the
   `ClientIr`; the IR types only the API emitter reads are in `api_ir.dart`,
   which `ir.dart` exports; method names,
   override names first, then

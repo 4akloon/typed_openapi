@@ -28,7 +28,7 @@ const Map<String, int> _fileAllowlist = {
   'lib/src/ir/ir_builder.dart': 540,
   // M9: the path variable pattern, parameter defaults, encodings, statuses,
   // secret bodies.
-  'lib/src/ir/operation_builder.dart': 638,
+  'lib/src/ir/operation_builder.dart': 535,
   'lib/src/ir/schema_mapper.dart': 2196,
   'lib/src/ir/schema_shapes.dart': 446,
   'test/check/spec_checker_test.dart': 705,
@@ -80,7 +80,6 @@ const Map<String, int> _methodAllowlist = {
   // M9: a parameter keeps its schema's default.
   'lib/src/ir/operation_builder.dart#OperationBuilder._parameter': 100,
   'lib/src/ir/operation_builder.dart#OperationBuilder._parameters': 74,
-  'lib/src/ir/operation_builder.dart#OperationBuilder._pick': 58,
   // M9: a response knows whether its body is a secret.
   'lib/src/ir/operation_builder.dart#OperationBuilder._responses': 58,
   'lib/src/ir/operation_selector.dart#OperationSelector.select': 42,
