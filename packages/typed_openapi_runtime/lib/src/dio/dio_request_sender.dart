@@ -79,6 +79,14 @@ final class DioRequestSender {
   /// result is a [TransportError] that explains how to get a streaming
   /// adapter: the default adapter delivers the body only when the
   /// connection closes.
+  ///
+  /// The stream of a [Success] holds the connection open: listen to it, or
+  /// the connection stays open. Cancelling the subscription closes the
+  /// connection, as does cancelling `call.cancelToken` (the stream then
+  /// ends with [SseDisconnected]). The stream never emits errors, with one
+  /// exception: an [Error] thrown by [decodeEvent] is a bug of the program,
+  /// so it reaches the listener as a stream error and the stream closes.
+  /// Problems with the data are items ([SseDecodeError]), never errors.
   Future<Result<Stream<SseItem<T>>, E>> openEvents<T, E>(
     OperationRequest request,
     T Function(SseMessage message) decodeEvent,
@@ -97,9 +105,25 @@ final class DioRequestSender {
       );
       return TransportError(exception, StackTrace.current);
     }
+    final token = CancelToken();
+    final outer = call?.cancelToken;
+    if (outer != null) {
+      if (outer.isCancelled) {
+        token.cancel(outer.cancelError?.error);
+      } else {
+        outer.whenCancel.then((e) {
+          if (!token.isCancelled) token.cancel(e.error);
+        });
+      }
+    }
     final Response<Object?> response;
     try {
-      response = await _request(request, call, events: true);
+      response = await _request(
+        request,
+        call,
+        events: true,
+        cancelToken: token,
+      );
     } on DioException catch (e, stackTrace) {
       final failed = e.response;
       if (e.type == .badResponse && failed != null) {
@@ -111,7 +135,12 @@ final class DioRequestSender {
     final body = response.data;
     if (request.streamStatuses.contains(status) && body is ResponseBody) {
       return Success(
-        SseItemDecoder<T>(decodeEvent).bind(body.stream),
+        SseItemDecoder<T>(
+          decodeEvent,
+          onClose: () {
+            if (!token.isCancelled) token.cancel('the event stream was closed');
+          },
+        ).bind(body.stream),
         statusCode: status,
         headers: response.headers.map,
       );
@@ -135,6 +164,7 @@ final class DioRequestSender {
     OperationRequest request,
     CallOptions? call, {
     bool events = false,
+    CancelToken? cancelToken,
   }) {
     final path = _guardQuery(request.resolvePath());
     final options = Options(
@@ -161,7 +191,7 @@ final class DioRequestSender {
       path,
       data: request.body,
       options: options,
-      cancelToken: call?.cancelToken,
+      cancelToken: cancelToken ?? call?.cancelToken,
       onSendProgress: call?.onSendProgress,
       onReceiveProgress: call?.onReceiveProgress,
     );
@@ -238,6 +268,19 @@ final class DioRequestSender {
       };
     } on DioException catch (e, stackTrace) {
       return _failure(e, stackTrace);
+    } on Exception catch (e, stackTrace) {
+      // The adapter's own exception while reading the body (a reset
+      // connection): a transport failure. An Error still reaches the caller.
+      return TransportError(
+        DioException(
+          requestOptions: response.requestOptions,
+          response: response,
+          type: .unknown,
+          error: e,
+          stackTrace: stackTrace,
+        ),
+        stackTrace,
+      );
     }
     final Object? body;
     try {

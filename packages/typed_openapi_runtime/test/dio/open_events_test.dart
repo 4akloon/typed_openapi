@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -174,6 +175,108 @@ void main() {
       FakeAdapter((_) => errorBody(404, '{"code": 1}', 'application/json')),
     );
     expect((mismatch as DecodeError).error.pointer, '/code');
+  });
+
+  test('cancelling the subscription closes the connection', () async {
+    final body = StreamController<Uint8List>();
+    final adapter = FakeAdapter((_) => eventStream(body.stream));
+    final result = await open(adapter);
+    final items = <String>[];
+    final subscription = (result as Success<Stream<SseItem<Delta>>, Problem>)
+        .data
+        .listen(
+          (item) => items.add(describe(item)),
+        );
+    body.add(utf8.encode('data: {"text": "a"}\n\n'));
+    await Future<void>.delayed(Duration.zero);
+    expect(adapter.cancelsFired.single, isFalse);
+    await subscription.cancel();
+    await Future<void>.delayed(Duration.zero);
+    expect(adapter.cancelsFired.single, isTrue);
+    expect(items, ['a']);
+    await body.close();
+  });
+
+  test('a user cancel still ends the stream with SseDisconnected', () async {
+    final body = StreamController<Uint8List>();
+    final token = CancelToken();
+    final adapter = FakeAdapter((_) => eventStream(body.stream));
+    final result = await open(adapter, call: CallOptions(cancelToken: token));
+    final items = (result as Success<Stream<SseItem<Delta>>, Problem>).data
+        .map(describe)
+        .toList();
+    token.cancel();
+    expect(await items, ['end cancel']);
+    expect(adapter.cancelsFired.single, isTrue);
+    await body.close();
+  });
+
+  test('a token cancelled before the call is Cancelled', () async {
+    final token = CancelToken()..cancel();
+    final adapter = FakeAdapter(
+      (_) => eventStream(Stream.value(utf8.encode('data: {}\n\n'))),
+    );
+    final result = await open(adapter, call: CallOptions(cancelToken: token));
+    expect(result, isA<Cancelled>());
+  });
+
+  test('a body read failure on an error status is a TransportError', () async {
+    final body = StreamController<Uint8List>();
+    final pending = open(
+      FakeAdapter(
+        (_) => ResponseBody(
+          body.stream,
+          500,
+          headers: {
+            Headers.contentTypeHeader: ['text/html'],
+          },
+        ),
+      ),
+    );
+    body
+      ..add(utf8.encode('partial'))
+      ..addError(const SocketException('reset'));
+    final result = await pending;
+    final exception = (result as TransportError).exception;
+    expect(exception.type, DioExceptionType.unknown);
+    expect(exception.error, isA<SocketException>());
+    await body.close();
+  });
+
+  test('an Error while reading the body still propagates', () async {
+    final body = StreamController<Uint8List>();
+    final pending = open(
+      FakeAdapter((_) => ResponseBody(body.stream, 500)),
+    );
+    body.addError(StateError('bug'));
+    await expectLater(pending, throwsStateError);
+    await body.close();
+  });
+
+  test('an Error in decodeEvent is a stream error and closes it', () async {
+    final body = StreamController<Uint8List>();
+    final adapter = FakeAdapter((_) => eventStream(body.stream));
+    final result = await DioRequestSender(Dio()..httpClientAdapter = adapter)
+        .openEvents<Delta, Problem>(
+          chat,
+          (message) => throw StateError('bug'),
+          decodeError,
+        );
+    final items = <SseItem<Delta>>[];
+    final errors = <Object>[];
+    final done = Completer<void>();
+    (result as Success<Stream<SseItem<Delta>>, Problem>).data.listen(
+      items.add,
+      onError: errors.add,
+      onDone: done.complete,
+    );
+    body.add(utf8.encode('data: {"text": "a"}\n\ndata: {"text": "b"}\n\n'));
+    await done.future;
+    await Future<void>.delayed(Duration.zero);
+    expect(items, isEmpty);
+    expect(errors.single, isA<StateError>());
+    expect(adapter.cancelsFired.single, isTrue);
+    await body.close();
   });
 
   test('a status outside streamStatuses is decoded like a response', () async {

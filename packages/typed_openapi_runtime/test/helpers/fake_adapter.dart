@@ -41,6 +41,10 @@ final class FakeAdapter implements HttpClientAdapter {
   /// The request bodies seen, as text.
   final List<String> bodies = [];
 
+  /// Per request, whether the `cancelFuture` Dio passed has completed: the
+  /// request was cancelled and a real adapter would close the connection.
+  final List<bool> cancelsFired = [];
+
   @override
   Future<ResponseBody> fetch(
     RequestOptions options,
@@ -48,6 +52,12 @@ final class FakeAdapter implements HttpClientAdapter {
     Future<void>? cancelFuture,
   ) async {
     requests.add(options);
+    final index = cancelsFired.length;
+    cancelsFired.add(false);
+    cancelFuture?.then(
+      (_) => cancelsFired[index] = true,
+      onError: (Object _) => cancelsFired[index] = true,
+    );
     final bytes = <int>[];
     if (requestStream != null) {
       await for (final chunk in requestStream) {

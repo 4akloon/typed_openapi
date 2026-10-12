@@ -10,14 +10,22 @@ import 'sse_message.dart';
 /// [SseMessage.jsonObject]); a [JsonDecodeException] becomes an
 /// [SseDecodeError] and the stream goes on. The end of the body, or its
 /// first error, becomes [SseDisconnected] and closes the stream, so the
-/// stream never emits errors. Cancelling the subscription cancels the body.
+/// stream never emits errors, with one exception: an [Error] thrown by
+/// [decode] is a bug of the program, not a problem of the data, so it is
+/// forwarded as a stream error and the stream closes. Cancelling the
+/// subscription cancels the body.
 final class SseItemDecoder<T>
     extends StreamTransformerBase<List<int>, SseItem<T>> {
   /// Creates a decoder whose events [decode] reads.
-  const SseItemDecoder(this.decode);
+  const SseItemDecoder(this.decode, {this.onClose});
 
   /// Reads the data of one event.
   final T Function(SseMessage message) decode;
+
+  /// Called when the stream stops reading the body early: the listener
+  /// cancelled, or [decode] threw an [Error]. Not called when the body
+  /// ends or fails by itself. `openEvents` closes the connection here.
+  final void Function()? onClose;
 
   @override
   Stream<SseItem<T>> bind(Stream<List<int>> stream) {
@@ -34,7 +42,20 @@ final class SseItemDecoder<T>
         source = const SseDecoder()
             .bind(stream)
             .listen(
-              (message) => items.add(_item(message)),
+              (message) {
+                final SseItem<T> item;
+                try {
+                  item = _item(message);
+                  // ignore: avoid_catching_errors, forwarded to the listener
+                } on Error catch (error, stackTrace) {
+                  items.addError(error, stackTrace);
+                  source?.cancel();
+                  onClose?.call();
+                  items.close();
+                  return;
+                }
+                items.add(item);
+              },
               onError: (Object error, StackTrace stackTrace) {
                 end(SseDisconnected(cause: error, stackTrace: stackTrace));
               },
@@ -44,7 +65,10 @@ final class SseItemDecoder<T>
       },
       onPause: () => source?.pause(),
       onResume: () => source?.resume(),
-      onCancel: () => source?.cancel(),
+      onCancel: () {
+        onClose?.call();
+        return source?.cancel();
+      },
     );
     return items.stream;
   }
