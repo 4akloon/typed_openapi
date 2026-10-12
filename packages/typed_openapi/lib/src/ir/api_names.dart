@@ -182,8 +182,9 @@ final class ApiNames {
     ResponseBodyNames inlineBodies,
   ) {
     final plural = '${candidate}s';
-    return inlineBodies.isInlineBodyOf(operation, candidate) &&
-            !_types.isTaken(plural)
+    return _types.isTaken(candidate) &&
+            !_types.isTaken(plural) &&
+            inlineBodies.isInlineBodyOf(operation, candidate)
         ? plural
         : candidate;
   }

@@ -25,7 +25,7 @@ const Map<String, int> _fileAllowlist = {
   // whether a response body is a secret.
   'lib/src/ir/ir.dart': 824,
   // M9: event streams in the empty-client report; webhooks checked.
-  'lib/src/ir/ir_builder.dart': 540,
+  'lib/src/ir/ir_builder.dart': 538,
   // M9: the path variable pattern, parameter defaults, encodings, statuses,
   // secret bodies.
   'lib/src/ir/operation_builder.dart': 535,

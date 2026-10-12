@@ -5,8 +5,8 @@ import 'package:typed_openapi/src/diagnostics/severity.dart';
 import 'package:typed_openapi/src/ir/dart_type.dart';
 import 'package:typed_openapi/src/ir/ir.dart';
 import 'package:typed_openapi/src/ir/ir_builder.dart';
-import 'package:typed_openapi/src/ir/operation_builder.dart';
 import 'package:typed_openapi/src/model/operation.dart';
+import 'package:typed_openapi/src/model/path_template.dart';
 import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'
     show OperationRequest;
 
@@ -26,7 +26,7 @@ OperationIr single(ClientIr ir) => ir.groups.single.operations.single;
 void main() {
   test('the generator reads path variables as the runtime does', () {
     expect(
-      OperationBuilder.pathVariable.pattern,
+      PathTemplate.variable.pattern,
       OperationRequest.pathVariable.pattern,
     );
     final fixture = IrFixture('''

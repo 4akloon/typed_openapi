@@ -1,4 +1,5 @@
 import '../model/operation.dart';
+import '../model/path_template.dart';
 import '../model/schema.dart';
 import 'body_encoding.dart';
 import 'dart_type.dart';
@@ -7,6 +8,7 @@ import 'ir_context.dart';
 import 'media_type_picker.dart';
 import 'names.dart';
 import 'operation_checks.dart';
+import 'parameter_styles.dart';
 import 'parts_builder.dart';
 import 'response_secrets.dart';
 import 'response_statuses.dart';
@@ -54,34 +56,9 @@ final class OperationBuilder {
 
   static const _names = DartNames();
 
-  /// A variable of a path template: `{name}`, where the name has no brace
-  /// (`{}` is a variable with an empty name). The runtime resolves paths
-  /// with the same pattern (`OperationRequest.pathVariable`), so every
-  /// variable it finds has a parameter.
-  static final pathVariable = RegExp(r'\{([^{}]*)\}');
-
   /// The header parameters OpenAPI says to ignore: the request's own
   /// `Accept`, `Content-Type` and `Authorization` (compared in lower case).
   static const _ignoredHeaders = {'accept', 'content-type', 'authorization'};
-
-  /// The styles OpenAPI allows for each placement, the default style
-  /// first (`style: cookie` is OpenAPI 3.2's second style for cookies); a
-  /// `querystring` parameter has none.
-  static const allowedStyles = {
-    ParameterLocation.path: [
-      ParameterStyle.simple,
-      ParameterStyle.label,
-      ParameterStyle.matrix,
-    ],
-    ParameterLocation.query: [
-      ParameterStyle.form,
-      ParameterStyle.spaceDelimited,
-      ParameterStyle.pipeDelimited,
-      ParameterStyle.deepObject,
-    ],
-    ParameterLocation.header: [ParameterStyle.simple],
-    ParameterLocation.cookie: [ParameterStyle.form, ParameterStyle.cookie],
-  };
 
   final IrContext _context;
   final SchemaMapper _mapper;
@@ -162,7 +139,7 @@ final class OperationBuilder {
       byKey[(placement, parameter.name)] = (placement, parameter);
     }
     final variables = [
-      for (final match in pathVariable.allMatches(entry.path)) match[1]!,
+      for (final match in PathTemplate(entry.path).variables) match[1]!,
     ];
     var bound = true;
     for (final variable in variables) {
@@ -241,7 +218,7 @@ final class OperationBuilder {
     String wire,
   ) {
     final style = parameter.style;
-    final allowed = allowedStyles[placement];
+    final allowed = ParameterStyles.allowed[placement];
     if (style == null || allowed == null || allowed.contains(style)) {
       return style;
     }

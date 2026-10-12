@@ -3,6 +3,8 @@ import 'package:typed_openapi/src/config/project_config.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_bag.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
+import 'package:typed_openapi/src/ir/ir.dart';
+import 'package:typed_openapi/src/ir/ir_builder.dart';
 import 'package:typed_openapi/src/ir/ir_context.dart';
 import 'package:typed_openapi/src/load/openapi_version.dart';
 import 'package:typed_openapi/src/load/spec_loader.dart';
@@ -19,6 +21,7 @@ final class IrFixture {
     GenerationConfig generation = const GenerationConfig(),
     String? overrides,
     Preset? preset,
+    String clientName = 'api',
   }) {
     final document = SpecLoader(diagnostics).parse(text, 'api.yaml')!;
     final version = OpenApiVersionDetector(diagnostics).detect(document)!;
@@ -34,7 +37,7 @@ final class IrFixture {
       diagnostics,
       spec,
       ClientConfig(
-        name: 'api',
+        name: clientName,
         input: 'api.yaml',
         output: 'lib/api',
         lineWidth: 80,
@@ -55,6 +58,16 @@ final class IrFixture {
 
   /// The diagnostics reported after normalizing, in report order.
   List<Diagnostic> get reported => diagnostics.all.skip(before).toList();
+
+  /// The IR of the client.
+  ClientIr build() =>
+      IrBuilder(diagnostics).build(context.spec, context.client);
+
+  /// The diagnostics of [reported] with [code].
+  List<Diagnostic> reportedOf(DiagnosticCode code) => [
+    for (final d in reported)
+      if (d.code == code) d,
+  ];
 
   /// The codes and pointers of [reported].
   List<(DiagnosticCode, String?)> get codes => [

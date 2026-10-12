@@ -1,5 +1,6 @@
 import '../model/schema.dart';
 import 'ir_context.dart';
+import 'ref_follower.dart';
 import 'schema_shapes.dart';
 
 /// Reads the `default` of a schema the way a model field does (M6): the
@@ -13,13 +14,8 @@ final class SchemaDefaults {
 
   final IrContext _context;
 
-  late final RefFollower _refs = RefFollower(
-    (schema) => switch (_context.model.resolveSchema(schema)) {
-      final SchemaObject object => object,
-      _ => null,
-    },
-    siblings: _context.model.document.version != .v30,
-  );
+  // Lazy because a field initializer cannot read `_context`.
+  late final RefFollower _refs = RefFollower.of(_context.model);
 
   /// The `default` of [schema], wrapped so that an explicit `null` default
   /// differs from none; null when [schema] is null or no source has one.

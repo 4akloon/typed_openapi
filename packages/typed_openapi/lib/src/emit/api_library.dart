@@ -1,6 +1,6 @@
 import '../ir/ir.dart';
 import '../ir/names.dart';
-import '../ir/operation_builder.dart';
+import '../model/path_template.dart';
 import 'dart_code.dart';
 import 'dart_writer.dart';
 import 'imports.dart';
@@ -185,7 +185,7 @@ final class ApiLibrary {
     final byName = {for (final v in server.variables) v.wireName: v};
     final pieces = <String>[];
     var start = 0;
-    for (final match in OperationBuilder.pathVariable.allMatches(server.url)) {
+    for (final match in PathTemplate(server.url).variables) {
       final variable = byName[match[1]];
       if (variable == null) continue;
       if (match.start > start) {

@@ -11,8 +11,12 @@ final class DartCode {
   /// other tools read as such), tabs, control characters, lone
   /// surrogates, which would break the line or the file's encoding, and the
   /// bidirectional controls, which could reorder the code on screen.
-  String string(String value) {
-    final out = StringBuffer("'");
+  String string(String value) => "'${escaped(value)}'";
+
+  /// [value] as the text between the quotes of [string], for a literal that
+  /// has other parts, such as an interpolation of its own.
+  String escaped(String value) {
+    final out = StringBuffer();
     for (final unit in value.runes) {
       out.write(switch (unit) {
         0x5c => r'\\',
@@ -32,7 +36,6 @@ final class DartCode {
         _ => String.fromCharCode(unit),
       });
     }
-    out.write("'");
     return out.toString();
   }
 

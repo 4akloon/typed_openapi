@@ -3,6 +3,7 @@ import '../model/schema.dart';
 import '../model/spec_node.dart';
 import '../resolve/spec_model.dart';
 import 'ir.dart';
+import 'ref_follower.dart';
 import 'response_statuses.dart';
 import 'schema_shapes.dart';
 
@@ -31,10 +32,8 @@ final class DirectionIndex {
   final Map<SpecLocation, bool> _directional = {};
   final Set<SpecLocation> _patchBodies = {};
 
-  late final RefFollower _refs = RefFollower(
-    _model.resolveSchema,
-    siblings: _model.document.version != .v30,
-  );
+  // Lazy because a field initializer cannot read `_model`.
+  late final RefFollower _refs = RefFollower.of(_model);
 
   /// Records the schemas of [operation]'s parameters and request body as
   /// used in requests and those of its responses as used in responses; the

@@ -1,3 +1,4 @@
+import '../ir/dart_type.dart';
 import '../ir/ir.dart';
 import '../ir/names.dart';
 import 'dart_code.dart';
@@ -162,27 +163,36 @@ final class OperationEmitter {
     if (operation.deprecated) {
       out.line("@Deprecated('Deprecated in the API spec.')");
     }
-    final arguments = [
-      for (final parameter in operation.parameters)
-        _argument(
-          _codec.known(parameter.type),
-          parameter.name,
-          isRequired: parameter.required,
-        ),
-      if (_request.bodyType(operation) case final body?)
-        _argument(body, 'body', isRequired: operation.body!.required),
-      'CallOptions? call',
-    ];
     out.list(
       'Future<Result<${_decoder.successType(operation)}, '
           '${_decoder.errorType(operation)}>> '
           '${operation.name}({',
-      arguments,
+      _arguments(operation),
       '}) => _sender.send(',
     );
     out.indented(() => _send(out, operation, info, decoder));
     out.line(');');
   }
+
+  /// The named arguments of the method of [operation]: its parameters, the
+  /// body and `call`.
+  List<String> _arguments(OperationIr operation) => [
+    for (final parameter in operation.parameters)
+      _argument(
+        _codec.known(parameter.type),
+        parameter.name,
+        isRequired: parameter.required,
+        type: parameter.type,
+      ),
+    if (_request.bodyType(operation) case final body?)
+      _argument(
+        body,
+        'body',
+        isRequired: operation.body!.required,
+        type: operation.partsName == null ? operation.body!.type : null,
+      ),
+    'CallOptions? call',
+  ];
 
   /// The arguments of `_sender.send`: the request, the decoder and `call`.
   void _send(
@@ -205,17 +215,20 @@ final class OperationEmitter {
       ..line('call: call,');
   }
 
-  /// The declaration of a named argument: `required` when it is, and
-  /// `JsonValue`, which is never nullable, defaults to JSON `null` when it
-  /// is optional.
+  /// The declaration of a named argument of the Dart type [declared]:
+  /// `required` when it is, and `JsonValue` (a [type] of kind json), which
+  /// is never nullable, defaults to JSON `null` when it is optional.
   static String _argument(
-    String type,
+    String declared,
     String name, {
     required bool isRequired,
+    DartType? type,
   }) {
-    if (isRequired) return 'required $type $name';
-    if (type == 'JsonValue') return '$type $name = const JsonValue(null)';
-    return '$type $name';
+    if (isRequired) return 'required $declared $name';
+    if (type case CoreType(kind: .json)) {
+      return '$declared $name = const JsonValue(null)';
+    }
+    return '$declared $name';
   }
 
   /// The doc comment of a method: summary, description, method and path,

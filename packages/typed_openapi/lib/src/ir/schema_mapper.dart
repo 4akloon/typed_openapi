@@ -9,6 +9,7 @@ import 'direction_index.dart';
 import 'ir.dart';
 import 'ir_context.dart';
 import 'names.dart';
+import 'ref_follower.dart';
 import 'schema_shapes.dart';
 
 /// How an inline schema's declaration is named (R5.4): after its parent
@@ -2019,12 +2020,9 @@ final class SchemaMapper {
         nullable: json.nullable,
       );
 
-  /// How the schema questions follow a `$ref`: through [_resolved], and the
-  /// keywords next to it count from OpenAPI 3.1.
-  late final RefFollower _refs = RefFollower(
-    _resolved,
-    siblings: _context.model.document.version != .v30,
-  );
+  /// How the schema questions follow a `$ref`. Lazy because a field
+  /// initializer cannot read `_context`.
+  late final RefFollower _refs = RefFollower.of(_context.model);
 
   SchemaObject? _resolved(Schema schema) =>
       switch (_context.model.resolveSchema(schema)) {

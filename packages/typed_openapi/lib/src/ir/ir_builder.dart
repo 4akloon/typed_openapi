@@ -2,6 +2,7 @@ import '../config/project_config.dart';
 import '../diagnostics/diagnostic_bag.dart';
 import '../diagnostics/json_pointer.dart';
 import '../model/operation.dart';
+import '../model/path_template.dart';
 import '../model/spec_node.dart';
 import '../normalize/normalizer.dart';
 import 'api_names.dart';
@@ -422,13 +423,10 @@ final class IrBuilder {
   /// `getUsersPostsByUserIdAndPostId`, `GET /pets/{id}` gives
   /// `getPetsById`.
   static String _pathName(String method, String path) {
-    final variables = <String>[];
-    final literal = path.replaceAllMapped(OperationBuilder.pathVariable, (
-      match,
-    ) {
-      variables.add(match[1]!);
-      return ' ';
-    });
+    final variables = [
+      for (final match in PathTemplate(path).variables) match[1]!,
+    ];
+    final literal = path.replaceAll(PathTemplate.variable, ' ');
     if (variables.isEmpty) return '$method $literal';
     return '$method $literal By ${variables.join(' And ')}';
   }

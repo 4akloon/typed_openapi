@@ -1,7 +1,7 @@
 import '../model/operation.dart';
 import 'ir.dart';
 import 'ir_context.dart';
-import 'operation_builder.dart';
+import 'parameter_styles.dart';
 
 /// Reads the `encoding` of a form or multipart request body.
 final class BodyEncoding {
@@ -17,7 +17,7 @@ final class BodyEncoding {
   /// (TOA656).
   List<EncodingIr> of(MediaType? media, BodyKind kind) {
     if (media == null || kind != .form && kind != .multipart) return const [];
-    final allowed = OperationBuilder.allowedStyles[ParameterLocation.query]!;
+    final allowed = ParameterStyles.allowed[ParameterLocation.query]!;
     return [
       for (final property in media.encoding.keys.toList()..sort())
         if (media.encoding[property] case final encoding?)

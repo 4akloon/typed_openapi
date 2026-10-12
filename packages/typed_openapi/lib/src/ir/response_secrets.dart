@@ -2,6 +2,7 @@ import '../model/schema.dart';
 import 'dart_type.dart';
 import 'ir.dart';
 import 'ir_context.dart';
+import 'ref_follower.dart';
 import 'schema_shapes.dart';
 
 /// Tells which response bodies are secrets that no `toString` may print
@@ -16,13 +17,7 @@ final class ResponseSecrets {
   final IrContext _context;
 
   // Lazy because a field initializer cannot read `_context`.
-  late final RefFollower _refs = RefFollower(
-    (schema) => switch (_context.model.resolveSchema(schema)) {
-      final SchemaObject object => object,
-      _ => null,
-    },
-    siblings: _context.model.document.version != .v30,
-  );
+  late final RefFollower _refs = RefFollower.of(_context.model);
 
   /// Whether a body of [type] mapped from [schema] is a secret; false
   /// without a [schema] or a [type].

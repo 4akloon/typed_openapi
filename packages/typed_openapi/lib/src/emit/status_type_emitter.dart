@@ -63,7 +63,7 @@ final class StatusTypeEmitter {
       ..line('int get hashCode => ($name).hashCode;')
       ..line()
       ..line('@override')
-      ..line("String toString() => '${_escaped(name)}()';");
+      ..line("String toString() => '${_code.escaped(name)}()';");
   }
 
   void _withBody(DartWriter out, StatusCaseIr variant, DartType body) {
@@ -94,7 +94,9 @@ final class StatusTypeEmitter {
       )
       ..line()
       ..line('@override')
-      ..line("String toString() => '${_escaped(name)}(${_shown(variant)})';");
+      ..line(
+        "String toString() => '${_code.escaped(name)}(${_shown(variant)})';",
+      );
   }
 
   /// What `toString` of [variant] writes for its body: `<redacted>` for a
@@ -110,7 +112,4 @@ final class StatusTypeEmitter {
     }
     return r'$body';
   }
-
-  /// [name] as the text of a string literal.
-  static String _escaped(String name) => name.replaceAll(r'$', r'\$');
 }
