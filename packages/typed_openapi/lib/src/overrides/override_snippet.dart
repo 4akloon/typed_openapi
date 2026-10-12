@@ -49,8 +49,11 @@ final class OverrideSnippet {
   }
 
   /// The override of the schema at [location] that sets [fields] (`null`
-  /// removes a field), as block YAML; null when the schema has no address.
+  /// removes a field), as block YAML; null when the schema has no address or
+  /// a value cannot be written as YAML the overrides file reads (a number
+  /// that is not finite).
   String? forSchema(SpecLocation location, Map<String, Object?> fields) {
+    if (!_isWritable(fields)) return null;
     final address = addressOf(location);
     if (address == null) return null;
     final lines = <String>[];
@@ -63,6 +66,16 @@ final class OverrideSnippet {
     }
     return lines.join('\n');
   }
+
+  static bool _isWritable(Object? value) => switch (value) {
+    null || bool() || int() || String() => true,
+    final double number => number.isFinite,
+    final Map<Object?, Object?> map => map.entries.every(
+      (e) => e.key is String && _isWritable(e.value),
+    ),
+    final List<Object?> list => list.every(_isWritable),
+    _ => false,
+  };
 
   static bool _isDefinition(Schema schema) =>
       schema is! SchemaObject || schema.ref == null;

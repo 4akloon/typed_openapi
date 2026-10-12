@@ -121,6 +121,39 @@ components:
     });
   });
 
+  test('a value YAML cannot carry gives no snippet', () {
+    final dir = TempDir();
+    final path = dir.write('api.yaml', '''
+openapi: 3.1.0
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Order: {type: object}
+''');
+    final bag = DiagnosticBag();
+    final document = SpecLoader(bag).load(path)!;
+    final snippet = OverrideSnippet(
+      SpecReader(bag).read(document, OpenApiVersion.v31),
+    );
+    final order = SpecLocation(
+      document.uri,
+      JsonPointer.parse('#/components/schemas/Order'),
+    );
+    expect(snippet.forSchema(order, {'default': 1.5}), isNotNull);
+    for (final value in [double.infinity, double.nan]) {
+      expect(snippet.forSchema(order, {'default': value}), isNull);
+      expect(
+        snippet.forSchema(order, {
+          'items': {
+            'x': [value],
+          },
+        }),
+        isNull,
+      );
+    }
+  });
+
   group('rule fixes carry an override that removes the finding', () {
     const header = '''
 openapi: 3.0.3
@@ -212,6 +245,34 @@ components:
         spec,
       ).all.singleWhere((d) => d.code == DiagnosticCode.binaryObject);
       expect(d.fix, isNot(contains('Override:')));
+    });
+
+    test('a double array with a non-finite number is reported, no snippet', () {
+      const head = '''
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+''';
+      final specs = {
+        'yaml':
+            '${head}components:\n  schemas:\n    Order:\n'
+            '      type: object\n      properties:\n        lines:\n'
+            '          type: array\n          items:\n'
+            '            required: true\n            type: array\n'
+            '            items: {type: number, default: .inf}\n',
+        'json':
+            '{"openapi": "3.0.3", "info": {"title": "t", "version": "1"}, '
+            '"paths": {}, "components": {"schemas": {"Order": {"type": '
+            '"object", "properties": {"lines": {"type": "array", "items": '
+            '{"required": true, "type": "array", "items": '
+            '{"type": "number", "maximum": 1e999}}}}}}}}',
+      };
+      for (final MapEntry(:key, :value) in specs.entries) {
+        final d = _normalize(
+          value,
+        ).all.singleWhere((d) => d.code == DiagnosticCode.doubleArray);
+        expect(d.fix, isNot(contains('Override:')), reason: key);
+      }
     });
 
     test('a schema without an address gets no override', () {
