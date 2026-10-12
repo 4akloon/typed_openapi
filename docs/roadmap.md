@@ -245,4 +245,5 @@ Findings of the M9 reviews that the fix tasks (10a, 10b, 10c) did not fix, with 
 | The collision cases of the client name (`api`, `models`) are tested only on `ApiLibrary`, not through `generate` | T6 M5 | the layout is verified by the reviewer on 13 outputs |
 | TOA568 for a scheme without a type is reported twice, with TOA111 or TOA112 at the same place | T10a M4 | each says something else (the spec is wrong; the metadata is `unknown`) |
 | `UndocumentedStatus.rawBody` is raw bytes, not parsed JSON, in an operation with a binary error (the operation reads bytes) | T10b M1 | stated in the decoder rules of `CLAUDE.md`; a parse by `Content-Type` can be added to `RawResponse.undocumented` |
-| `// ignore_for_file: avoid_print` of `wire_calls.dart.txt` has no reason; `body(String schema)` in `response_status_test.dart` reads like an unused parameter | T10b M5 | style only |
+| `body(String schema)` in `response_status_test.dart` reads like an unused parameter | T10b M5 | style only |
+| The new emitter code uses `!` where a pattern or an early return could promote the value (`decoder_writer.dart`, `request_writer.dart`, `operation_emitter.dart`, `api_library.dart`) | final review minor 9 | the values are IR-contract invariants and 54,000 fuzzed builds found no crash; style only |

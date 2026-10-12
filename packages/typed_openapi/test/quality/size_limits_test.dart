@@ -26,11 +26,9 @@ const Map<String, int> _fileAllowlist = {
   'lib/src/ir/ir.dart': 824,
   // M9: event streams in the empty-client report; webhooks checked.
   'lib/src/ir/ir_builder.dart': 538,
-  // M9: the path variable pattern, parameter defaults, encodings, statuses,
-  // secret bodies.
   'lib/src/ir/operation_builder.dart': 509,
-  'lib/src/ir/schema_mapper.dart': 2196,
-  'lib/src/ir/schema_shapes.dart': 446,
+  'lib/src/ir/schema_mapper.dart': 2194,
+  'lib/src/ir/schema_shapes.dart': 433,
   'test/check/spec_checker_test.dart': 705,
   'test/cli/cli_test.dart': 793,
   'test/cli/generate_command_test.dart': 771,
@@ -76,12 +74,11 @@ const Map<String, int> _methodAllowlist = {
   'lib/src/ir/ir_builder.dart#IrBuilder._methodName': 50,
   // M9: event streams are a reason a client is empty.
   'lib/src/ir/ir_builder.dart#IrBuilder._reportEmpty': 55,
-  'lib/src/ir/ir_builder.dart#IrBuilder.build': 95,
+  'lib/src/ir/ir_builder.dart#IrBuilder.build': 94,
   // M9: a parameter keeps its schema's default.
   'lib/src/ir/operation_builder.dart#OperationBuilder._parameter': 100,
   'lib/src/ir/operation_builder.dart#OperationBuilder._parameters': 74,
-  // M9: a response knows whether its body is a secret.
-  'lib/src/ir/operation_builder.dart#OperationBuilder._responses': 58,
+  'lib/src/ir/operation_builder.dart#OperationBuilder._responses': 42,
   'lib/src/ir/operation_selector.dart#OperationSelector.select': 42,
   'lib/src/ir/schema_mapper.dart#SchemaMapper._claim': 66,
   'lib/src/ir/schema_mapper.dart#SchemaMapper._component': 76,

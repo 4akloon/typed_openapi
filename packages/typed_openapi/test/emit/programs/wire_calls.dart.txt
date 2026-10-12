@@ -1,6 +1,7 @@
 // A program that calls the client generated from test/emit/fixtures/wire.yaml
 // through a Dio whose adapter answers from memory, and prints what went on
 // the wire and what each call returned.
+// The test reads what the program prints, so it prints.
 // ignore_for_file: avoid_print
 import 'dart:convert';
 import 'dart:typed_data';

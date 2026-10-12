@@ -289,8 +289,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `Accept`, `Content-Type` and `Authorization` are dropped as OpenAPI says;
   a parameter style its `in` does not allow falls back to the default,
   TOA564, and an `in: querystring` parameter is skipped, TOA565; path
-  variables are `OperationBuilder.pathVariable`, the runtime's
-  `OperationRequest.pathVariable`, which a test keeps equal) and
+  variables are `PathTemplate.variable` in `model/path_template.dart`, the
+  runtime's `OperationRequest.pathVariable`, which a test keeps equal) and
   `IrBuilder`
   (operations written as a `$ref` are skipped (TOA107); groups by tag, path
   or one class, with an override `group` (UpperCamelCase, or a value that
@@ -308,9 +308,10 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   multipart parts (`RequestBodyIr.parts`, TOA655 when the schema is not an
   object; `PartMediaType` makes each part's `encoding.contentType` one
   concrete type, TOA661, and an object part that is not JSON a `String` the
-  caller supplies, TOA662); `OperationBuilder` keeps security requirements (an alternative
-  that names a scheme `components.securitySchemes` does not define is
-  TOA568 and left out as a whole when another alternative can be described;
+  caller supplies, TOA662); `OperationBuilder` keeps security requirements
+  (an alternative that names a scheme `components.securitySchemes` does not
+  define, or is not an object (`SecurityRequirement.isMalformed`, also
+  TOA111), is TOA568 and left out as a whole when another alternative can be described;
   when none can, all stay with the scheme of kind `SecurityKind.unknown`
   (the runtime's `SecuritySchemeType.unknown`), so the metadata never says
   less than the spec: no operation reads as open or as optional), skips event-stream operations (TOA654) and reports
@@ -320,10 +321,10 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   type of a body, response or parameter and tells its `BodyKind`); `ApiNames.client` assembles the
   `ClientIr`; `RootNames` names the root client (a client name that loses
   letters is TOA559, one with no letters TOA552 and `ApiClient`, one that
-  starts with a digit gets `Api` in front, never `$1`), the group fields and
-  the servers, and reports a member that is renamed (TOA550, TOA551); the
-  fields of a multipart parts class are reported like arguments (TOA550,
-  TOA551, TOA552, TOA559); `TypeClaims` claims the library's type names; a
+  starts with a digit gets `Api` in front, never `$1`, with TOA559), the group
+  fields and the servers with their variables, and reports a member that is renamed (TOA550, TOA551); the
+  fields of a multipart parts class and the variables of a server are reported
+  like arguments (TOA550, TOA551, TOA552, TOA559); `TypeClaims` claims the library's type names; a
   security scheme that is defined without a usable type has its own TOA568
   text; the responses of an operation are picked (`MediaTypePicker`) and
   checked for an event stream before any type is mapped, so a skipped
@@ -568,7 +569,10 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `ClientConfig`, `Preset`, `ProjectConfig`, `GenerationConfig`, `GroupBy`,
   `TriStateRule`, `OperationFilter`, `FilterPattern`, `ModelLibrary`,
   `OutputWriter`, `OutputChanges`, the IR (`IrBuilder`,
-  `IrJson`, `ClientIr` and its node classes, `DartType` and its
+  `IrJson`, `ClientIr` and its node classes, among them the M9 ones
+  (`RootIr`, `ServerIr`, `ServerVariableIr`, `StatusTypeIr`, `StatusCaseIr`,
+  `PartIr`, `EncodingIr`, `SecurityUseIr`, `SecuritySchemeIr`,
+  `SecurityKind`), `DartType` and its
   subclasses, `DeclId`, `DeclVariant`, `UnionDispatch`, `UnionKind`,
   `UnionVariantIr`), the diagnostics (`Diagnostic`,
   `RelatedLocation`, `DiagnosticBag`, `DiagnosticCode`, `DisplayPaths`,

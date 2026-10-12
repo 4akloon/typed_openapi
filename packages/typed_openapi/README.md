@@ -142,7 +142,12 @@ switch (await client.pets.getPet(petId: 1)) {
   class (`UploadPhotoRequest`) whose binary properties are `FileUpload`s
   (`FileUpload.bytes`, which works on the web, or `FileUpload.stream`, which
   Dio's browser adapter buffers); the parts are sent in the order of the
-  schema; a binary body is a `FileUpload`. Event streams come with M10 (TOA654).
+  schema, so a text part after a file or a typed part carries
+  `Content-Type: text/plain; charset=utf-8` (a text part before them has
+  none); a part whose `encoding` names a list or a wildcard of media types is
+  sent with one concrete type (TOA661), and an object part that is not JSON
+  is a `String` you supply (TOA662); a binary body is a `FileUpload`. Event
+  streams come with M10 (TOA654).
 - The client never changes your Dio: set the base URL there, from the root
   class's server constants (`PetstoreClient.server`, or a method such as
   `PetstoreClient.server1(region: 'eu')` for a URL with variables). When the

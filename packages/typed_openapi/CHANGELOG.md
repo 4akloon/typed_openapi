@@ -10,7 +10,10 @@
   binary successes, sealed types for several successes or errors with
   different bodies, envelopes, typed errors, `UndocumentedStatus`; bodies
   are JSON, forms with their `encoding`, multipart parts with `FileUpload`
-  files, binary `FileUpload`s and text. Every request carries its
+  files, binary `FileUpload`s and text. A multipart text part sent after a
+  file or a typed part now has `Content-Type: text/plain; charset=utf-8`
+  (before, such a part could be sent before the files, out of the schema's
+  order). Every request carries its
   `OperationInfo` with tags and security metadata.
 - Models (M8): `generate` writes the models of every client without check
   errors into its `output` directory: a file per model, enum and union in
@@ -183,17 +186,12 @@
   - TOA567 callbacks-not-generated (info): `callbacks` of an operation and
     the document's `webhooks` are not generated.
   - TOA568 security-scheme-unknown (warning): a security requirement names
-    a scheme `components.securitySchemes` does not have; its alternative is
+    a scheme `components.securitySchemes` does not have or defines without a
+    usable type; its alternative is
     left out of the metadata when another one can be described, else the
     scheme has the kind `unknown`, so no operation reads as open. A
     requirement that is not an object (`security: ["bearer"]`, `[null]`) is
     the same, next to its TOA111.
-  - TOA653 success-undocumented (warning): no 2xx response; any 2xx is a
-    success with the body as `JsonValue`.
-  - TOA654 event-stream-not-generated (warning): an operation whose success
-    is `text/event-stream` is not generated until M10.
-  - TOA655 multipart-not-object (warning): a multipart body that is not an
-    object with properties has no class of parts.
   - TOA650 media-type-as-bytes (info): a body whose media type is not JSON, a
     form, `multipart/form-data`, `text/*` or `text/event-stream`, or a form
     or multipart response, is bytes and its schema is not used (TOA561
@@ -204,6 +202,12 @@
   - TOA652 default-error-schema-missing (warning): `errors.default_schema` is
     not a key of `components.schemas`; the setting is ignored (TOA562 before
     M9).
+  - TOA653 success-undocumented (warning): no 2xx response; any 2xx is a
+    success with the body as `JsonValue`.
+  - TOA654 event-stream-not-generated (warning): an operation whose success
+    is `text/event-stream` is not generated until M10.
+  - TOA655 multipart-not-object (warning): a multipart body that is not an
+    object with properties has no class of parts.
   - TOA656 encoding-headers-ignored (info): the `headers` of the `encoding`
     of a multipart part or a form property are not sent.
   - TOA657 response-status-invalid (warning): a key of `responses` that is
