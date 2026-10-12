@@ -11,13 +11,15 @@ import 'percent_encoder.dart';
 sealed class ParameterValue {
   const ParameterValue();
 
-  /// Classifies [value].
-  factory ParameterValue.of(Object? value) => switch (value) {
-    null => const UndefinedValue(),
-    final List<Object?> list => _items(list),
-    final Map<String, Object?> map => _pairs(map),
-    _ => ScalarValue(text(value)),
-  };
+  /// Classifies [value]. [kind] names the parameter in error messages
+  /// (`simple`, `form`, `header`, ...).
+  factory ParameterValue.of(Object? value, {String kind = 'this'}) =>
+      switch (value) {
+        null => const UndefinedValue(),
+        final List<Object?> list => _items(list, kind),
+        final Map<String, Object?> map => _pairs(map, kind),
+        _ => ScalarValue(text(value)),
+      };
 
   /// Expands the value of the parameter [name] per RFC 6570:
   /// [first] starts a defined value, [separator] joins exploded items,
@@ -34,11 +36,17 @@ sealed class ParameterValue {
     String ifEmpty = '',
   });
 
-  /// The text of a scalar JSON value.
-  static String text(Object? value) => switch (value) {
+  /// The text of a scalar JSON value; [kind] names the parameter in the
+  /// error for a nested list or object.
+  static String text(Object? value, [String kind = 'this']) => switch (value) {
     final String text => text,
     final bool flag => '$flag',
     final num number when number.isFinite => '$number',
+    List<Object?>() || Map<Object?, Object?>() => throw ArgumentError.value(
+      value,
+      'value',
+      'nested objects/arrays are not supported in a $kind parameter',
+    ),
     _ => throw ArgumentError.value(
       value,
       'value',
@@ -46,18 +54,18 @@ sealed class ParameterValue {
     ),
   };
 
-  static ParameterValue _items(List<Object?> list) {
+  static ParameterValue _items(List<Object?> list, String kind) {
     final items = [
       for (final item in list)
-        if (item != null) text(item),
+        if (item != null) text(item, kind),
     ];
     return items.isEmpty ? const UndefinedValue() : ListValue(items);
   }
 
-  static ParameterValue _pairs(Map<String, Object?> map) {
+  static ParameterValue _pairs(Map<String, Object?> map, String kind) {
     final pairs = [
       for (final MapEntry(:key, :value) in map.entries)
-        if (value != null) (key, text(value)),
+        if (value != null) (key, text(value, kind)),
     ];
     return pairs.isEmpty ? const UndefinedValue() : ObjectValue(pairs);
   }
@@ -129,7 +137,9 @@ final class ListValue extends ParameterValue {
     final key = PercentEncoder.unreserved.encode(name);
     final values = items.map(encoder.encode);
     if (explode) {
-      final parts = named ? values.map((v) => '$key=$v') : values;
+      final parts = named
+          ? values.map((v) => v.isEmpty ? '$key$ifEmpty' : '$key=$v')
+          : values;
       return '$first${parts.join(separator)}';
     }
     final joined = values.join(delimiter);
@@ -159,7 +169,10 @@ final class ObjectValue extends ParameterValue {
     if (explode) {
       final parts = [
         for (final (key, value) in pairs)
-          '${encoder.encode(key)}=${encoder.encode(value)}',
+          if (named && value.isEmpty)
+            '${encoder.encode(key)}$ifEmpty'
+          else
+            '${encoder.encode(key)}=${encoder.encode(value)}',
       ];
       return '$first${parts.join(separator)}';
     }

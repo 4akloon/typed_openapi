@@ -33,7 +33,8 @@ enum QueryStyle {
 /// Values are the JSON form of the parameter (`toJson` applied): a scalar, a
 /// list or a string-keyed map. `null` and empty lists and maps are
 /// undefined and expand to `''`. Every character but the unreserved ones is
-/// percent-encoded, so a value cannot add path segments.
+/// percent-encoded, so a value cannot add path segments; a value that is
+/// exactly `.` or `..` is rejected, see [encode].
 final class PathParameter {
   /// Creates a path parameter; OAS defaults are `simple` without explode.
   const PathParameter(
@@ -56,8 +57,13 @@ final class PathParameter {
   final bool explode;
 
   /// The text that replaces `{name}`.
+  ///
+  /// Throws [ArgumentError] when a scalar, item or property is exactly `.` or
+  /// `..`: a client normalizes such a path segment away, which would change
+  /// the request path, and percent-encoding does not help.
   String encode() {
-    final value = ParameterValue.of(this.value);
+    final value = ParameterValue.of(this.value, kind: style.name);
+    _rejectDotSegments(value);
     return switch (style) {
       .simple => value.expand(
         name,
@@ -82,6 +88,27 @@ final class PathParameter {
         separator: ';',
       ),
     };
+  }
+
+  void _rejectDotSegments(ParameterValue value) {
+    final texts = switch (value) {
+      UndefinedValue() => const <String>[],
+      ScalarValue(:final text) => [text],
+      ListValue(:final items) => items,
+      ObjectValue(:final pairs) => [
+        for (final (key, text) in pairs) ...[key, text],
+      ],
+    };
+    for (final text in texts) {
+      if (text == '.' || text == '..') {
+        throw ArgumentError.value(
+          this.value,
+          name,
+          'A path parameter value cannot be a dot segment ("$text"): it '
+          'would change the request path',
+        );
+      }
+    }
   }
 }
 
@@ -119,7 +146,7 @@ final class QueryParameter {
   /// The `name=value` pairs joined by `&`, or `''` when the value is
   /// undefined.
   String encode() {
-    final value = ParameterValue.of(this.value);
+    final value = ParameterValue.of(this.value, kind: style.name);
     final PercentEncoder encoder = allowReserved ? .reserved : .unreserved;
     if (style == .deepObject) return _deepObject(value, encoder);
     return value.expand(
@@ -174,7 +201,7 @@ final class HeaderParameter {
   final bool explode;
 
   /// The header value, or `null` when the value is undefined.
-  String? encode() => switch (ParameterValue.of(value)) {
+  String? encode() => switch (ParameterValue.of(value, kind: 'header')) {
     UndefinedValue() => null,
     final defined => defined.expand(
       name,
@@ -205,7 +232,7 @@ final class CookieParameter {
   final bool explode;
 
   /// The pairs joined by `; `, or `null` when the value is undefined.
-  String? encode() => switch (ParameterValue.of(value)) {
+  String? encode() => switch (ParameterValue.of(value, kind: 'cookie')) {
     UndefinedValue() => null,
     final defined => defined.expand(
       name,

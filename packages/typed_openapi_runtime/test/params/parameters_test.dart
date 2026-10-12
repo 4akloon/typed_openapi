@@ -46,6 +46,40 @@ void main() {
       expect(const PathParameter('id', '-._~').encode(), '-._~');
     });
 
+    test('a dot segment would change the request path', () {
+      for (final style in PathStyle.values) {
+        for (final dots in ['.', '..']) {
+          for (final value in [
+            dots,
+            [dots],
+            ['ok', dots],
+            {'k': dots},
+          ]) {
+            expect(
+              () => path(style, false, value),
+              throwsA(
+                isA<ArgumentError>().having(
+                  (e) => e.message,
+                  'message',
+                  contains('cannot be a dot segment'),
+                ),
+              ),
+              reason: '$style $value',
+            );
+          }
+        }
+      }
+      expect(path(.simple, false, '...'), '...');
+      expect(path(.simple, false, 'a.b'), 'a.b');
+    });
+
+    test('matrix keeps an empty item or value without "="', () {
+      expect(path(.matrix, true, const ['', 'x']), ';color;color=x');
+      expect(path(.matrix, true, const {'R': '', 'G': 1}), ';R;G=1');
+      expect(path(.matrix, false, const ['', 'x']), ';color=,x');
+      expect(path(.simple, true, const {'R': '', 'G': 1}), 'R=,G=1');
+    });
+
     test('undefined values expand to nothing', () {
       for (final style in PathStyle.values) {
         expect(path(style, false, null), '');
@@ -120,6 +154,23 @@ void main() {
       expect(query(const {'z': 1, 'a': null, 'b': 2}), 'z=1&b=2');
     });
 
+    test('empty list items and empty object values', () {
+      expect(query(const ['', 'a']), 'color=&color=a');
+      expect(query(const ['', 'a'], explode: false), 'color=,a');
+      expect(query(const {'R': '', 'G': 1}), 'R=&G=1');
+    });
+
+    test('names are percent-encoded as UTF-8', () {
+      expect(
+        const QueryParameter('ключ', 1).encode(),
+        '%D0%BA%D0%BB%D1%8E%D1%87=1',
+      );
+      expect(
+        const QueryParameter('ü', 'ü').encode(),
+        '%C3%BC=%C3%BC',
+      );
+    });
+
     test('names and values are percent-encoded', () {
       expect(
         const QueryParameter('a b[]', 'x&y=z+w#v').encode(),
@@ -189,6 +240,30 @@ void main() {
         ['nested'],
       ]).encode(),
       throwsA(isA<ArgumentError>()),
+    );
+    expect(
+      () => const QueryParameter('q', [
+        {'a': 1},
+      ]).encode(),
+      throwsA(
+        isA<ArgumentError>().having(
+          (e) => e.message,
+          'message',
+          'nested objects/arrays are not supported in a form parameter',
+        ),
+      ),
+    );
+    expect(
+      () => const PathParameter('p', {
+        'a': [1],
+      }, style: .label).encode(),
+      throwsA(
+        isA<ArgumentError>().having(
+          (e) => e.message,
+          'message',
+          contains('in a label parameter'),
+        ),
+      ),
     );
     expect(
       () => QueryParameter('t', DateTime(2024)).encode(),
