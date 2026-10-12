@@ -193,9 +193,27 @@ final class OverrideApplier {
     }
     final toRef =
         spec.containsKey(r'$ref') ||
-        raw.containsKey(r'$ref') && spec.containsKey('nullable');
+        spec.containsKey('nullable') &&
+            (raw.containsKey(r'$ref') || _nullableReference(raw) != null);
     if (toRef) {
       yield* _reference(entry, at, raw, property);
+      return;
+    }
+    if (_version == .v30 && raw.containsKey(r'$ref')) {
+      for (final field in ['type', ..._plainFields]) {
+        if (!spec.containsKey(field) || property && field == 'required') {
+          continue;
+        }
+        _report(
+          .fixNotApplied,
+          entry,
+          field,
+          'This override was not applied: in OpenAPI 3.0 the siblings of '
+          '"\$ref" are ignored, so "$field" would have no effect on a '
+          'schema that is a reference.',
+          fix: 'Override the referenced schema by its name under "schemas".',
+        );
+      }
       return;
     }
     if (spec.containsKey('type') || spec.containsKey('nullable')) {
@@ -235,7 +253,8 @@ final class OverrideApplier {
       );
       return;
     }
-    final ref = (spec[r'$ref'] ?? raw[r'$ref']) as String;
+    final ref =
+        (spec[r'$ref'] ?? raw[r'$ref'] ?? _nullableReference(raw)) as String;
     final nullable = spec['nullable'] == true;
     final next = <String, Object?>{
       if (!nullable) r'$ref': ref,
@@ -264,6 +283,28 @@ final class OverrideApplier {
     yield OverrideEdit(SpecEdit.replace(at, next), [
       for (final field in fields) (entry, field),
     ]);
+  }
+
+  /// The `$ref` of a nullable reference in the form [_reference] writes for
+  /// the document's dialect; null for any other schema.
+  String? _nullableReference(Map<String, Object?> raw) {
+    final bool v30 = _version == .v30;
+    final shape = v30
+        ? raw['nullable'] == true && raw.length == 2
+        : raw.length == 1;
+    final list = raw[v30 ? 'allOf' : 'anyOf'];
+    if (!shape || list is! List<Object?> || list.length != (v30 ? 1 : 2)) {
+      return null;
+    }
+    if (!v30 && !_equality.equals(list.last, const {'type': 'null'})) {
+      return null;
+    }
+    final first = list.first;
+    return first is Map<String, Object?> &&
+            first.length == 1 &&
+            first[r'$ref'] is String
+        ? first[r'$ref'] as String
+        : null;
   }
 
   Iterable<OverrideEdit> _typeAndNullable30(
@@ -310,7 +351,11 @@ final class OverrideApplier {
       {'type': null} => const <String>[],
       _ => base,
     };
-    var nullable = spec['nullable'] as bool? ?? wasNullable;
+    // `type: null` without `nullable` removes the type, and the schema with
+    // it is no longer nullable.
+    var nullable =
+        spec['nullable'] as bool? ??
+        (wasNullable && (spec['type'] != null || !spec.containsKey('type')));
     if (nullable && nextBase.isEmpty) {
       _report(
         .invalidOverride,

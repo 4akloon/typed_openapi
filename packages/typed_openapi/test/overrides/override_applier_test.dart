@@ -2,6 +2,7 @@ import 'package:test/test.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_bag.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
 import 'package:typed_openapi/src/diagnostics/json_pointer.dart';
+import 'package:typed_openapi/src/diagnostics/severity.dart';
 import 'package:typed_openapi/src/load/openapi_version.dart';
 import 'package:typed_openapi/src/load/spec_document.dart';
 import 'package:typed_openapi/src/load/spec_loader.dart';
@@ -591,5 +592,101 @@ schemas:
       },
     });
     expect(run.result.overrides?.operations.single.group, 'zoo');
+  });
+
+  test('"type: null" on a nullable 3.1 schema removes the type, no error', () {
+    final run = _Run(
+      '''
+$_header31
+components:
+  schemas:
+    A: {type: [string, 'null'], description: d}
+''',
+      'schemas: {A: {type: null}}\n',
+    );
+    expect(run.overrideDiagnostics, isEmpty);
+    expect(run.at('#/components/schemas/A'), {'description': 'd'});
+  });
+
+  test('a 3.1 nullable reference is already nullable', () {
+    const spec = r'''
+components:
+  schemas:
+    Owner: {type: object}
+    Pet:
+      type: object
+      properties:
+        owner:
+          anyOf:
+            - {$ref: '#/components/schemas/Owner'}
+            - {type: 'null'}
+''';
+    final same = _Run(
+      '$_header31$spec',
+      'schemas: {Pet: {properties: {owner: {nullable: true}}}}\n',
+    );
+    expect(same.overrideDiagnostics, [
+      (
+        DiagnosticCode.overrideUnchanged,
+        '#/schemas/Pet/properties/owner/nullable',
+      ),
+    ]);
+    final off = _Run(
+      '$_header31$spec',
+      'schemas: {Pet: {properties: {owner: {nullable: false}}}}\n',
+    );
+    expect(off.overrideDiagnostics, isEmpty);
+    expect(off.at('#/components/schemas/Pet/properties/owner'), {
+      r'$ref': '#/components/schemas/Owner',
+    });
+  });
+
+  group(r'fields next to "$ref"', () {
+    const spec = r'''
+components:
+  schemas:
+    Status: {type: string}
+    Pet:
+      type: object
+      properties:
+        status: {$ref: '#/components/schemas/Status'}
+''';
+    const overrides = '''
+schemas:
+  Pet:
+    properties:
+      status: {enum: [a, b], format: x}
+''';
+
+    test('are not written in 3.0, where they are ignored', () {
+      final run = _Run('$_header30$spec', overrides);
+      expect(run.overrideDiagnostics, [
+        (DiagnosticCode.fixNotApplied, '#/schemas/Pet/properties/status/enum'),
+        (
+          DiagnosticCode.fixNotApplied,
+          '#/schemas/Pet/properties/status/format',
+        ),
+      ]);
+      expect(
+        run.bag.sorted.first.message,
+        'This override was not applied: in OpenAPI 3.0 the siblings of '
+        r'"$ref" are ignored, so "enum" would have no effect on a schema '
+        'that is a reference.',
+      );
+      expect(run.bag.sorted.first.severity, Severity.warning);
+      expect(run.at('#/components/schemas/Pet/properties/status'), {
+        r'$ref': '#/components/schemas/Status',
+      });
+    });
+
+    test('are written from 3.1, where they are valid', () {
+      final run = _Run('$_header31$spec', overrides);
+      expect(run.overrideDiagnostics, isEmpty);
+      expect(run.at('#/components/schemas/Pet/properties/status'), {
+        r'$ref': '#/components/schemas/Status',
+        'format': 'x',
+        'enum': ['a', 'b'],
+      });
+    });
   });
 }

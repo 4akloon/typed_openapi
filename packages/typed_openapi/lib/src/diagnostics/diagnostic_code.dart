@@ -198,8 +198,9 @@ enum DiagnosticCode {
   /// `*/*` is used as a media type.
   wildcardMediaType('TOA601', 'wildcard-media-type', .warning),
 
-  /// A normalizer fix was not applied: its file cannot be read, its target is
-  /// gone, or the spec kept changing after the last pass.
+  /// A normalizer fix or an override was not applied: its file cannot be
+  /// read, its target is gone, the spec kept changing after the last pass, or
+  /// the change would have no effect in the spec's dialect.
   fixNotApplied('TOA800', 'fix-not-applied', .warning),
 
   /// The overrides file a client names does not exist.
