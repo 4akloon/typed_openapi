@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 
@@ -7,6 +8,9 @@ import '../request/operation_info.dart';
 import '../request/operation_request.dart';
 import '../request/raw_response.dart';
 import '../result/result.dart';
+import '../sse/sse_item.dart';
+import '../sse/sse_item_decoder.dart';
+import '../sse/sse_message.dart';
 import 'call_options.dart';
 
 /// Sends an [OperationRequest] through the user's [Dio] and turns every
@@ -67,28 +71,92 @@ final class DioRequestSender {
     return _decode(_raw(response, response.data), decode);
   }
 
+  /// Opens a `text/event-stream` operation. A status in
+  /// [OperationRequest.streamStatuses] gives a [Success] whose stream reads
+  /// every event with [decodeEvent]; any other status reads the whole body
+  /// and decodes it with [decodeError] (which returns a documented error or
+  /// an undocumented status). On the web, with Dio's default adapter, the
+  /// result is a [TransportError] that explains how to get a streaming
+  /// adapter: the default adapter delivers the body only when the
+  /// connection closes.
+  Future<Result<Stream<SseItem<T>>, E>> openEvents<T, E>(
+    OperationRequest request,
+    T Function(SseMessage message) decodeEvent,
+    Result<Stream<SseItem<T>>, E> Function(RawResponse response) decodeError, {
+    CallOptions? call,
+  }) async {
+    if (isWeb && _hasDefaultAdapter) {
+      final exception = DioException(
+        requestOptions: RequestOptions(
+          path: request.resolvePath(),
+          method: request.operation.method,
+          extra: {OperationInfo.extraKey: request.operation},
+        ),
+        error: UnsupportedError(webStreamingMessage),
+        message: webStreamingMessage,
+      );
+      return TransportError(exception, StackTrace.current);
+    }
+    final Response<Object?> response;
+    try {
+      response = await _request(request, call, events: true);
+    } on DioException catch (e, stackTrace) {
+      final failed = e.response;
+      if (e.type == .badResponse && failed != null) {
+        return _openFailed(failed, decodeError);
+      }
+      return _failure(e, stackTrace);
+    }
+    final status = response.statusCode ?? 0;
+    final body = response.data;
+    if (request.streamStatuses.contains(status) && body is ResponseBody) {
+      return Success(
+        SseItemDecoder<T>(decodeEvent).bind(body.stream),
+        statusCode: status,
+        headers: response.headers.map,
+      );
+    }
+    return _openFailed(response, decodeError);
+  }
+
+  /// Explains why server-sent events cannot stream on the web with the
+  /// default Dio adapter.
+  static const String webStreamingMessage =
+      'Server-sent events need a streaming HTTP adapter on the web: Dio\'s '
+      'default browser adapter delivers the body only when the connection '
+      'closes. Set a fetch-based adapter on your Dio, such as '
+      'ConversionLayerAdapter from package:dio_compatibility_layer with '
+      'package:http\'s BrowserClient or package:fetch_client.';
+
+  bool get _hasDefaultAdapter =>
+      dio.httpClientAdapter.runtimeType == HttpClientAdapter().runtimeType;
+
   Future<Response<Object?>> _request(
     OperationRequest request,
-    CallOptions? call,
-  ) {
+    CallOptions? call, {
+    bool events = false,
+  }) {
     final path = _guardQuery(request.resolvePath());
     final options = Options(
       method: request.operation.method,
       headers: {
+        if (events) 'Accept': 'text/event-stream',
         ...request.resolveHeaders(),
         for (final MapEntry(:key, :value) in call?.headers.entries ?? const [])
           key: ?value,
       },
       extra: {...?call?.extra, OperationInfo.extraKey: request.operation},
       contentType: request.contentType,
-      responseType: switch (request.responseKind) {
-        .json => .json,
-        .text => .plain,
-        .bytes => .bytes,
-      },
+      responseType: events
+          ? .stream
+          : switch (request.responseKind) {
+              .json => .json,
+              .text => .plain,
+              .bytes => .bytes,
+            },
     );
     // The type argument picks how Dio reads the body: Dio forces JSON for
-    // any type but String and List<int> with bytes.
+    // any type but String, List<int> with bytes or ResponseBody with stream.
     Future<Response<R>> send<R>() => dio.request<R>(
       path,
       data: request.body,
@@ -97,6 +165,7 @@ final class DioRequestSender {
       onSendProgress: call?.onSendProgress,
       onReceiveProgress: call?.onReceiveProgress,
     );
+    if (events) return send<ResponseBody>();
     return switch (request.responseKind) {
       .json => send<Object?>(),
       .text => send<String>(),
@@ -152,6 +221,42 @@ final class DioRequestSender {
         headers: raw.headers,
       );
     }
+  }
+
+  /// Reads the whole body of an event-stream response that did not open,
+  /// parses it (JSON by content type) and decodes it with [decodeError].
+  Future<Result<Stream<SseItem<T>>, E>> _openFailed<T, E>(
+    Response<Object?> response,
+    Result<Stream<SseItem<T>>, E> Function(RawResponse response) decodeError,
+  ) async {
+    final headers = response.headers.map;
+    final Uint8List bytes;
+    try {
+      bytes = switch (response.data) {
+        final ResponseBody body => await _readAll(body.stream),
+        _ => Uint8List(0),
+      };
+    } on DioException catch (e, stackTrace) {
+      return _failure(e, stackTrace);
+    }
+    final Object? body;
+    try {
+      body = RawResponse.parse(bytes, headers);
+    } on JsonDecodeException catch (e) {
+      return DecodeError(
+        e,
+        statusCode: response.statusCode,
+        rawBody: utf8.decode(bytes, allowMalformed: true),
+        headers: headers,
+      );
+    }
+    return _decode(_raw(response, body), decodeError);
+  }
+
+  static Future<Uint8List> _readAll(Stream<List<int>> stream) async {
+    final bytes = BytesBuilder(copy: false);
+    await stream.forEach(bytes.add);
+    return bytes.takeBytes();
   }
 
   /// A failure without a response.

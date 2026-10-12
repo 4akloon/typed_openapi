@@ -29,4 +29,7 @@ export 'src/result/result.dart'
         TransportError,
         UndocumentedStatus;
 export 'src/sse/sse_decoder.dart' show SseDecoder;
+export 'src/sse/sse_item.dart'
+    show SseDecodeError, SseDisconnected, SseEvent, SseItem;
+export 'src/sse/sse_item_decoder.dart' show SseItemDecoder;
 export 'src/sse/sse_message.dart' show SseMessage;
