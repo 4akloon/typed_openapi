@@ -40,6 +40,10 @@ final class OperationBuilder {
   static const _names = DartNames();
   static final _variable = RegExp(r'\{([^}]*)\}');
 
+  /// The header parameters OpenAPI says to ignore: the request's own
+  /// `Accept`, `Content-Type` and `Authorization` (compared in lower case).
+  static const _ignoredHeaders = {'accept', 'content-type', 'authorization'};
+
   /// The styles OpenAPI allows for each placement, the default style
   /// first (`style: cookie` is OpenAPI 3.2's second style for cookies); a
   /// `querystring` parameter has none.
@@ -101,6 +105,12 @@ final class OperationBuilder {
       // reported it (TOA111, TOA112).
       final placement = parameter?.placement;
       if (parameter == null || placement == null) continue;
+      // OpenAPI says these headers SHALL be ignored: the HTTP client and
+      // the body's media type decide them.
+      if (placement == .header &&
+          _ignoredHeaders.contains(parameter.name?.toLowerCase())) {
+        continue;
+      }
       byKey[(placement, parameter.name)] = (placement, parameter);
     }
     final variables = [

@@ -445,6 +445,33 @@ paths:
     });
   });
 
+  group('headers OpenAPI says to ignore (final review M1)', () {
+    test('Accept, Content-Type and Authorization are not arguments', () {
+      final fixture = IrFixture(
+        specOf({
+          '/a':
+              'operationId: a\ntags: [t]\nparameters: ['
+              '{name: Accept, in: header, schema: {type: string, enum: ["*/*"]}}, '
+              '{name: content-type, in: header, schema: {type: string}}, '
+              '{name: AUTHORIZATION, in: header, required: true, '
+              'schema: {type: string}}, '
+              '{name: X-Accept, in: header, schema: {type: string}}, '
+              '{name: Accept, in: query, schema: {type: string}}]',
+        }),
+      );
+      final ir = build(fixture);
+      expect(
+        [
+          for (final p in ir.groups.single.operations.single.parameters)
+            '${p.placement.name}:${p.wireName}',
+        ],
+        ['query:Accept', 'header:X-Accept'],
+      );
+      expect(fixture.reported, isEmpty);
+      expect(ir.declarations, isEmpty);
+    });
+  });
+
   group('groups', () {
     test('TOA554 is decided on the operations that are generated', () {
       final fixture = IrFixture(
