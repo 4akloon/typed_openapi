@@ -11,6 +11,8 @@ No code was changed: this is a diagnosis and a plan.
 | [Google eng-practices: What to look for](https://google.github.io/eng-practices/review/reviewer/looking-for.html) | Complexity is checked at every level (lines, functions, classes); code that "can't be understood quickly" is simplified. Over-engineering: solve the problem you know you have now. Tests in the same change. A comment explains why; if it must explain what, simplify the code. A name is long enough to say what the thing is or does. Update the documentation with the change. |
 | [Google C++ Style Guide](https://google.github.io/styleguide/cppguide.html) | "Write short functions": a function over about 40 lines is a reason to check whether it can be split. Composition over inheritance. No classes with only static members. |
 | [Effective Dart: Design](https://dart.dev/effective-dart/design) | Class modifiers (`final`, `sealed`, `interface`) say how a class may be extended. No positional `bool`s. `==` together with `hashCode`. Never return `null` instead of an empty collection. |
+| Effective Dart: [Style](https://dart.dev/effective-dart/style), [Usage](https://dart.dev/effective-dart/usage), [Documentation](https://dart.dev/effective-dart/documentation) | The rules behind the lints, and the ones no lint checks (acronyms, doc-comment shape, `///` summary, "Whether" for booleans, no tag-style `@param`). The latter went into `CLAUDE.md`. |
+| [Dart linter rule catalog](https://dart.dev/tools/linter-rules/all) (data: `linter_rules.json` in dart-lang/site-www) | 264 rules with state, sets, categories, `incompatible` pairs and the SDK version of each. Used for section 7. |
 | Community rules for agents ([agent-friendly-code](https://cdn.jsdelivr.net/npm/aiwg@2026.7.12/agentic/code/frameworks/sdlc-complete/rules/agent-friendly-code.md)) | File 300 lines (warning) / 500 (error), function 30 / 50, nesting 3 / 4, parameters 4 / 6, cyclomatic complexity 10 / 15. Before writing, estimate `current LOC + new lines`; over the threshold, extract first. |
 
 What is not there: Google gives no official number for file size (only
@@ -186,8 +188,9 @@ The rules in `CLAUDE.md` are context, not enforcement. To make them hold:
    broken by the first change to `schema_mapper.dart`. About 60 lines.
 2. **The 40-line method limit** in the same test, approximated from
    indentation, with the same exemption list for the 35 current methods.
-3. **Lints** for `analysis_options.yaml`, not yet checked for how many
-   violations they would raise (enable each one alone first):
+3. **Lints** for `analysis_options.yaml`: done, see section 7 (40 rules
+   enabled, the rest staged). The list that was proposed here before the
+   trial, for the record:
    `avoid_positional_boolean_parameters`, `avoid_returning_this`,
    `cascade_invocations`, `parameter_assignments`,
    `prefer_constructors_over_static_methods`, `unnecessary_lambdas`,
@@ -221,3 +224,88 @@ normalize/rules/schema_shape_rules.dart 341  parse/operation_parser.dart 314
 ```
 
 Permanent exemption (not to be split): `diagnostics/diagnostic_code.dart`.
+
+## 7. Lint analysis
+
+Method (2026-10-12, SDK 3.13.1, `lints` 6.1.0): the catalog has 264 rules
+(233 stable, 11 experimental, 6 deprecated, 14 removed). Before this work the
+project used `lints/recommended` plus 46 explicit rules. The 109 stable and
+experimental rules that were not enabled were switched on together in a trial
+run (27,773 findings) and counted per rule. Then each rule was judged by:
+stable, available in the minimum SDK (3.10), no `incompatible` clash with an
+enabled rule, fits Effective Dart or the rules of this repository, and no
+findings (this cleanup touches no source while M9 is open).
+
+Result:
+
+- **Enabled now: 40 rules, zero findings** (`dart analyze packages` stays
+  clean). Grouped in `analysis_options.yaml` by purpose:
+  - types and signatures: `avoid_annotating_with_dynamic`,
+    `avoid_types_on_closure_parameters`, `always_put_required_named_parameters_first`,
+    `avoid_final_parameters`, `parameter_assignments`,
+    `tighten_type_of_initializing_formals`;
+  - class design: `avoid_returning_this`, `avoid_setters_without_getters`,
+    `use_setters_to_change_properties`, `use_to_and_as_if_applicable`,
+    `avoid_implementing_value_types`, `prefer_mixin`,
+    `avoid_field_initializers_in_const_classes`,
+    `prefer_const_constructors_in_immutables`,
+    `prefer_const_literals_to_create_immutables`,
+    `sort_unnamed_constructors_first`, `prefer_asserts_in_initializer_lists`;
+  - expressions: `unnecessary_lambdas`, `join_return_with_assignment`,
+    `switch_on_type`, `use_is_even_rather_than_modulo`,
+    `use_truncating_division`, `prefer_int_literals`,
+    `noop_primitive_operations`,
+    `unnecessary_null_aware_operator_on_extension_on_nullable`;
+  - errors and async: `avoid_catches_without_on_clauses`, `avoid_slow_async_io`,
+    `avoid_print` (the generator reports through diagnostics, never prints);
+  - web: `avoid_double_and_int_checks` (int and double are one type in JS),
+    `avoid_js_rounded_ints`, `no_runtimetype_tostring`;
+  - imports and docs: `prefer_relative_imports` (the repository convention),
+    `conditional_uri_does_not_exist`, `unnecessary_library_directive`,
+    `missing_code_block_language_in_doc_comment`;
+  - deprecation, tests, pubspec: `deprecated_consistency`,
+    `deprecated_member_use_from_same_package`, `unnecessary_ignore`,
+    `use_test_throws_matchers`, `sort_pub_dependencies`.
+- **Removed:** `unnecessary_await_in_return` (deprecated; the analyzer says to
+  drop it).
+- **Staged, valuable, a few findings in files M9 will change** (counts from the
+  trial; enable after M9 merges, phase 3 of the plan):
+
+  | Rule or flag | Findings |
+  | --- | --- |
+  | `strict-casts`, `strict-inference`, `strict-raw-types` | 6 (one in `dio_request_sender.dart`, one is a compile error in a test only strict-casts finds) |
+  | `avoid_equals_and_hash_code_on_mutable_classes` | 24 (add `@immutable`) |
+  | `comment_references` | 16 |
+  | `missing_whitespace_between_adjacent_strings` | 11 (a real bug class in messages) |
+  | `cast_nullable_to_non_nullable`, `avoid_escaping_inner_quotes` | 10 each |
+  | `avoid_redundant_argument_values` | 6 |
+  | `discarded_futures` | 5 |
+  | `prefer_expression_function_bodies`, `prefer_foreach` | 3 each |
+  | `avoid_positional_boolean_parameters`, `unnecessary_null_checks`, `unawaited_futures`, `async_return_with_no_await`, `prefer_constructors_over_static_methods` | 2 each |
+  | `unnecessary_parenthesis`, `prefer_void_to_null`, `omit_obvious_local_variable_types`, `document_ignores`, `simplify_variable_pattern` | 1 each |
+  | `omit_obvious_property_types`, `specify_nonobvious_property_types` | 42, 12 (Effective Dart's newer advice on obvious types) |
+  | `lines_longer_than_80_chars` | 21 (long strings the formatter cannot wrap) |
+
+- **Needs a newer SDK than 3.10** (enable when the minimum SDK is raised):
+  `initialize_in_field_declaration` (3.13), `simple_directive_paths` (3.12),
+  `no_dynamic_casts`, `no_raw_types` (3.13), and the primary-constructor
+  rules (`use_declaring_parameters`, `unnecessary_primary_constructor_body`,
+  `unnecessary_type_name_in_constructor`), which also contradict the rule
+  that primary constructors are not used.
+- **Rejected on purpose:**
+
+  | Rule | Findings | Why |
+  | --- | --- | --- |
+  | `prefer_double_quotes` | 12,535 | clashes with `prefer_single_quotes` |
+  | `always_use_package_imports` | 444 | clashes with `prefer_relative_imports` |
+  | `unnecessary_final` | 3,737 | clashes with `prefer_final_locals` |
+  | `always_specify_types`, `specify_nonobvious_local_variable_types`, `omit_local_variable_types` | 7,812, 2,460, 12 | the code uses inferred `final` locals |
+  | `always_put_control_body_on_new_line` | 510 | formatting taste, not Effective Dart |
+  | `cascade_invocations` | 60 | stylistic; revisit later |
+  | `no_adjacent_strings_in_list` | 19 | long messages are written as adjacent strings |
+  | `do_not_use_environment` | 2 | the web check uses `bool.fromEnvironment` on purpose |
+- **Not applicable:** the Flutter widget rules, the experimental rules (their
+  behaviour may still change), and rules with no use here.
+
+No lint measures file or method size, so those limits stay with the ratchet
+test (plan, phase 0).

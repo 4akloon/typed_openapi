@@ -1,53 +1,130 @@
+# Lints for the whole workspace. Rules come from Effective Dart
+# (https://dart.dev/effective-dart) and the lint catalog
+# (https://dart.dev/tools/linter-rules/all); the reasoning, the counts and the
+# rules left out are in docs/code-quality-review.md (section 7).
+#
+# Rules since Dart 3.11 or newer are not listed: the minimum SDK is 3.10.
+# Every rule here passes with zero findings today, so `dart analyze packages`
+# must print "No issues found!".
 include: package:lints/recommended.yaml
 
 linter:
   rules:
+    # Types and signatures (Effective Dart: Design, Usage)
     - always_declare_return_types
-    - avoid_bool_literals_in_conditional_expressions
-    - avoid_catching_errors
-    - avoid_classes_with_only_static_members
-    - avoid_dynamic_calls
-    - avoid_multiple_declarations_per_line
-    - avoid_type_to_string
+    - type_annotate_public_apis
+    - avoid_annotating_with_dynamic
+    - avoid_types_on_closure_parameters
     - avoid_types_as_parameter_names
+    - avoid_dynamic_calls
+    - always_put_required_named_parameters_first
+    - avoid_final_parameters
+    - parameter_assignments
     - avoid_unused_constructor_parameters
-    - avoid_void_async
-    - cancel_subscriptions
-    - close_sinks
-    - combinators_ordering
-    - directives_ordering
-    - eol_at_end_of_file
-    - file_names
-    - leading_newlines_in_multiline_strings
-    - library_names
-    - literal_only_boolean_expressions
     - matching_super_parameters
-    - no_literal_bool_comparisons
-    - no_self_assignments
-    - only_throw_errors
-    - prefer_asserts_with_message
+    - tighten_type_of_initializing_formals
+
+    # Immutability and class design (Effective Dart: Design)
+    - prefer_final_locals
+    - prefer_final_in_for_each
     - prefer_const_constructors
     - prefer_const_declarations
-    - prefer_final_in_for_each
-    - prefer_final_locals
+    - prefer_const_constructors_in_immutables
+    - prefer_const_literals_to_create_immutables
+    - avoid_field_initializers_in_const_classes
+    - avoid_returning_this
+    - avoid_setters_without_getters
+    - use_setters_to_change_properties
+    - use_to_and_as_if_applicable
+    - avoid_implementing_value_types
+    - prefer_mixin
+    - avoid_classes_with_only_static_members
+    - use_enums
+    - sort_constructors_first
+    - sort_unnamed_constructors_first
+    - prefer_asserts_in_initializer_lists
+    - prefer_asserts_with_message
+    - test_types_in_equals
+
+    # Control flow and expressions (Effective Dart: Usage)
+    - avoid_bool_literals_in_conditional_expressions
+    - literal_only_boolean_expressions
+    - no_literal_bool_comparisons
+    - no_self_assignments
+    - avoid_multiple_declarations_per_line
     - prefer_if_elements_to_conditional_expressions
     - prefer_null_aware_method_calls
-    - prefer_single_quotes
-    - public_member_api_docs
-    - require_trailing_commas
-    - sort_constructors_first
-    - test_types_in_equals
-    - throw_in_finally
-    - type_annotate_public_apis
-    - unnecessary_await_in_return
-    - unnecessary_breaks
-    - unnecessary_raw_strings
     - unnecessary_statements
-    - unreachable_from_main
-    - use_enums
+    - unnecessary_breaks
+    - unnecessary_lambdas
+    - join_return_with_assignment
+    - switch_on_type
+    - use_is_even_rather_than_modulo
+    - use_truncating_division
+    - prefer_int_literals
+    - noop_primitive_operations
     - use_named_constants
-    - use_raw_strings
     - use_string_buffers
+    - unnecessary_null_aware_operator_on_extension_on_nullable
+
+    # Errors, async and resources (Effective Dart: Usage; the generator never prints)
+    - avoid_catching_errors
+    - avoid_catches_without_on_clauses
+    - only_throw_errors
+    - throw_in_finally
+    - avoid_void_async
+    - avoid_slow_async_io
+    - cancel_subscriptions
+    - close_sinks
+    - avoid_print
+
+    # Web compatibility (the runtime is compiled to JS and Wasm)
+    - avoid_double_and_int_checks
+    - avoid_js_rounded_ints
+    - no_runtimetype_tostring
+    - avoid_type_to_string
+
+    # Strings, imports and files (Effective Dart: Style)
+    - prefer_single_quotes
+    - unnecessary_raw_strings
+    - use_raw_strings
+    - leading_newlines_in_multiline_strings
+    - directives_ordering
+    - combinators_ordering
+    - file_names
+    - library_names
+    - eol_at_end_of_file
+    - prefer_relative_imports
+    - conditional_uri_does_not_exist
+    - unnecessary_library_directive
+    - unreachable_from_main
+    - require_trailing_commas
+
+    # Documentation, deprecation, tests and pubspec
+    - public_member_api_docs
+    - missing_code_block_language_in_doc_comment
+    - deprecated_consistency
+    - deprecated_member_use_from_same_package
+    - unnecessary_ignore
+    - use_test_throws_matchers
+    - sort_pub_dependencies
+
+    # Staged, not enabled yet: each has a few findings in files M9 is going to
+    # change. Enable one at a time after M9 merges and its findings are fixed
+    # (docs/code-quality-plan.md, phase 3):
+    #   strict-casts, strict-inference, strict-raw-types (analyzer: language:)
+    #   avoid_positional_boolean_parameters, avoid_redundant_argument_values,
+    #   avoid_equals_and_hash_code_on_mutable_classes (add @immutable),
+    #   cast_nullable_to_non_nullable, comment_references, discarded_futures,
+    #   unawaited_futures, async_return_with_no_await,
+    #   missing_whitespace_between_adjacent_strings, avoid_escaping_inner_quotes,
+    #   prefer_expression_function_bodies, prefer_foreach,
+    #   prefer_constructors_over_static_methods, unnecessary_null_checks,
+    #   unnecessary_parenthesis, prefer_void_to_null, omit_obvious_local_variable_types,
+    #   omit_obvious_property_types, specify_nonobvious_property_types,
+    #   lines_longer_than_80_chars, document_ignores, simplify_variable_pattern
+    # Needs Dart 3.11+: initialize_in_field_declaration (3.13),
+    #   simple_directive_paths (3.12), no_dynamic_casts and no_raw_types (3.13).
 
 formatter:
   trailing_commas: preserve

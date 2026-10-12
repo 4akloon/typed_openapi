@@ -552,7 +552,10 @@ for assertions that differ. Do not write an int literal beyond 2^53 in
   `ConfigLoader(bag)`, `SpecChecker(bag)`).
 - Lints come from `analysis_options.yaml` (`public_member_api_docs`,
   `sort_constructors_first`, `prefer_final_locals`, `require_trailing_commas`,
-  ...). Every public member has a doc comment. Formatting keeps trailing commas.
+  ...). Every public member has a doc comment. Formatting keeps trailing
+  commas. The rule list is grouped by purpose and explained in
+  `docs/code-quality-review.md` (section 7); rules waiting for the M9 merge
+  are listed at the bottom of the file.
 - Tests do not touch the network; temp files only through `TempDir` in
   `test/helpers/temp_dir.dart`.
 
@@ -624,6 +627,33 @@ exemption list of `docs/code-quality-review.md`.
   `dynamic`, no `late` without a comment on why it is set before first read.
 - Every user-input problem is a diagnostic, never a bare `catch` or a silent
   default (see the design rules below).
+
+**Dart style (Effective Dart; the rules a lint cannot check)**
+
+Naming, ordering, quotes, imports, `new`/`const`, collection and async idioms
+are enforced by the lints in `analysis_options.yaml` and `dart format`. These
+are not, so follow them by hand:
+
+- Acronyms longer than two letters are words (`Uri`, `Json`, `Sse`, `Ir`);
+  never a leading underscore on a non-private name, no Hungarian prefixes, an
+  unused callback parameter is `_`.
+- Doc comments use `///`, start with a one-sentence summary that is its own
+  paragraph, and refer to identifiers in `[brackets]`. A boolean starts with
+  "Whether", a non-boolean property is a noun phrase, a method with a side
+  effect starts with a third-person verb. Prose describes parameters and
+  returns, no `@param` tags. Do not repeat what the signature says. One doc
+  comment for a getter/setter pair. The doc comment goes before annotations.
+- `/* */` only to comment out code; comments are sentences with a capital
+  letter and a full stop.
+- No one-member abstract class where a function will do; no nullable
+  `Future`, `Stream` or collection return (return an empty one); no
+  positional `bool`; no `catch` without `on`, never catch `Error`, and
+  `rethrow` keeps the stack trace.
+- Never silence a lint: no `// ignore:` or `// ignore_for_file:` without a
+  comment on why, and no rule removed from `analysis_options.yaml` to make a
+  change pass. To enable a new lint: stable, available in the minimum SDK,
+  zero findings (or fix them in the same change), no conflict with an enabled
+  rule (`incompatible` in the lint catalog).
 
 **Tests**
 

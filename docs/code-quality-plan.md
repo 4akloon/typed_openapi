@@ -110,8 +110,10 @@ the same commit.
   diagnostic inside is the usual shape; move the body of the branch into a
   method named for what it does.
 - `!`, `late` and the three-level ternary chains from the review's P3.
-- Lints from the review's section 5 (each one alone first, to see how many
-  violations it raises).
+- The staged lints from section 7 of the review (the list is at the bottom of
+  `analysis_options.yaml`): enable one at a time, fix its findings in the same
+  commit, keep `dart analyze packages` clean. The six `strict-*` findings and
+  the `@immutable` annotations (24 findings) go first.
 
 ## 4. `SchemaMapper` sequence (step 2.3)
 
