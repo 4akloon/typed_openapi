@@ -23,8 +23,8 @@ class PatchOwnerRequest {
 
   final Patch<JsonValue>? meta;
 
-  /// Encodes this [PatchOwnerRequest]; optional fields that are not set are
-  /// not sent.
+  /// Encodes this [PatchOwnerRequest]; optional fields that are not set are not
+  /// sent.
   Map<String, Object?> toJson() => {
     if (name case final v?) 'name': v.toJson((p0) => p0),
     if (meta case final v?) 'meta': v.toJson((p0) => p0),

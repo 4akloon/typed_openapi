@@ -722,8 +722,8 @@ schemas:
       expect(
         root,
         contains(
-          '/// A [Root] of a JSON type several variants share (number, '
-          'object), as received.',
+          '/// A [Root] of a JSON type several variants share (number, object), '
+          'as\n/// received.',
         ),
       );
     });
@@ -855,5 +855,37 @@ schemas:
         ),
       ),
     );
+  });
+
+  test('the sentences the generator writes wrap at the line width', () {
+    const long = 'AVeryLongComponentNameThatKeepsGoingForQuiteAWhile';
+    for (final mode in UnionMode.values) {
+      final files = emit(
+        """
+    Root:
+      type: object
+      properties:
+        a: {\$ref: '#/components/schemas/${long}Union'}
+        b: {\$ref: '#/components/schemas/${long}Enum'}
+        c: {\$ref: '#/components/schemas/${long}Extra'}
+    ${long}Union:
+      oneOf:
+        - {\$ref: '#/components/schemas/${long}Extra'}
+        - {type: integer}
+        - {type: array, items: {type: string}}
+    ${long}Enum: {type: string, enum: [a, b]}
+    ${long}Extra:
+      type: object
+      additionalProperties: {type: integer}
+""",
+        generation: GenerationConfig(union: mode),
+      );
+      for (final MapEntry(:key, :value) in files.entries) {
+        for (final line in value.split('\n')) {
+          if (!line.trimLeft().startsWith('///')) continue;
+          expect(line.length, lessThanOrEqualTo(80), reason: '$key: $line');
+        }
+      }
+    }
   });
 }

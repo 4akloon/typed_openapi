@@ -78,8 +78,9 @@ final class DartCode {
   /// that would be read as code or HTML is escaped (`[`, `]`, `<`, `>`,
   /// `\`, and `{` of a doc directive such as `{@link}`), control characters
   /// and bidirectional controls are dropped, a lone surrogate becomes
-  /// U+FFFD, a lone `\r` and the Unicode line separators end a line, and each line is wrapped at [width]
-  /// characters except inside fenced code blocks.
+  /// U+FFFD, a lone `\r` and the Unicode line separators end a line, and
+  /// each line is wrapped at [width] characters except inside fenced code
+  /// blocks.
   List<String> docLines(String text, int width) {
     final lines = <String>[];
     var fenced = false;
@@ -104,6 +105,30 @@ final class DartCode {
     }
     if (fenced) lines.add('```');
     return lines;
+  }
+
+  /// [text], the generator's own sentence (not a spec string: it keeps
+  /// `[Name]` references and backticks as they are), wrapped at [width]
+  /// characters.
+  ///
+  /// A code span is never broken across lines: the analyzer reads a doc
+  /// directive (`{@template}`) inside a span that starts on the previous
+  /// line as a directive.
+  List<String> proseLines(String text, int width) {
+    // Spaces inside a code span are held back from `_wrap`, then restored.
+    const held = '\u0000';
+    final parts = text.split('`');
+    final joined = [
+      for (final (i, part) in parts.indexed)
+        if (i.isOdd && i < parts.length - 1)
+          part.replaceAll(' ', held)
+        else
+          part,
+    ].join('`');
+    return [
+      for (final line in _wrap(joined, width < 20 ? 20 : width))
+        line.replaceAll(held, ' '),
+    ];
   }
 
   static String _clean(String text) =>

@@ -9,8 +9,8 @@ class Cat {
   /// Creates a [Cat].
   const Cat({required this.lives, this.bornAt});
 
-  /// Decodes a [Cat] from [json]; throws a `JsonDecodeException`
-  /// when it does not match the schema.
+  /// Decodes a [Cat] from [json]; throws a `JsonDecodeException` when it does
+  /// not match the schema.
   factory Cat.fromJson(Map<String, Object?> json) {
     final r = JsonReader(json, schema: 'Cat');
     r.constant('kind', 'cat');
@@ -28,8 +28,7 @@ class Cat {
 
   final DateTime? bornAt;
 
-  /// Encodes this [Cat]; optional fields that are not set are
-  /// not sent.
+  /// Encodes this [Cat]; optional fields that are not set are not sent.
   Map<String, Object?> toJson() => {
     'kind': 'cat',
     'lives': lives,

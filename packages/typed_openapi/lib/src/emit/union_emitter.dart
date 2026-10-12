@@ -54,10 +54,10 @@ final class UnionEmitter {
     final property = decl.discriminator!;
     _codec.imports.fromRuntime('JsonReader');
     out
-      ..line(
-        '/// Decodes a [$name] by its `${_code.docSpan(property)}`; a value no',
+      ..prose(
+        'Decodes a [$name] by its `${_code.docSpan(property)}`; a value no '
+        'variant has is a [${decl.unknownName}].',
       )
-      ..line('/// variant has is a [${decl.unknownName}].')
       ..block('factory $name.fromJson(Object? json)', () {
         out.line(
           'final r = JsonReader.of(json, schema: ${_code.string(name)});',
@@ -114,8 +114,10 @@ final class UnionEmitter {
   void _byJsonType(DartWriter out, UnionDecl decl) {
     final name = decl.name;
     out
-      ..line('/// Decodes a [$name] by the JSON type of [json]; a value of')
-      ..line('/// another type is a [${decl.unknownName}].')
+      ..prose(
+        'Decodes a [$name] by the JSON type of [json]; a value of another '
+        'type is a [${decl.unknownName}].',
+      )
       ..line('factory $name.fromJson(Object? json) => switch (json) {')
       ..indented(() {
         final cases = <(String, String)>[
@@ -152,15 +154,12 @@ final class UnionEmitter {
     final oneOf = decl.kind == .oneOf;
     _codec.imports.fromRuntime('JsonReader');
     out
-      ..line(
+      ..prose(
         oneOf
-            ? '/// Decodes a [$name] as the one variant [json] matches; none or'
-            : '/// Decodes a [$name] as the first variant [json] matches; none',
-      )
-      ..line(
-        oneOf
-            ? '/// several make a [${decl.unknownName}].'
-            : '/// makes a [${decl.unknownName}].',
+            ? 'Decodes a [$name] as the one variant [json] matches; none or '
+                  'several make a [${decl.unknownName}].'
+            : 'Decodes a [$name] as the first variant [json] matches; none '
+                  'makes a [${decl.unknownName}].',
       )
       ..block('factory $name.fromJson(Object? json)', () {
         out.list('final decoders = <$name Function()>[', [
@@ -280,10 +279,10 @@ final class UnionEmitter {
     final property = decl.discriminator ?? '';
     final first = variant.discriminatorValues.firstOrNull;
     out
-      ..line(
+      ..prose(
         variant.jsonKinds.isEmpty
-            ? '/// A [${decl.name}] that is a `${_code.docSpan(type)}`.'
-            : '/// A [${decl.name}] of a JSON type several variants share '
+            ? 'A [${decl.name}] that is a `${_code.docSpan(type)}`.'
+            : 'A [${decl.name}] of a JSON type several variants share '
                   '(${variant.jsonKinds.map((k) => k.name).join(', ')}), '
                   'as received.',
       )
@@ -307,15 +306,10 @@ final class UnionEmitter {
         if (remembers) {
           out
             ..line()
-            ..line(
-              '/// The `${_code.docSpan(property)}` [value] was decoded with; null '
-              'for a',
-            )
-            ..line(
-              first == null
-                  ? '/// wrapper made in code, which writes none.'
-                  : '/// wrapper made in code, which writes '
-                        '`${_code.docSpan(_code.string(first))}`.',
+            ..prose(
+              'The `${_code.docSpan(property)}` [value] was decoded with; '
+              'null for a wrapper made in code, which writes '
+              '${first == null ? 'none' : '`${_code.docSpan(_code.string(first))}`'}.',
             )
             ..line('final String? discriminator;');
         }
@@ -388,8 +382,10 @@ final class UnionEmitter {
         : r'$json';
     _codec.imports.fromRuntime('DeepEquality');
     out
-      ..line('/// A [${decl.name}] that no variant takes; only')
-      ..line('/// [${decl.name}.fromJson] creates one.')
+      ..prose(
+        'A [${decl.name}] that no variant takes; only [${decl.name}.fromJson] '
+        'creates one.',
+      )
       ..line('@immutable')
       ..block('class $name implements ${decl.name}', () {
         out

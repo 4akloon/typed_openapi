@@ -8,8 +8,7 @@ import 'cat.dart';
 import 'dog.dart';
 
 sealed class Pet {
-  /// Decodes a [Pet] by its `kind`; a value no
-  /// variant has is a [PetUnknown].
+  /// Decodes a [Pet] by its `kind`; a value no variant has is a [PetUnknown].
   factory Pet.fromJson(Object? json) {
     final r = JsonReader.of(json, schema: 'Pet');
     return switch (r.json['kind']) {
@@ -56,8 +55,8 @@ class PetDog implements Pet {
   /// The value of the variant.
   final Dog value;
 
-  /// The `kind` [value] was decoded with; null for a
-  /// wrapper made in code, which writes `'dog'`.
+  /// The `kind` [value] was decoded with; null for a wrapper made in code,
+  /// which writes `'dog'`.
   final String? discriminator;
 
   @override
@@ -76,8 +75,7 @@ class PetDog implements Pet {
   String toString() => 'PetDog($value)';
 }
 
-/// A [Pet] that no variant takes; only
-/// [Pet.fromJson] creates one.
+/// A [Pet] that no variant takes; only [Pet.fromJson] creates one.
 @immutable
 class PetUnknown implements Pet {
   const PetUnknown._(this.json);

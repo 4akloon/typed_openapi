@@ -23,8 +23,8 @@ import 'check_command.dart';
 /// A client whose check reports an error, including an overrides file that
 /// cannot be used, is skipped; so is one whose output directory the
 /// generator may not own (TOA830), which includes a directory that holds a
-/// file the config makes any client read. The report and a line per client go to
-/// stdout, and the exit code is the one `check` gives.
+/// file the config makes any client read. The report and a line per client
+/// go to stdout, and the exit code is the one `check` gives.
 final class GenerateCommand extends Command<int> {
   /// Creates the command; reports go to [_out], and files are named as
   /// [_paths] does.

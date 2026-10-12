@@ -6,8 +6,7 @@ import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'
 
 /// Where the owner is.
 sealed class Status {
-  /// Decodes a [Status]; a value the spec does not list is a
-  /// [StatusUnknown].
+  /// Decodes a [Status]; a value the spec does not list is a [StatusUnknown].
   factory Status.fromJson(Object? json) {
     final value = JsonReader.asString(json);
     for (final known in StatusKnown.values) {
@@ -46,8 +45,8 @@ enum StatusKnown implements Status {
   String toJson() => value;
 }
 
-/// A value of [Status] the spec does not list; only
-/// [Status.fromJson] creates one.
+/// A value of [Status] the spec does not list; only [Status.fromJson] creates
+/// one.
 class StatusUnknown implements Status {
   const StatusUnknown._(this.value);
 

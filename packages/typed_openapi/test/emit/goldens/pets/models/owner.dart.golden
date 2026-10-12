@@ -20,8 +20,8 @@ class Owner {
     this.additionalProperties = const {},
   });
 
-  /// Decodes a [Owner] from [json]; throws a `JsonDecodeException`
-  /// when it does not match the schema.
+  /// Decodes a [Owner] from [json]; throws a `JsonDecodeException` when it does
+  /// not match the schema.
   factory Owner.fromJson(Map<String, Object?> json) {
     final r = JsonReader(json, schema: 'Owner');
     return Owner(
@@ -45,11 +45,11 @@ class Owner {
 
   final String? secret;
 
-  /// The properties of the object the schema does not list (`additionalProperties`).
+  /// The properties of the object the schema does not list
+  /// (`additionalProperties`).
   final Map<String, int> additionalProperties;
 
-  /// Encodes this [Owner]; optional fields that are not set are
-  /// not sent.
+  /// Encodes this [Owner]; optional fields that are not set are not sent.
   Map<String, Object?> toJson() => {
     'id': id.toJson(),
     'status': ?status?.toJson(),

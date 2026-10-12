@@ -5,8 +5,8 @@ import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'
     show DeepEquality, JsonReader, JsonValue, immutable;
 
 sealed class IdOrName {
-  /// Decodes a [IdOrName] by the JSON type of [json]; a value of
-  /// another type is a [IdOrNameUnknown].
+  /// Decodes a [IdOrName] by the JSON type of [json]; a value of another type
+  /// is a [IdOrNameUnknown].
   factory IdOrName.fromJson(Object? json) => switch (json) {
     final String value => IdOrNameString(JsonReader.asString(value)),
     final int value => IdOrNameInt(JsonReader.asInt(value)),
@@ -65,8 +65,7 @@ class IdOrNameInt implements IdOrName {
   String toString() => 'IdOrNameInt($value)';
 }
 
-/// A [IdOrName] that no variant takes; only
-/// [IdOrName.fromJson] creates one.
+/// A [IdOrName] that no variant takes; only [IdOrName.fromJson] creates one.
 @immutable
 class IdOrNameUnknown implements IdOrName {
   const IdOrNameUnknown._(this.json);

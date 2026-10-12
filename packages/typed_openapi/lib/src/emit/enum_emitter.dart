@@ -34,8 +34,9 @@ final class EnumEmitter {
     final modifier = decl.exhaustive ? 'sealed' : 'abstract interface';
     out.block('$modifier class $name', () {
       out
-        ..line('/// Decodes a [$name]; a value the spec does not list is a')
-        ..line('/// [$unknown].')
+        ..prose(
+          'Decodes a [$name]; a value the spec does not list is a [$unknown].',
+        )
         ..block('factory $name.fromJson(Object? json)', () {
           out.line('final value = JsonReader.$read(json);');
           out.block('for (final known in $known.values)', () {
@@ -58,7 +59,7 @@ final class EnumEmitter {
     });
     out
       ..line()
-      ..line('/// The values of [$name] the spec lists.')
+      ..prose('The values of [$name] the spec lists.')
       ..block('enum $known implements $name', () {
         for (final (i, value) in decl.values.indexed) {
           if (i > 0) out.line();
@@ -80,8 +81,9 @@ final class EnumEmitter {
       });
     out
       ..line()
-      ..line('/// A value of [$name] the spec does not list; only')
-      ..line('/// [$name.fromJson] creates one.')
+      ..prose(
+        'A value of [$name] the spec does not list; only [$name.fromJson] creates one.',
+      )
       ..block('class $unknown implements $name', () {
         out
           ..line('const $unknown._(this.value);')

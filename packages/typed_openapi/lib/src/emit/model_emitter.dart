@@ -44,7 +44,7 @@ final class ModelEmitter {
     out
       ..line('@immutable')
       ..block('class $name', () {
-        out.line('/// Creates a [$name].');
+        out.prose('Creates a [$name].');
         _constructor(out, 'const $name', model, fields, typed: known);
         if (known) {
           out.line();
@@ -63,8 +63,8 @@ final class ModelEmitter {
         if (extra != null) {
           out
             ..line()
-            ..line(
-              '/// The properties of the object the schema does not list '
+            ..prose(
+              'The properties of the object the schema does not list '
               '(`additionalProperties`).',
             )
             ..line(
@@ -123,11 +123,10 @@ final class ModelEmitter {
   }) {
     final name = model.name;
     final create = private ? '$name._' : name;
-    out
-      ..line(
-        '/// Decodes a [$name] from [json]; throws a `JsonDecodeException`',
-      )
-      ..line('/// when it does not match the schema.');
+    out.prose(
+      'Decodes a [$name] from [json]; throws a `JsonDecodeException` '
+      'when it does not match the schema.',
+    );
     final head = 'factory $name.fromJson(Map<String, Object?> json)';
     final extra = model.additionalProperties;
     if (fields.isEmpty && constants.isEmpty && extra == null) {
@@ -262,10 +261,10 @@ final class ModelEmitter {
     List<FieldIr> fields,
     List<FieldIr> constants,
   ) {
-    out.line(
-      '/// Encodes this [${model.name}]; optional fields that are not set are',
+    out.prose(
+      'Encodes this [${model.name}]; optional fields that are not set are '
+      'not sent.',
     );
-    out.line('/// not sent.');
     final entries = <String>[];
     for (final field in model.fields) {
       final key = _code.string(field.jsonKey);

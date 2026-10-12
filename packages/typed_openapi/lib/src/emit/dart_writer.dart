@@ -56,6 +56,15 @@ final class DartWriter {
     }
   }
 
+  /// Writes [text], a sentence of the generator's own (its `[Name]`
+  /// references and code spans are kept as they are), as a doc comment
+  /// wrapped at the width. Spec text goes through [doc].
+  void prose(String text) {
+    for (final line in _code.proseLines(text, width - indent.length - 4)) {
+      this.line('/// $line');
+    }
+  }
+
   /// Writes [open], the [items] separated by `, ` and [close] on one line
   /// when it fits, else [open], each item and a comma on a line one level
   /// deeper, and [close]. No items give `open` and `close` together.
