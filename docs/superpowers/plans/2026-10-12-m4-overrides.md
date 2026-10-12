@@ -19,7 +19,7 @@
 - Кожен новий код — у `DiagnosticCode` з doc-коментарем, slug у kebab-case, рівень за замовчуванням; діагностика про override — у файлі override-ів, з JSON pointer запису (поля) і позицією, і з `reason`, якщо він є (spec, рішення 6–7).
 - Детермінізм (R13.1): записи — у порядку файлу, цілі — у порядку записів, правки — у порядку цілей; звіт сортує `DiagnosticBag.sorted`.
 - Знання структури OAS — у парсері й моделі; override-и знаходять вузли через `SpecModel` і змінюють лише сире дерево через `SpecEdit` (spec, рішення 2–3).
-- Error — лише для справжніх помилок (невалідне значення, неоднозначна адреса, конфлікт, відсутній файл); застарілий override — warning, зайвий — info (R3.2).
+- Error — лише для справжніх помилок (невалідне значення, невідомий ключ, неоднозначна адреса, конфлікт, відсутній файл); застарілий override — warning, зайвий і спільний вузол — info (R3.2).
 - Негативні тести на валідних входах для кожного шляху: валідний файл override-ів — жодної діагностики; поля генерації — жодної правки; спільний параметр двох операцій — не конфлікт.
 - Фікстури — вигадані й маленькі. Приватна специфікація компанії не використовується ні як фікстура, ні як джерело фікстур. Публічний корпус — лише для прогону `check`.
 - Лінти з кореневого `analysis_options.yaml`; `dart analyze packages` з кореня — `No issues found!`; `dart format lib test bin` (з `packages/typed_openapi`) — другий запуск змінює 0 файлів.
@@ -29,32 +29,37 @@
 
 ## Ухвалені рішення
 
-Рішення специфікації M4 — обов'язкові. Тут — те, що специфікація лишає планові; формат файлу, який бачить користувач, винесено також у «Відкриті питання» наприкінці, щоб користувач підтвердив або змінив його до виконання.
+Рішення специфікації M4 — обов'язкові. Тут — те, що специфікація лишає планові; формат файлу й семантику, які бачить користувач, підтвердили користувач (рішення 1, 2, 13, 14) і контролер (решта) після першої версії плану.
 
-1. **Формат файлу.** Корінь — `operations` і `schemas`. Ключ операції — `operationId` або `METHOD /path` (метод без урахування регістру, один із методів `PathItem.methods`; невідомий метод — TOA802). У операції: `reason`, `name`, `exclude`, `group`, `parameters`, `requestBody`, `responses`. Параметр — за `name` або `in:name` (`path:id`); у ньому `required`, `schema` (поля специфікації), `name`, `dartType` (генерації). `requestBody` і `responses.<code>`: `contentType`, `schema`; у відповіді ще `sse` — схема даних однієї події (генерація). Схема (ключ `components.schemas`): `$ref`, `type`, `nullable`, `format`, `required` (список імен), `items`, `additionalProperties`, `enum`, `discriminator` (специфікації), `name`, `exclude`, `exhaustive`, `dartType`, `properties`. Властивість — ті самі поля специфікації, але `required` — булеве; генерації: `name`, `exclude`, `dartType`, `triState`. `dartType: {type, import, converter?}` (R6.8). Кожен запис може мати `reason`.
+1. **Формат файлу.** Корінь — `operations` і `schemas`. Ключ операції — `operationId` або `METHOD /path` (метод без урахування регістру, один із методів `PathItem.methods`; невідомий метод — TOA802). У операції: `reason`, `name`, `exclude`, `group`, `parameters`, `requestBody`, `responses`. Параметр — за `name` або `in:name` (`path:id`); у ньому `required`, `schema` (поля специфікації), `name`, `dartType` (генерації). `requestBody` і `responses.<code>`: `contentType`, `schema`. Схема (ключ `components.schemas`): `$ref`, `type`, `nullable`, `format`, `required` (список імен), `items`, `additionalProperties`, `enum`, `discriminator` (специфікації), `name`, `exclude`, `exhaustive`, `dartType`, `properties`. Властивість — ті самі поля специфікації, але `required` — булеве; генерації: `name`, `exclude`, `dartType`, `triState`. `dartType: {type, import, converter?}` (R6.8). Кожен запис може мати `reason`. Ключі — camelCase, як в OpenAPI (конфіг лишається snake_case: `line_width`); `type` — один рядок, без списку типів 3.1; `exclude` — на операціях, схемах і властивостях, не на параметрах. **`sse` у M4 не приймається** (його форма — справа M10, а зміна форми потім зламала б файли користувачів): зараз це невідомий ключ, TOA803.
 2. **`null` прибирає поле** специфікації (`format: null`, `type: null`): так закривається TOA204 (`format` на масиві) і TOA206 (`type: object` проти гілок). `type` — один рядок із семи типів JSON Schema, крім `null` (нульовість — через `nullable`).
 3. **Семантика «set» (spec, рішення 4) на рівні поля запису:** кожне перелічене поле замінює значення специфікації цілком (`items`, `schema`, `discriminator` — об'єкт цілком), неперелічені лишаються.
-4. **`$ref` у записі схеми чи властивості робить схему посиланням:** вузол замінюється цілком. Разом із `$ref` дозволені лише `nullable`, `reason`, поля генерації і `required` властивості; інші поля специфікації — TOA802 (рішення читача), `properties` у записі схеми з `$ref` — TOA802. Nullable-посилання: у 3.0 — `{allOf: [{$ref}], nullable: true}`, з 3.1 — `{anyOf: [{$ref}, {type: 'null'}]}`. Властивість, що вже є `$ref`, з override-ом `nullable` стає nullable-посиланням.
+4. **`$ref` у записі схеми чи властивості робить схему посиланням:** вузол замінюється цілком. Разом із `$ref` дозволені лише `nullable`, `reason`, поля генерації і `required` властивості; інші поля специфікації — TOA802 (рішення читача), `properties` у записі схеми з `$ref` — TOA802. Nullable-посилання: у 3.0 — `{allOf: [{$ref}], nullable: true}`, з 3.1 — `{anyOf: [{$ref}, {type: 'null'}]}`. Властивість, що вже є `$ref`, з override-ом `nullable` стає nullable-посиланням. M6 має читати обидві форми.
 5. **Діалектний `nullable` (spec, рішення 5)** за версією, яку оголошує документ: у 3.0 `nullable: true` додається, `nullable: false` прибирає поле. З 3.1 `null` додається в `type` або прибирається з нього; `type` в override-і зберігає нульовість схеми (`[integer, 'null']` + `type: number` → `[number, 'null']`). `nullable: true` для схеми без `type` у 3.1+ — TOA802 «додай `type`».
-6. **Цілі.** Схема — те, на чому закінчується ланцюжок `$ref` ключа `components.schemas` (зокрема в іншому файлі); властивість — вузол у власних `properties` цієї схеми, без переходу за `$ref` (змінюється лише ця властивість); параметр — вузол, що його визначає (параметр операції перекриває параметр шляху з тим самим `name` + `in`; `$ref` веде в `components.parameters`); тіло й відповідь — за `$ref`. Вебхуки, `additionalOperations` за `METHOD /path`, вкладені властивості й успадковані через `allOf` властивості не адресуються.
+6. **Цілі.** Схема — те, на чому закінчується ланцюжок `$ref` ключа `components.schemas` (зокрема в іншому файлі); властивість — вузол у власних `properties` цієї схеми, без переходу за `$ref` (змінюється лише ця властивість); параметр — вузол, що його визначає (параметр операції перекриває параметр шляху з тим самим `name` + `in`; `$ref` веде в `components.parameters`); тіло й відповідь — за `$ref`. Вебхуки, `additionalOperations` за `METHOD /path`, вкладені властивості й успадковані через `allOf` властивості не адресуються (див. «Відкладено»). **Спільний вузол:** коли override, адресований через операцію (її параметр, тіло, відповідь), має поля специфікації, а його вузол лежить поза операцією (параметр шляху, `$ref` на компонент, вузол в іншому файлі), — `TOA808 override-shared-target` (info) у позиції override-у: зміна стосується спільного вузла, повідомлення називає його місце (pointer, а для іншого файлу — `файл#pointer`). Override, адресований прямо ім'ям схеми, такої діагностики не дає.
 7. **Конфлікти двох рівнів.** Адресний: два записи називають один вузол (`getPet` і `GET /pets/{id}`; `id` і `path:id` в одній операції; дві схеми-аліаси) — TOA806 на кожному, жоден не застосовується, вкладені записи операції чи схеми — теж. Правковий: дві *різні* правки, що перекриваються (`SpecEdit.overlaps`), від різних записів — TOA806 на кожному полі, обидві не робляться; однакові правки (`sameAs`) робляться один раз. Так спільний параметр шляху, який дві операції роблять `required: true`, — не конфлікт, а `required: [a]` схеми разом із `required: true` властивості — конфлікт.
 8. **Тіло й відповідь.** `contentType` X: якщо X уже є — лишається тільки він; якщо media type один — він перейменовується на X; якщо немає жодного — додається `{X: {}}`; кілька і жоден не X — TOA805. `schema` без `contentType` — у єдиний media type; кілька — TOA805, жодного — TOA802 «додай `contentType`».
-9. **«Нічого не змінив» (TOA807) — по полю**, у позиції поля, а не запису: запис може змінювати одне поле і повторювати інше. Порівняння — зі специфікацією, як її прочитано (до правил нормалізатора). Поля генерації не порівнюються.
-10. **Застосування.** `Normalizer` читає модель один раз у тимчасовий журнал, розв'язує цілі, застосовує правки override-ів (`TreeEditor`, документи читаються один раз і передаються в проходи як `others`), а далі працює як у M3. Правка, яку не вдалося застосувати, — TOA800 у позиції override-у. Файл override-ів, який не можна використати (TOA801/TOA802), звітується, а специфікація перевіряється без нього. Прогони `SpecChecker` розрізняються ще й файлом override-ів.
-11. **Фрагменти в підказках (spec, рішення 9)** — лише там, де override повністю закриває дефект: `double-array` (TOA203: `items` ← внутрішні `items`), `format-on-array` (TOA204: `format: null` і `items: {type, format}`; `int32`/`int64` → `integer`, `float`/`double` → `number`, решта — `string`), `binary-object` (TOA205: `type: string`), `contradictory-object-type` (TOA206: `type: null`), `nullable-enum-one-of` (TOA303: `$ref` + `nullable: true`). Не отримують: `array-without-items` (тип елементів невідомий), `example-type-mismatch` (невідомо, що правильне — приклад чи схема), `path-param-not-in-template`, `duplicate-operation-id` (потрібне ім'я на проводі чи нове ім'я — вгадування), `wildcard-media-type` (невідомо, який media type), правила дискримінатора. Адреса — `schemas.<key>` або `schemas.<key>.properties.<name>`; ключ, що визначає схему, має перевагу над ключем-аліасом; без адреси фрагмента немає. Фрагмент — блоковий YAML, значення — flow-стиль, рядки, які YAML прочитав би інакше (`on`, `1.5`, `#/...`), — у лапках JSON. `TextReporter` зсуває рядки багаторядкового `fix` на 4 пробіли.
-12. **Коди TOA801–TOA807** (TOA800 зайнятий).
+9. **«Нічого не змінив» (TOA807) — по полю**, у позиції поля, а не запису: запис може змінювати одне поле і повторювати інше. Порівняння — зі специфікацією, як її прочитано (до правил нормалізатора): override, який повторює виправлення правила, зайвим не позначається. Поля генерації не порівнюються.
+10. **Застосування.** `Normalizer` читає модель один раз у тимчасовий журнал, розв'язує цілі, застосовує правки override-ів (`TreeEditor`, документи читаються один раз і передаються в проходи як `others`), а далі працює як у M3. Правка, яку не вдалося застосувати, — TOA800 у позиції override-у. Файл override-ів, який не можна використати (TOA801; TOA802 — синтаксис, корінь не об'єкт, каталог замість файлу з власним повідомленням «Overrides path … is a directory»), — помилка; `check` усе одно перевіряє специфікацію без нього, а `generate` (M9) мусить такого клієнта пропустити. Прогони `SpecChecker` розрізняються ще й файлом override-ів.
+11. **Фрагменти в підказках (spec, рішення 9)** — лише там, де override повністю закриває дефект: `double-array` (TOA203: `items` ← внутрішні `items`), `format-on-array` (TOA204: `format: null` і `items: {type, format}` — лише коли тип елементів випливає з відомого формату: `int32`/`int64` → `integer`, `float`/`double` → `number`, рядкові формати OpenAPI і JSON Schema (`date`, `date-time`, `time`, `duration`, `uuid`, `byte`, `binary`, `password`, `email`, `uri`, `hostname`, `ipv4` тощо) → `string`; для невідомого формату фрагмента немає, діагностика лишається), `binary-object` (TOA205: `type: string`), `contradictory-object-type` (TOA206: `type: null`), `nullable-enum-one-of` (TOA303: `$ref` + `nullable: true`). Не отримують: `array-without-items` (тип елементів невідомий), `example-type-mismatch` (невідомо, що правильне — приклад чи схема), `path-param-not-in-template`, `duplicate-operation-id` (потрібне ім'я на проводі чи нове ім'я — вгадування), `wildcard-media-type` (невідомо, який media type), правила дискримінатора. Адреса — `schemas.<key>` або `schemas.<key>.properties.<name>`; ключ, що визначає схему, має перевагу над ключем-аліасом; без адреси фрагмента немає. Фрагмент — блоковий YAML, значення — flow-стиль, рядки, які YAML прочитав би інакше (`on`, `1.5`, `#/...`), — у лапках JSON. `TextReporter` зсуває рядки багаторядкового `fix` на 4 пробіли.
+12. **Коди TOA801–TOA808** (TOA800 зайнятий).
+13. **Невідомий ключ — помилка (TOA803)**, а не warning: одрук `nulable: true` інакше мовчки не застосовувався б. Якщо відомий ключ того самого рівня на відстані Левенштейна ≤ 2, `fix` починається з `Did you mean "<ключ>"?` (з кількох — найближчий, за рівної відстані — перший за абеткою); далі — перелік дозволених ключів.
+14. **Позиція діагностики запису** — на значенні запису (`api.overrides.yaml:2:11`), а не на ключі: так компоновщик зберігає позиції за pointer; для запису блоком — перший ключ усередині.
+
+**Відкладено.** Не адресуються в M4: вебхуки, `additionalOperations` 3.2 за `METHOD /path` (за `operationId` — так), вкладені властивості, властивості з `allOf`, схеми поза `components.schemas` (схему параметра чи тіла змінює лише `schema` цілком). Пункти «Перенесено з M3» у roadmap, призначені на M4 (URI з percent-кодуванням у ключах `SpecDocuments`, зсув позицій після правок списку, повторне читання файлу, що не завантажився), переходять у M6; roadmap оновлює контролер.
 
 ## Нові коди діагностики
 
 | Код | Slug | Рівень | Коли | Задача | Spec |
 |---|---|---|---|---|---|
 | TOA801 | `overrides-not-found` | error | Файлу override-ів, який указує клієнт, немає | 1 | brief |
-| TOA802 | `invalid-override` | error | Файл не читається (синтаксис, корінь не об'єкт, дублікати ключів — з рівнем джерела) або значення не того типу; значення ігнорується | 1, 3 | рішення 10 |
-| TOA803 | `unknown-override-key` | warning | Невідомий ключ; ігнорується | 1 | рішення 10 |
+| TOA802 | `invalid-override` | error | Файл не читається (синтаксис, корінь не об'єкт, каталог, дублікати ключів — з рівнем джерела) або значення не того типу; значення ігнорується | 1, 3 | рішення 10 |
+| TOA803 | `unknown-override-key` | error | Невідомий ключ (зокрема `sse`); ігнорується; «did you mean» для близького відомого | 1 | рішення 13 |
 | TOA804 | `override-target-not-found` | warning | Ціль не знайдено | 2 | рішення 6 |
 | TOA805 | `override-target-ambiguous` | error | Адреса називає кілька вузлів (`operationId` двічі, ім'я параметра в кількох `in`, кілька media types) | 2, 3 | рішення 8 |
 | TOA806 | `override-conflict` | error | Два override-и одного вузла | 2, 3 | рішення 8 |
 | TOA807 | `override-unchanged` | info | Специфікація вже має це значення; override можна прибрати | 3 | рішення 6 |
+| TOA808 | `override-shared-target` | info | Override через операцію змінює спільний вузол (параметр шляху, `$ref`, інший файл) | 2 | рішення 6 |
 
 ## Файли
 
@@ -64,7 +69,7 @@
 |---|---|---|
 | `lib/src/overrides/override_set.dart` | `OverrideSet`, `OverrideEntry` і підкласи, `DartTypeOverride` | 1 |
 | `lib/src/overrides/override_loader.dart` | `OverrideLoader`: файл → `OverrideSet`, TOA801–TOA803 | 1 |
-| `lib/src/overrides/override_resolver.dart` | `OverrideResolver`, `OverrideTarget` і підкласи; TOA804–TOA806 | 2 |
+| `lib/src/overrides/override_resolver.dart` | `OverrideResolver`, `OverrideTarget` і підкласи; TOA804–TOA806, TOA808 | 2 |
 | `lib/src/overrides/override_applier.dart` | `OverrideApplier`, `OverrideEdit`; поля → `SpecEdit`, TOA807, правкові конфлікти | 3 |
 | `lib/src/normalize/normalizer.dart`, `lib/src/check/spec_checker.dart` | `overrides:` у `normalize`, `NormalizedSpec.overrides`; завантаження файлу клієнта | 3 |
 | `lib/src/overrides/override_snippet.dart` | `OverrideSnippet`: місце → адреса, YAML | 4 |
@@ -86,7 +91,7 @@ final class OperationOverride extends OverrideEntry { String? operationId, metho
 final class ParameterOverride extends OverrideEntry { String parameterName;
   ParameterLocation? placement; String? name; DartTypeOverride? dartType; }
 final class BodyOverride extends OverrideEntry {}
-final class ResponseOverride extends OverrideEntry { Map<String, Object?>? sse; }
+final class ResponseOverride extends OverrideEntry {}
 final class SchemaOverride extends OverrideEntry { String? name; bool? exclude, exhaustive;
   DartTypeOverride? dartType; List<PropertyOverride> properties; }
 final class PropertyOverride extends OverrideEntry { String? name; bool? exclude, triState;
@@ -106,7 +111,7 @@ ContentTarget(OverrideEntry entry, SpecNode node);      // RequestBody or Respon
 SchemaTarget(SchemaOverride entry, SchemaObject node);
 PropertyTarget(PropertyOverride entry, SchemaObject owner, Schema node);
 final class OverrideResolver { const OverrideResolver(DiagnosticBag, OverrideSet);
-  List<OverrideTarget> resolve(SpecModel model); }
+  List<OverrideTarget> resolve(SpecModel model, SpecDocuments documents); }
 
 // overrides/override_applier.dart, normalize (Task 3)
 final class OverrideEdit { const OverrideEdit(SpecEdit edit,
@@ -140,7 +145,8 @@ String RuleContext.withOverride(String fix, SpecLocation schema, Map<String, Obj
 Поведінка, яку закріплюють тести:
 - Повний файл (усі розділи, ключ `operationId` і `METHOD /path`, `in:name`, `dartType` з `converter`, `format: null`, `$ref` + `nullable`) читається без діагностики; поля специфікації — у `spec` у порядку файлу, поля генерації — типізовані; JSON читається так само; `{}` — порожній набір без діагностики.
 - Відсутній файл — TOA801 (`null`); синтаксична помилка й корінь не-об'єкт — TOA802 (`null`); дублікат ключа — TOA802 з рівнем, який дав компоновщик; файл з диска називається `displayPath`, позиція — рядок:колонка значення.
-- Невідомі ключі на кожному рівні (корінь, операція, параметр, тіло, відповідь, схема, `dartType`, властивість) — TOA803, решта запису читається.
+- Невідомі ключі на кожному рівні (корінь, операція, параметр, тіло, відповідь, схема, `dartType`, властивість) — TOA803 (error), решта запису читається; `nulable` — підказка `Did you mean "nullable"?`, далекий ключ (`exhaustiveness`) і `sse` — без підказки.
+- Каталог замість файлу — TOA802 «Overrides path … is a directory, not a file.» з підказкою про `overrides` клієнта.
 - Значення не того типу — TOA802 у pointer поля, ігнорується лише воно (запис-не-мапа ігнорується цілком).
 - `$ref` із полем специфікації, крім `nullable` (і `required` властивості), — TOA802 на полі; `properties` у записі схеми з `$ref` — TOA802, властивості відкидаються.
 - `FETCH /pets` — TOA802, запис відкидається; `body:id` — TOA802, параметр відкидається.
@@ -151,10 +157,10 @@ Diff `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart` (`git app
 
 ```diff
 diff --git a/packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart b/packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart
-index 6933785..6902e10 100644
+index 6933785..9cd1d37 100644
 --- a/packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart
 +++ b/packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart
-@@ -202,6 +202,16 @@ enum DiagnosticCode {
+@@ -202,6 +202,17 @@ enum DiagnosticCode {
    /// gone, or the spec kept changing after the last pass.
    fixNotApplied('TOA800', 'fix-not-applied', .warning),
  
@@ -165,8 +171,9 @@ index 6933785..6902e10 100644
 +  /// wrong type; the value is ignored.
 +  invalidOverride('TOA802', 'invalid-override', .error),
 +
-+  /// An override has a key this tool does not know; it is ignored.
-+  unknownOverrideKey('TOA803', 'unknown-override-key', .warning),
++  /// An override has a key this tool does not know, such as a misspelled
++  /// field; it is ignored.
++  unknownOverrideKey('TOA803', 'unknown-override-key', .error),
 +
    /// The configuration file does not exist.
    configNotFound('TOA901', 'config-not-found', .error),
@@ -181,6 +188,7 @@ index 6933785..6902e10 100644
 import 'package:test/test.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_bag.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
+import 'package:typed_openapi/src/diagnostics/severity.dart';
 import 'package:typed_openapi/src/model/operation.dart';
 import 'package:typed_openapi/src/overrides/override_loader.dart';
 import 'package:typed_openapi/src/overrides/override_set.dart';
@@ -216,7 +224,6 @@ operations:
     responses:
       '200':
         contentType: text/event-stream
-        sse: {type: object}
   POST /pets:
     exclude: true
 schemas:
@@ -264,7 +271,6 @@ schemas:
     });
     expect(get.responses.single.key, '200');
     expect(get.responses.single.spec, {'contentType': 'text/event-stream'});
-    expect(get.responses.single.sse, {'type': 'object'});
     expect(post.operationId, isNull);
     expect((post.method, post.path, post.exclude), ('post', '/pets', true));
     final [pet, owner] = set.schemas;
@@ -319,6 +325,16 @@ schemas:
     expect(set.schemas.single.spec, isEmpty);
     expect(bag.all.single.code, DiagnosticCode.invalidOverride);
     expect(bag.all.single.location, 'o.yaml:1:23');
+  });
+
+  test('a directory as the overrides path is an invalid overrides file', () {
+    final dir = TempDir();
+    final bag = DiagnosticBag();
+    expect(OverrideLoader(bag).load(dir.path, displayPath: 'o'), isNull);
+    final d = bag.all.single;
+    expect(d.code, DiagnosticCode.invalidOverride);
+    expect(d.message, 'Overrides path o is a directory, not a file.');
+    expect(d.fix, contains('"overrides"'));
   });
 
   test('a syntax error or a non-object root is an invalid file', () {
@@ -383,6 +399,34 @@ schemas:
     );
     expect(set.schemas.single.properties.single.spec, {'nullable': true});
     expect(set.schemas.single.dartType?.type, 'P');
+  });
+
+  test('an unknown key is an error that suggests a close known key', () {
+    final bag = DiagnosticBag();
+    final set = parse(bag, '''
+schemas:
+  Pet:
+    properties:
+      id: {nulable: true, type: string}
+    exhaustiveness: false
+operations:
+  getPet:
+    responses:
+      '200': {sse: {type: object}}
+''')!;
+    final [typo, far, sse] = bag.sorted;
+    expect(typo.code, DiagnosticCode.unknownOverrideKey);
+    expect(typo.severity, Severity.error);
+    expect(typo.pointer?.value, '#/schemas/Pet/properties/id/nulable');
+    expect(
+      typo.fix,
+      startsWith('Did you mean "nullable"? Allowed keys here: '),
+    );
+    expect(far.pointer?.value, '#/schemas/Pet/exhaustiveness');
+    expect(far.fix, startsWith('Allowed keys here: '));
+    expect(sse.pointer?.value, '#/operations/getPet/responses/200/sse');
+    expect(sse.fix, startsWith('Allowed keys here: '));
+    expect(set.schemas.single.properties.single.spec, {'type': 'string'});
   });
 
   test('reports values of the wrong type and ignores only them', () {
@@ -662,12 +706,7 @@ final class ResponseOverride extends OverrideEntry {
     required super.pointer,
     super.reason,
     super.spec,
-    this.sse,
   });
-
-  /// The schema of one server-sent event's data, for a response that is an
-  /// event stream.
-  final Map<String, Object?>? sse;
 }
 
 /// An override of a schema, addressed by its key in `components.schemas`.
@@ -788,12 +827,22 @@ final class OverrideLoader {
   /// diagnostics. Returns null when the file cannot be used at all.
   OverrideSet? load(String path, {String? displayPath}) {
     final file = displayPath ?? path;
-    if (FileSystemEntity.typeSync(path) == FileSystemEntityType.notFound) {
+    final type = FileSystemEntity.typeSync(path);
+    if (type == FileSystemEntityType.notFound) {
       _diagnostics.report(
         .overridesNotFound,
         'Overrides file $file does not exist.',
         file: file,
         fix: 'Create it, or fix "overrides" of this client in the config.',
+      );
+      return null;
+    }
+    if (type == FileSystemEntityType.directory) {
+      _diagnostics.report(
+        .invalidOverride,
+        'Overrides path $file is a directory, not a file.',
+        file: file,
+        fix: 'Point "overrides" of this client at the overrides file itself.',
       );
       return null;
     }
@@ -855,7 +904,7 @@ final class _OverrideReader {
     'dartType',
   };
   static const _bodyKeys = {'reason', 'contentType', 'schema'};
-  static const _responseKeys = {'reason', 'contentType', 'schema', 'sse'};
+  static const _responseKeys = {'reason', 'contentType', 'schema'};
 
   /// Fields that change a schema, in the order they are applied.
   static const _schemaFields = [
@@ -1014,7 +1063,6 @@ final class _OverrideReader {
       pointer: at,
       reason: _string(entry, 'reason', at),
       spec: _contentSpec(entry, at),
-      sse: _map(entry, 'sse', at),
     );
   }
 
@@ -1231,17 +1279,57 @@ final class _OverrideReader {
     Set<String> allowed,
     JsonPointer at,
   ) {
+    final known = allowed.toList()..sort();
     for (final key in map.keys) {
       if (allowed.contains(key)) continue;
+      final closest = _closest(key, known);
       _diagnostics.report(
         .unknownOverrideKey,
         'Unknown key "$key"; it is ignored.',
         file: _document.file,
         pointer: at.child(key),
         span: _document.spanOf(at.child(key)),
-        fix: 'Allowed keys here: ${(allowed.toList()..sort()).join(', ')}.',
+        fix:
+            '${closest == null ? '' : 'Did you mean "$closest"? '}'
+            'Allowed keys here: ${known.join(', ')}.',
       );
     }
+  }
+
+  /// The first of the sorted [known] keys at the smallest edit distance
+  /// from [key], when that distance is at most [_maxTypoDistance].
+  static String? _closest(String key, List<String> known) {
+    String? best;
+    var bestDistance = _maxTypoDistance + 1;
+    for (final candidate in known) {
+      final distance = _distance(key, candidate);
+      if (distance < bestDistance) {
+        best = candidate;
+        bestDistance = distance;
+      }
+    }
+    return best;
+  }
+
+  /// How many edits a key may be away from a known key to be suggested.
+  static const _maxTypoDistance = 2;
+
+  /// The Levenshtein distance between [a] and [b].
+  static int _distance(String a, String b) {
+    var previous = List<int>.generate(b.length + 1, (i) => i);
+    for (var i = 1; i <= a.length; i++) {
+      final current = List<int>.filled(b.length + 1, 0)..[0] = i;
+      for (var j = 1; j <= b.length; j++) {
+        final substitution = a[i - 1] == b[j - 1] ? 0 : 1;
+        current[j] = [
+          previous[j] + 1,
+          current[j - 1] + 1,
+          previous[j - 1] + substitution,
+        ].reduce((x, y) => x < y ? x : y);
+      }
+      previous = current;
+    }
+    return previous[b.length];
   }
 
   void _invalid(String message, JsonPointer at, {String? fix}) {
@@ -1260,7 +1348,7 @@ final class _OverrideReader {
 - [ ] **Step 5: Перевірити**
 
 Run (з `packages/typed_openapi`): `dart test`
-Expected: PASS, 348 тестів (`+348: All tests passed!`).
+Expected: PASS, 350 тестів (`+350: All tests passed!`).
 
 Run (з `packages/typed_openapi`): `dart format lib test bin` двічі
 Expected: другий запуск — `0 changed`.
@@ -1277,22 +1365,23 @@ git commit -m "feat(typed_openapi): read the overrides file into an OverrideSet"
 ```
 
 
-### Task 2: Адресація: `OverrideResolver` (TOA804–TOA806)
+### Task 2: Адресація: `OverrideResolver` (TOA804–TOA806, TOA808)
 
 **Files:**
 - Create: `packages/typed_openapi/lib/src/overrides/override_resolver.dart`, `packages/typed_openapi/test/overrides/override_resolver_test.dart`
 - Modify: `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart`
 
 **Interfaces:**
-- Consumes: `OverrideSet` і записи (задача 1); `SpecModel` (`document.paths`, `document.components.schemas`, `resolve`, `resolveSchema`), `Operation`, `PathItem`, `Parameter`, `SchemaObject` (M2).
-- Produces: блок «override_resolver.dart (Task 2)»; коди `overrideTargetNotFound` (TOA804), `overrideTargetAmbiguous` (TOA805), `overrideConflict` (TOA806).
+- Consumes: `OverrideSet` і записи (задача 1); `SpecModel` (`document.paths`, `document.components.schemas`, `resolve`, `resolveSchema`), `Operation`, `PathItem`, `Parameter`, `SchemaObject` (M2); `SpecDocuments.displayPath` (M3).
+- Produces: блок «override_resolver.dart (Task 2)»; коди `overrideTargetNotFound` (TOA804), `overrideTargetAmbiguous` (TOA805), `overrideConflict` (TOA806), `overrideSharedTarget` (TOA808).
 
 Поведінка, яку закріплюють тести:
-- Кожен вид цілі знаходиться без діагностики: операція за `operationId`, за `DELETE /pets/{id}` і за `get /pets`; параметр шляху `path:id`, параметр операції `query:id`, параметр через `$ref` у `components.parameters`; відповідь через `$ref`; тіло; схема; властивість (вузол властивості, не ціль її `$ref`; `owner` — схема). Ключ-аліас (`Animal: {$ref: Pet}`) веде до `Pet`.
+- Кожен вид цілі знаходиться без діагностики (записи без полів специфікації на спільних вузлах — без TOA808): операція за `operationId`, за `DELETE /pets/{id}` і за `get /pets`; параметр шляху `path:id`, параметр операції `query:id`, параметр через `$ref` у `components.parameters`; відповідь через `$ref`; тіло; схема; властивість (вузол властивості, не ціль її `$ref`; `owner` — схема). Ключ-аліас (`Animal: {$ref: Pet}`) веде до `Pet`.
 - Відсутня ціль — TOA804 (warning) з `reason` у повідомленні, у позиції запису у файлі override-ів; інші записи застосовуються: невідомий `operationId`, шлях не в `paths`, метод відсутній, параметр (з `in` і без), тіло, відповідь, схема, булева схема, властивість.
 - `operationId` двох операцій — TOA805 з підказкою `METHOD /path` для кожної (у порядку `paths`), вкладені записи не розв'язуються; ім'я параметра в `path` і `query` — TOA805 з підказкою `path:id, query:id`.
 - Два записи одного вузла — TOA806 на кожному, жоден (і нічого всередині) не застосовується: `getPet` + `GET /pets/{id}`, `id` + `path:id`, `Pet` + аліас `Animal`.
-- Негатив: дві операції, кожна зі своїм override-ом спільного параметра шляху, — не конфлікт на рівні адрес.
+- Поля специфікації через операцію на спільному вузлі — TOA808 (info) з місцем вузла: параметр шляху (`#/paths/~1pets~1{id}/parameters/0`), `$ref`-параметр, `$ref`-відповідь; на власному параметрі й тілі операції та на схемі за іменем — нічого; цілі все одно повертаються.
+- Негатив: дві операції, кожна зі своїм override-ом спільного параметра шляху (лише поля генерації), — не конфлікт на рівні адрес і без TOA808.
 
 - [ ] **Step 1: Коди**
 
@@ -1300,12 +1389,12 @@ Diff `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart` (`git app
 
 ```diff
 diff --git a/packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart b/packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart
-index 6902e10..cb11e9d 100644
+index 9cd1d37..8ac01ee 100644
 --- a/packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart
 +++ b/packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart
-@@ -212,6 +212,17 @@ enum DiagnosticCode {
-   /// An override has a key this tool does not know; it is ignored.
-   unknownOverrideKey('TOA803', 'unknown-override-key', .warning),
+@@ -213,6 +213,22 @@ enum DiagnosticCode {
+   /// field; it is ignored.
+   unknownOverrideKey('TOA803', 'unknown-override-key', .error),
  
 +  /// An override names an operation, a schema, a property, a parameter or a
 +  /// response the spec does not have; it is not applied.
@@ -1317,6 +1406,11 @@ index 6902e10..cb11e9d 100644
 +
 +  /// Two overrides change the same node; neither is applied.
 +  overrideConflict('TOA806', 'override-conflict', .error),
++
++  /// An override addressed through an operation changes a node other
++  /// operations may share: a path-level parameter, a `$ref`'d component or
++  /// a node in another file.
++  overrideSharedTarget('TOA808', 'override-shared-target', .info),
 +
    /// The configuration file does not exist.
    configNotFound('TOA901', 'config-not-found', .error),
@@ -1335,6 +1429,7 @@ import 'package:typed_openapi/src/load/openapi_version.dart';
 import 'package:typed_openapi/src/load/spec_loader.dart';
 import 'package:typed_openapi/src/overrides/override_loader.dart';
 import 'package:typed_openapi/src/overrides/override_resolver.dart';
+import 'package:typed_openapi/src/resolve/spec_documents.dart';
 import 'package:typed_openapi/src/resolve/spec_reader.dart';
 
 const _spec = r'''
@@ -1388,7 +1483,10 @@ components:
   final setup = DiagnosticBag();
   final document = SpecLoader(setup).parse(_spec, 'api.yaml')!;
   final version = OpenApiVersionDetector(setup).detect(document)!;
-  final model = SpecReader(setup).read(document, version);
+  final documents = SpecDocuments(SpecLoader(setup), document);
+  final model = SpecReader(
+    setup,
+  ).read(document, version, documents: documents);
   final set = OverrideLoader(setup).parse(overrides, 'o.yaml')!;
   expect(
     setup.all.where((d) => d.file == 'o.yaml'),
@@ -1396,7 +1494,7 @@ components:
     reason: 'the overrides file itself is valid',
   );
   final bag = DiagnosticBag();
-  return (OverrideResolver(bag, set).resolve(model), bag);
+  return (OverrideResolver(bag, set).resolve(model, documents), bag);
 }
 
 /// Each target as (entry pointer, node pointer).
@@ -1410,11 +1508,11 @@ void main() {
 operations:
   getPet:
     parameters:
-      path:id: {required: true}
+      path:id: {name: petId}
       query:id: {required: false}
       limit: {name: max}
     responses:
-      '200': {contentType: application/json}
+      '200': {reason: x}
   DELETE /pets/{id}:
     requestBody: {contentType: application/json}
   get /pets: {name: list}
@@ -1594,6 +1692,42 @@ schemas:
     ]);
   });
 
+  test('a spec change through an operation of a node it shares is an info '
+      'that names the node', () {
+    final (targets, bag) = _resolve('''
+operations:
+  getPet:
+    parameters:
+      path:id: {required: true}
+      query:id: {required: true}
+      limit: {required: true}
+    responses:
+      '200': {contentType: application/json}
+  deletePet:
+    requestBody: {contentType: application/json}
+schemas:
+  Pet: {nullable: true}
+''');
+    expect(
+      [for (final d in bag.sorted) (d.code, d.pointer?.value)],
+      [
+        for (final p in [
+          '#/operations/getPet/parameters/path:id',
+          '#/operations/getPet/parameters/limit',
+          '#/operations/getPet/responses/200',
+        ])
+          (DiagnosticCode.overrideSharedTarget, p),
+      ],
+    );
+    expect(
+      bag.sorted.first.message,
+      'This override changes the shared node at '
+      '#/paths/~1pets~1{id}/parameters/0; the change applies to every '
+      'operation that uses it.',
+    );
+    expect(targets, hasLength(8));
+  });
+
   test('two operations may each override a parameter they share', () {
     final (targets, bag) = _resolve('''
 operations:
@@ -1630,6 +1764,7 @@ import '../diagnostics/diagnostic_code.dart';
 import '../model/operation.dart';
 import '../model/schema.dart';
 import '../model/spec_node.dart';
+import '../resolve/spec_documents.dart';
 import '../resolve/spec_model.dart';
 import 'override_set.dart';
 
@@ -1719,6 +1854,11 @@ final class PropertyTarget extends OverrideTarget {
 /// overrides that name the same node (`getPet` and `GET /pets/{id}`, or `id`
 /// and `path:id`) are `override-conflict`. None of them is a target; the
 /// overrides inside such an operation or schema are not resolved.
+///
+/// A parameter, request body or response override with spec fields whose
+/// node lies outside its operation (a path-level parameter, a `$ref`'d
+/// component, a node in another file) is `override-shared-target`: the
+/// change applies to every operation that uses the node.
 final class OverrideResolver {
   /// Creates a resolver of [_overrides] that reports to [_diagnostics].
   const OverrideResolver(this._diagnostics, this._overrides);
@@ -1726,10 +1866,10 @@ final class OverrideResolver {
   final DiagnosticBag _diagnostics;
   final OverrideSet _overrides;
 
-  /// The targets in [model], in file order: operations with their
-  /// parameters, request bodies and responses, then schemas with their
-  /// properties.
-  List<OverrideTarget> resolve(SpecModel model) {
+  /// The targets in [model], read from [documents], in file order:
+  /// operations with their parameters, request bodies and responses, then
+  /// schemas with their properties.
+  List<OverrideTarget> resolve(SpecModel model, SpecDocuments documents) {
     final operations = _OperationIndex(model);
     final targets = <OverrideTarget>[];
     final found = <(OperationTarget, List<OverrideTarget>)>[];
@@ -1740,9 +1880,13 @@ final class OverrideResolver {
       found.add((target, _inside(entry, operation, model)));
     }
     for (final (target, inner) in _unique(found)) {
+      final unique = _uniqueTargets(inner);
       targets
         ..add(target)
-        ..addAll(_uniqueTargets(inner));
+        ..addAll(unique);
+      for (final t in unique) {
+        _shared(t, target.node, model, documents);
+      }
     }
     final schemas = <(SchemaTarget, List<OverrideTarget>)>[];
     for (final entry in _overrides.schemas) {
@@ -1762,6 +1906,31 @@ final class OverrideResolver {
         ..addAll(_uniqueTargets(inner));
     }
     return targets;
+  }
+
+  /// Reports [target] when it changes the spec at a node outside
+  /// [operation].
+  void _shared(
+    OverrideTarget target,
+    Operation operation,
+    SpecModel model,
+    SpecDocuments documents,
+  ) {
+    if (target.entry.spec.isEmpty) return;
+    final at = target.node.location;
+    final inside =
+        at.document == operation.location.document &&
+        at.pointer.value.startsWith('${operation.pointer.value}/');
+    if (inside) return;
+    final where = at.document == model.document.location.document
+        ? at.pointer.value
+        : '${documents.displayPath(at.document)}${at.pointer.value}';
+    _report(
+      .overrideSharedTarget,
+      target.entry,
+      'This override changes the shared node at $where; the change applies '
+      'to every operation that uses it.',
+    );
   }
 
   /// [found] without the targets whose node another one names too; those
@@ -2035,7 +2204,7 @@ final class _OperationIndex {
 - [ ] **Step 5: Перевірити**
 
 Run (з `packages/typed_openapi`): `dart test`
-Expected: PASS, 355 тестів (`+355: All tests passed!`).
+Expected: PASS, 358 тестів (`+358: All tests passed!`).
 
 Run (з `packages/typed_openapi`): `dart format lib test bin` двічі
 Expected: другий запуск — `0 changed`.
@@ -2067,9 +2236,9 @@ git commit -m "feat(typed_openapi): resolve override addresses to spec nodes" \
 - 3.1: `nullable: true` → `[string, 'null']`; `type: number` для `[integer, 'null']` → `[number, 'null']`; `nullable: false` → `string`; `nullable: true` без `type` — TOA802, схема не змінюється.
 - `$ref` і nullable-посилання: 3.0 — `allOf` + `nullable`, 3.1 — `anyOf` з `{type: 'null'}`; TOA303 після override-у зникає.
 - Поле, яке специфікація вже має, — TOA807 (info) у pointer поля з `reason`: `required`/`schema` параметра, `contentType`/`schema` відповіді, `type`, `nullable`, `format: null` (поля немає), `required: true`/`false` властивості; змінене поле поряд — без TOA807 і застосовується.
-- Різні правки одного вузла від різних записів — TOA806 на кожному полі, обидві не робляться (`schema` спільного параметра з двох операцій; `required` схеми + `required` властивості); однакові правки (`required: true` спільного параметра з двох операцій) — один раз, без діагностики.
+- Різні правки одного вузла від різних записів — TOA806 на кожному полі, обидві не робляться (`schema` спільного параметра з двох операцій; `required` схеми + `required` властивості); однакові правки (`required: true` спільного параметра з двох операцій) — один раз, без конфлікту; кожен override спільного параметра — ще й TOA808.
 - Кілька media types: `schema` без `contentType` і `contentType`, якого немає, — TOA805; `contentType`, що є, лишає тільки його.
-- Схема в іншому файлі (ключ `$ref` у `pet.yaml`) змінюється в тому файлі.
+- Вузли в іншому файлі змінюються в тому файлі: схема (ключ `$ref` у `pet.yaml`) — без діагностики; відповідь операції через `$ref` у `pet.yaml` — TOA808 «… shared node at pet.yaml#/Ok …».
 - Лише поля генерації — жодної діагностики і жодної правки.
 - `SpecChecker`: override клієнта прибирає TOA205; клієнт без override-ів на тому ж файлі дає TOA205; відсутній файл override-ів — TOA801 з відносним шляхом, а специфікацію все одно перевірено.
 
@@ -2079,19 +2248,19 @@ Diff `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart` (`git app
 
 ```diff
 diff --git a/packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart b/packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart
-index cb11e9d..973843f 100644
+index 8ac01ee..3acacd0 100644
 --- a/packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart
 +++ b/packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart
-@@ -223,6 +223,9 @@ enum DiagnosticCode {
+@@ -224,6 +224,9 @@ enum DiagnosticCode {
    /// Two overrides change the same node; neither is applied.
    overrideConflict('TOA806', 'override-conflict', .error),
  
 +  /// An override sets a value the spec already has; it can be removed.
 +  overrideUnchanged('TOA807', 'override-unchanged', .info),
 +
-   /// The configuration file does not exist.
-   configNotFound('TOA901', 'config-not-found', .error),
- 
+   /// An override addressed through an operation changes a node other
+   /// operations may share: a path-level parameter, a `$ref`'d component or
+   /// a node in another file.
 ```
 
 - [ ] **Step 2: Тести, що не проходять**
@@ -2420,12 +2589,25 @@ schemas:
     );
     expect(run.overrideDiagnostics, [
       (
+        DiagnosticCode.overrideSharedTarget,
+        '#/operations/getPet/parameters/id',
+      ),
+      (
         DiagnosticCode.overrideConflict,
         '#/operations/getPet/parameters/id/schema',
+      ),
+      (DiagnosticCode.overrideSharedTarget, '#/operations/getPet/parameters/v'),
+      (
+        DiagnosticCode.overrideSharedTarget,
+        '#/operations/deletePet/parameters/id',
       ),
       (
         DiagnosticCode.overrideConflict,
         '#/operations/deletePet/parameters/id/schema',
+      ),
+      (
+        DiagnosticCode.overrideSharedTarget,
+        '#/operations/deletePet/parameters/v',
       ),
       (DiagnosticCode.overrideConflict, '#/schemas/Pet/required'),
       (DiagnosticCode.overrideConflict, '#/schemas/Pet/properties/b/required'),
@@ -2492,18 +2674,47 @@ operations:
     });
   });
 
-  test('changes a schema defined in another file', () {
+  test('changes nodes defined in another file', () {
     final dir = TempDir();
-    dir.write('pet.yaml', 'Pet: {type: object}\n');
+    dir.write('pet.yaml', '''
+Pet: {type: object}
+Ok:
+  description: ok
+  content: {application/json: {schema: {type: object}}}
+''');
     final path = dir.write('api.yaml', '''
 $_header30
-paths: {}
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      responses:
+        '200': {\$ref: 'pet.yaml#/Ok'}
 components:
   schemas:
     Pet: {\$ref: 'pet.yaml#/Pet'}
 ''');
-    final run = _Run('', 'schemas: {Pet: {nullable: true}}', path: path);
-    expect(run.overrideDiagnostics, isEmpty);
+    final run = _Run('', '''
+operations:
+  listPets:
+    responses:
+      '200': {schema: {type: array}}
+schemas:
+  Pet: {nullable: true}
+''', path: path);
+    // Addressed by schema name: no info; through an operation: an info that
+    // names the shared node in its file.
+    expect(run.overrideDiagnostics, [
+      (
+        DiagnosticCode.overrideSharedTarget,
+        '#/operations/listPets/responses/200',
+      ),
+    ]);
+    expect(
+      run.bag.all.firstWhere((d) => d.file == 'o.yaml').message,
+      'This override changes the shared node at pet.yaml#/Ok; the change '
+      'applies to every operation that uses it.',
+    );
     final pet = run.result.documents.loaded.last;
     expect(pet.valueAt(JsonPointer.parse('#/Pet'))?.$1, {
       'type': 'object',
@@ -3087,7 +3298,7 @@ Diff `packages/typed_openapi/lib/src/normalize/normalizer.dart` (`git apply` з 
 
 ```diff
 diff --git a/packages/typed_openapi/lib/src/normalize/normalizer.dart b/packages/typed_openapi/lib/src/normalize/normalizer.dart
-index c9da2d4..c7b0496 100644
+index c9da2d4..ea342e1 100644
 --- a/packages/typed_openapi/lib/src/normalize/normalizer.dart
 +++ b/packages/typed_openapi/lib/src/normalize/normalizer.dart
 @@ -4,6 +4,9 @@ import '../diagnostics/diagnostic_bag.dart';
@@ -3128,7 +3339,7 @@ index c9da2d4..c7b0496 100644
  ///
  /// The report holds what the parser and resolver say about the last pass,
  /// every finding of a rule that fixed something in a pass, and the findings
-@@ -89,11 +97,35 @@ final class Normalizer {
+@@ -89,11 +97,38 @@ final class Normalizer {
    /// The framework whose hints the findings carry.
    final Preset? preset;
  
@@ -3149,7 +3360,10 @@ index c9da2d4..c7b0496 100644
 +      final model = SpecReader(
 +        DiagnosticBag(),
 +      ).read(root, version, documents: documents);
-+      final targets = OverrideResolver(_diagnostics, overrides).resolve(model);
++      final targets = OverrideResolver(
++        _diagnostics,
++        overrides,
++      ).resolve(model, documents);
 +      final edits = OverrideApplier(
 +        _diagnostics,
 +        overrides,
@@ -3166,7 +3380,7 @@ index c9da2d4..c7b0496 100644
      for (var pass = 1; ; pass++) {
        final scratch = DiagnosticBag();
        final documents = SpecDocuments(loader, root, others: others);
-@@ -126,7 +158,7 @@ final class Normalizer {
+@@ -126,7 +161,7 @@ final class Normalizer {
              );
            }
          }
@@ -3175,7 +3389,7 @@ index c9da2d4..c7b0496 100644
        }
        // Every finding of a rule that fixes something in this pass is part of
        // that fix (a rule may put one edit on the first of several
-@@ -185,6 +217,37 @@ final class Normalizer {
+@@ -185,6 +220,37 @@ final class Normalizer {
      };
    }
  
@@ -3296,7 +3510,7 @@ index d13ef21..dd639bb 100644
 - [ ] **Step 6: Перевірити**
 
 Run (з `packages/typed_openapi`): `dart test`
-Expected: PASS, 364 тестів (`+364: All tests passed!`).
+Expected: PASS, 367 тестів (`+367: All tests passed!`).
 
 Run (з `packages/typed_openapi`): `dart format lib test bin` двічі
 Expected: другий запуск — `0 changed`.
@@ -3327,7 +3541,7 @@ git commit -m "feat(typed_openapi): apply override spec fields before the normal
 - `addressOf`: схема `components.schemas` — за ключем, що її визначає (не за аліасом, також для властивостей); властивість — `schemas.<key>.properties.<name>`; схема в іншому файлі — за ключем, чий `$ref` туди веде; inline-схема параметра, `items`, властивість вкладеного об'єкта, сам ключ-аліас — `null`.
 - `forSchema`: блоковий YAML, значення у flow-стилі; `on`, `1.5`, `a b`, `#/...` — у лапках JSON; `null` — `null`.
 - Для кожного з п'яти правил: `fix` закінчується ` Override:` і фрагментом; цей фрагмент, прочитаний як файл override-ів, прибирає знахідку і не дає жодної діагностики файлу override-ів (перевірка «повний і правильний фрагмент»).
-- Негатив: та сама знахідка в схемі тіла запиту (без адреси) — `fix` без фрагмента.
+- Негатив: та сама знахідка в схемі тіла запиту (без адреси) — `fix` без фрагмента; `format: money` на масиві — TOA204 без фрагмента (тип елементів невідомий), `format: date` поряд — з `items: {type: string, format: date}`.
 - `TextReporter` зсуває рядки багаторядкового `fix` на 4 пробіли.
 
 - [ ] **Step 1: Тест, що не проходить**
@@ -3510,6 +3724,27 @@ paths: {}
         expect(again.all.where((d) => d.file == 'o.yaml'), isEmpty);
       });
     }
+
+    test('format-on-array has no override for an unknown format', () {
+      const spec = '''
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Prices: {type: array, format: money}
+    Days: {type: array, format: date}
+''';
+      final found = _normalize(
+        spec,
+      ).all.where((d) => d.code == DiagnosticCode.formatOnArray).toList();
+      final [days, prices] = found;
+      expect(days.pointer?.value, '#/components/schemas/Days/format');
+      expect(days.fix, contains('items: {type: string, format: date}'));
+      expect(prices.pointer?.value, '#/components/schemas/Prices/format');
+      expect(prices.fix, isNot(contains('Override:')));
+      expect(prices.fix, contains('the element schema'));
+    });
 
     test('a schema without an address gets no override', () {
       const spec = '''
@@ -3719,7 +3954,7 @@ Diff `packages/typed_openapi/lib/src/normalize/rules/schema_shape_rules.dart` (`
 
 ```diff
 diff --git a/packages/typed_openapi/lib/src/normalize/rules/schema_shape_rules.dart b/packages/typed_openapi/lib/src/normalize/rules/schema_shape_rules.dart
-index 475ff2c..4e703d7 100644
+index 475ff2c..8b6950f 100644
 --- a/packages/typed_openapi/lib/src/normalize/rules/schema_shape_rules.dart
 +++ b/packages/typed_openapi/lib/src/normalize/rules/schema_shape_rules.dart
 @@ -73,16 +73,24 @@ final class DoubleArray extends NormalizerRule {
@@ -3751,27 +3986,54 @@ index 475ff2c..4e703d7 100644
        );
      }
    }
-@@ -108,6 +116,15 @@ final class FormatOnArray extends NormalizerRule {
+@@ -108,6 +116,41 @@ final class FormatOnArray extends NormalizerRule {
    @override
    List<DiagnosticCode> get codes => const [.formatOnArray];
  
-+  /// The element type of the formats OpenAPI defines for numbers; every
-+  /// other format is a string format.
-+  static const _elementTypes = {
++  /// The element type each known format implies: the number formats of the
++  /// OpenAPI format registry and the string formats of OpenAPI and JSON
++  /// Schema. Another format gives no override, because its type is unknown.
++  static final _elementTypes = {
 +    'int32': 'integer',
 +    'int64': 'integer',
 +    'float': 'number',
 +    'double': 'number',
++    for (final format in [
++      'binary',
++      'byte',
++      'date',
++      'date-time',
++      'duration',
++      'email',
++      'hostname',
++      'idn-email',
++      'idn-hostname',
++      'ipv4',
++      'ipv6',
++      'iri',
++      'iri-reference',
++      'json-pointer',
++      'password',
++      'regex',
++      'relative-json-pointer',
++      'time',
++      'uri',
++      'uri-reference',
++      'uri-template',
++      'uuid',
++    ])
++      format: 'string',
 +  };
 +
    @override
    Iterable<Finding> check(RuleContext context) sync* {
      for (final schema in context.nodes<SchemaObject>()) {
-@@ -118,14 +135,22 @@ final class FormatOnArray extends NormalizerRule {
+@@ -118,14 +161,25 @@ final class FormatOnArray extends NormalizerRule {
            ArrayWithoutItems._hasItemsKey(context, schema)) {
          continue;
        }
-+      final type = _elementTypes[format] ?? 'string';
++      final type = _elementTypes[format];
++      const move = 'Move it into the elements at the source; until then, ';
        yield context.finding(
          .formatOnArray,
          '"format: $format" is on the array, which has no "items", not on its '
@@ -3780,20 +4042,22 @@ index 475ff2c..4e703d7 100644
 -        fix:
 -            'Move it into the elements at the source; until then, override '
 -            '"items" of this schema with {type: string, format: $format}.',
-+        fix: context.withOverride(
-+          'Move it into the elements at the source; until then, override '
-+          '"items" of this schema with {type: $type, format: $format} and '
-+          'remove its "format".',
-+          schema.location,
-+          {
-+            'format': null,
-+            'items': {'type': type, 'format': format},
-+          },
-+        ),
++        fix: type == null
++            ? '${move}override "items" of this schema with the element schema '
++                  'and remove its "format".'
++            : context.withOverride(
++                '${move}override "items" of this schema with {type: $type, '
++                'format: $format} and remove its "format".',
++                schema.location,
++                {
++                  'format': null,
++                  'items': {'type': type, 'format': format},
++                },
++              ),
        );
      }
    }
-@@ -155,9 +180,12 @@ final class BinaryObject extends NormalizerRule {
+@@ -155,9 +209,12 @@ final class BinaryObject extends NormalizerRule {
          '"type: object" with "format: binary" does not describe a file; a '
          'file is "type: string, format: binary".',
          schema.location.child('type'),
@@ -3809,7 +4073,7 @@ index 475ff2c..4e703d7 100644
        );
      }
    }
-@@ -199,9 +227,12 @@ final class ContradictoryObjectType extends NormalizerRule {
+@@ -199,9 +256,12 @@ final class ContradictoryObjectType extends NormalizerRule {
          '"type: object" is next to "oneOf"/"anyOf" whose branches are all '
          '$names; no value matches both.',
          schema.location.child('type'),
@@ -3855,7 +4119,7 @@ index 946032d..ade94fa 100644
 - [ ] **Step 5: Перевірити**
 
 Run (з `packages/typed_openapi`): `dart test`
-Expected: PASS, 376 тестів (`+376: All tests passed!`).
+Expected: PASS, 380 тестів (`+380: All tests passed!`).
 
 Run (з `packages/typed_openapi`): `dart format lib test bin` двічі
 Expected: другий запуск — `0 changed`.
@@ -3971,10 +4235,10 @@ Diff `CLAUDE.md` (`git apply` з кореня):
 
 ```diff
 diff --git a/CLAUDE.md b/CLAUDE.md
-index 7f3ae54..aefd844 100644
+index 7f3ae54..4ed777c 100644
 --- a/CLAUDE.md
 +++ b/CLAUDE.md
-@@ -104,8 +104,34 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
+@@ -104,8 +104,41 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
    without `#` or `/` is a component name, also with a dot, when it is a key
    of `components.schemas`, and a remote value says remote refs are not read;
    `SchemaType.integer.accepts` takes whole-number doubles beyond int64.
@@ -3982,15 +4246,20 @@ index 7f3ae54..aefd844 100644
 +  YAML, through `SpecLoader`) into an immutable `OverrideSet`: operations
 +  (`operationId` or `METHOD /path`) with parameters (`name` or `in:name`),
 +  `requestBody` and `responses`, schemas (`components.schemas` keys) with
-+  their own `properties`. Each entry splits into spec fields (`spec`, a map
-+  where `null` removes the field) and typed generation fields (`name`,
-+  `exclude`, `group`, `exhaustive`, `dartType`, `sse`, `triState`) that M4
-+  only keeps for the generator. A missing file is TOA801, a bad value TOA802
-+  (the value is ignored), an unknown key TOA803. `OverrideResolver` maps
-+  entries to model nodes (`OverrideTarget`; a schema follows its `$ref`
-+  chain, a property does not, a parameter is the node that defines it):
-+  missing node TOA804 (warning), ambiguous address TOA805, two entries for
-+  one node TOA806 (none of them applies). `OverrideApplier` turns spec
++  their own `properties`. Keys are camelCase. Each entry splits into spec
++  fields (`spec`, a map where `null` removes the field) and typed
++  generation fields (`name`, `exclude`, `group`, `exhaustive`, `dartType`,
++  `triState`) that M4 only keeps for the generator (`sse` is not accepted
++  until M10 settles its shape). A missing file is TOA801, a directory or a
++  bad value TOA802 (the value is ignored), an unknown key the error TOA803
++  with "did you mean" for a known key within Levenshtein distance 2.
++  `OverrideResolver` maps entries to model nodes (`OverrideTarget`; a
++  schema follows its `$ref` chain, a property does not, a parameter is the
++  node that defines it): missing node TOA804 (warning), ambiguous address
++  TOA805, two entries for one node TOA806 (none of them applies); a
++  parameter, body or response override with spec fields whose node lies
++  outside its operation (path-level, `$ref`'d, another file) is TOA808
++  (info, names the shared node). `OverrideApplier` turns spec
 +  fields into `SpecEdit`s with set semantics (a value replaces the spec's
 +  value, `null` removes it), dialect-aware `nullable` (3.0 `nullable`, 3.1+
 +  `null` in `type`; a nullable reference is `allOf` + `nullable` in 3.0 and
@@ -4000,17 +4269,19 @@ index 7f3ae54..aefd844 100644
 +  before its passes, so rules see the overridden spec; `NormalizedSpec`
 +  carries the `OverrideSet`. `OverrideSnippet` turns a schema location back
 +  into an override address and block YAML; rules use it through
-+  `RuleContext.withOverride` (TOA203-TOA206, TOA303), and `TextReporter`
-+  indents the lines of a multi-line fix.
++  `RuleContext.withOverride` (TOA203-TOA206, TOA303; TOA204 only for a
++  format whose element type is known), and `TextReporter` indents the
++  lines of a multi-line fix.
  - `config/` - `ConfigLoader`, `ProjectConfig`, `ClientConfig`, `Preset`.
 -- `check/` - `SpecChecker`: config -> load -> version -> `Normalizer`.
 +- `check/` - `SpecChecker`: config -> load -> version -> overrides ->
-+  `Normalizer`; an overrides file that cannot be used is reported and the
-+  spec is checked without it.
++  `Normalizer`; an overrides file that cannot be used is reported (an
++  error) and the spec is checked without it; `generate` (M9) must skip
++  such a client.
  - `cli/` - `TypedOpenApiCli` (`cli.dart`, owns the `CommandRunner` and maps
    usage errors to exit code 64) and `CheckCommand` (`check_command.dart`,
    options `--config/-c` and `--format`, client names as positional
-@@ -120,13 +146,17 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
+@@ -120,13 +153,17 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
    `RefKind`, `OpenApiDocument` and the other OAS objects), the entry points
    `SpecReader`, `SpecModel` and `SpecDocuments`, and the normalizer
    (`Normalizer`, `NormalizedSpec`, `NormalizerRule`, `RuleContext`,
@@ -4037,10 +4308,10 @@ Diff `packages/typed_openapi/CHANGELOG.md` (`git apply` з кореня):
 
 ```diff
 diff --git a/packages/typed_openapi/CHANGELOG.md b/packages/typed_openapi/CHANGELOG.md
-index a5204ce..d6053f9 100644
+index a5204ce..200e60a 100644
 --- a/packages/typed_openapi/CHANGELOG.md
 +++ b/packages/typed_openapi/CHANGELOG.md
-@@ -64,3 +64,27 @@
+@@ -64,3 +64,30 @@
    `RuleContext`, `Finding`, `SpecEdit`, `EditOperation`, `SpecDocuments`.
  - A region of a spec that several `$ref`s, enclosing nodes or clients reach is
    read once, and an identical diagnostic is reported once.
@@ -4053,16 +4324,19 @@ index a5204ce..d6053f9 100644
 +  `contentType`/`schema`) replace the spec's values before the normalizer
 +  runs (`null` removes a field; `nullable` follows the document's dialect).
 +  Generation fields (`name`, `exclude`, `group`, `exhaustive`, `dartType`,
-+  `sse`, `triState`) are checked and kept for the generator. Every entry may
-+  have a `reason`, printed in diagnostics about it. A missing overrides
-+  file is TOA801, an invalid value TOA802, an unknown key TOA803, an
-+  override whose target is gone TOA804 (warning), an ambiguous address
-+  TOA805, two overrides of one node TOA806, and an override the spec
-+  already matches TOA807 (info, "can be removed").
++  `triState`) are checked and kept for the generator. Every entry may have
++  a `reason`, printed in diagnostics about it. A missing overrides file is
++  TOA801, a directory or an invalid value TOA802, an unknown key the error
++  TOA803 (with "did you mean" for a close known key), an override whose
++  target is gone TOA804 (warning), an ambiguous address TOA805, two
++  overrides of one node TOA806, an override the spec already matches TOA807
++  (info, "can be removed"), and a change through an operation of a node
++  other operations share TOA808 (info).
 +- The fixes of `double-array`, `format-on-array`, `binary-object`,
 +  `contradictory-object-type` and `nullable-enum-one-of` end with the
 +  override to copy into the overrides file, when the schema is in
-+  `components.schemas` or is one of its properties.
++  `components.schemas` or is one of its properties (`format-on-array` only
++  for a format whose element type is known).
 +- Programmatic API: `OverrideLoader`, `OverrideSet`, `OverrideEntry`,
 +  `OperationOverride`, `ParameterOverride`, `BodyOverride`,
 +  `ResponseOverride`, `SchemaOverride`, `PropertyOverride`,
@@ -4074,10 +4348,10 @@ Diff `packages/typed_openapi/README.md` (`git apply` з кореня):
 
 ````diff
 diff --git a/packages/typed_openapi/README.md b/packages/typed_openapi/README.md
-index 68b1aa0..ed9d518 100644
+index 68b1aa0..b0986d8 100644
 --- a/packages/typed_openapi/README.md
 +++ b/packages/typed_openapi/README.md
-@@ -45,6 +45,32 @@ defaults:
+@@ -45,6 +45,33 @@ defaults:
    rules: {dedupe-enum-values: false}
  ```
  
@@ -4102,9 +4376,10 @@ index 68b1aa0..ed9d518 100644
 +
 +Overrides change the spec before the normalizer runs; `null` removes a field.
 +An override whose target is gone is a warning, one the spec already matches
-+is an info that it can be removed. Fields for the generator (`name`,
-+`exclude`, `group`, `exhaustive`, `dartType`, `triState`, `sse`) are checked
-+now and used once code generation lands. Hints of rules that cannot fix a
++is an info that it can be removed, and a misspelled key is an error that
++suggests the closest known one. Fields for the generator (`name`, `exclude`,
++`group`, `exhaustive`, `dartType`, `triState`) are checked now and used once
++code generation lands. Hints of rules that cannot fix a
 +defect themselves end with the override to copy.
 +
  Every finding has a stable code (`TOA011`), a JSON pointer into the spec and,
@@ -4116,10 +4391,10 @@ Diff `packages/typed_openapi/README.ua.md` (`git apply` з кореня):
 
 ````diff
 diff --git a/packages/typed_openapi/README.ua.md b/packages/typed_openapi/README.ua.md
-index 7922928..86292ef 100644
+index 7922928..2467b25 100644
 --- a/packages/typed_openapi/README.ua.md
 +++ b/packages/typed_openapi/README.ua.md
-@@ -46,6 +46,32 @@ defaults:
+@@ -46,6 +46,33 @@ defaults:
    rules: {dedupe-enum-values: false}
  ```
  
@@ -4143,10 +4418,11 @@ index 7922928..86292ef 100644
 +```
 +
 +Override-и змінюють специфікацію до нормалізатора; `null` прибирає поле.
-+Override, ціль якого зникла, дає warning, а той, з яким специфікація вже
-+збігається, — info, що його можна прибрати. Поля для генератора (`name`,
-+`exclude`, `group`, `exhaustive`, `dartType`, `triState`, `sse`) уже
-+перевіряються і запрацюють разом із генерацією коду. Підказки правил, які не
++Override, ціль якого зникла, дає warning, той, з яким специфікація вже
++збігається, — info, що його можна прибрати, а ключ з одруком — помилку з
++підказкою найближчого відомого ключа. Поля для генератора (`name`, `exclude`,
++`group`, `exhaustive`, `dartType`, `triState`) уже перевіряються і
++запрацюють разом із генерацією коду. Підказки правил, які не
 +можуть виправити дефект самі, закінчуються override-ом, який можна скопіювати.
 +
  У кожної знахідки є стабільний код (`TOA011`), JSON-pointer на місце в
@@ -4197,7 +4473,7 @@ index e6f9892..f813174 100644
 - [ ] **Step 3: Перевірити**
 
 Run (з `packages/typed_openapi`): `dart test`
-Expected: PASS, 377 тестів (`+377: All tests passed!`).
+Expected: PASS, 381 тестів (`+381: All tests passed!`).
 
 Run (з `packages/typed_openapi`): `dart format lib test bin` двічі
 Expected: другий запуск — `0 changed`.
@@ -4222,22 +4498,3 @@ git commit -m "docs(typed_openapi): document overrides and export their API" \
 
 Run (з `packages/typed_openapi`, після коміту): `dart pub publish --dry-run`
 Expected: `Package has 0 warnings.`
-
-## Відкриті питання
-
-Специфікація їх не вирішує; план обрав варіант (він у коді задач), але користувач має підтвердити або змінити його до виконання, бо це формат, який бачить користувач, або семантика, яку важко змінити після релізу.
-
-1. **Імена ключів і форма файлу** (рішення 1): `requestBody`, `contentType`, `dartType`, `triState` (camelCase, як в OpenAPI, тоді як конфіг — snake_case: `line_width`); роздільник `in:name`; метод у `METHOD /path` без урахування регістру; `type` — лише один рядок (без списку типів 3.1); `exclude` — на операціях, схемах і властивостях, але не на параметрах.
-2. **`null` прибирає поле** (рішення 2) — потрібне для фрагментів TOA204/TOA206; альтернатива — окреме поле `remove: [format]`.
-3. **Форма `sse`** у відповіді: зараз — схема даних однієї події (як `itemSchema` 3.2). Альтернатива — мапа «ім'я події → схема». Вирішувати разом із M10?
-4. **Форма nullable-посилання** (рішення 4): 3.0 — `allOf: [{$ref}]` + `nullable: true`; 3.1+ — `anyOf: [{$ref}, {type: 'null'}]` (а не `oneOf`, як пише NestJS 12). M6 має читати обидві форми.
-5. **`type` у 3.1 зберігає нульовість** (рішення 5), а не замінює список повністю, як вимагала б буквальна семантика «set».
-6. **Спільні вузли** (рішення 6): override параметра шляху, `$ref`-параметра, `$ref`-відповіді чи тіла, схеми з ключем-`$ref` в інший файл змінює вузол, що його визначає, — тобто всі операції, які його поділяють, без окремої діагностики. Альтернативи: info «змінено спільний вузол» або локальна копія для операції.
-7. **Позиція діагностики запису** — на значенні запису (`api.overrides.yaml:2:11`), а не на ключі (`2:3`): так компоновщик зберігає позиції за pointer. Для запису блоком позиція — перший ключ усередині (`5:5`).
-8. **«Можна прибрати» порівнює зі специфікацією до нормалізатора** (рішення 9). Override, який повторює виправлення правила (наприклад, `required: true` властивості, яку виправить `bool-required-to-array`), не позначається як зайвий. R3.2 каже «збігся з виправленою специфікацією» — якщо мова про виправлення нормалізатором, потрібне друге порівняння після проходів.
-9. **Рівні:** невідомий ключ — warning (TOA803, як TOA903 конфігу), хоча одрук `nulable: true` мовчки не застосовується; невалідне значення — error (TOA802, як TOA902).
-10. **Файл override-ів, який не читається**, — помилка, але специфікація перевіряється без override-ів (рішення 10), тож у звіті можуть бути знахідки, які override закрив би. Альтернатива — не перевіряти клієнта.
-11. **TOA204: тип елементів** у фрагменті виводиться з формату (`int32`/`int64` → `integer`, `float`/`double` → `number`, інше — `string`). Для власних форматів (`format: money`) це припущення; можна давати фрагмент лише для форматів реєстру OpenAPI.
-12. **Що не адресується:** вебхуки, `additionalOperations` 3.2 за `METHOD /path` (за `operationId` — так), вкладені властивості, властивості з `allOf`, схеми поза `components.schemas` (параметрів, тіл — лише через `schema` параметра/тіла цілком).
-13. **Повідомлення для каталогу замість файлу override-ів** успадковане від `SpecLoader` («Spec path … is a directory», підказка про `input`) і перекодоване в TOA802; варто дати власний текст.
-14. **Пункти «Перенесено з M3» у roadmap для M4** (URI з percent-кодуванням у ключах `SpecDocuments`, зсув позицій після правок списку, повторне читання файлу, що не завантажився) цей план не закриває: override-и працюють на тих самих правках, але жоден тест M4 на них не наштовхнувся. Пропозиція — лишити в roadmap з новою ціллю (M6).
