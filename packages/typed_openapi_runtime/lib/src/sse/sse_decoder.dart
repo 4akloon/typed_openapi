@@ -118,8 +118,10 @@ final class _SseSink implements EventSink<String> {
     _eventType = '';
   }
 
-  /// The most milliseconds a [Duration] holds (its microseconds are an int64).
-  static const int _maxRetry = 9223372036854775;
+  /// The most milliseconds a retry may take: a [Duration] counts microseconds,
+  /// and 2^53 of them (9007199254740 ms) is the largest count JavaScript
+  /// holds exactly, so the same cap applies on every platform.
+  static const int _maxRetry = 9007199254740;
 
   static final RegExp _digits = RegExp(r'^[0-9]+$');
 }

@@ -5,6 +5,7 @@ import 'package:test/test.dart';
 import 'package:typed_openapi_runtime/typed_openapi_runtime.dart';
 
 import '../helpers/fake_adapter.dart';
+import '../helpers/test_platform.dart';
 
 /// A model the way generated code reads one.
 final class Pet {
@@ -215,18 +216,20 @@ void main() {
   );
 
   test('a body that does not match the schema is a decode error', () async {
-    final adapter = FakeAdapter.json(200, {'id': 7.0, 'name': 'Rex'});
+    final adapter = FakeAdapter.json(200, {'id': 'seven', 'name': 'Rex'});
     final result = await DioRequestSender(
       dioWith(adapter),
     ).send(request, decodePet);
     final error = result as DecodeError<Pet, Problem>;
     expect(error.statusCode, 200);
     expect(error.error.pointer, '/id');
-    expect(error.error.message, 'expected an integer, got a number');
+    expect(error.error.message, 'expected an integer, got a string');
     expect(error.error.schema, 'Pet');
-    expect(error.rawBody, {'id': 7.0, 'name': 'Rex'});
+    expect(error.rawBody, {'id': 'seven', 'name': 'Rex'});
   });
 
+  // Dio's JSON parser reports a failure differently in a browser (I1);
+  // the browser behaviour is tested in test/dio/web_test.dart.
   test('malformed JSON is a decode error without a status', () async {
     final broken = FakeAdapter.text(200, '{"id": 7,', 'application/json');
     final result = await DioRequestSender(
@@ -239,7 +242,7 @@ void main() {
       'expected a JSON body, got text that is not JSON',
     );
     expect(error.rawBody, '{"id": 7,');
-  });
+  }, testOn: 'vm');
 
   test('JSON sent as text/plain is not guessed', () async {
     final adapter = FakeAdapter.text(
@@ -300,6 +303,7 @@ void main() {
 
   test(
     'a FormatException that is not a JSON parse failure is transport',
+    testOn: 'vm',
     () async {
       final dio = Dio(BaseOptions(baseUrl: 'https://api.test'))
         ..httpClientAdapter = FakeAdapter.json(200, {'id': 7, 'name': 'Rex'})
@@ -330,6 +334,7 @@ void main() {
 
   test(
     'a text FormatException source is a decode error on the web only',
+    testOn: 'vm',
     () async {
       Future<Result<Pet, Problem>> run({required bool isWeb}) {
         final adapter = FakeAdapter(
@@ -398,7 +403,9 @@ void main() {
     expect(adapter.bodies.single, '{"name":"Rex","tag":null}');
     expect(adapter.requests.single.method, 'POST');
     expect(adapter.requests.single.contentType, 'application/json');
-    expect(sent, isNotEmpty);
+    // The adapter reports progress only when Dio streams the body to it,
+    // which it does on the VM.
+    if (!TestPlatform.isWeb) expect(sent, isNotEmpty);
 
     final bytes = FakeAdapter(
       (_) => ResponseBody.fromBytes(

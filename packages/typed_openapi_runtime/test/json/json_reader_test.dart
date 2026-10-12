@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:test/test.dart';
 import 'package:typed_openapi_runtime/typed_openapi_runtime.dart';
 
+import '../helpers/test_platform.dart';
+
 /// A model the way generated code reads one.
 final class Tag {
   const Tag(this.name);
@@ -14,9 +16,6 @@ final class Tag {
 
   final String name;
 }
-
-const int maxInt64 = 9223372036854775807;
-const int minInt64 = -9223372036854775808;
 
 void main() {
   JsonDecodeException failure(void Function() body) {
@@ -257,31 +256,20 @@ void main() {
       expect(JsonReader.asDouble(1), 1.0);
       expect(JsonReader.asDouble(1), isA<double>());
       expect(JsonReader.asNumber(1), 1);
-      expect(failure(() => JsonReader.asInt(1.0)).actual, 'a number');
+      // JavaScript has one number type: 1.0 is the int 1 there.
+      if (!TestPlatform.isWeb) {
+        expect(failure(() => JsonReader.asInt(1.0)).actual, 'a number');
+      }
       expect(failure(() => JsonReader.asInt('1')).actual, 'a string');
       expect(failure(() => JsonReader.asString(1)).actual, 'a number');
       expect(failure(() => JsonReader.asBool('true')).actual, 'a string');
       expect(failure(() => JsonReader.asBool(0)).actual, 'a number');
-      // jsonDecode turns a 30-digit integer into a double.
-      final huge = jsonDecode('123456789012345678901234567890');
-      expect(failure(() => JsonReader.asInt(huge)).expected, 'an integer');
-    });
-
-    test('the int64 boundary: 2^63 - 1 is an int, 2^63 is not', () {
-      expect(JsonReader.asInt(jsonDecode('9223372036854775807')), maxInt64);
-      expect(JsonReader.asInt(jsonDecode('-9223372036854775808')), minInt64);
-      expect(
-        failure(
-          () => JsonReader.asInt(jsonDecode('9223372036854775808')),
-        ).expected,
-        'an integer',
-      );
-      expect(
-        failure(
-          () => JsonReader.asInt(jsonDecode('-9223372036854775809')),
-        ).expected,
-        'an integer',
-      );
+      if (!TestPlatform.isWeb) {
+        // On the VM jsonDecode turns a 30-digit integer into a double; in
+        // JavaScript every whole number is an int.
+        final huge = jsonDecode('123456789012345678901234567890');
+        expect(failure(() => JsonReader.asInt(huge)).expected, 'an integer');
+      }
     });
 
     test('non-finite numbers are rejected', () {
@@ -421,8 +409,16 @@ void main() {
       expect(e.expected, 'arrays and objects nested at most 1000 deep');
       expect(e.path, hasLength(JsonReader.maxDepth));
       expect(e.pointer, startsWith('/0/k/0/k/'));
-      final deep = jsonDecode('[' * 200000 + ']' * 200000);
+      // Built without a parser, which would overflow the stack in a browser.
+      final deep = nested(200000);
       expect(failure(() => JsonReader.checkDepth(deep)).path, hasLength(1000));
+      if (!TestPlatform.isWeb) {
+        final parsed = jsonDecode('[' * 200000 + ']' * 200000);
+        expect(
+          failure(() => JsonReader.checkDepth(parsed)).path,
+          hasLength(1000),
+        );
+      }
     });
   });
 

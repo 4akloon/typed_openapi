@@ -137,12 +137,12 @@ void main() {
       );
     });
 
-    test('a retry beyond what a Duration holds is ignored', () async {
+    test('a retry beyond the JavaScript-safe cap is ignored', () async {
       final events = await decode([
         'retry: 9223372036854775807\ndata: a\n\n'
-            'retry: 9223372036854776\ndata: b\n\n'
+            'retry: 9007199254741\ndata: b\n\n'
             'retry: ${'9' * 30}\ndata: c\n\n'
-            'retry: 9223372036854775\ndata: d\n\n',
+            'retry: 9007199254740\ndata: d\n\n',
       ]);
       expect(
         [for (final e in events) e.retry],
@@ -150,7 +150,7 @@ void main() {
           null,
           null,
           null,
-          const Duration(milliseconds: 9223372036854775),
+          const Duration(milliseconds: 9007199254740),
         ],
       );
     });
