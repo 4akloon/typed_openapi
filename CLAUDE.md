@@ -279,7 +279,10 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   object); `OperationBuilder` keeps security requirements (TOA568 for an
   unknown scheme), skips event-stream operations (TOA654) and reports
   operation servers (TOA566), callbacks and webhooks (TOA567) and a missing
-  2xx (TOA653); method names,
+  2xx (TOA653) through collaborators (`SecurityBuilder`, `PartsBuilder`,
+  `BodyEncoding`, `OperationChecks`); `ApiNames.client` assembles the
+  `ClientIr`; the IR types only the API emitter reads are in `api_ir.dart`,
+  which `ir.dart` exports; method names,
   override names first, then
   `operationId` without the `operation_prefix`, then the path; TOA563 when
   no operation is generated, at the config client if filters left some
@@ -382,7 +385,9 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   barrel's name), which exports both barrels and holds the root class
   (`ClientIr.root`: a field per group, servers as `static const` or a
   `static String` method of the URL variables; it never sets a base URL).
-  `OperationEmitter` writes a group: a plain `class` with
+  `OperationEmitter` (with `RequestWriter` for parameters and bodies,
+  `DecoderWriter` for the status `switch`, `StatusTypeEmitter` and
+  `PartsEmitter` for the types after the class) writes a group: a plain `class` with
   `{Group}(Dio dio)`, a private `OperationInfo` (tags, security) and a
   static decoder per operation (private names apart in their own scope),
   methods with named arguments only (`required` for required ones; enum
@@ -589,8 +594,8 @@ that the API composes, including an `implements` fake of a tag class.
   a generated decoder switches on; `parsedJson` parses a JSON body that Dio
   read as text or bytes), and the bodies `FileUpload` (bytes or a stream),
   `FormBody`/`FormEncoding` and `MultipartBody`/`MultipartPart`, which
-  `DioRequestSender` turns into form text, `FormData` and bytes or a
-  stream.
+  `DioBody` (`dio/`) turns into form text, `FormData` and bytes or a
+  stream for `DioRequestSender`.
 - `dio/` - `DioRequestSender(dio, {isWeb})` (`send`, `openEvents`; requests
   only through `dio.request`, never mutates the user's Dio, never retries;
   decoding catches only `DioException`, `JsonDecodeException` and, from the
