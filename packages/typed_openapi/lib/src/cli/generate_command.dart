@@ -24,9 +24,10 @@ import 'check_command.dart';
 /// cannot be used, is skipped; so is one whose output directory the
 /// generator may not replace (TOA830): a directory that holds a package, a
 /// file the config makes any client read, or a file the generator did not
-/// write or that changed since it did (`--force` replaces those, never the
-/// others). The report and a line per client go to stdout, and the exit code
-/// is the one `check` gives.
+/// write or that changed since it did (`--force` replaces those and lists
+/// each, never the others; `--break-lock` only takes over a lock). The report
+/// and a line per client go to stdout, and the exit code is the one `check`
+/// gives.
 final class GenerateCommand extends Command<int> {
   /// Creates the command; reports go to [_out], and files are named as
   /// [_paths] does.
@@ -43,7 +44,14 @@ final class GenerateCommand extends Command<int> {
         negatable: false,
         help:
             'Replace files in an output directory that typed_openapi did not '
-            'write or that changed since it wrote them.',
+            'write or that changed since it wrote them; each is listed.',
+      )
+      ..addFlag(
+        'break-lock',
+        negatable: false,
+        help:
+            'Take over the lock of an output when it cannot be told whether '
+            'the run that holds it is still going. Replaces no file.',
       );
   }
 
@@ -114,6 +122,7 @@ final class GenerateCommand extends Command<int> {
           inputs: inputsOf(check),
           protected: protected,
           force: results.flag('force'),
+          breakLock: results.flag('break-lock'),
         );
         lines.add(
           changes == null

@@ -38,6 +38,7 @@ errors is skipped, and the exit code is the one `check` gives):
 dart run typed_openapi generate          # every client
 dart run typed_openapi generate core_api # one client
 dart run typed_openapi generate --force  # also replace files it did not write
+dart run typed_openapi generate --break-lock  # take over a lock of unknown owner
 ```
 
 ### What `generate` writes
@@ -105,7 +106,7 @@ directory is foreign (a file of yours, of another client, of another tool) or
 modified (a generated file someone edited): the client is not generated, and
 error `TOA830` names the files and changes nothing. Move them away, or run
 `generate --force` to replace them (the line of the client says how many were
-replaced). A directory with files and no manifest of its own is refused the
+replaced, and an info `TOA833` names each file it overwrote or deleted). A directory with files and no manifest of its own is refused the
 same way, as all its files are foreign, and so is a directory whose manifest
 has no hash for a file (written before manifest format 2): pass `--force`
 once and the new manifest has the hashes. A file that already holds what the
@@ -122,17 +123,19 @@ One run works on an output at a time. It holds the lock file
 `.<output>.typed_openapi.lock`, created next to the output, which names its
 process. A second run on the same output gets `TOA831` and changes nothing.
 The lock of a process that is gone (on the same host) is taken over (info
-`TOA832`); when typed_openapi cannot tell whether the process runs, or you
-know better, delete the file or run `generate --force`, which breaks any
-lock. A directory that cannot be written is `TOA831` too.
+`TOA832`). When typed_openapi cannot tell whether the process runs (another
+host, an unreadable lock, Windows), delete the lock file or run
+`generate --break-lock`, which takes such a lock over and replaces no file;
+`--force` does not touch locks. The lock of a process that runs stays held.
+A directory that cannot be written is `TOA831` too.
 
 A run that was killed while it swapped leaves `.<output>.typed_openapi-*`
 directories (eight letters or digits after the dash, `-old` for the backup;
 these names are the generator's, do not use them). The next run, under the
 lock and after it has checked the output as above, puts the previous output
 back if it is missing, removes them and says so (info `TOA832`); a directory
-that holds a file any client reads is left alone. TOA830, TOA831, TOA832 and
-TOA904 cannot be lowered.
+that holds a file any client reads is left alone. TOA830-TOA833 and TOA904
+cannot be lowered.
 
 `check` reads the whole spec, follows its `$ref`s (also into other local
 files) and reports unknown keys, wrong value types, broken or looping
@@ -235,7 +238,7 @@ for files the parser could position, a line and column. Paths are relative
 to the directory you run the command in. Change the level of a code, by its
 id or name, in `defaults` or per client; `off` drops it. Codes that say a
 spec, overrides or baseline file cannot be read, and the codes of `generate`
-(TOA830-TOA832), cannot be lowered:
+(TOA830-TOA833), cannot be lowered:
 
 ```yaml
 defaults:

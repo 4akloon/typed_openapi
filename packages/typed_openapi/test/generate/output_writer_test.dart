@@ -32,6 +32,7 @@ void main() {
     List<String> protected = const [],
     void Function()? beforeInstall,
     bool force = false,
+    bool breakLock = false,
     ProcessResult Function(String, List<String>)? run,
   }) => OutputWriter.forTesting(bag, beforeInstall: beforeInstall, run: run)
       .write(
@@ -40,6 +41,7 @@ void main() {
         inputs: 'in',
         protected: protected,
         force: force,
+        breakLock: breakLock,
       );
 
   /// Every entry under the temp directory, sorted, with file content.
@@ -174,6 +176,58 @@ void main() {
     }, skip: Platform.isWindows ? 'no POSIX modes' : false);
   });
 
+  group('--force lists what it replaces (TOA833)', () {
+    List<String> replaced() => [
+      for (final d in bag.all)
+        if (d.code == DiagnosticCode.outputFileReplaced) d.message,
+    ];
+
+    test('every foreign and modified file is named, as info', () {
+      write(old);
+      dir
+        ..write('gen/pets/NOTES.md', 'mine')
+        ..write('gen/pets/sub/deep.txt', 'mine')
+        ..write('gen/pets/a.dart', '// my edit');
+      final changes = write({'a.dart': '// new'}, force: true)!;
+      expect(changes.forced, 3);
+      for (final d in bag.all) {
+        expect(d.code, DiagnosticCode.outputFileReplaced);
+        expect(d.severity, Severity.info);
+      }
+      final lines = replaced();
+      expect(lines, hasLength(3));
+      expect(lines.join('\n'), contains('NOTES.md'));
+      expect(lines.join('\n'), contains('sub/deep.txt'));
+      final edited = lines.singleWhere((m) => m.contains('a.dart'));
+      expect(edited, contains('changed since'));
+      expect(edited, contains('--force'));
+      expect(File(p.join(client.output, 'NOTES.md')).existsSync(), isFalse);
+    });
+
+    test('a directory with no manifest: every file is named', () {
+      dir
+        ..write('gen/pets/one.txt', 'mine')
+        ..write('gen/pets/two.txt', 'mine');
+      expect(write(old, force: true), isNotNull);
+      final lines = replaced();
+      expect(lines, hasLength(2));
+      expect(lines.join('\n'), allOf(contains('one.txt'), contains('two.txt')));
+    });
+
+    test('nothing is listed when nothing is replaced, or the run fails', () {
+      write(old);
+      expect(write(old, force: true), isNotNull);
+      expect(bag.all, isEmpty);
+      dir.write('gen/pets/NOTES.md', 'mine');
+      write(
+        {'a.dart': '// new'},
+        force: true,
+        beforeInstall: () => throw const FileSystemException('disk gone'),
+      );
+      expect(replaced(), isEmpty);
+    });
+  });
+
   group('one run at a time works on an output (the lock)', () {
     String lockPath() =>
         p.join(p.dirname(client.output), '.pets.typed_openapi.lock');
@@ -214,7 +268,7 @@ void main() {
       expect(bag2.all.single.message, contains('another typed_openapi run'));
       expect(bag2.all.single.message, contains('.pets.typed_openapi.lock'));
       expect(bag2.all.single.message, contains('Nothing was changed'));
-      expect(bag2.all.single.fix, contains('--force'));
+      expect(bag2.all.single.fix, isNot(contains('--force')));
       // The second run touched nothing: not the staging tree of the first.
       expect(afterSecond, duringFirst);
       expect(
@@ -284,33 +338,78 @@ void main() {
       expect(everything(), before);
     });
 
-    test('--force breaks the lock of a process that runs', () {
+    test('neither --break-lock nor --force breaks the lock of a process that '
+        'runs', () {
       write(old);
       dir.write('gen/.pets.typed_openapi.lock', lockOf());
-      expect(write({'a.dart': '// new'}, force: true), isNotNull);
-      expect(bag.all.single.code, DiagnosticCode.outputRecovered);
-      expect(bag.all.single.message, contains('--force breaks it'));
-      expect(
-        File(p.join(client.output, 'a.dart')).readAsStringSync(),
-        '// new',
-      );
-      expect(File(lockPath()).existsSync(), isFalse);
+      final before = everything();
+      for (final (force, breakLock) in [(false, true), (true, false)]) {
+        bag = DiagnosticBag();
+        expect(
+          write({'a.dart': '// new'}, force: force, breakLock: breakLock),
+          isNull,
+        );
+        expect(bag.all.single.code, DiagnosticCode.outputNotWritten);
+        expect(bag.all.single.message, contains('which is running'));
+        expect(everything(), before);
+      }
     });
 
-    test('a lock that cannot be read or is from another host is held', () {
+    test('a lock that cannot be read or is from another host is held, and '
+        '--break-lock takes it over, --force does not', () {
       write(old);
       for (final text in ['', 'garbage', lockOf(host: 'some-other-host')]) {
         bag = DiagnosticBag();
         dir.write('gen/.pets.typed_openapi.lock', text);
         final before = everything();
         expect(write({'a.dart': '// new'}), isNull, reason: text);
-        expect(bag.all.single.code, DiagnosticCode.outputNotWritten);
-        expect(bag.all.single.message, contains('cannot be told'));
+        final held = bag.all.single;
+        expect(held.code, DiagnosticCode.outputNotWritten);
+        expect(held.message, contains('cannot be told'));
+        expect(held.fix, contains('--break-lock'));
+        expect('${held.message} ${held.fix}', isNot(contains('--force')));
         expect(everything(), before);
-        expect(write({'a.dart': '// new'}, force: true), isNotNull);
         bag = DiagnosticBag();
-        write(old, force: true);
+        expect(write({'a.dart': '// new'}, force: true), isNull);
+        expect(everything(), before);
+        bag = DiagnosticBag();
+        expect(write({'a.dart': '// new'}, breakLock: true), isNotNull);
+        expect(bag.all.single.code, DiagnosticCode.outputRecovered);
+        expect(bag.all.single.severity, Severity.info);
+        expect(File(lockPath()).existsSync(), isFalse);
+        write(old);
       }
+    });
+
+    test('a held lock of a running process never suggests --force', () {
+      write(old);
+      dir.write('gen/.pets.typed_openapi.lock', lockOf());
+      expect(write({'a.dart': '// new'}), isNull);
+      final held = bag.all.single;
+      expect('${held.message} ${held.fix}', isNot(contains('--force')));
+      expect('${held.message} ${held.fix}', isNot(contains('--break-lock')));
+    });
+
+    test('breaking a lock replaces no foreign or modified file', () {
+      write(old);
+      dir
+        ..write('gen/pets/NOTES.md', 'mine')
+        ..write('gen/pets/a.dart', '// my edit')
+        ..write(
+          'gen/.pets.typed_openapi.lock',
+          lockOf(host: 'old-hostname.local'),
+        );
+      final before = everything();
+      expect(write({'a.dart': '// new'}, breakLock: true), isNull);
+      final refused = bag.all.firstWhere(
+        (d) => d.code == DiagnosticCode.outputNotOwned,
+      );
+      expect(refused.message, contains('NOTES.md'));
+      expect(refused.message, contains('a.dart'));
+      // The lock went; the files are all there.
+      expect(File(lockPath()).existsSync(), isFalse);
+      final after = everything()..remove('gen/.pets.typed_openapi.lock');
+      expect(after, before..remove('gen/.pets.typed_openapi.lock'));
     });
 
     test('a system with no kill cannot tell, so the lock is held', () {

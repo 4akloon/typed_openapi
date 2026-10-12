@@ -30,7 +30,8 @@
   lists with a matching hash. A file of the user or of another client, or a
   generated file that was edited, is foreign or modified: the client is not
   generated and `TOA830` names the files. The new flag `generate --force`
-  replaces them (and says how many); it never replaces a directory with a
+  replaces them, says how many and names each file it overwrote or deleted
+  (info `TOA833`); it never replaces a directory with a
   package, a symbolic link or a file any client reads (the config, a spec,
   its `$ref`'d files, overrides, baseline; also through links or another
   letter case). A manifest without the hash of a file (written before format
@@ -39,8 +40,10 @@
 - `generate` holds a lock file `.<output>.typed_openapi.lock` next to the
   output while it works (created exclusively, with its pid and host): a
   second run on the same output gets `TOA831` and changes nothing, the lock
-  of a process that is gone is taken over (`TOA832`), and `--force` breaks
-  any lock. A run killed while it swapped leaves `.<output>.typed_openapi-*`
+  of a process that is gone is taken over (`TOA832`), and the new flag
+  `--break-lock` takes over a lock whose owner cannot be told (another host,
+  unreadable, Windows) without replacing any file; `--force` never breaks a
+  lock. A run killed while it swapped leaves `.<output>.typed_openapi-*`
   directories; the next run recovers under the lock (`TOA832`), after it has
   checked the output, and never touches a directory that holds an input of
   the run. A read-only output (mode 555) works, and a missing `chmod` is
@@ -81,7 +84,8 @@
   (warning), TOA454 union-variant-duplicate (info), TOA455
   union-branch-subsumed (info), TOA456 discriminator-value-duplicate
   (warning), TOA830 output-not-owned (error), TOA831 output-not-written
-  (error), TOA832 output-recovered (info). TOA830-TOA832 cannot be lowered.
+  (error), TOA832 output-recovered (info), TOA833 output-file-replaced (info).
+  TOA830-TOA833 cannot be lowered.
 - Semantic IR (M6): `check` builds each client's IR (`IrBuilder`,
   `ClientIr`) from the normalized spec and reports naming and mapping
   problems. Types follow R6.2 (`integer` -> `int`, `number` -> `num` or

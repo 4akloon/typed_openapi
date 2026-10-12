@@ -308,6 +308,9 @@ void main() {
       expect(out, isNot(contains('TOA830')));
       expect(out, contains('Generated pets in'));
       expect(out, contains('--force replaced 2'));
+      expect(out, contains('info TOA833 output-file-replaced'));
+      expect(out, contains('notes.txt'));
+      expect(out, contains('models/pet.dart'));
       expect(tree('gen/pets').keys, [
         '.typed_openapi.json',
         'models.dart',
@@ -330,8 +333,10 @@ void main() {
     test('--force takes a directory that has files but no manifest', () async {
       dir.write('gen/pets/notes.txt', 'mine');
       await refused(['notes.txt', 'no .typed_openapi.json']);
-      final (code, _) = await generate(client, args: ['--force']);
+      final (code, out) = await generate(client, args: ['--force']);
       expect(code, 0);
+      expect(out, contains('info TOA833 output-file-replaced'));
+      expect(out, contains('notes.txt'));
       expect(tree('gen/pets').keys, contains('models.dart'));
       expect(tree('gen/pets').keys, isNot(contains('notes.txt')));
     });
@@ -455,7 +460,7 @@ void main() {
     const client = '  pets: {input: specs/pets.yaml, output: gen/pets}\n';
 
     test(
-      'a lock held by another run stops the client, --force breaks it',
+      'a lock held by a running process is held, whatever the flags',
       () async {
         await generate(client);
         final lock = jsonEncode({
@@ -465,27 +470,62 @@ void main() {
         });
         dir.write('gen/.pets.typed_openapi.lock', lock);
         final before = tree('gen/pets');
-        final (code, out) = await generate(client);
-        expect(code, 1);
-        expect(out, contains('error TOA831 output-not-written'));
-        expect(out, contains('.pets.typed_openapi.lock'));
-        expect(out, contains('Skipped pets: see the error above.'));
-        expect(tree('gen/pets'), before);
-        expect(
-          File(p.join(dir.path, 'gen/.pets.typed_openapi.lock')).existsSync(),
-          isTrue,
-        );
-
-        final (forced, log) = await generate(client, args: ['--force']);
-        expect(forced, 0);
-        expect(log, contains('info TOA832 output-recovered'));
-        expect(log, contains('Generated pets in'));
-        expect(
-          File(p.join(dir.path, 'gen/.pets.typed_openapi.lock')).existsSync(),
-          isFalse,
-        );
+        for (final args in [
+          <String>[],
+          ['--force'],
+          ['--break-lock'],
+        ]) {
+          final (code, out) = await generate(client, args: args);
+          expect(code, 1);
+          expect(out, contains('error TOA831 output-not-written'));
+          expect(out, contains('.pets.typed_openapi.lock'));
+          expect(out, contains('Skipped pets: see the error above.'));
+          expect(out, isNot(contains('--force')));
+          expect(tree('gen/pets'), before);
+        }
       },
     );
+
+    test('a lock of an unknown owner: --break-lock takes it over', () async {
+      await generate(client);
+      dir.write(
+        'gen/.pets.typed_openapi.lock',
+        jsonEncode({'pid': 99999, 'host': 'old-hostname.local', 'id': 'x'}),
+      );
+      final (code, out) = await generate(client);
+      expect(code, 1);
+      expect(out, contains('--break-lock'));
+      expect(out, isNot(contains('--force')));
+      final (forced, forcedOut) = await generate(client, args: ['--force']);
+      expect(forced, 1);
+      expect(forcedOut, contains('error TOA831'));
+      final (broken, log) = await generate(client, args: ['--break-lock']);
+      expect(broken, 0);
+      expect(log, contains('info TOA832 output-recovered'));
+      expect(log, contains('Generated pets in'));
+      expect(
+        File(p.join(dir.path, 'gen/.pets.typed_openapi.lock')).existsSync(),
+        isFalse,
+      );
+    });
+
+    test('--break-lock replaces no foreign or modified file', () async {
+      await generate(client);
+      dir
+        ..write('gen/pets/NOTES.md', 'mine')
+        ..write('gen/pets/models/pet.dart', '// my important note\n')
+        ..write(
+          'gen/.pets.typed_openapi.lock',
+          jsonEncode({'pid': 99999, 'host': 'old-hostname.local', 'id': 'x'}),
+        );
+      final before = tree('gen/pets');
+      final (code, out) = await generate(client, args: ['--break-lock']);
+      expect(code, 1);
+      expect(out, contains('error TOA830 output-not-owned'));
+      expect(out, contains('NOTES.md'));
+      expect(out, contains('models/pet.dart'));
+      expect(tree('gen/pets'), before);
+    });
 
     test('a run leaves no lock behind', () async {
       await generate(client);

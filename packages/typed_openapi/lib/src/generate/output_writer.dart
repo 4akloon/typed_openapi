@@ -154,7 +154,8 @@ final class _Held {
 /// One run at a time works on an output: it holds the lock file
 /// `.<output>.typed_openapi.lock` next to it, created exclusively and naming
 /// its process. A second run gets TOA831 and changes nothing; a lock whose
-/// process is gone is taken over (TOA832), and `force` breaks any lock.
+/// process is gone is taken over (TOA832), and `breakLock` takes over one
+/// whose owner cannot be told; neither replaces files, which `force` does.
 ///
 /// A process killed while it swaps leaves the backup and the new tree in
 /// sibling directories named `.<output>.typed_openapi-<8 letters or
@@ -217,14 +218,17 @@ final class OutputWriter {
   /// and the manifest with [inputs], the hash of what they were generated
   /// from; [protected] are the input files of the run, which the directory
   /// must not hold. With [force] a file the generator did not write, or that
-  /// changed since, and a lock another run holds do not stop the run.
-  /// Returns null after reporting why nothing was written.
+  /// changed since do not stop the run, and each one it replaces is reported
+  /// (TOA833); [breakLock] takes over a lock whose owner cannot be told, and
+  /// never replaces a file. Returns null after reporting why nothing was
+  /// written.
   OutputChanges? write(
     ClientConfig client,
     Map<String, String> files, {
     required String inputs,
     List<String> protected = const [],
     bool force = false,
+    bool breakLock = false,
   }) {
     final root = p.normalize(p.absolute(client.output));
     final created = <Directory>[];
@@ -236,7 +240,7 @@ final class OutputWriter {
         missing.createSync();
         created.add(missing);
       }
-      lock = _acquire(client, root, force: force);
+      lock = _acquire(client, root, breakLock: breakLock);
       if (lock == null) return null;
       final keys = files.keys.toList()..sort();
       final hashes = {for (final path in keys) path: _hash(files[path]!)};
@@ -296,6 +300,15 @@ final class OutputWriter {
       _install(staging, root, hasOld: Directory(root).existsSync());
       staging = null;
       created.clear();
+      for (final stray in existing.strays) {
+        _diagnostics.report(
+          .outputFileReplaced,
+          '${files.containsKey(stray.path) ? 'Overwrote' : 'Deleted'} '
+          '${stray.path} (${stray.reason}) in ${_paths.of(root)} because of '
+          '--force.',
+          file: _paths.of(p.join(root, stray.path)),
+        );
+      }
       return changes;
     } on FileSystemException catch (e) {
       _diagnostics.report(
@@ -365,8 +378,9 @@ final class OutputWriter {
   /// Takes the lock of [root] by creating its file exclusively, and returns
   /// it; null after reporting TOA831 when another run holds it. A lock of a
   /// process that is gone (it is on this host and no longer exists) is taken
-  /// over, and [force] breaks any other, both with TOA832.
-  _Lock? _acquire(ClientConfig client, String root, {required bool force}) {
+  /// over with TOA832, and so is one whose owner cannot be told when
+  /// [breakLock] is set; a lock of a process that runs stays held.
+  _Lock? _acquire(ClientConfig client, String root, {required bool breakLock}) {
     final file = _lockFile(root);
     final lock = _Lock(file);
     for (var attempt = 0; attempt < 3; attempt++) {
@@ -378,7 +392,7 @@ final class OutputWriter {
         final held = _readLock(file);
         if (held == null) continue; // Released in the meantime.
         final alive = _isAlive(held);
-        if (alive != false && !force) {
+        if (alive == true || (alive == null && !breakLock)) {
           _lockHeld(client, root, file, held, knownAlive: alive == true);
           return null;
         }
@@ -390,7 +404,7 @@ final class OutputWriter {
           'Took over the lock ${_paths.of(file.path)} of client '
           '"${client.name}", ${alive == false ? 'which ${held.describe} had '
                     'left behind: that process is gone' : 'which ${held.describe} '
-                    'held: --force breaks it'}.',
+                    'held: --break-lock takes it over'}.',
           file: _paths.of(root),
         );
       }
@@ -420,10 +434,12 @@ final class OutputWriter {
       '${knownAlive ? ', which is running' : '; it cannot be told whether '
                 'that process still runs'}). Nothing was changed.',
       file: _paths.of(root),
-      fix:
-          'Wait for it to finish. If no run is going, delete '
-          '${_paths.of(file.path)}, or run generate --force, which breaks '
-          'the lock.',
+      fix: knownAlive
+          ? 'Wait for it to finish. If you are sure no run is going, delete '
+                '${_paths.of(file.path)}.'
+          : 'Delete ${_paths.of(file.path)} if no run is going, or run '
+                'generate --break-lock, which takes the lock over and '
+                'replaces no file.',
     );
   }
 

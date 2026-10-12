@@ -451,7 +451,8 @@ enum DiagnosticCode {
 
   /// `generate` cannot write a client's output directory, or another run
   /// holds its lock (`.<output>.typed_openapi.lock` next to the output; a
-  /// lock of a process that is gone is taken over, and `--force` breaks any).
+  /// lock of a process that is gone is taken over, and `--break-lock` takes
+  /// over one whose owner cannot be told).
   outputNotWritten('TOA831', 'output-not-written', .error),
 
   /// An earlier `generate` was killed while it replaced the output directory
@@ -459,8 +460,12 @@ enum DiagnosticCode {
   /// named `.<output>.typed_openapi-*`. The run put the previous output
   /// back, when the output was missing, and removed the leftovers. Also
   /// reported when a run takes over the lock of a process that is gone, or
-  /// breaks a lock with `--force`.
+  /// breaks a lock whose owner cannot be told with `--break-lock`.
   outputRecovered('TOA832', 'output-recovered', .info),
+
+  /// `generate --force` overwrote or deleted a file that it did not write or
+  /// that changed since it wrote it; one report for each file.
+  outputFileReplaced('TOA833', 'output-file-replaced', .info),
 
   /// The configuration file does not exist.
   configNotFound('TOA901', 'config-not-found', .error),
@@ -508,6 +513,7 @@ enum DiagnosticCode {
     outputNotOwned,
     outputNotWritten,
     outputRecovered,
+    outputFileReplaced,
     ...configCodes,
   };
 

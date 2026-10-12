@@ -38,7 +38,7 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
 - `diagnostics/` - `Diagnostic` (with `RelatedLocation`s, preset `hints` as
   `(preset, text)` and fingerprint `args`), `DiagnosticCode` (stable `TOAnnn`
   catalog; the config codes TOA901-TOA904 cannot be changed at all, and
-  `fixedCodes` - read errors, TOA801-TOA803, TOA820/821/823, TOA830-TOA832 -
+  `fixedCodes` - read errors, TOA801-TOA803, TOA820/821/823, TOA830-TOA833 -
   can be raised but not lowered), `Severity` (declared from most to least
   serious; level comparison uses its order), `SeverityLevels` (a client's
   `severity` config), `JsonPointer`, `DiagnosticBag` (baselined diagnostics kept
@@ -347,7 +347,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   files and no manifest of this generator (a manifest that parses as JSON
   and names `typed_openapi`), the client is refused with TOA830 that names
   up to 8 files, and `generate --force` (`OutputChanges.forced` counts them)
-  replaces them. Whatever `force` says, TOA830 also refuses an output that
+  replaces them, and each file overwritten or deleted is reported as
+  TOA833 (info, `output-file-replaced`) after the swap works. Whatever `force` says, TOA830 also refuses an output that
   holds a `pubspec.yaml`, is a package's `lib`, is or holds a symbolic link,
   is not a directory, or holds an input of the run; I/O errors, also an
   unreadable directory, are TOA831.
@@ -356,9 +357,12 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   symbolic links and lower-cased on a case-insensitive file system, before
   anything else is read and removed at the end (only if it still holds this
   run's text). A held lock is TOA831 and nothing is touched; a lock of a
-  pid on this host that `kill -0` says is gone is taken over, and `--force`
-  breaks any lock, both reported as TOA832; a lock whose process cannot be
-  told (another host, unreadable, no `kill`, Windows) is held.
+  pid on this host that `kill -0` says is gone is taken over (TOA832); a lock whose process cannot be
+  told (another host, unreadable, no `kill`, Windows) is held unless
+  `--break-lock` (`breakLock`) takes it over (TOA832), which replaces no file;
+  the lock of a running process is held whatever the flags, and `--force`
+  never touches locks (the TOA831 message says to delete the lock file or
+  use `--break-lock`, never `--force`).
   A run killed between the renames leaves `.<output>.typed_openapi-<8
   letters or digits>[-old]` directories. Under the lock, `_leftovers` skips
   any that holds an input of the run (by location, by symbolic link and by
@@ -377,8 +381,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   in the config, also one that was not selected: the declared input,
   overrides and baseline, the `$ref`'d files of the clients that were
   checked, and the config itself. A client whose output overlaps another's
-  (TOA904) is skipped by `generate`. `GenerateCommand` has `--config/-c` and
-  `--force`.
+  (TOA904) is skipped by `generate`. `GenerateCommand` has `--config/-c`, `--force` and
+  `--break-lock`.
 - `check/` - `SpecChecker`: config -> load -> version -> overrides ->
   `Normalizer` -> `IrBuilder` once per run (file, preset, rules, overrides
   file, `GenerationConfig.key`); an overrides file that cannot be used is
