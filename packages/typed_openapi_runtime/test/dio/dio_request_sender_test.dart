@@ -302,8 +302,8 @@ void main() {
   });
 
   test(
-    'a FormatException that is not a JSON parse failure is transport',
-    testOn: 'vm',
+    'off the web a FormatException that is not a JSON parse failure is '
+    'transport',
     () async {
       final dio = Dio(BaseOptions(baseUrl: 'https://api.test'))
         ..httpClientAdapter = FakeAdapter.json(200, {'id': 7, 'name': 'Rex'})
@@ -314,31 +314,42 @@ void main() {
             },
           ),
         );
-      final result = await DioRequestSender(dio).send(request, decodePet);
+      final result = await DioRequestSender(
+        dio,
+        isWeb: false,
+      ).send(request, decodePet);
       final error = result as TransportError<Pet, Problem>;
       expect(error.exception.error, isA<FormatException>());
-
-      // A text operation never reads JSON, whatever the body looks like.
-      final text = FakeAdapter((_) => throw const FormatException('x', [123]));
-      final textResult = await DioRequestSender(dioWith(text)).send(
-        const OperationRequest(
-          getPet,
-          path: [PathParameter('petId', 1)],
-          responseKind: .text,
-        ),
-        (r) => r.undocumented<Pet, Problem>(),
-      );
-      expect(textResult, isA<TransportError<Pet, Problem>>());
     },
   );
 
   test(
-    'a text FormatException source is a decode error on the web only',
-    testOn: 'vm',
+    'a text operation never reads JSON, so a FormatException is transport',
     () async {
-      Future<Result<Pet, Problem>> run({required bool isWeb}) {
+      for (final isWeb in [true, false]) {
+        final text = FakeAdapter(
+          (_) => throw const FormatException('x', [123]),
+        );
+        final result = await DioRequestSender(dioWith(text), isWeb: isWeb).send(
+          const OperationRequest(
+            getPet,
+            path: [PathParameter('petId', 1)],
+            responseKind: .text,
+          ),
+          (r) => r.undocumented<Pet, Problem>(),
+        );
+        expect(result, isA<TransportError<Pet, Problem>>());
+      }
+    },
+  );
+
+  test(
+    'a FormatException of a JSON request is a decode error: any source on the '
+    'web, the bytes of the body elsewhere',
+    () async {
+      Future<Result<Pet, Problem>> run(Object? source, {required bool isWeb}) {
         final adapter = FakeAdapter(
-          (_) => throw const FormatException('bad', '{"id": 7,'),
+          (_) => throw FormatException('bad', source),
         );
         return DioRequestSender(
           dioWith(adapter),
@@ -346,10 +357,25 @@ void main() {
         ).send(request, decodePet);
       }
 
-      final web = await run(isWeb: true) as DecodeError<Pet, Problem>;
-      expect(web.statusCode, isNull);
-      expect(web.rawBody, '{"id": 7,');
-      expect(await run(isWeb: false), isA<TransportError<Pet, Problem>>());
+      final bytes = Uint8List.fromList('{"id": 7,'.codeUnits);
+      for (final (source, rawBody) in <(Object?, Object?)>[
+        ('{"id": 7,', '{"id": 7,'),
+        (null, null),
+        (bytes, '{"id": 7,'),
+      ]) {
+        final web = await run(source, isWeb: true) as DecodeError<Pet, Problem>;
+        expect(web.statusCode, isNull);
+        expect(web.rawBody, rawBody);
+        expect(web.error.pointer, '');
+      }
+      final fromBytes = await run(bytes, isWeb: false);
+      expect((fromBytes as DecodeError<Pet, Problem>).rawBody, '{"id": 7,');
+      for (final source in ['{"id": 7,', null]) {
+        expect(
+          await run(source, isWeb: false),
+          isA<TransportError<Pet, Problem>>(),
+        );
+      }
     },
   );
 

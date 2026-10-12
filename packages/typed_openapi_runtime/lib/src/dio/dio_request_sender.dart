@@ -37,14 +37,16 @@ import 'call_options.dart';
 final class DioRequestSender {
   /// Sends requests through [dio].
   ///
-  /// [isWeb] tells whether the program runs in a browser, where Dio's JSON
-  /// parser reports a failure with the body text instead of its bytes; it is
-  /// detected by default and set by tests only.
+  /// [isWeb] tells whether the program runs in a browser (dart2js or
+  /// dart2wasm), where Dio's JSON parser reports a failure without the bytes
+  /// of the body; it is detected by default and set by tests only.
   const DioRequestSender(this.dio, {this.isWeb = _runsOnWeb});
 
-  /// `true` when compiled to JavaScript, where `0` and `0.0` are the same
-  /// value.
-  static const bool _runsOnWeb = identical(0, 0.0);
+  /// `true` when `dart:js_interop` is available, which it is on dart2js and
+  /// dart2wasm and nowhere else.
+  static const bool _runsOnWeb = bool.fromEnvironment(
+    'dart.library.js_interop',
+  );
 
   /// The user's Dio instance.
   final Dio dio;
@@ -310,14 +312,19 @@ final class DioRequestSender {
   ///   wraps) is a bug, not a transport problem: it is rethrown with its
   ///   original stack trace.
   /// - Dio drops the response when its JSON parser fails (`unknown` with a
-  ///   [FormatException]). That is a decode error without a status when the
-  ///   request reads JSON and the exception reports the bytes of the body
-  ///   (what Dio's default transformer does on the VM): the raw body is that
-  ///   text (for a body Dio read in chunks, only the chunk that failed). On
-  ///   the web ([isWeb]) Dio's parser reports the text itself, so a text
-  ///   source counts too. A [FormatException] from anywhere else
+  ///   [FormatException]), so the result has no status. That is a decode
+  ///   error when the request reads JSON and the exception reports the bytes
+  ///   of the body (what Dio's default transformer does on the VM and
+  ///   dart2wasm): the raw body is that text (for a body Dio read in chunks,
+  ///   only the chunk that failed). On the web ([isWeb]) every such
+  ///   [FormatException] counts: dart2js reports the browser's `SyntaxError`
+  ///   text and no source, so the raw body is the source when it is text and
+  ///   `null` otherwise; a [FormatException] from an interceptor of a JSON
+  ///   request is a decode error there too, because the failures cannot be
+  ///   told apart. On the VM a [FormatException] from anywhere else
   ///   (`Uri.parse` in an interceptor, a custom transformer that reports
-  ///   text on the VM) stays a [TransportError].
+  ///   text) stays a [TransportError]; a request that does not read JSON
+  ///   never gets a decode error here.
   Failure<T, E> _failure<T, E>(
     DioException e,
     StackTrace stackTrace,
@@ -333,7 +340,7 @@ final class DioRequestSender {
             requestOptions: RequestOptions(responseType: .json),
             error: FormatException(:final source),
           )
-          when source is List<int> || isWeb && source is String:
+          when source is List<int> || isWeb:
         return DecodeError(
           JsonDecodeException(
             expected: 'a JSON body',
@@ -341,7 +348,8 @@ final class DioRequestSender {
           ),
           rawBody: switch (source) {
             final List<int> bytes => utf8.decode(bytes, allowMalformed: true),
-            _ => source,
+            final String text => text,
+            _ => null,
           },
         );
       default:
