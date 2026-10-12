@@ -320,8 +320,15 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `allOf` part or the one non-null branch of a nullable `anyOf`/`oneOf`
   (Pydantic's `Optional[SecretStr]`), and a secret as array items, map
   values or a branch of a union (`SchemaShapes.annotationSources`,
-  `carriesSecret`; the direction split reads the same flags); the unknown
-  variant of a union with a secret variant prints it too.
+  `carriesSecret`; the direction split reads the same flags). A value that
+  stays raw JSON (`DartType.holdsRawJson`: `JsonValue` or a list, map or
+  patch of it) is redacted when `carriesSecret(intoProperties: true)`, which
+  also looks into properties and `allOf` parts at any depth (cycle-guarded
+  by location), finds a secret in its schema (`SchemaMapper._rawSecret`: a
+  field, `additionalProperties`, the shared `JsonValue` variant of a union
+  over every branch it keeps); `UnionDecl.unknownSensitive` (a secret
+  anywhere in any branch) and a secret variant make the unknown variant
+  print `<redacted>`.
 - `generate/` - `OutputWriter` (atomic per run: the whole tree and the
   manifest `.typed_openapi.json` (generator, hash of the inputs, every file
   with its hash) are built in a staging directory next to the output, made

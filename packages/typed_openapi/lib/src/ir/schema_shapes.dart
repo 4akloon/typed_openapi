@@ -353,12 +353,17 @@ final class SchemaShapes {
   /// `writeOnly` or has `format: password`, or the value holds one: an
   /// array whose items are secrets, an object whose `additionalProperties`
   /// are, or a `oneOf`/`anyOf` with a secret branch (a union whose value may
-  /// be the secret, also when it is not generated as a union). The
-  /// properties of an object are not looked into: the model of the object
-  /// redacts its own.
+  /// be the secret, also when it is not generated as a union).
+  ///
+  /// By default the properties of an object are not looked into: the model
+  /// of the object redacts its own. With [intoProperties] they are, and so
+  /// are the parts of an `allOf`, at any depth (a cycle is followed once):
+  /// that is the question to ask of a value that stays raw JSON (`JsonValue`,
+  /// the unknown variant of a union), which no model prints.
   static bool carriesSecret(
     Schema schema, {
     required RefFollower refs,
+    bool intoProperties = false,
     Set<Object>? seen,
   }) {
     final visited = seen ?? <Object>{};
@@ -371,8 +376,17 @@ final class SchemaShapes {
         ?source.additionalProperties,
         for (final branch in [...source.oneOf, ...source.anyOf])
           if (!isNullOnly(branch)) branch,
+        if (intoProperties) ...source.properties.values,
+        if (intoProperties) ...source.allOf,
       ]) {
-        if (carriesSecret(inner, refs: refs, seen: visited)) return true;
+        if (carriesSecret(
+          inner,
+          refs: refs,
+          intoProperties: intoProperties,
+          seen: visited,
+        )) {
+          return true;
+        }
       }
     }
     return false;

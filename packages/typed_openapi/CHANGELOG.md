@@ -39,7 +39,10 @@
   is. `toString` prints `<redacted>` for a secret: a `writeOnly` or
   `format: password` property, also through a `$ref`, an annotation part,
   the one branch of a nullable `anyOf`/`oneOf` (Pydantic's
-  `Optional[SecretStr]`), array items, map values and union variants.
+  `Optional[SecretStr]`), array items, map values and union variants. A
+  value that stays raw JSON (a `JsonValue` field, list or map, a `...Json`
+  variant, the `...Unknown` class of a union) is redacted too when a model
+  or variant it may hold has a secret property, at any depth.
 - A `oneOf` or `anyOf` without a discriminator drops an inline enum or
   `const` of a primitive type (string, integer, number, boolean) when
   another branch (inline or a `$ref`) is that type with no `format`,

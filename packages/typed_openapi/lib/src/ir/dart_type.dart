@@ -57,6 +57,17 @@ sealed class DartType {
   /// This type with [nullable] set to [value].
   DartType withNullable(bool value);
 
+  /// Whether a value of this type holds raw JSON, `JsonValue`, that no
+  /// generated class prints: the type is `JsonValue` or a list, a map or a
+  /// patch of it.
+  bool get holdsRawJson => switch (this) {
+    CoreType(:final kind) => kind == .json,
+    ListType(:final item) => item.holdsRawJson,
+    MapType(:final value) => value.holdsRawJson,
+    PatchType(:final value) => value.holdsRawJson,
+    NamedType() || CustomType() => false,
+  };
+
   /// The type as Dart code; [nameOf] gives the name of a declaration.
   String code(String Function(DeclId id) nameOf) =>
       nullable ? '${_code(nameOf)}?' : _code(nameOf);

@@ -377,7 +377,7 @@ final class UnionEmitter {
 
   void _unknown(DartWriter out, UnionDecl decl) {
     final name = decl.unknownName;
-    final shown = decl.variants.any((v) => v.sensitive)
+    final shown = decl.unknownSensitive || decl.variants.any((v) => v.sensitive)
         ? '<redacted>'
         : r'$json';
     _codec.imports.fromRuntime('DeepEquality');

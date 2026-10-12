@@ -115,12 +115,18 @@ linter:
         ..write('bin/extend.dart', _extendProgram)
         ..write('bin/hierarchy.dart', _hierarchyProgram)
         ..write('bin/secrets_raw.dart', _secretsProgram('raw'))
-        ..write('bin/secrets_structural.dart', _secretsProgram('structural'));
+        ..write('bin/secrets_structural.dart', _secretsProgram('structural'))
+        ..write('bin/raw_secrets_raw.dart', _rawSecretsProgram('raw'))
+        ..write(
+          'bin/raw_secrets_structural.dart',
+          _rawSecretsProgram('structural'),
+        );
       for (final fixture in [
         'pets',
         'everything',
         'hostile',
         'secrets',
+        'secrets_raw',
         'hierarchy',
       ]) {
         for (final mode in UnionMode.values) {
@@ -157,6 +163,11 @@ linter:
     for (final mode in ['raw', 'structural']) {
       test('a secret is never printed ($mode)', () {
         final result = dart(['run', 'bin/secrets_$mode.dart'], package);
+        expect(result.stderr, '');
+        expect(result.stdout, 'ok\n');
+      });
+      test('a secret in raw JSON is never printed ($mode)', () {
+        final result = dart(['run', 'bin/raw_secrets_$mode.dart'], package);
         expect(result.stderr, '');
         expect(result.stdout, 'ok\n');
       });
@@ -268,6 +279,42 @@ void main() {
   check('Extra', const Extra(additionalProperties: {'a': 'S-extra'}).toString(), 'S-extra');
   check('CredString', const CredString('S-variant').toString(), 'S-variant');
   check('CredUnknown', Cred.fromJson(true).toString(), 'true');
+  print(failures.isEmpty ? 'ok' : failures.join('\\n'));
+}
+''';
+
+/// A value that stays raw JSON (`JsonValue`, the unknown variant of a union)
+/// holds the properties of models that have a secret.
+String _rawSecretsProgram(String mode) =>
+    '''
+// ignore_for_file: avoid_print
+import 'package:fixture/secrets_raw_$mode/models.dart';
+final failures = <String>[];
+
+void check(String name, Object value, String secret) {
+  if (value.toString().contains(secret)) failures.add('\$name prints \$secret');
+}
+
+void main() {
+  const login = {'kind': 'sso', 'user': 'u', 'password': 'S-raw'};
+  check('Tagged', Tagged.fromJson(login), 'S-raw');
+  ${mode == 'raw' ? '''
+  final session = Session.fromJson({
+    'auth': login,
+    'auths': [login],
+    'byKey': {'k': login},
+    'mixed': login,
+    'extra': login,
+  });
+  check('Session', session, 'S-raw');
+  ''' : '''
+  check('Auth', Auth.fromJson(const {'user': 'u', 'password': 'S-auth'}), 'S-auth');
+  check('Auth unknown', Auth.fromJson(const {'password': 'S-unknown'}), 'S-unknown');
+  check('Mixed', Mixed.fromJson(login), 'S-raw');
+  if (!Node.fromJson(true).toString().contains('true')) {
+    failures.add('the unknown variant of a union with no secret is redacted');
+  }
+  '''}
   print(failures.isEmpty ? 'ok' : failures.join('\\n'));
 }
 ''';

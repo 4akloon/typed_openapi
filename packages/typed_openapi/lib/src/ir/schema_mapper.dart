@@ -828,7 +828,10 @@ final class SchemaMapper {
           knownValues: mapped is CoreType && mapped.kind == .json
               ? const []
               : notes.knownValues,
-          sensitive: writeOnly || notes.secret,
+          sensitive:
+              writeOnly ||
+              notes.secret ||
+              _rawSecret(property, custom == null ? mapped : null),
           required: required.contains(json),
           readOnly: readOnly,
           writeOnly: writeOnly,
@@ -882,7 +885,8 @@ final class SchemaMapper {
         additionalPropertiesName: extraName ?? 'additionalProperties',
         additionalSensitive:
             additionalSchema != null &&
-            SchemaShapes.carriesSecret(additionalSchema, refs: _refs),
+            (SchemaShapes.carriesSecret(additionalSchema, refs: _refs) ||
+                _rawSecret(additionalSchema, additional)),
         direction: direction,
         fields: [
           for (final (field, fieldName) in named)
@@ -912,6 +916,16 @@ final class SchemaMapper {
       );
     };
   }
+
+  /// Whether a value of [type], mapped from [schema], is raw JSON that could
+  /// hold a secret: nothing prints the properties of raw JSON, so a secret
+  /// anywhere in [schema] (its properties, the parts of its `allOf`, the
+  /// branches of a union that stays `JsonValue`) makes the value print as
+  /// `<redacted>`.
+  bool _rawSecret(Schema schema, DartType? type) =>
+      type != null &&
+      type.holdsRawJson &&
+      SchemaShapes.carriesSecret(schema, refs: _refs, intoProperties: true);
 
   /// The name of the field that holds a model's `additionalProperties`,
   /// claimed in the model's field [scope] after the properties, so a
@@ -1255,6 +1269,7 @@ final class SchemaMapper {
         shared = _Variant(const CoreType(.json), null, branch);
         variants.insert(at ?? variants.length, shared!);
       }
+      if (!shared!.also.contains(branch)) shared!.also.add(branch);
       if (!shared!.kinds.contains(kind)) shared!.kinds.add(kind);
     }
 
@@ -1457,6 +1472,13 @@ final class SchemaMapper {
         discriminator: property,
         defaultVariant: fallback,
         exhaustive: exhaustive,
+        unknownSensitive: branches.any(
+          (branch) => SchemaShapes.carriesSecret(
+            branch,
+            refs: _refs,
+            intoProperties: true,
+          ),
+        ),
         description: schema.description,
         deprecated: schema.deprecated,
         variants: [
@@ -1473,10 +1495,12 @@ final class SchemaMapper {
                 'a variant class of $name',
               ),
               jsonKinds: [...variant.kinds]..sort((a, b) => a.index - b.index),
-              sensitive: SchemaShapes.carriesSecret(
-                variant.branch,
-                refs: _refs,
-              ),
+              sensitive:
+                  SchemaShapes.carriesSecret(variant.branch, refs: _refs) ||
+                  variant.type.holdsRawJson &&
+                      [variant.branch, ...variant.also].any(
+                        (branch) => _rawSecret(branch, variant.type),
+                      ),
             ),
         ],
         unknownName: _helperName(
@@ -2076,6 +2100,10 @@ final class _Variant {
   final SpecLocation? target;
   final Schema branch;
   final List<JsonKind> kinds = [];
+
+  /// The other branches that make up a variant of any JSON value, besides
+  /// [branch].
+  final List<Schema> also = [];
 }
 
 /// A declaration whose name is not given yet.

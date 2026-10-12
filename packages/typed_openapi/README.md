@@ -87,7 +87,10 @@ you can extend them); a union base is `sealed`.
 - A secret is never printed: `toString` writes `<redacted>` for a property
   that is `writeOnly` or has `format: password` (also through a `$ref`, a
   nullable `anyOf` such as Pydantic's `Optional[SecretStr]`, array items,
-  map values or a union variant).
+  map values or a union variant). A value that stays raw JSON (`JsonValue`,
+  or the `...Unknown` class of a union) is printed as `<redacted>` too when
+  its schema could carry a secret: any model or union variant it may hold,
+  at any depth, has a secret property.
 
 `generate` owns each output directory. It builds the whole new tree and a
 manifest (`.typed_openapi.json`: the generator, a hash of the inputs and the

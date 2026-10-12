@@ -62,4 +62,83 @@ void main() {
       });
     });
   }
+
+  group(
+    'a value that stays raw JSON is not printed when its schema could carry a secret',
+    () {
+      group('raw', () {
+        late Map<String, String> files;
+        late String session;
+        setUpAll(() {
+          files = emitFixture(
+            'secrets_raw.yaml',
+            generation: const GenerationConfig(union: .raw),
+          );
+          session = toStringOf(files, 'Session');
+        });
+
+        for (final field in [
+          'auth',
+          'auths',
+          'byKey',
+          'mixed',
+          'additionalProperties',
+        ]) {
+          test(field, () => expect(session, contains('$field: <redacted>')));
+        }
+
+        test('a raw value without a secret anywhere is printed', () {
+          expect(session, contains(r'harmless: $harmless'));
+          expect(session, contains(r'node: $node'));
+        });
+
+        test('a typed model prints itself, with its own redaction', () {
+          expect(session, contains(r'typed: $typed'));
+          expect(
+            toStringOf(files, 'PwLogin'),
+            contains('password: <redacted>'),
+          );
+        });
+
+        test('the unknown variant of a discriminated union', () {
+          expect(toStringOf(files, 'TaggedUnknown'), contains('(<redacted>)'));
+          expect(toStringOf(files, 'TaggedPwLogin'), contains(r'($value)'));
+        });
+      });
+
+      group('structural', () {
+        late Map<String, String> files;
+        late String session;
+        setUpAll(() {
+          files = emitFixture(
+            'secrets_raw.yaml',
+            generation: const GenerationConfig(union: .structural),
+          );
+          session = toStringOf(files, 'Session');
+        });
+
+        test('the unknown variant of a union with a secret variant', () {
+          for (final name in ['AuthUnknown', 'MixedUnknown', 'TaggedUnknown']) {
+            expect(
+              toStringOf(files, name),
+              contains('(<redacted>)'),
+              reason: name,
+            );
+          }
+        });
+
+        test('the variants print their value, which redacts itself', () {
+          expect(toStringOf(files, 'AuthPwLogin'), contains(r'($value)'));
+          expect(toStringOf(files, 'MixedString'), contains(r'($value)'));
+          expect(session, contains(r'auth: $auth'));
+        });
+
+        test('the unknown variant of a union with no secret is printed', () {
+          for (final name in ['HarmlessUnknown', 'NodeUnknown']) {
+            expect(toStringOf(files, name), contains(r'($json)'), reason: name);
+          }
+        });
+      });
+    },
+  );
 }

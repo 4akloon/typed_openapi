@@ -394,6 +394,7 @@ final class UnionDecl extends Declaration {
     this.discriminator,
     this.defaultVariant,
     this.exhaustive = true,
+    this.unknownSensitive = false,
     String? unknownName,
     super.description,
     super.deprecated,
@@ -423,6 +424,11 @@ final class UnionDecl extends Declaration {
 
   /// Whether a `switch` must name every variant (research §7.8).
   final bool exhaustive;
+
+  /// Whether a value no variant takes could still hold a secret: a variant
+  /// has a secret anywhere in its schema, so `toString` of the unknown
+  /// variant, which keeps the raw JSON, does not print it.
+  final bool unknownSensitive;
 }
 
 /// A variant of a union.
