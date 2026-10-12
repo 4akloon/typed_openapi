@@ -325,6 +325,14 @@ enum DiagnosticCode {
   /// (TOA556). The message says why.
   clientEmpty('TOA563', 'client-empty', .warning),
 
+  /// A parameter's `style` is not allowed for its `in` (path takes `simple`,
+  /// `label` or `matrix`; query `form`, `spaceDelimited`, `pipeDelimited` or
+  /// `deepObject`; header `simple`; cookie `form`), so the default style of
+  /// the placement is used. Also reported for an `in: querystring`
+  /// parameter (OpenAPI 3.2), which the client cannot send: the parameter
+  /// is not generated.
+  parameterStyleInvalid('TOA564', 'parameter-style-invalid', .warning),
+
   /// `*/*` is used as a media type.
   wildcardMediaType('TOA601', 'wildcard-media-type', .warning),
 

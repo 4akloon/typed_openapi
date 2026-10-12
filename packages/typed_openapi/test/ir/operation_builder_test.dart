@@ -6,6 +6,7 @@ import 'package:typed_openapi/src/diagnostics/json_pointer.dart';
 import 'package:typed_openapi/src/diagnostics/severity.dart';
 import 'package:typed_openapi/src/ir/ir.dart';
 import 'package:typed_openapi/src/ir/ir_builder.dart';
+import 'package:typed_openapi/src/model/operation.dart';
 
 import '../helpers/ir_fixture.dart';
 
@@ -339,6 +340,108 @@ operations:
         [for (final p in ir.groups.single.operations.single.parameters) p.name],
         names,
       );
+    });
+  });
+
+  group('parameter style (TOA564)', () {
+    String params(List<String> parameters) =>
+        'operationId: a\ntags: [t]\nparameters: [${parameters.join(', ')}]';
+
+    test('a style the placement does not allow gets the default style', () {
+      final fixture = IrFixture(
+        specOf({
+          '/a/{id}/{ok}':
+              'operationId: a\ntags: [t]\nparameters: ['
+              '{name: id, in: path, required: true, style: form, '
+              'schema: {type: string}}, '
+              '{name: ok, in: path, required: true, style: matrix, '
+              'schema: {type: string}}, '
+              '{name: q, in: query, style: matrix, schema: {type: string}}, '
+              '{name: deep, in: query, style: deepObject, '
+              'schema: {type: object}}, '
+              '{name: X-H, in: header, style: form, '
+              'schema: {type: string}}, '
+              '{name: X-Ok, in: header, style: simple, '
+              'schema: {type: string}}, '
+              '{name: c, in: cookie, style: matrix, schema: {type: string}}, '
+              '{name: c2, in: cookie, style: form, schema: {type: string}}]',
+        }),
+      );
+      final ir = build(fixture);
+      final styles = {
+        for (final p in ir.groups.single.operations.single.parameters)
+          p.wireName: p.style,
+      };
+      expect(styles, {
+        'id': null,
+        'ok': ParameterStyle.matrix,
+        'q': null,
+        'deep': ParameterStyle.deepObject,
+        'X-H': null,
+        'X-Ok': ParameterStyle.simple,
+        'c': null,
+        'c2': ParameterStyle.form,
+      });
+      final found = reported(fixture, .parameterStyleInvalid);
+      expect(
+        [for (final d in found) d.pointer?.value],
+        [
+          '#/paths/~1a~1{id}~1{ok}/get/parameters/0',
+          '#/paths/~1a~1{id}~1{ok}/get/parameters/2',
+          '#/paths/~1a~1{id}~1{ok}/get/parameters/4',
+          '#/paths/~1a~1{id}~1{ok}/get/parameters/6',
+        ],
+      );
+      expect(found.first.severity, Severity.warning);
+      expect(
+        found.first.message,
+        allOf(contains('"form"'), contains('path'), contains('"simple"')),
+      );
+      expect(found.first.message, contains('default'));
+      expect(fixture.reported, hasLength(4));
+    });
+
+    test('a querystring parameter is not generated, and the message says '
+        'so', () {
+      final fixture = IrFixture('''
+openapi: 3.2.0
+info: {title: t, version: "1"}
+paths:
+  /a:
+    get:
+      operationId: a
+      tags: [t]
+      parameters:
+        - {name: all, in: querystring, content: {application/x-www-form-urlencoded: {schema: {type: object}}}}
+        - {name: q, in: query, schema: {type: string}}
+      responses: {"200": {description: ok}}
+''');
+      final ir = build(fixture);
+      expect(
+        [for (final p in ir.groups.single.operations.single.parameters) p.name],
+        ['q'],
+      );
+      final found = reported(fixture, .parameterStyleInvalid).single;
+      expect(found.pointer?.value, '#/paths/~1a/get/parameters/0');
+      expect(found.message, contains('querystring'));
+      expect(found.message, contains('not generated'));
+      expect(fixture.reported, hasLength(1));
+    });
+
+    test('valid styles and no style are silent', () {
+      final fixture = IrFixture(
+        specOf({
+          '/a/{id}': params([
+            '{name: id, in: path, required: true, style: label, '
+                'schema: {type: string}}',
+            '{name: q, in: query, style: pipeDelimited, '
+                'schema: {type: array, items: {type: string}}}',
+            '{name: X-H, in: header, schema: {type: string}}',
+          ]),
+        }),
+      );
+      build(fixture);
+      expect(fixture.reported, isEmpty);
     });
   });
 

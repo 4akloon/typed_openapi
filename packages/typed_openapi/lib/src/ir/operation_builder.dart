@@ -40,6 +40,25 @@ final class OperationBuilder {
   static const _names = DartNames();
   static final _variable = RegExp(r'\{([^}]*)\}');
 
+  /// The styles OpenAPI allows for each placement, the default style
+  /// first (`style: cookie` is OpenAPI 3.2's second style for cookies); a
+  /// `querystring` parameter has none.
+  static const _allowedStyles = {
+    ParameterLocation.path: [
+      ParameterStyle.simple,
+      ParameterStyle.label,
+      ParameterStyle.matrix,
+    ],
+    ParameterLocation.query: [
+      ParameterStyle.form,
+      ParameterStyle.spaceDelimited,
+      ParameterStyle.pipeDelimited,
+      ParameterStyle.deepObject,
+    ],
+    ParameterLocation.header: [ParameterStyle.simple],
+    ParameterLocation.cookie: [ParameterStyle.form, ParameterStyle.cookie],
+  };
+
   final IrContext _context;
   final SchemaMapper _mapper;
 
@@ -119,7 +138,9 @@ final class OperationBuilder {
       });
     final named = [
       for (final (_, (placement, parameter)) in sorted)
-        if (parameter.name case final wire?) (placement, parameter, wire),
+        if (parameter.name case final wire?)
+          if (_isSendable(placement, parameter, wire))
+            (placement, parameter, wire),
     ];
     // The names overrides give are claimed first, so an automatic name that
     // is the same gets the suffix, not the override's.
@@ -133,6 +154,50 @@ final class OperationBuilder {
       }
     }
     return [for (var i = 0; i < named.length; i++) built[i]!];
+  }
+
+  /// Whether a parameter of [placement] can be sent; a `querystring`
+  /// parameter cannot, and is reported (TOA564).
+  bool _isSendable(
+    ParameterLocation placement,
+    Parameter parameter,
+    String wire,
+  ) {
+    if (placement != .querystring) return true;
+    _context.report(
+      .parameterStyleInvalid,
+      'Parameter "$wire" is in: querystring (OpenAPI 3.2), which the client '
+      'cannot send; the parameter is not generated.',
+      parameter.location,
+      fix: 'Describe the query string as query parameters at the source.',
+    );
+    return false;
+  }
+
+  /// The style of [parameter] as the IR keeps it: what the spec writes when
+  /// its placement allows it, else null (the default style of the
+  /// placement), with TOA564.
+  ParameterStyle? _checkedStyle(
+    Parameter parameter,
+    ParameterLocation placement,
+    String wire,
+  ) {
+    final style = parameter.style;
+    final allowed = _allowedStyles[placement];
+    if (style == null || allowed == null || allowed.contains(style)) {
+      return style;
+    }
+    final fallback = allowed.first;
+    _context.report(
+      .parameterStyleInvalid,
+      'The style "${style.name}" is not allowed for a ${placement.name} '
+      'parameter, which takes '
+      '${[for (final s in allowed) '"${s.name}"'].join(', ')}; the default '
+      'style "${fallback.name}" is used for "$wire".',
+      parameter.location,
+      fix: 'Use one of these styles at the source.',
+    );
+    return null;
   }
 
   ParameterIr _parameter(
@@ -226,7 +291,7 @@ final class OperationBuilder {
       type: required ? type : type.withNullable(true),
       location: parameter.location,
       required: required,
-      style: parameter.style,
+      style: _checkedStyle(parameter, placement, wire),
       explode: parameter.explode,
       allowReserved: parameter.allowReserved,
       contentType: contentType,
