@@ -1,6 +1,7 @@
 import '../model/operation.dart';
 import '../model/spec_node.dart';
 import 'ir_context.dart';
+import 'media_type_picker.dart';
 import 'names.dart';
 
 /// Tells which keys of an operation's `responses` the client generates, and
@@ -82,5 +83,23 @@ final class ResponseStatuses {
       }
     }
     return result;
+  }
+
+  /// How many responses of each kind (success or error, by the base of
+  /// [nameOf]) declare an inline body type. Inline names carry the status
+  /// only when several do; a response read as bytes or text, also a form or
+  /// multipart one, declares nothing and does not count.
+  static Map<String, int> bodyCounts(List<PickedResponse> responses) {
+    final counts = <String, int>{};
+    for (final (status, _, (contentType, media)) in responses) {
+      final kind = contentType == null
+          ? null
+          : MediaTypePicker.kindOf(contentType);
+      if (kind != .json && kind != .eventStream) continue;
+      if (media?.schema == null && media?.itemSchema == null) continue;
+      final base = nameOf(status, shared: false);
+      counts[base] = (counts[base] ?? 0) + 1;
+    }
+    return counts;
   }
 }

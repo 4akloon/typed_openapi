@@ -23,6 +23,7 @@ paths:
         - {name: e, in: query, schema: {type: string, enum: []}}
         - {name: jsonEncode, in: query, required: true, content: {application/json: {schema: {type: string}}}}
         - {name: base64Encode, in: query, schema: {type: string, format: byte}}
+        - {name: needed, in: query, required: true, schema: {type: integer, default: 7}, description: "```\n{@youtube 560 315 https://x.example/v}\n```"}
         - {name: big, in: cookie, schema: {type: integer, enum: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]}}
       responses:
         "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Response'}}}}

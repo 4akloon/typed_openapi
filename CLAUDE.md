@@ -275,7 +275,10 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `$ref` target; a `default` beside a `$ref` counts from 3.1; one that does
   not fit the `enum` or the `format` (`date`, `date-time`, `uuid`, `int32`)
   of those schemas is TOA660 and not kept: `DefaultMatcher`); envelopes; errors, with
-  `errors.default_schema` for statuses without a body; a `responses` key is
+  `errors.default_schema` for statuses without a body; the status goes into
+  an inline body's name only when several responses of a kind declare one
+  (`ResponseStatuses.bodyCounts`: a form, multipart, text or bytes response
+  declares none); a required parameter's `default` is not documented; a `responses` key is
   generated only when it is a code 200-299 or 400-599, a range `2XX`, `4XX`
   or `5XX` (either case, kept upper case) or `default`
   (`ResponseStatuses`): any other key is TOA657 and its response is
@@ -347,7 +350,9 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   including U+0085, U+2028 and U+2029, controls, bidirectional controls and
   lone surrogates are escaped; one-line code spans `docSpan`/`jsonSpan`;
   `docLines` for spec text: `[`, `]`, `<`, `>`, `\` and `{@` escaped outside
-  code spans, controls dropped, wrapped at the width, fenced blocks kept;
+  code spans, controls dropped, wrapped at the width (a span is never
+  broken), fenced blocks kept but for `{@`, which dartdoc expands there
+  too;
   `proseLines` for the generator's own sentences, which never breaks a code
   span), `DartWriter` (own layout: indentation, `doc`, `prose`,
   one-line-or-one-item-a-line lists, `&&` chains; `line` asserts that the

@@ -87,6 +87,27 @@ void main() {
       ]);
     });
 
+    test('neutralises doc directives inside a fenced block', () {
+      expect(
+        code.docLines(
+          '```\n{@youtube 560 315 https://x.example/v}\n{@macro m} <raw>\n```',
+          80,
+        ),
+        [
+          '```',
+          r'\{@youtube 560 315 https://x.example/v}',
+          r'\{@macro m} <raw>',
+          '```',
+        ],
+      );
+      // An unclosed fence is closed, and its directives are neutralised too.
+      expect(code.docLines('```\n{@template t}', 80), [
+        '```',
+        r'\{@template t}',
+        '```',
+      ]);
+    });
+
     test('drops bidirectional controls and fixes lone surrogates', () {
       expect(code.docLines('a\u202eb\u2066c\u2069d', 80), ['abcd']);
       expect(code.docLines('a\ud800b\udc00c', 80), ['a\ufffdb\ufffdc']);

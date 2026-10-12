@@ -400,14 +400,7 @@ final class OperationBuilder {
   ];
 
   List<ResponseIr> _responses(List<PickedResponse> responses, String prefix) {
-    // Inline names carry the status only when several responses of the
-    // same kind (success or error) have a body.
-    final withBody = <String, int>{};
-    for (final (status, _, (_, media)) in responses) {
-      if (media?.schema == null && media?.itemSchema == null) continue;
-      final base = ResponseStatuses.nameOf(status, shared: false);
-      withBody[base] = (withBody[base] ?? 0) + 1;
-    }
+    final withBody = ResponseStatuses.bodyCounts(responses);
     final result = <ResponseIr>[];
     for (final (status, response, (contentType, media)) in responses) {
       final kind = _responseKind(contentType, response);

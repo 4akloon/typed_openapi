@@ -248,7 +248,8 @@ final class OperationEmitter {
                 '(`${_code.docSpan(operation.operationId!)}`)'}.',
     );
     for (final parameter in operation.parameters) {
-      final defaultValue = parameter.defaultValue;
+      // A required parameter is always sent: its default is never used.
+      final defaultValue = parameter.required ? null : parameter.defaultValue;
       if (parameter.description == null && defaultValue == null) continue;
       out
         ..line('///')

@@ -83,7 +83,8 @@ final class DartCode {
   /// and bidirectional controls are dropped, a lone surrogate becomes
   /// U+FFFD, a lone `\r` and the Unicode line separators end a line, and
   /// each line is wrapped at [width] characters except inside fenced code
-  /// blocks.
+  /// blocks, where only the `{` of a directive is escaped. A code span is
+  /// never broken across lines.
   List<String> docLines(String text, int width) {
     final lines = <String>[];
     var fenced = false;
@@ -95,7 +96,9 @@ final class DartCode {
         continue;
       }
       if (fenced) {
-        lines.add(line);
+        // Markdown shows a fenced line as it is, but dartdoc expands a
+        // directive there too.
+        lines.add(line.replaceAll('{@', r'\{@'));
         continue;
       }
       // A code span stays on one line: the analyzer reads the text of a

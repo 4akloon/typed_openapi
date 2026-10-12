@@ -132,4 +132,28 @@ void main() {
         .join('\n');
     expect(api, contains("SecurityScheme('missing', .unknown), ['read']"));
   });
+
+  test('a required parameter is not documented with a default', () {
+    final api = emitClient('hostile_operations.yaml').entries
+        .where((e) => e.key.startsWith('api/'))
+        .map((e) => e.value)
+        .join('\n');
+    expect(api, contains('/// [needed]:'));
+    expect(api, isNot(contains('[needed], when not sent')));
+  });
+
+  test('a doc directive in a fenced block of a description is escaped', () {
+    final files = emitClient('hostile_operations.yaml');
+    for (final MapEntry(:key, :value) in files.entries) {
+      for (final line in value.split('\n')) {
+        if (!line.contains('{@youtube')) continue;
+        expect(line, contains(r'\{@youtube'), reason: key);
+      }
+    }
+    final api = files.entries
+        .where((e) => e.key.startsWith('api/'))
+        .map((e) => e.value)
+        .join('\n');
+    expect(api, contains(r'/// \{@youtube 560 315 https://x.example/v}'));
+  });
 }
