@@ -124,7 +124,6 @@ operations:
           ('o.yaml', '#/operations/ov/name'),
           ('o.yaml', '#/operations/ov/parameters/query:id/name'),
           ('o.yaml', '#/operations/ow/name'),
-          ('o.yaml', '#/operations/ow/group'),
           ('o.yaml', '#/operations/ox/name'),
         ]),
       );
@@ -158,6 +157,65 @@ operations:
         'petId',
       );
       expect(fixture.reported, isEmpty);
+    });
+
+    test('a group that differs from UpperCamelCase only by case or '
+        'separators is used without a report', () {
+      final fixture = IrFixture(
+        specOf({
+          '/a': 'operationId: a\ntags: [t]',
+          '/b': 'operationId: b\ntags: [t]',
+          '/c': 'operationId: c\ntags: [t]',
+          '/d': 'operationId: d\ntags: [t]',
+        }),
+        overrides: '''
+operations:
+  a: {group: pets}
+  b: {group: pet-store}
+  c: {group: pet_shop}
+  d: {group: Über}
+''',
+      );
+      final ir = build(fixture);
+      expect(ir.groups.map((g) => g.name), [
+        'BerApi',
+        'PetShopApi',
+        'PetStoreApi',
+        'PetsApi',
+      ]);
+      expect(
+        [
+          for (final d in reported(fixture, .overrideNameInvalid))
+            d.pointer?.value,
+        ],
+        ['#/operations/d/group'],
+      );
+    });
+
+    test('an argument override is claimed before an automatic name', () {
+      final fixture = IrFixture(
+        specOf({
+          '/a':
+              'operationId: a\ntags: [t]\nparameters: '
+              '[{name: c, in: query, schema: {type: string}}, '
+              '{name: b, in: query, schema: {type: string}}]',
+        }),
+        overrides: '''
+operations:
+  a:
+    parameters:
+      "query:b": {name: c}
+''',
+      );
+      final ir = build(fixture);
+      final byWire = {
+        for (final p in ir.groups.single.operations.single.parameters)
+          p.wireName: p.name,
+      };
+      expect(byWire, {'c': 'cQuery', 'b': 'c'});
+      final collision = reported(fixture, .nameCollision).single;
+      expect(collision.pointer?.value, '#/paths/~1a/get/parameters/0');
+      expect(collision.fix, contains('name: cQuery'));
     });
 
     test('an override name is claimed before an automatic name', () {
@@ -204,6 +262,28 @@ operations:
         ],
       );
       expect(found[1].fix, contains('name: grE'));
+    });
+
+    test('a name that also collides is reported for both', () {
+      final fixture = IrFixture(
+        specOf({
+          '/a': 'operationId: ber\ntags: [t]',
+          '/b': 'operationId: Über\ntags: [t]',
+        }),
+      );
+      build(fixture);
+      expect(
+        [
+          for (final d in fixture.reported)
+            if (d.code == DiagnosticCode.nameLossy ||
+                d.code == DiagnosticCode.nameCollision)
+              (d.code, d.pointer?.value),
+        ],
+        [
+          (DiagnosticCode.nameCollision, '#/paths/~1b/get'),
+          (DiagnosticCode.nameLossy, '#/paths/~1b/get'),
+        ],
+      );
     });
 
     test('changes of case and separators are silent', () {
@@ -430,6 +510,46 @@ paths:
         found.single.message,
         contains('application/x-www-form-urlencoded'),
       );
+    });
+
+    test('variants of the chosen media type are not reported as dropped', () {
+      final fixture = IrFixture('''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /a:
+    get:
+      operationId: get
+      tags: [t]
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json: {schema: {type: object}}
+            application/json; profile="CamelCase": {schema: {type: object}}
+            application/vnd.api+json: {schema: {type: object}}
+            text/json: {schema: {type: object}}
+        "201":
+          description: ok
+          content:
+            application/json: {schema: {type: object}}
+            application/xml: {schema: {type: object}}
+            application/json; profile="Pascal": {schema: {type: object}}
+''');
+      build(fixture);
+      final found = reported(fixture, .mediaTypeAsBytes);
+      // `application/vnd.api+json` and `text/json` are JSON too (text/json
+      // is text, so it is not).
+      expect(found, hasLength(2));
+      expect(found.map((d) => d.pointer?.value), [
+        '#/paths/~1a/get/responses/200/content',
+        '#/paths/~1a/get/responses/201/content',
+      ]);
+      expect(found[0].message, contains('"text/json"'));
+      expect(found[0].message, isNot(contains('profile')));
+      expect(found[0].message, isNot(contains('vnd.api')));
+      expect(found[1].message, contains('"application/xml"'));
+      expect(found[1].message, isNot(contains('profile')));
     });
 
     test('one JSON media type is silent', () {

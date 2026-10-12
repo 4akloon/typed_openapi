@@ -117,11 +117,22 @@ final class OperationBuilder {
         final byPlacement = order.indexOf(a.$2.$1) - order.indexOf(b.$2.$1);
         return byPlacement != 0 ? byPlacement : a.$1 - b.$1;
       });
-    return [
+    final named = [
       for (final (_, (placement, parameter)) in sorted)
-        if (parameter.name case final wire?)
-          _parameter(entry, parameter, placement, wire, scope, prefix),
+        if (parameter.name case final wire?) (placement, parameter, wire),
     ];
+    // The names overrides give are claimed first, so an automatic name that
+    // is the same gets the suffix, not the override's.
+    final built = <int, ParameterIr>{};
+    for (final withOverride in [true, false]) {
+      for (final (i, (placement, parameter, wire)) in named.indexed) {
+        final given =
+            _context.overrides.parameterAt(parameter.location)?.name != null;
+        if (given != withOverride) continue;
+        built[i] = _parameter(entry, parameter, placement, wire, scope, prefix);
+      }
+    }
+    return [for (var i = 0; i < named.length; i++) built[i]!];
   }
 
   ParameterIr _parameter(
@@ -177,7 +188,8 @@ final class OperationBuilder {
         fix: 'Name the argument explicitly to keep the name stable.',
         override: _context.overrideAt(address, {'name': name}),
       );
-    } else if (given == null) {
+    }
+    if (given == null && automatic != null) {
       _context.checkLossyName(
         wire,
         name,
@@ -392,9 +404,14 @@ final class OperationBuilder {
       for (final MapEntry(key: type, value: written) in content.entries) {
         if (_kind(type) != kind) continue;
         final media = _context.model.resolve(written);
+        // A variant of the chosen type (`application/json; profile=...`) or
+        // another JSON type has the same use: nothing is lost.
         final dropped = [
           for (final other in content.keys)
-            if (other != type) other,
+            if (other != type &&
+                _baseType(other) != _baseType(type) &&
+                !(kind == .json && _kind(other) == .json))
+              other,
         ];
         if (dropped.isNotEmpty) {
           _context.report(
@@ -451,8 +468,12 @@ final class OperationBuilder {
     return (media?.schema, type);
   }
 
+  /// [contentType] without its parameters, in lower case.
+  static String _baseType(String contentType) =>
+      contentType.split(';').first.trim().toLowerCase();
+
   static BodyKind _kind(String contentType) {
-    final type = contentType.split(';').first.trim().toLowerCase();
+    final type = _baseType(contentType);
     if (type == 'application/json' || type.endsWith('+json')) return .json;
     if (type == 'multipart/form-data') return .multipart;
     if (type == 'application/x-www-form-urlencoded') return .form;

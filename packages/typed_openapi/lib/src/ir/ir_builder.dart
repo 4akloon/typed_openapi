@@ -264,13 +264,23 @@ final class IrBuilder {
     final operation = entry.operation;
     final override = context.overrides.operationAt(operation.location);
     if (override?.group case final written?) {
-      final name = context.checkedOverrideName(
-        override!,
-        'group',
-        written,
-        .type,
-        what: 'group',
-      );
+      // A group is a word list like a tag: a value that differs from its
+      // UpperCamelCase form only by case or separators is that form.
+      final words = _names.pascal(written);
+      final String? name;
+      if (_names.isValid(written, .type)) {
+        name = written;
+      } else if (words != null && !_names.dropsLetters(written)) {
+        name = words;
+      } else {
+        name = context.checkedOverrideName(
+          override!,
+          'group',
+          written,
+          .type,
+          what: 'group',
+        );
+      }
       if (name != null) return _GroupChoice(name);
     }
     final config = context.config;
@@ -487,7 +497,8 @@ final class IrBuilder {
         fix: 'Name the method explicitly to keep the name stable.',
         override: context.overrideAt(at, {'name': name}),
       );
-    } else if (override == null) {
+    }
+    if (override == null && candidate != null) {
       context.checkLossyName(
         id == null ? entry.path : source,
         name,
