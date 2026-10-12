@@ -32,9 +32,15 @@ Git commands run from the repo root. Commit messages are Conventional Commits
 
 All under `packages/typed_openapi/lib/src/`, one folder per stage:
 
-- `diagnostics/` - `Diagnostic`, `DiagnosticCode` (stable `TOAnnn` catalog),
-  `Severity`, `JsonPointer`, `DiagnosticBag`, and the reporters
-  (`DiagnosticReporter`, `TextReporter`, `JsonReporter`, `ReportFormat`).
+- `diagnostics/` - `Diagnostic` (with `RelatedLocation`s, preset `hints` as
+  `(preset, text)` and fingerprint `args`), `DiagnosticCode` (stable `TOAnnn` catalog;
+  `fixedCodes` - a file cannot be read - cannot be lowered, `configCodes`
+  not changed), `Severity`,
+  `SeverityLevels` (a client's `severity` config), `JsonPointer`,
+  `DiagnosticBag` (baselined diagnostics kept apart), `DisplayPaths` (files
+  relative to the working directory, absolute outside it), and the reporters
+  (`DiagnosticReporter`, `TextReporter`, `JsonReporter`, `SarifReporter`,
+  `GitHubActionsReporter`, `ReportFormat`).
 - `load/` - `SpecLoader` reads JSON/YAML into a `SpecDocument` (plain tree,
   absolute file URI, source spans by JSON pointer, `valueAt(pointer)`,
   `withRoot`) through `YamlComposer`, which `ConfigLoader` uses too.
@@ -157,18 +163,36 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   a value cannot be written as YAML (non-finite numbers).
 - `config/` - `ConfigLoader`, `ProjectConfig`, `ClientConfig`, `Preset`.
 - `check/` - `SpecChecker`: config -> load -> version -> overrides ->
-  `Normalizer`; an overrides file that cannot be used is reported (an
-  error) and the spec is checked without it; `generate` (M9) must skip
-  such a client.
+  `Normalizer` once per run (file, preset, rules, overrides file); an
+  overrides file that cannot be used is reported (an error) and the spec is
+  checked without it; `generate` (M9) must skip such a client. Each client
+  then applies its levels (`checkClients` -> `ClientCheck`) and its baseline
+  (`check`).
+- `baseline/` - `AnchorIndex` (logical addresses of a spec's nodes:
+  operation `METHOD /path`, `in:name` parameter, components schema,
+  property), `Fingerprints` (anchor, `sha256([code, anchor, args])[:12]`),
+  `Baseline`, `BaselineEntry`, `BaselineMatch` (match, prune, YAML; only
+  errors and warnings of codes that are not fixed are accepted) and
+  `BaselineLoader` (TOA820, TOA821; `version` must be the integer 1). The
+  `baseline` subcommands write a file atomically (temp + rename) and skip a
+  client whose spec could not be read (`ClientCheck.readErrors`: the file is
+  untouched, the error printed, exit `1`); `check` reports no stale entries
+  for it. `--strict-baseline` applies after the configured levels.
 - `cli/` - `TypedOpenApiCli` (`cli.dart`, owns the `CommandRunner` and maps
-  usage errors to exit code 64) and `CheckCommand` (`check_command.dart`,
-  options `--config/-c` and `--format`, client names as positional
-  arguments); `bin/typed_openapi.dart` only calls `TypedOpenApiCli().run(args)`
+  usage errors to exit code 64; `workingDirectory` for tests),
+  `CheckCommand` (`check_command.dart`, options `--config/-c`, `--format`
+  (`text`, `json`, `sarif`, `github-actions`), `--show-baselined`,
+  `--strict-baseline`, client names as positional arguments) and
+  `BaselineCommand` (`baseline_command.dart`, subcommands `create` and
+  `prune`); `bin/typed_openapi.dart` only calls `TypedOpenApiCli().run(args)`
   and sets `exitCode`.
 - `lib/typed_openapi.dart` exports the public API, each with a `show` list:
-  `SpecChecker`, `TypedOpenApiCli`, `ConfigLoader`, `ClientConfig`, `Preset`,
-  `ProjectConfig`, the diagnostics (`Diagnostic`, `DiagnosticBag`,
-  `DiagnosticCode`, `JsonPointer`, `Severity` and the reporters), the loader
+  `SpecChecker`, `ClientCheck`, `TypedOpenApiCli`, `ConfigLoader`,
+  `ClientConfig`, `Preset`, `ProjectConfig`, the diagnostics (`Diagnostic`,
+  `RelatedLocation`, `DiagnosticBag`, `DiagnosticCode`, `DisplayPaths`,
+  `JsonPointer`, `Severity`, `SeverityLevels` and the reporters), the
+  baseline (`AnchorIndex`, `Baseline`, `BaselineEntry`, `BaselineMatch`,
+  `BaselineLoader`, `Fingerprints`), the loader
   (`SpecLoader`, `SpecDocument`, `OpenApiVersion`, `OpenApiVersionDetector`),
   the whole `model/` (`SpecNode`, `SpecLocation`, `RefOr`, `Ref`, `Inline`,
   `RefKind`, `OpenApiDocument` and the other OAS objects), the entry points
@@ -176,7 +200,7 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   (`Normalizer`, `NormalizedSpec`, `NormalizerRule`, `RuleContext`,
   `Finding`, `SpecEdit`, `EditOperation`) and the overrides file
   (`OverrideLoader`, `OverrideSet`, `OverrideEntry` and its subclasses,
-  `DartTypeOverride`). Not exported: `CheckCommand`, the
+  `DartTypeOverride`). Not exported: `CheckCommand`, `BaselineCommand`, the
   internals of `parse/` (`OpenApiParser`, `OperationParser`, `SchemaParser`,
   `ObjectReader`, `ParseContext`, `SpecIndex`, `DialectChecker`), `resolve/`
   (`RefTarget`, `RefResolver`), `normalize/` (`TreeEditor`, the rule
@@ -194,11 +218,12 @@ Rules of the pipeline:
 - Reports are deterministic: diagnostics sort by file, position, pointer, code,
   message (`Diagnostic.compareTo`, `DiagnosticBag.sorted`). `DiagnosticBag`
   ignores a diagnostic equal to one it has (same code, severity, message, file,
-  pointer and start position), so a region read twice reports once.
+  pointer and start position), so a region read twice reports once; only its
+  new preset hints are added. Paths are relative to the working directory.
 - The CLI never calls `exit()`; commands return the code. Reports go to
   stdout, usage errors to stderr. Codes: `0` ok, `1` errors found, `64` usage,
   `78` the config file could not be loaded (TOA904 and per-client TOA902 exit
-  `1`).
+  `1`). Diagnostics a baseline accepts do not count.
 
 ## Code rules
 

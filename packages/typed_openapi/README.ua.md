@@ -29,7 +29,7 @@ clients:
 ```sh
 dart run typed_openapi check            # усі клієнти
 dart run typed_openapi check core_api   # один клієнт
-dart run typed_openapi check --format json
+dart run typed_openapi check --format json   # також: sarif, github-actions
 ```
 
 `check` читає всю специфікацію, проходить її `$ref` (зокрема в інші локальні
@@ -74,9 +74,44 @@ Override, ціль якого зникла, дає warning, той, з яким 
 дефект самі, закінчуються override-ом, який можна скопіювати.
 
 У кожної знахідки є стабільний код (`TOA011`), JSON-pointer на місце в
-специфікації і, якщо парсер зміг визначити позицію, рядок і колонка. Код
-виходу `1` означає хоча б одну помилку, `64` — неправильні аргументи або
-невідомий клієнт, `78` — конфіг не вдалося прочитати.
+специфікації і, якщо парсер зміг визначити позицію, рядок і колонка. Шляхи —
+відносно каталогу, з якого запущено команду. Рівень коду (за кодом або
+назвою) змінюється в `defaults` або в клієнті; `off` вимикає його. Коди про
+те, що файл специфікації, override-ів чи baseline не читається, знизити не
+можна:
+
+```yaml
+defaults:
+  severity: {TOA208: off, duplicate-operation-id: warning}
+```
+
+Щоб почати зі специфікацією, де багато знахідок, зафіксуй наявні в baseline
+і вали перевірку лише на нових:
+
+```yaml
+clients:
+  core_api:
+    input: specs/core_api.json
+    output: lib/src/api/core_api
+    baseline: specs/core_api.baseline.yaml
+```
+
+```sh
+dart run typed_openapi baseline create   # зафіксувати сьогоднішні error і warning
+dart run typed_openapi check             # лише нові; «baselined: N»
+dart run typed_openapi check --show-baselined
+dart run typed_openapi baseline prune    # прибрати записи, що вже не збігаються
+```
+
+Знахідка зіставляється за fingerprint її коду і місця (операція, параметр,
+схема чи властивість, якщо місце їх має), а не за текстом чи рядком, тож
+інше формулювання повідомлення чи правка деінде в специфікації його не
+змінюють. Запис, що більше не збігається, — warning з підказкою
+`baseline prune`; `check --strict-baseline` робить його помилкою за будь-якого
+рівня з конфігу. `baseline create` і `baseline prune` не чіпають baseline
+клієнта, чию специфікацію не вдалося прочитати, і завершуються з кодом `1`. Код виходу
+`1` означає хоча б одну незафіксовану помилку, `64` — неправильні аргументи
+або невідомий клієнт, `78` — конфіг не вдалося прочитати.
 
 Згенеровані клієнти залежать від
 [`typed_openapi_runtime`](../typed_openapi_runtime/README.ua.md).

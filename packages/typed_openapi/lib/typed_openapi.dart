@@ -4,10 +4,16 @@
 /// diagnostics. [SpecReader] reads a loaded spec into the typed model
 /// ([SpecModel]) with its `$ref`s resolved; [OverrideLoader] reads a
 /// client's overrides file; [Normalizer] applies its spec fields, runs the
-/// named rules over the spec and applies their fixes.
+/// named rules over the spec and applies their fixes. [Baseline] and
+/// [BaselineLoader] read and write a client's baseline file, and
+/// [Fingerprints] computes the keys it matches diagnostics by.
 library;
 
-export 'src/check/spec_checker.dart' show SpecChecker;
+export 'src/baseline/anchor_index.dart' show AnchorIndex;
+export 'src/baseline/baseline.dart' show Baseline, BaselineEntry, BaselineMatch;
+export 'src/baseline/baseline_loader.dart' show BaselineLoader;
+export 'src/baseline/fingerprints.dart' show Fingerprints;
+export 'src/check/spec_checker.dart' show ClientCheck, SpecChecker;
 export 'src/cli/cli.dart' show TypedOpenApiCli;
 export 'src/config/config_loader.dart' show ConfigLoader;
 export 'src/config/project_config.dart'
@@ -15,6 +21,7 @@ export 'src/config/project_config.dart'
 export 'src/diagnostics/diagnostic.dart' show Diagnostic, RelatedLocation;
 export 'src/diagnostics/diagnostic_bag.dart' show DiagnosticBag;
 export 'src/diagnostics/diagnostic_code.dart' show DiagnosticCode;
+export 'src/diagnostics/display_paths.dart' show DisplayPaths;
 export 'src/diagnostics/github_actions_reporter.dart'
     show GitHubActionsReporter;
 export 'src/diagnostics/json_pointer.dart' show JsonPointer;
@@ -22,6 +29,7 @@ export 'src/diagnostics/reporters.dart'
     show DiagnosticReporter, JsonReporter, ReportFormat, TextReporter;
 export 'src/diagnostics/sarif_reporter.dart' show SarifReporter;
 export 'src/diagnostics/severity.dart' show Severity;
+export 'src/diagnostics/severity_levels.dart' show SeverityLevels;
 export 'src/load/openapi_version.dart'
     show OpenApiVersion, OpenApiVersionDetector;
 export 'src/load/spec_document.dart' show SpecDocument;

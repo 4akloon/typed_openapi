@@ -102,3 +102,47 @@
   `ResponseOverride`, `SchemaOverride`, `PropertyOverride`,
   `DartTypeOverride`; `Normalizer.normalize` takes `overrides:` and
   `NormalizedSpec.overrides` is the set, or null without an overrides file.
+- Paths in reports are relative to the working directory, in every format
+  and for every file (the config, specs, files reached through `$ref`,
+  overrides and baseline files); a file outside it is named by its absolute
+  path (`DisplayPaths`). `TypedOpenApiCli(workingDirectory:)` sets the
+  directory for tests and tools.
+- Levels in the config: `severity: {<code or name>: error|warning|info|off}`
+  in `defaults` and per client (a client overrides `defaults` code by code)
+  changes the report and the exit code. An unknown code is TOA903; a bad
+  level, a code named twice, lowering or turning off a code that says a
+  spec, overrides or baseline file cannot be read (`DiagnosticCode.fixedCodes`:
+  TOA001, TOA003, TOA004, TOA006-TOA008, TOA010, TOA011, TOA801-TOA803,
+  TOA820, TOA821, TOA823), and any change of a config code (TOA901-TOA904)
+  are TOA902. Any other code may be raised, lowered or turned off.
+- Baseline (R2.3): `clients.<name>.baseline` names a YAML file written by
+  `typed_openapi baseline create [client...]` from the client's errors and
+  warnings (infos are always shown); `check` then hides the diagnostics it
+  accepts and counts them (`baselined: N`), lists them marked
+  with `--show-baselined`, and reports an entry that matches nothing (or
+  fewer diagnostics than its `count`) as TOA822 (warning, an error with
+  `--strict-baseline`) with a hint to run `typed_openapi baseline prune`;
+  `--strict-baseline` applies after the configured levels, so TOA822 is an
+  error even if the config lowered it.
+  Entries are keyed by a fingerprint: the first 12 hex digits of SHA-256 of
+  `[code, anchor, args]`, where the anchor is the logical address of the
+  place (operation `METHOD /path`, `in:name` parameter, components schema,
+  property) or the file (relative to the baseline file) and JSON pointer;
+  message text and positions are not part of it. A missing baseline file
+  is TOA820, an unreadable one or a bad entry TOA821, a file that cannot be
+  written TOA823; two clients naming one baseline file is TOA902. The
+  file starts with `version: 1` (it must be the integer 1) and its entries
+  are sorted. `baseline create` and `baseline prune` write it atomically
+  (a temporary file, then a rename), and skip a client whose spec, or a
+  file it is read with, cannot be read: its baseline is left as it is, the
+  error is printed and the exit code is `1`. `check` reports no stale
+  entries for such a client either.
+- Report formats `sarif` (SARIF 2.1.0: rules, levels, relative URIs,
+  logical locations, `relatedLocations`, baselined results as suppressed)
+  and `github-actions` (workflow-command annotations).
+- A problem an override introduces has a related location: the override
+  field (text `related:`, JSON `related`, SARIF `relatedLocations`).
+- Preset hints are kept apart (`Diagnostic.hints`): a finding two clients
+  share keeps the hints of both presets instead of the first one's; with
+  more than one, each starts with its preset's name (`nestjs: ...`).
+- `Diagnostic.args` (part of the fingerprint): the field name of TOA112.

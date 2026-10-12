@@ -28,7 +28,7 @@ Check the specs without generating anything:
 ```sh
 dart run typed_openapi check            # all clients
 dart run typed_openapi check core_api   # one client
-dart run typed_openapi check --format json
+dart run typed_openapi check --format json   # also: sarif, github-actions
 ```
 
 `check` reads the whole spec, follows its `$ref`s (also into other local
@@ -73,9 +73,44 @@ code generation lands. Hints of rules that cannot fix a defect themselves
 end with the override to copy.
 
 Every finding has a stable code (`TOA011`), a JSON pointer into the spec and,
-for files the parser could position, a line and column. Exit code `1` means
-at least one error, `64` wrong arguments or an unknown client, `78` the
-config could not be read.
+for files the parser could position, a line and column. Paths are relative
+to the directory you run the command in. Change the level of a code, by its
+id or name, in `defaults` or per client; `off` drops it. Codes that say a
+spec, overrides or baseline file cannot be read cannot be lowered:
+
+```yaml
+defaults:
+  severity: {TOA208: off, duplicate-operation-id: warning}
+```
+
+To adopt the tool on a spec with many findings, accept the current ones in
+a baseline and fail only on new ones:
+
+```yaml
+clients:
+  core_api:
+    input: specs/core_api.json
+    output: lib/src/api/core_api
+    baseline: specs/core_api.baseline.yaml
+```
+
+```sh
+dart run typed_openapi baseline create   # accept today's errors and warnings
+dart run typed_openapi check             # new findings only; "baselined: N"
+dart run typed_openapi check --show-baselined
+dart run typed_openapi baseline prune    # drop entries that no longer match
+```
+
+A finding is matched by a fingerprint of its code and its place (the
+operation, parameter, schema or property when it has one), not by its
+message or line, so rewording a message or editing the spec elsewhere keeps
+it. An entry that no longer matches is a warning that suggests
+`baseline prune`; `check --strict-baseline` makes it an error, whatever
+level the config gives it. `baseline create` and `baseline prune` leave the
+baseline of a client whose spec cannot be read untouched and exit with `1`.
+Exit code `1`
+means at least one error that is not accepted, `64` wrong arguments or an
+unknown client, `78` the config could not be read.
 
 Generated clients depend on
 [`typed_openapi_runtime`](../typed_openapi_runtime/README.md).
