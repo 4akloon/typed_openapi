@@ -186,10 +186,11 @@ enum DiagnosticCode {
   /// generated as a model and the branches are ignored.
   oneOfConstraintsIgnored('TOA255', 'oneof-constraints-ignored', .info),
 
-  /// Parts or properties that sit beside a `oneOf` or `anyOf` union are
-  /// ignored (`allOf` next to a union), or the branches are, when the schema
-  /// is a model made of `allOf` parts or `properties`.
-  allOfBesideUnionIgnored('TOA256', 'allof-beside-union-ignored', .warning),
+  /// Parts, properties or branches of a schema are ignored because another
+  /// keyword decides its shape: `allOf` parts or `properties` beside a
+  /// `oneOf` or `anyOf` union, or the union's branches when the schema is
+  /// a model made of `allOf` parts or `properties`.
+  compositionPartsIgnored('TOA256', 'composition-parts-ignored', .warning),
 
   /// An `enum` repeats a value; the repeats are removed.
   duplicateEnumValue('TOA301', 'duplicate-enum-value', .warning),
@@ -298,6 +299,26 @@ enum DiagnosticCode {
   /// An override `name` is not a valid Dart name for what it names (`my
   /// thing`, `1x`, `_private`); the name made from it is used.
   overrideNameInvalid('TOA560', 'override-name-invalid', .warning),
+
+  /// A request or response body has a media type that is not JSON, a form,
+  /// `multipart/form-data`, `text/*` or `text/event-stream`: it is sent or
+  /// read as bytes and its schema is not used. Also reported when an
+  /// operation offers several media types of a body and the others are
+  /// dropped; the message names the chosen one and the dropped ones.
+  mediaTypeAsBytes('TOA561', 'media-type-as-bytes', .info),
+
+  /// `errors.default_schema` names a key that is not in
+  /// `components.schemas`; the setting is ignored.
+  defaultErrorSchemaMissing(
+    'TOA562',
+    'default-error-schema-missing',
+    .warning,
+  ),
+
+  /// No operation of a client is generated: all are filtered out, all are
+  /// written as a `$ref` (TOA107), or all have an unbound path variable
+  /// (TOA556). The message says why.
+  clientEmpty('TOA563', 'client-empty', .warning),
 
   /// `*/*` is used as a media type.
   wildcardMediaType('TOA601', 'wildcard-media-type', .warning),

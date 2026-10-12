@@ -111,10 +111,14 @@ final class OperationBuilder {
       ParameterLocation.header,
       ParameterLocation.cookie,
     ];
-    final sorted = byKey.values.toList()
-      ..sort((a, b) => order.indexOf(a.$1) - order.indexOf(b.$1));
+    // By location, then in the order of the spec (a sort is not stable).
+    final sorted = byKey.values.toList().indexed.toList()
+      ..sort((a, b) {
+        final byPlacement = order.indexOf(a.$2.$1) - order.indexOf(b.$2.$1);
+        return byPlacement != 0 ? byPlacement : a.$1 - b.$1;
+      });
     return [
-      for (final (placement, parameter) in sorted)
+      for (final (_, (placement, parameter)) in sorted)
         if (parameter.name case final wire?)
           _parameter(entry, parameter, placement, wire, scope, prefix),
     ];
@@ -129,12 +133,38 @@ final class OperationBuilder {
     String prefix,
   ) {
     final override = _context.overrides.parameterAt(parameter.location);
-    final candidate = override?.name ?? _names.camel(wire) ?? 'param';
+    final written = override?.name;
+    final given = written == null
+        ? null
+        : _context.checkedOverrideName(
+            override!,
+            'name',
+            written,
+            .member,
+            what: 'argument',
+          );
+    final automatic = given == null ? _names.camel(wire) : null;
+    final candidate = given ?? automatic ?? 'param';
     final (name, change) = scope.claim(
       candidate,
       alternatives: ['$candidate${_names.pascal(placement.name)}'],
     );
-    if (change != null) {
+    final address = [
+      'operations',
+      entry.overrideKey,
+      'parameters',
+      '${placement.name}:$wire',
+    ];
+    if (given == null && automatic == null) {
+      _context.report(
+        .nameUnrepresentable,
+        'Parameter "$wire" has no ASCII letter or digit; the argument is '
+        'named "$name".',
+        parameter.location,
+        fix: 'Name the argument explicitly.',
+        override: _context.overrideAt(address, {'name': 'argument'}),
+      );
+    } else if (change != null) {
       _context.report(
         change == .reserved ? .nameReserved : .nameCollision,
         change == .reserved
@@ -145,20 +175,20 @@ final class OperationBuilder {
                   '"$wire" is named "$name".',
         parameter.location,
         fix: 'Name the argument explicitly to keep the name stable.',
-        override: _context.overrideAt(
-          [
-            'operations',
-            entry.overrideKey,
-            'parameters',
-            '${placement.name}:$wire',
-          ],
-          {'name': name},
-        ),
+        override: _context.overrideAt(address, {'name': name}),
+      );
+    } else if (given == null) {
+      _context.checkLossyName(
+        wire,
+        name,
+        parameter.location,
+        what: 'Parameter',
+        override: _context.overrideAt(address, {'name': name}),
       );
     }
     final (schema, contentType) = switch (parameter.schema) {
       final schema? => (schema, null),
-      null => _content(parameter.content),
+      null => _content(parameter.content, parameter.location),
     };
     final mapped = schema == null
         ? const CoreType(.json)
@@ -198,17 +228,24 @@ final class OperationBuilder {
     if (written == null) return null;
     final body = _context.model.resolve(written);
     if (body == null) return null;
-    final (contentType, media) = _pick(body.content);
+    final (contentType, media) = _pick(
+      body.content,
+      body.location,
+      'request body',
+    );
     final kind = contentType == null ? BodyKind.none : _kind(contentType);
     final schema = media?.schema;
-    final type = schema == null
-        ? null
-        : _mapper.typeOf(
-            schema,
-            NameHint(prefix, 'Request'),
-            direction: .request,
-            patchBody: method.toLowerCase() == 'patch',
-          );
+    // Raw bytes have no model, as in responses.
+    final DartType? type = switch ((schema, kind)) {
+      (_, .bytes) => const CoreType(.binary),
+      (null, _) => null,
+      (final schema?, _) => _mapper.typeOf(
+        schema,
+        NameHint(prefix, 'Request'),
+        direction: .request,
+        patchBody: method.toLowerCase() == 'patch',
+      ),
+    };
     return RequestBodyIr(
       kind: kind,
       location: body.location,
@@ -224,7 +261,11 @@ final class OperationBuilder {
       for (final MapEntry(key: status, value: written)
           in operation.responses.entries)
         if (_context.model.resolve(written) case final response?)
-          (status, response, _pick(response.content)),
+          (
+            status,
+            response,
+            _pick(response.content, response.location, 'response'),
+          ),
     ];
     // Inline names carry the status only when several responses of the
     // same kind (success or error) have a body.
@@ -321,7 +362,7 @@ final class OperationBuilder {
   }
 
   DartType? _defaultErrorType() {
-    final key = _context.config.defaultErrorSchema;
+    final key = _context.defaultErrorSchema;
     if (key == null) return null;
     final schema = _context.model.document.components?.schemas[key];
     if (schema == null) return null;
@@ -329,8 +370,15 @@ final class OperationBuilder {
   }
 
   /// The media type the client uses: JSON first, then forms, text, event
-  /// streams and anything else, each in document order.
-  (String?, MediaType?) _pick(Map<String, RefOr<MediaType>> content) {
+  /// streams and anything else, each in document order. [location] is the
+  /// object that has [content] and [what] says what it is. The media types
+  /// that are dropped are reported, and so is a chosen one that becomes
+  /// bytes and takes its schema with it (TOA561).
+  (String?, MediaType?) _pick(
+    Map<String, RefOr<MediaType>> content,
+    SpecLocation location,
+    String what,
+  ) {
     if (content.isEmpty) return (null, null);
     const preference = [
       BodyKind.json,
@@ -343,14 +391,63 @@ final class OperationBuilder {
     for (final kind in preference) {
       for (final MapEntry(key: type, value: written) in content.entries) {
         if (_kind(type) != kind) continue;
-        return (type, _context.model.resolve(written));
+        final media = _context.model.resolve(written);
+        final dropped = [
+          for (final other in content.keys)
+            if (other != type) other,
+        ];
+        if (dropped.isNotEmpty) {
+          _context.report(
+            .mediaTypeAsBytes,
+            'The $what offers ${content.length} media types; "$type" is '
+            'used and ${_quoted(dropped)} '
+            '${dropped.length == 1 ? 'is' : 'are'} dropped.',
+            location.child('content'),
+            fix:
+                'Offer one media type at the source if the client should '
+                'use another.',
+          );
+        }
+        final schema = media?.schema;
+        if (kind == .bytes && schema != null && !_isPlain(schema)) {
+          _context.report(
+            .mediaTypeAsBytes,
+            'The media type "$type" of the $what is not JSON, a form, text '
+            'or an event stream, so it is sent as bytes and its schema is '
+            'not used.',
+            location.child('content').child(type),
+            fix:
+                'Use a JSON media type at the source if the schema '
+                'matters.',
+          );
+        }
+        return (type, media);
       }
     }
     return (null, null);
   }
 
-  (Schema?, String?) _content(Map<String, RefOr<MediaType>> content) {
-    final (type, media) = _pick(content);
+  static String _quoted(List<String> types) =>
+      [for (final type in types) '"$type"'].join(', ');
+
+  /// Whether [schema] says no more than "bytes": nothing, a boolean or a
+  /// string of any format.
+  bool _isPlain(Schema schema) {
+    final resolved = _context.model.resolveSchema(schema);
+    if (resolved is! SchemaObject) return true;
+    return resolved.types.every((t) => t == .string || t == .nullType) &&
+        resolved.properties.isEmpty &&
+        resolved.allOf.isEmpty &&
+        resolved.oneOf.isEmpty &&
+        resolved.anyOf.isEmpty &&
+        resolved.items == null;
+  }
+
+  (Schema?, String?) _content(
+    Map<String, RefOr<MediaType>> content,
+    SpecLocation location,
+  ) {
+    final (type, media) = _pick(content, location, 'parameter');
     return (media?.schema, type);
   }
 

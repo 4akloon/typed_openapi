@@ -68,15 +68,15 @@ paths:
       'UsersApi.getUsersPostsByUserIdAndPostId',
     ]);
     expect(fixture.codes, [
-      (DiagnosticCode.operationUntagged, '#/paths/~1health/get'),
       (DiagnosticCode.operationMultipleTags, '#/paths/~1pets/post/tags'),
       (DiagnosticCode.tagsMerged, '#/paths/~1pets~1{id}/get/tags/0'),
+      (DiagnosticCode.operationUntagged, '#/paths/~1health/get'),
     ]);
-    expect(fixture.reported[1].fix, '''
+    expect(fixture.reported[0].fix, '''
 Keep one tag at the source, or name the group. Override:
 operations:
   PetController_create:
-    group: pets''');
+    group: Pets''');
   });
 
   test('groups by path or into one class, as configured', () {
@@ -220,6 +220,7 @@ paths:
     expect(fixture.codes, [
       (DiagnosticCode.operationUntagged, '#/paths'),
       (DiagnosticCode.pathVariableUnbound, '#/paths/~1pets~1{id}~1{ID}/get'),
+      (DiagnosticCode.clientEmpty, '#/paths'),
     ]);
   });
 
@@ -264,7 +265,13 @@ components:
         data: {$ref: '#/components/schemas/Pet'}
 ''');
     final ir = build(fixture);
-    expect(fixture.reported, isEmpty);
+    // The text alternative of the request body is dropped.
+    expect(fixture.codes, [
+      (
+        DiagnosticCode.mediaTypeAsBytes,
+        '#/paths/~1pets/post/requestBody/content',
+      ),
+    ]);
     final create = operationJson(ir, 'createPet');
     expect(create['body'], {
       'kind': 'json',
@@ -784,7 +791,8 @@ components:
 openapi: 3.1.0
 info: {title: t, version: "1"}
 paths:
-  /pets:
+  /pets/{id}:
+    parameters: [{name: id, in: path, required: true, schema: {type: string}}]
     get:
       operationId: getPet
       tags: [pets]

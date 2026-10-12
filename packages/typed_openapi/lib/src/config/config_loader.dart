@@ -526,6 +526,7 @@ final class _GenerationReader {
     }
     final suffixes = _suffixes();
     final client = _sources.last.$2;
+    final errorSchema = _string('errors', 'default_schema');
     return GenerationConfig(
       groupTemplate: _groupTemplate() ?? GenerationConfig.defaultGroupTemplate,
       defaultGroup: _defaultGroup() ?? GenerationConfig.defaultDefaultGroup,
@@ -539,7 +540,11 @@ final class _GenerationReader {
       formats: _customTypes('formats'),
       schemas: _customTypes('schemas'),
       triState: _choice('tri_state', TriStateRule.values) ?? .patch,
-      defaultErrorSchema: _string('errors', 'default_schema')?.$1,
+      defaultErrorSchema: errorSchema?.$1,
+      defaultErrorSchemaPointer: errorSchema?.$2,
+      defaultErrorSchemaSpan: errorSchema == null
+          ? null
+          : _reader.spanAt(errorSchema.$2),
       file: _reader.file,
       client: client,
       clientSpan: _reader.spanAt(client),

@@ -225,7 +225,7 @@ components:
       expect(variantsOf(ir, 'U'), ['A', 'B']);
       expect(fixture.codes, [
         (
-          DiagnosticCode.allOfBesideUnionIgnored,
+          DiagnosticCode.compositionPartsIgnored,
           '#/components/schemas/U/properties',
         ),
       ]);
@@ -297,7 +297,7 @@ components:
       expect(fieldsOf(ir, 'M'), ['id(id): int?']);
       expect(fixture.codes, [
         (
-          DiagnosticCode.allOfBesideUnionIgnored,
+          DiagnosticCode.compositionPartsIgnored,
           '#/components/schemas/M/oneOf',
         ),
       ]);
@@ -322,7 +322,7 @@ components:
       expect(variantsOf(ir, 'P'), ['A', 'B']);
       expect(fixture.codes, [
         (
-          DiagnosticCode.allOfBesideUnionIgnored,
+          DiagnosticCode.compositionPartsIgnored,
           '#/components/schemas/P/allOf',
         ),
       ]);

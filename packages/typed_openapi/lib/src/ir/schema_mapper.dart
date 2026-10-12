@@ -758,7 +758,7 @@ final class SchemaMapper {
         );
       } else {
         _context.report(
-          .allOfBesideUnionIgnored,
+          .compositionPartsIgnored,
           'The $key branches of this schema are ignored: it is generated as '
           'a model of its properties and allOf parts.',
           schema.location.child(key),
@@ -792,7 +792,7 @@ final class SchemaMapper {
   ) {
     if (schema.allOf.isNotEmpty) {
       _context.report(
-        .allOfBesideUnionIgnored,
+        .compositionPartsIgnored,
         'The allOf parts of this schema are ignored: it is generated as the '
         'union of its ${kind.name} branches.',
         schema.location.child('allOf'),
@@ -806,7 +806,7 @@ final class SchemaMapper {
     ];
     if (others.isNotEmpty) {
       _context.report(
-        .allOfBesideUnionIgnored,
+        .compositionPartsIgnored,
         'The properties of this schema are ignored: it is generated as the '
         'union of its ${kind.name} branches.',
         schema.location.child('properties'),

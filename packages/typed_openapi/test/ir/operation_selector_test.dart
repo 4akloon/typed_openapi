@@ -95,6 +95,7 @@ components:
       spec,
       generation: GenerationConfig(
         file: 'typed_openapi.yaml',
+        client: JsonPointer.root.child('clients').child('a'),
         include: OperationFilter(
           tags: [
             pattern('pets', '#/clients/a/include/tags/0'),
@@ -123,6 +124,11 @@ components:
           DiagnosticCode.filterMatchesNothing,
           'typed_openapi.yaml',
           '#/clients/a/include/tags/1',
+        ),
+        (
+          DiagnosticCode.clientEmpty,
+          'typed_openapi.yaml',
+          '#/clients/a',
         ),
       ],
     );

@@ -89,6 +89,10 @@ final class IrContext {
 
   late final OverrideSnippet _snippets = OverrideSnippet(model);
 
+  /// `errors.default_schema` when `components.schemas` has the key; else
+  /// null, with TOA562 reported the first time this is read.
+  late final String? defaultErrorSchema = _checkedDefaultErrorSchema();
+
   static const _names = DartNames();
 
   /// The spec model.
@@ -122,6 +126,25 @@ final class IrContext {
       span: documents[at.document]?.spanOf(at.pointer),
       fix: text,
     );
+  }
+
+  String? _checkedDefaultErrorSchema() {
+    final key = config.defaultErrorSchema;
+    if (key == null) return null;
+    if (model.document.components?.schemas.containsKey(key) ?? false) {
+      return key;
+    }
+    final pointer = config.defaultErrorSchemaPointer;
+    diagnostics.report(
+      .defaultErrorSchemaMissing,
+      'errors.default_schema names "$key", which is not in '
+      'components.schemas; the setting is ignored.',
+      file: config.file,
+      pointer: pointer,
+      span: config.defaultErrorSchemaSpan,
+      fix: 'Name a key of components.schemas, or remove the setting.',
+    );
+    return null;
   }
 
   /// Whether an override leaves the property schema written at [location]

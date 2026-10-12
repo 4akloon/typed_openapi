@@ -95,6 +95,8 @@ final class GenerationConfig {
     this.schemas = const {},
     this.triState = .patch,
     this.defaultErrorSchema,
+    this.defaultErrorSchemaPointer,
+    this.defaultErrorSchemaSpan,
     this.file,
     this.client,
     this.clientSpan,
@@ -162,6 +164,12 @@ final class GenerationConfig {
   /// error responses that document none.
   final String? defaultErrorSchema;
 
+  /// Where `errors.default_schema` is in the config file.
+  final JsonPointer? defaultErrorSchemaPointer;
+
+  /// The source range of `errors.default_schema`.
+  final SourceSpan? defaultErrorSchemaSpan;
+
   /// The config file, as diagnostics name it.
   final String? file;
 
@@ -179,7 +187,9 @@ final class GenerationConfig {
   /// not matter. A client with an `include` or `exclude` filter has its own
   /// key, so that the diagnostics about its patterns (TOA557, TOA558) and
   /// about an empty client (TOA563) are reported at its own place in the
-  /// config, not at the place of another client that has the same settings.
+  /// config, not at the place of another client that has the same settings;
+  /// the key has the place of `errors.default_schema` for TOA562 the same
+  /// way.
   String get key => jsonEncode({
     'group': groupTemplate,
     'default_group': defaultGroup,
@@ -194,7 +204,9 @@ final class GenerationConfig {
     'formats': _sorted(formats),
     'schemas': _sorted(schemas),
     'tri_state': triState.name,
-    'default_schema': defaultErrorSchema,
+    'default_schema': defaultErrorSchema == null
+        ? null
+        : [defaultErrorSchema, defaultErrorSchemaPointer?.value],
   });
 
   static Map<String, Object?> _sorted(Map<String, DartTypeOverride> types) => {
