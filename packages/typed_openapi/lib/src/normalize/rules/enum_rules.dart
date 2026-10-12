@@ -20,6 +20,17 @@ final class DedupeEnumValues extends NormalizerRule {
 
   static const _equality = DeepCollectionEquality();
 
+  /// [value] as JSON, except a number that is not finite, which JSON cannot
+  /// carry and `jsonEncode` rejects: it is written as YAML spells it.
+  static String _show(Object? value) => switch (value) {
+    double() when value.isNaN => '.nan',
+    double() when value.isInfinite => value.isNegative ? '-.inf' : '.inf',
+    final List<Object?> list => '[${list.map(_show).join(',')}]',
+    final Map<Object?, Object?> map =>
+      '{${map.entries.map((e) => '${jsonEncode('${e.key}')}:${_show(e.value)}').join(',')}}',
+    _ => jsonEncode(value),
+  };
+
   @override
   String get name => 'dedupe-enum-values';
 
@@ -39,7 +50,7 @@ final class DedupeEnumValues extends NormalizerRule {
       }
       if (repeated.isEmpty) continue;
       final at = schema.location.child('enum');
-      final shown = repeated.map(jsonEncode).toSet().join(', ');
+      final shown = repeated.map(_show).toSet().join(', ');
       yield context.finding(
         .duplicateEnumValue,
         'The enum repeats $shown; the repeats are removed and the first '

@@ -36,6 +36,22 @@ void main() {
       );
     });
 
+    test('a repeated non-finite number is described, not thrown on', () {
+      final run = NormalizerFixture(
+        spec('''
+    Limit: {type: number, enum: [.inf, .inf, 1, [-.inf], [-.inf]]}
+'''),
+      );
+      final d = run.of(DiagnosticCode.duplicateEnumValue).single;
+      expect(d.message, contains('The enum repeats .inf, [-.inf];'));
+      final schemas = run.result.model.document.components!.schemas;
+      expect((schemas['Limit']! as SchemaObject).enumValues, [
+        double.infinity,
+        1,
+        [double.negativeInfinity],
+      ]);
+    });
+
     test('many repeats suggest merged enums; nestjs gets enumName', () {
       final run = NormalizerFixture(
         spec('''
