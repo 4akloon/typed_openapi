@@ -179,7 +179,20 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   (TOA203-TOA206, TOA303; TOA204 only for a format whose element type is
   known), and `TextReporter` indents the lines of a multi-line fix. No
   snippet is offered when the flagged schema node has `$ref` in 3.0, or when
-  a value cannot be written as YAML (non-finite numbers).
+  a value cannot be written as YAML (non-finite numbers). Structure:
+  `OverrideLoader` handles files and delegates to `OverrideDocumentReader`
+  (the sections `operations`, `schemas`) with `OperationOverrideReader`,
+  `SchemaOverrideReader`, `GenerationFieldReader` (`union`, `dartType`),
+  `OverrideFieldReader` (typed access and TOA803) and `KeySuggestion`;
+  `OverrideResolver` delegates to `OperationTargetFinder`,
+  `SchemaTargetFinder` and `TargetConflicts` (TOA806, TOA808) and reports
+  through `OverrideTargetReporter` (the targets are in `override_target.dart`,
+  re-exported by the resolver); `OverrideApplier` delegates to
+  `OperationOverrideApplier`, `SchemaOverrideApplier` (with
+  `ReferenceOverrideApplier`, `TypeOverrideApplier` and `NullableShape`)
+  and `OverrideConflicts`, sharing an `OverrideEditContext` (reporting,
+  `set`); `OverrideEdit` is in `override_edit.dart`, re-exported by the
+  applier.
 - `config/` - `ConfigLoader`, `ProjectConfig`, `ClientConfig`, `Preset`,
   `GenerationConfig` (`naming`, `group_by`, `include`/`exclude`
   (`OperationFilter`, `FilterPattern`), `types`, `tri_state`, `union`
