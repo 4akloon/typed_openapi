@@ -44,7 +44,7 @@ Runtime для клієнтів, згенерованих
   для одного виклику. Заголовки з `CallOptions.headers` мають перевагу над
   заголовками-параметрами операції, але не над її `Content-Type`: тип вмісту
   тіла запиту (наприклад `application/json`) завжди виграє, тож
-  `Content-Type`, заданий там, ігнорується.
+  `Content-Type`, заданий там, ігнорується, коли операція надсилає тіло.
 - Декодер потоку подій (`text/event-stream`) за WHATWG;
   `DioRequestSender.openEvents` повертає `Result`, у `Success` якого лежить
   потік із `SseEvent`, `SseDecodeError` (одна погана подія) і наприкінці

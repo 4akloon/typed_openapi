@@ -44,7 +44,8 @@ code depends on. Dependencies: `dio` and `meta`.
   `extra` and progress callbacks. Headers in `CallOptions.headers` win over
   the operation's header parameters, but not over its `Content-Type`: the
   content type of the request body (`application/json`, for example) always
-  wins, so a `Content-Type` given there is ignored.
+  wins, so a `Content-Type` given there is ignored when the operation
+  sends a body.
 - An event stream (`text/event-stream`) decoder following WHATWG;
   `DioRequestSender.openEvents` returns a `Result` whose `Success` holds a
   stream of `SseEvent`, `SseDecodeError` (one bad event) and, last,
