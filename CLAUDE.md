@@ -258,7 +258,10 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   part headers TOA656; a media type that is an unresolved `$ref` is
   reported by the resolver and leaves the body without schema, encoding and
   parts); a parameter keeps its schema's `default`
-  (`ParameterIr.defaultValue`, documented only); envelopes; errors, with
+  (`ParameterIr.defaultValue`, documented only) by the rule of a model
+  field (`SchemaDefaults`: the schema's own, then the schema it stands for
+  through an `allOf` of one part or a nullable `anyOf`/`oneOf`, then the
+  `$ref` target; a `default` beside a `$ref` counts from 3.1); envelopes; errors, with
   `errors.default_schema` for statuses without a body; header parameters
   `Accept`, `Content-Type` and `Authorization` are dropped as OpenAPI says;
   a parameter style its `in` does not allow falls back to the default,

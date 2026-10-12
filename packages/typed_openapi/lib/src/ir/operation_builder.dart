@@ -9,6 +9,7 @@ import 'names.dart';
 import 'operation_checks.dart';
 import 'parts_builder.dart';
 import 'response_secrets.dart';
+import 'schema_defaults.dart';
 import 'schema_mapper.dart';
 import 'security_builder.dart';
 
@@ -45,6 +46,7 @@ final class OperationBuilder {
       _security = SecurityBuilder(_context),
       _parts = PartsBuilder(_context, _mapper),
       _encoding = BodyEncoding(_context),
+      _defaults = SchemaDefaults(_context),
       _secrets = ResponseSecrets(_context);
 
   static const _names = DartNames();
@@ -85,6 +87,7 @@ final class OperationBuilder {
   final SecurityBuilder _security;
   final PartsBuilder _parts;
   final BodyEncoding _encoding;
+  final SchemaDefaults _defaults;
 
   /// How many operations [build] left out because a success is an event
   /// stream (TOA654).
@@ -347,18 +350,9 @@ final class OperationBuilder {
       contentType: contentType,
       description: parameter.description,
       deprecated: parameter.deprecated,
-      defaultValue: _defaultOf(schema),
+      defaultValue: _defaults.of(schema),
     );
   }
-
-  /// `default` of a parameter's [schema], also through a `$ref`.
-  (Object?,)? _defaultOf(Schema? schema) => switch (schema) {
-    null => null,
-    final schema => switch (_context.model.resolveSchema(schema)) {
-      final SchemaObject target => target.defaultValue,
-      _ => null,
-    },
-  };
 
   RequestBodyIr? _body(Operation operation, String method, String prefix) {
     final written = operation.requestBody;
