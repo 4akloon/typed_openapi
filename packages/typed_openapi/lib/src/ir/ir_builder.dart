@@ -38,7 +38,10 @@ final class IrBuilder {
     final context = IrContext(_diagnostics, spec, client);
     final all = _operations(context);
     final selected = OperationSelector(context).select(all);
-    final directions = DirectionIndex(spec.model);
+    final directions = DirectionIndex(
+      spec.model,
+      isExcluded: context.isPropertyExcluded,
+    );
     for (final entry in selected) {
       directions.addOperation(entry.operation, entry.item, entry.method);
     }

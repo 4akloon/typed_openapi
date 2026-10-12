@@ -43,7 +43,12 @@ final class SchemaMapper {
   /// Creates a mapper for the spec of [_context]; [directions] tells which
   /// schemas are split into response and request models.
   SchemaMapper(this._context, [DirectionIndex? directions])
-    : _directions = directions ?? DirectionIndex(_context.model);
+    : _directions =
+          directions ??
+          DirectionIndex(
+            _context.model,
+            isExcluded: _context.isPropertyExcluded,
+          );
 
   static const _names = DartNames();
   static const _fallbackName = 'Schema';
@@ -81,12 +86,19 @@ final class SchemaMapper {
     bool patchBody = false,
   }) {
     _direction = direction;
-    _patchTarget = patchBody
-        ? _context.model.resolveSchema(schema)?.location
-        : null;
+    _patchTarget = patchBody ? _directions.bodyTarget(schema)?.location : null;
     final type = _map(schema, hint);
     _patchTarget = null;
-    if (patchBody && type is NamedType) _pending[type.id]?.patchBody = true;
+    if (patchBody && type is NamedType) {
+      // A schema that other uses share is not tri-state: only the PATCH
+      // model made for the body, or a schema nothing else uses, is.
+      final pending = _pending[type.id];
+      if (pending != null &&
+          (pending.id.variant == .patch ||
+              _directions.isPatchOnly(type.id.location))) {
+        pending.patchBody = true;
+      }
+    }
     return type;
   }
 
@@ -163,10 +175,10 @@ final class SchemaMapper {
     } else {
       final hint = pending.hint;
       final parent = hint?._parent;
-      final start = parent != null
-          ? _claim(scope, parent)
-          : hint?.prefix ?? _fallbackName;
-      candidate = '$start${hint?.suffix ?? ''}$suffix';
+      // The name of a parent model has its variant suffix already.
+      candidate = parent != null
+          ? '${_claim(scope, parent)}${hint!.suffix}'
+          : '${hint?.prefix ?? _fallbackName}${hint?.suffix ?? ''}$suffix';
     }
     if (candidate == null) {
       final (name, _) = scope.claim(_fallbackName);
@@ -265,7 +277,7 @@ final class SchemaMapper {
       }
     }
     final id = _idOf(schema);
-    final single = _single(schema);
+    final single = singleOf(schema);
     if (single == null && _declares(schema)) {
       if (_replacing) return _nothingDeclared(schema);
       final key = _referenceName(schema.location);
@@ -345,7 +357,7 @@ final class SchemaMapper {
   }
 
   DartType _inline(SchemaObject schema, NameHint hint) {
-    final single = _single(schema);
+    final single = singleOf(schema);
     if (single != null) {
       final type = _map(single, hint);
       return type.withNullable(type.nullable || _isNullable(schema));
@@ -385,7 +397,7 @@ final class SchemaMapper {
   /// The one schema [schema] stands for (R6.3, rules carried from M3): the
   /// part of an `allOf` with one part, or the branch of a `oneOf`/`anyOf`
   /// with one branch besides `null`; null when there is none.
-  Schema? _single(SchemaObject schema) {
+  static Schema? singleOf(SchemaObject schema) {
     if (schema.properties.isNotEmpty || _enumValues(schema) != null) {
       return null;
     }
@@ -533,6 +545,18 @@ final class SchemaMapper {
     for (final MapEntry(key: json, value: property) in properties.entries) {
       final override = _context.overrides.propertyAt(property.location);
       if (override?.exclude ?? false) continue;
+      if (override?.triState != null &&
+          direction == .response &&
+          !_directions.splits(schema)) {
+        _context.reportAtOverride(
+          .overrideUnchanged,
+          'The triState of this override has no effect: the model is used in '
+              'responses only, and only a request model has tri-state fields.',
+          override!,
+          'triState',
+          fix: 'Remove it.',
+        );
+      }
       final resolved = _resolved(property);
       final readOnly =
           (resolved?.readOnly ?? false) ||
@@ -596,7 +620,9 @@ final class SchemaMapper {
               valueType: field.valueType,
               location: field.location,
               required: field.required,
-              triState: field.override?.triState ?? _isTriState(field, pending),
+              triState:
+                  direction != .response &&
+                  (field.override?.triState ?? _isTriState(field, pending)),
               readOnly: field.readOnly,
               writeOnly: field.writeOnly,
               defaultValue: field.defaultValue,

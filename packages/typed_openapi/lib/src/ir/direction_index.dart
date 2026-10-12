@@ -3,6 +3,7 @@ import '../model/schema.dart';
 import '../model/spec_node.dart';
 import '../resolve/spec_model.dart';
 import 'ir.dart';
+import 'schema_mapper.dart';
 
 /// Where each schema is used, requests or responses, to split models by
 /// direction (spec decision 4).
@@ -11,12 +12,19 @@ import 'ir.dart';
 /// a schema inside it, has a `readOnly` or `writeOnly` property and it is
 /// used in both directions. The request body of a PATCH operation is not a
 /// use of its schema here: it is recorded apart, and a PATCH body schema
-/// that is used anywhere else gets a PATCH model of its own.
+/// that is used anywhere else gets a PATCH model of its own. A schema used
+/// only as a PATCH body is a request model.
 final class DirectionIndex {
-  /// Creates an index of [_model] with no uses.
-  DirectionIndex(this._model);
+  /// Creates an index of [_model] with no uses; a property for which
+  /// [isExcluded] is true is not part of any model, so it counts for
+  /// nothing.
+  DirectionIndex(
+    this._model, {
+    bool Function(SpecLocation)? isExcluded,
+  }) : _isExcluded = isExcluded ?? ((_) => false);
 
   final SpecModel _model;
+  final bool Function(SpecLocation) _isExcluded;
   final Map<SpecLocation, Set<ModelDirection>> _uses = {};
   final Set<(SpecLocation, ModelDirection)> _seen = {};
   final Map<SpecLocation, bool> _directional = {};
@@ -61,13 +69,27 @@ final class DirectionIndex {
   /// Records [schema] as a PATCH body; the schemas inside it are used in
   /// requests.
   void _patchBody(Schema? schema) {
-    if (schema == null) return;
-    final resolved = _model.resolveSchema(schema);
-    if (resolved is! SchemaObject) return;
-    _patchBodies.add(resolved.location);
-    for (final child in _children(resolved)) {
+    final target = schema == null ? null : bodyTarget(schema);
+    if (target == null) return;
+    _patchBodies.add(target.location);
+    for (final child in _children(target)) {
       add(child, .request);
     }
+  }
+
+  /// The schema a request body [schema] stands for: the schema a `$ref`
+  /// reaches, and through wrappers the schema of `allOf` with one part or
+  /// of a union with one branch besides `null`; null when it is not an
+  /// object schema.
+  SchemaObject? bodyTarget(Schema schema) {
+    final seen = <SpecLocation>{};
+    var current = _model.resolveSchema(schema);
+    while (current is SchemaObject && seen.add(current.location)) {
+      final single = SchemaMapper.singleOf(current);
+      if (single == null) return current;
+      current = _model.resolveSchema(single);
+    }
+    return null;
   }
 
   /// Records [schema] and every schema inside it as used in [direction].
@@ -90,6 +112,11 @@ final class DirectionIndex {
       _patchBodies.contains(schema.location) &&
       _uses.containsKey(schema.location);
 
+  /// Whether the schema at [location] is a PATCH body and nothing else
+  /// uses it, so its model is the PATCH model.
+  bool isPatchOnly(SpecLocation location) =>
+      _patchBodies.contains(location) && !_uses.containsKey(location);
+
   /// Whether [schema] gets a response model and a request model.
   bool splits(SchemaObject schema) =>
       (_uses[schema.location]?.length ?? 0) > 1 && _isDirectional(schema);
@@ -98,6 +125,7 @@ final class DirectionIndex {
   ModelDirection? onlyDirection(SchemaObject schema) =>
       switch (_uses[schema.location]) {
         final uses? when uses.length == 1 => uses.single,
+        null when isPatchOnly(schema.location) => .request,
         _ => null,
       };
 
@@ -136,7 +164,7 @@ final class DirectionIndex {
   /// Whether a property of [schema] is `readOnly` or `writeOnly`, as
   /// written or through its `$ref`.
   bool _hasDirectionalProperty(SchemaObject schema) {
-    for (final property in schema.properties.values) {
+    for (final property in _properties(schema)) {
       final resolved = _model.resolveSchema(property);
       if (resolved is SchemaObject &&
           (resolved.readOnly || resolved.writeOnly)) {
@@ -150,8 +178,13 @@ final class DirectionIndex {
     return false;
   }
 
-  static List<Schema> _children(SchemaObject schema) => [
-    ...schema.properties.values,
+  Iterable<Schema> _properties(SchemaObject schema) => [
+    for (final property in schema.properties.values)
+      if (!_isExcluded(property.location)) property,
+  ];
+
+  List<Schema> _children(SchemaObject schema) => [
+    ..._properties(schema),
     ?schema.items,
     ...schema.prefixItems,
     ?schema.additionalProperties,
