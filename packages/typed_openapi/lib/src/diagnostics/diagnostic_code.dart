@@ -213,6 +213,22 @@ enum DiagnosticCode {
   /// field; it is ignored.
   unknownOverrideKey('TOA803', 'unknown-override-key', .error),
 
+  /// An override names an operation, a schema, a property, a parameter or a
+  /// response the spec does not have; it is not applied.
+  overrideTargetNotFound('TOA804', 'override-target-not-found', .warning),
+
+  /// An override's address names more than one node, such as an
+  /// `operationId` two operations share; it is not applied.
+  overrideTargetAmbiguous('TOA805', 'override-target-ambiguous', .error),
+
+  /// Two overrides change the same node; neither is applied.
+  overrideConflict('TOA806', 'override-conflict', .error),
+
+  /// An override addressed through an operation changes a node other
+  /// operations may share: a path-level parameter, a `$ref`'d component or
+  /// a node in another file.
+  overrideSharedTarget('TOA808', 'override-shared-target', .info),
+
   /// The configuration file does not exist.
   configNotFound('TOA901', 'config-not-found', .error),
 
