@@ -437,4 +437,42 @@ clients:
       expect(err, contains('No client has a "baseline" in the config.'));
     });
   });
+
+  test('a problem an override introduces names the override', () async {
+    final dir = TempDir();
+    dir.write('api.yaml', '''
+openapi: 3.0.3
+info: {title: api, version: "1"}
+paths: {}
+components:
+  schemas:
+    Pet: {type: object}
+''');
+    dir.write('api.overrides.yaml', 'schemas:\n  Pet: {format: binary}\n');
+    final path = dir.write('typed_openapi.yaml', '''
+clients:
+  api: {input: api.yaml, output: lib/api, overrides: api.overrides.yaml}
+''');
+    final (code, out, _) = await run([
+      'check',
+      '-c',
+      path,
+    ], workingDirectory: dir.path);
+    expect(code, 0);
+    expect(
+      out,
+      contains(
+        '  at #/components/schemas/Pet/type\n'
+        '  fix: ',
+      ),
+    );
+    expect(
+      out,
+      contains(
+        '  related: Introduced by this override.\n'
+        '    --> api.overrides.yaml:2:17\n'
+        '    at #/schemas/Pet/format\n',
+      ),
+    );
+  });
 }

@@ -1,6 +1,8 @@
 import '../config/project_config.dart';
 import '../diagnostics/diagnostic.dart';
 import '../diagnostics/diagnostic_bag.dart';
+import '../diagnostics/diagnostic_code.dart';
+import '../diagnostics/json_pointer.dart';
 import '../load/openapi_version.dart';
 import '../load/spec_document.dart';
 import '../load/spec_loader.dart';
@@ -107,10 +109,12 @@ final class Normalizer {
     final loader = SpecLoader(_diagnostics);
     var root = document;
     var others = const <SpecDocument>[];
+    _OverrideOrigins? origins;
     if (overrides != null && !overrides.isEmpty) {
       final documents = SpecDocuments(loader, root);
+      final read = DiagnosticBag();
       final model = SpecReader(
-        DiagnosticBag(),
+        read,
       ).read(root, version, documents: documents);
       final targets = OverrideResolver(
         _diagnostics,
@@ -122,7 +126,28 @@ final class Normalizer {
         documents,
         version,
       ).edits(targets);
-      final edited = _applyOverrides(documents, overrides, edits);
+      final applied = <OverrideEdit>[];
+      final edited = _applyOverrides(documents, overrides, edits, applied);
+      origins = _OverrideOrigins(
+        overrides,
+        before: [
+          ...read.all,
+          for (final rule in _rules)
+            for (final finding in rule.check(
+              RuleContext(model, documents, version),
+            ))
+              finding.diagnostic,
+        ],
+        changes: [
+          for (final OverrideEdit(:edit, :sources) in applied)
+            for (final (entry, field) in sources)
+              (
+                documents.displayPath(edit.location.document),
+                _parentOf(edit.location.pointer),
+                entry.pointer.child(field),
+              ),
+        ],
+      );
       root = edited[root.uri] ?? root;
       others = [
         for (final loaded in documents.loaded)
@@ -144,10 +169,12 @@ final class Normalizer {
       ];
       final hasEdits = found.any((f) => f.$2.edits.isNotEmpty);
       if (!hasEdits || pass == maxPasses) {
-        scratch.all.forEach(_diagnostics.add);
+        for (final diagnostic in scratch.all) {
+          _diagnostics.add(origins?.attach(diagnostic) ?? diagnostic);
+        }
         final reported = <SpecEdit>[];
         for (final (rule, finding) in found) {
-          _report(rule, finding);
+          _report(rule, finding, origins);
           for (final edit in finding.edits) {
             // An edit proposed twice (a path item shared by several paths)
             // is one fix.
@@ -171,7 +198,7 @@ final class Normalizer {
           if (finding.edits.isNotEmpty) rule,
       };
       for (final (rule, finding) in found) {
-        if (fixing.contains(rule)) _report(rule, finding);
+        if (fixing.contains(rule)) _report(rule, finding, origins);
       }
       final edited = _apply(documents, found);
       root = edited[root.uri] ?? root;
@@ -220,20 +247,26 @@ final class Normalizer {
     };
   }
 
-  /// Applies the override [edits] in order; returns the edited documents by
-  /// URI. An edit that cannot be applied is reported at its override.
+  /// Applies the override [edits] in order and adds the applied ones to
+  /// [applied]; returns the edited documents by URI. An edit that cannot be
+  /// applied is reported at its override.
   Map<Uri, SpecDocument> _applyOverrides(
     SpecDocuments documents,
     OverrideSet overrides,
     List<OverrideEdit> edits,
+    List<OverrideEdit> applied,
   ) {
     final editors = <Uri, TreeEditor>{};
-    for (final OverrideEdit(:edit, :sources) in edits) {
+    for (final override in edits) {
+      final OverrideEdit(:edit, :sources) = override;
       final uri = edit.location.document;
       final document = documents[uri]!;
       final editor = editors[uri] ??= TreeEditor(document.root);
       final problem = editor.apply(edit);
-      if (problem == null) continue;
+      if (problem == null) {
+        applied.add(override);
+        continue;
+      }
       for (final (entry, field) in sources) {
         final at = entry.pointer.child(field);
         _diagnostics.report(
@@ -251,25 +284,27 @@ final class Normalizer {
     };
   }
 
-  void _report(NormalizerRule rule, Finding finding) {
+  void _report(
+    NormalizerRule rule,
+    Finding finding,
+    _OverrideOrigins? origins,
+  ) {
     final d = finding.diagnostic;
-    final hint = switch (preset) {
-      final preset? => rule.hint(d.code, preset),
-      null => null,
-    };
-    _diagnostics.add(
-      hint == null
-          ? d
-          : Diagnostic(
-              code: d.code,
-              severity: d.severity,
-              message: d.message,
-              file: d.file,
-              pointer: d.pointer,
-              span: d.span,
-              fix: d.fix == null ? hint : '${d.fix} $hint',
-            ),
-    );
+    final preset = this.preset;
+    final hint = preset == null ? null : rule.hint(d.code, preset);
+    final hinted = preset == null || hint == null
+        ? d
+        : d.withHints([...d.hints, (preset.name, hint)]);
+    _diagnostics.add(origins?.attach(hinted) ?? hinted);
+  }
+
+  /// The node an edit at [pointer] changes: the object or list it sets a
+  /// member of.
+  static JsonPointer _parentOf(JsonPointer pointer) {
+    final tokens = pointer.tokens;
+    return tokens
+        .take(tokens.isEmpty ? 0 : tokens.length - 1)
+        .fold(JsonPointer.root, (at, token) => at.child(token));
   }
 
   void _notApplied(
@@ -287,5 +322,62 @@ final class Normalizer {
       pointer: pointer,
       span: documents[uri]?.spanOf(pointer),
     );
+  }
+}
+
+/// Which problems of a spec its overrides introduced.
+///
+/// A problem is introduced when the spec as read, before the overrides,
+/// did not have it (same code, file and pointer), and an applied override
+/// changed a member of its node, of a node inside it or of a node around
+/// it.
+final class _OverrideOrigins {
+  _OverrideOrigins(
+    this._overrides, {
+    required List<Diagnostic> before,
+    required this.changes,
+  }) : _before = {for (final d in before) _keyOf(d)};
+
+  final OverrideSet _overrides;
+  final Set<(DiagnosticCode, String?, String?)> _before;
+
+  /// The changed nodes: the file as diagnostics name it, the pointer of the
+  /// node an override set a member of, and the pointer of the override field
+  /// that did.
+  final List<(String, JsonPointer, JsonPointer)> changes;
+
+  /// [diagnostic] with the overrides that introduced it as related
+  /// locations.
+  Diagnostic attach(Diagnostic diagnostic) {
+    final pointer = diagnostic.pointer;
+    if (pointer == null || _before.contains(_keyOf(diagnostic))) {
+      return diagnostic;
+    }
+    final related = [
+      for (final (file, at, field) in changes)
+        if (file == diagnostic.file && _nested(pointer, at))
+          RelatedLocation(
+            message: 'Introduced by this override.',
+            file: _overrides.file,
+            pointer: field,
+            span: _overrides.spanOf(field),
+          ),
+    ];
+    if (related.isEmpty) return diagnostic;
+    return diagnostic.withRelated([...diagnostic.related, ...related]);
+  }
+
+  static (DiagnosticCode, String?, String?) _keyOf(Diagnostic d) =>
+      (d.code, d.file, d.pointer?.value);
+
+  /// Whether one of [a] and [b] is the other or inside it.
+  static bool _nested(JsonPointer a, JsonPointer b) {
+    final x = a.tokens;
+    final y = b.tokens;
+    final length = x.length < y.length ? x.length : y.length;
+    for (var i = 0; i < length; i++) {
+      if (x[i] != y[i]) return false;
+    }
+    return true;
   }
 }

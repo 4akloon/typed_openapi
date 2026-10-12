@@ -13,16 +13,18 @@ import 'severity.dart';
 /// A diagnostic equal to one already in the bag (same code, severity,
 /// message, file, pointer and start position) is ignored: the same region
 /// of a file read twice, for example through two `$ref`s or two clients,
-/// reports each problem once.
+/// reports each problem once. Its preset hints ([Diagnostic.hints]) are
+/// added to the one in the bag, so two clients with different presets keep
+/// both hints.
 ///
 /// Diagnostics a baseline accepts are kept apart ([baselined]): they are
 /// not in [all], [count] or [hasErrors].
 final class DiagnosticBag {
   final List<Diagnostic> _items = [];
   final List<Diagnostic> _baselined = [];
-  final Set<(DiagnosticCode, Severity, String, String?, String?, int?)> _seen =
-      {};
-  final Set<(DiagnosticCode, Severity, String, String?, String?, int?)>
+  final Map<(DiagnosticCode, Severity, String, String?, String?, int?), int>
+  _seen = {};
+  final Map<(DiagnosticCode, Severity, String, String?, String?, int?), int>
   _seenBaselined = {};
 
   /// All diagnostics in the order they were reported.
@@ -42,15 +44,35 @@ final class DiagnosticBag {
   int count(Severity severity) =>
       _items.where((d) => d.severity == severity).length;
 
-  /// Adds an already built [diagnostic], unless an equal one is present.
-  void add(Diagnostic diagnostic) {
-    if (_seen.add(_keyOf(diagnostic))) _items.add(diagnostic);
-  }
+  /// Adds an already built [diagnostic], unless an equal one is present;
+  /// then only its new hints are added to that one.
+  void add(Diagnostic diagnostic) => _add(_items, _seen, diagnostic);
 
-  /// Adds [diagnostic], which a baseline accepts, unless an equal one is
-  /// present.
-  void addBaselined(Diagnostic diagnostic) {
-    if (_seenBaselined.add(_keyOf(diagnostic))) _baselined.add(diagnostic);
+  /// Adds [diagnostic], which a baseline accepts, like [add].
+  void addBaselined(Diagnostic diagnostic) =>
+      _add(_baselined, _seenBaselined, diagnostic);
+
+  static void _add(
+    List<Diagnostic> items,
+    Map<(DiagnosticCode, Severity, String, String?, String?, int?), int> seen,
+    Diagnostic diagnostic,
+  ) {
+    final key = _keyOf(diagnostic);
+    final index = seen[key];
+    if (index == null) {
+      seen[key] = items.length;
+      items.add(diagnostic);
+      return;
+    }
+    final present = items[index];
+    final hints = [
+      ...present.hints,
+      for (final hint in diagnostic.hints)
+        if (!present.hints.contains(hint)) hint,
+    ];
+    if (hints.length != present.hints.length) {
+      items[index] = present.withHints(hints);
+    }
   }
 
   static (DiagnosticCode, Severity, String, String?, String?, int?) _keyOf(

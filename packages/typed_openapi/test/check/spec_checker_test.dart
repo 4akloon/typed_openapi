@@ -538,4 +538,59 @@ clients:
       expect(bag.baselined, isEmpty);
     });
   });
+
+  test('clients with different presets keep both hints on a shared '
+      'finding', () {
+    final dir = TempDir();
+    dir.write('api.yaml', '''
+openapi: 3.0.3
+info: {title: t, version: "1"}
+components: {schemas: {Kind: {type: string, enum: [a, a]}}}
+''');
+    final path = dir.write('typed_openapi.yaml', '''
+clients:
+  a: {input: api.yaml, output: lib/a}
+  b: {input: api.yaml, output: lib/b, preset: nestjs}
+''');
+    final bag = DiagnosticBag();
+    SpecChecker(
+      bag,
+      DisplayPaths(dir.path),
+    ).check(ConfigLoader(bag).load(path)!);
+    final finding = bag.all.single;
+    expect(finding.code, DiagnosticCode.duplicateEnumValue);
+    expect(finding.fix, contains('In NestJS, give the enum its own schema'));
+    expect(finding.fix, isNot(contains('nestjs:')));
+  });
+
+  test('hints of several presets are named by their preset', () {
+    final dir = TempDir();
+    dir.write('api.yaml', '''
+openapi: 3.0.3
+info: {title: t, version: "1"}
+paths:
+  /a: {get: {operationId: same, responses: {'200': {description: ok}}}}
+  /b: {get: {operationId: same, responses: {'200': {description: ok}}}}
+''');
+    final path = dir.write('typed_openapi.yaml', '''
+clients:
+  a: {input: api.yaml, output: lib/a, preset: nestjs}
+  b: {input: api.yaml, output: lib/b, preset: fastapi}
+''');
+    final bag = DiagnosticBag();
+    SpecChecker(
+      bag,
+      DisplayPaths(dir.path),
+    ).check(ConfigLoader(bag).load(path)!);
+    final finding = bag.all.single;
+    expect(finding.code, DiagnosticCode.duplicateOperationId);
+    expect(
+      finding.fix,
+      'Give each operation its own operationId at the source, or override '
+      'the method name of this operation. nestjs: In NestJS, set '
+      '`operationIdFactory` in SwaggerModule.createDocument (the default is '
+      'controllerKey_methodKey). fastapi: In FastAPI, pass '
+      '`generate_unique_id_function` to FastAPI(...).',
+    );
+  });
 }

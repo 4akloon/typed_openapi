@@ -1,6 +1,8 @@
 import 'package:source_span/source_span.dart';
 import 'package:test/test.dart';
+import 'package:typed_openapi/src/diagnostics/diagnostic.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_bag.dart';
+import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
 import 'package:typed_openapi/src/diagnostics/json_pointer.dart';
 import 'package:typed_openapi/src/diagnostics/severity.dart';
 
@@ -69,5 +71,35 @@ void main() {
     expect(bag.count(Severity.error), 1);
     expect(bag.count(Severity.warning), 1);
     expect(bag.count(Severity.info), 0);
+  });
+
+  test('a duplicate adds its new preset hints to the one in the bag', () {
+    const base = Diagnostic(
+      code: DiagnosticCode.duplicateEnumValue,
+      severity: Severity.warning,
+      message: 'Repeats.',
+      file: 'api.yaml',
+      fix: 'Remove it.',
+    );
+    final bag = DiagnosticBag()
+      ..add(base)
+      ..add(base.withHints([('nestjs', 'In NestJS, ...')]));
+    expect(bag.all.single.fix, 'Remove it. In NestJS, ...');
+    bag
+      ..add(
+        base.withHints([
+          ('fastapi', 'In FastAPI, ...'),
+          ('nestjs', 'In NestJS, ...'),
+        ]),
+      )
+      ..add(base);
+    expect(bag.all.single.hints, [
+      ('nestjs', 'In NestJS, ...'),
+      ('fastapi', 'In FastAPI, ...'),
+    ]);
+    expect(
+      bag.all.single.fix,
+      'Remove it. nestjs: In NestJS, ... fastapi: In FastAPI, ...',
+    );
   });
 }

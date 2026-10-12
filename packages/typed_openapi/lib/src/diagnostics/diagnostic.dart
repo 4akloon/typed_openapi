@@ -49,10 +49,11 @@ final class Diagnostic implements Comparable<Diagnostic> {
     this.file,
     this.pointer,
     this.span,
-    this.fix,
+    String? fix,
+    this.hints = const [],
     this.args = const [],
     this.related = const [],
-  });
+  }) : _fix = fix;
 
   /// The stable code from the catalog.
   final DiagnosticCode code;
@@ -72,8 +73,22 @@ final class Diagnostic implements Comparable<Diagnostic> {
   /// The source range in [file], when positions are known.
   final SourceSpan? span;
 
-  /// What to change in the source to fix the finding.
-  final String? fix;
+  final String? _fix;
+
+  /// What to change in the source to fix the finding, followed by the
+  /// [hints]: a single hint as it is, several each after its preset's name
+  /// (`nestjs: ...`).
+  String? get fix {
+    if (hints.isEmpty) return _fix;
+    final texts = hints.length == 1
+        ? [hints.single.$2]
+        : [for (final (preset, text) in hints) '$preset: $text'];
+    return [?_fix, ...texts].join(' ');
+  }
+
+  /// How to fix the finding in the code of a framework: the preset's name
+  /// and the hint, one per preset of the clients that share the finding.
+  final List<(String, String)> hints;
 
   /// Values from the spec that tell this finding from another of the same
   /// code at the same place, such as the name of a missing field; part of
@@ -95,6 +110,34 @@ final class Diagnostic implements Comparable<Diagnostic> {
     return start == null ? null : start.column + 1;
   }
 
+  /// This diagnostic with [related] instead of its own related locations.
+  Diagnostic withRelated(List<RelatedLocation> related) => Diagnostic(
+    code: code,
+    severity: severity,
+    message: message,
+    file: file,
+    pointer: pointer,
+    span: span,
+    fix: _fix,
+    hints: hints,
+    args: args,
+    related: related,
+  );
+
+  /// This diagnostic with [hints] instead of its own.
+  Diagnostic withHints(List<(String, String)> hints) => Diagnostic(
+    code: code,
+    severity: severity,
+    message: message,
+    file: file,
+    pointer: pointer,
+    span: span,
+    fix: _fix,
+    hints: hints,
+    args: args,
+    related: related,
+  );
+
   /// This diagnostic with [severity] instead of its own.
   Diagnostic withSeverity(Severity severity) => Diagnostic(
     code: code,
@@ -103,7 +146,8 @@ final class Diagnostic implements Comparable<Diagnostic> {
     file: file,
     pointer: pointer,
     span: span,
-    fix: fix,
+    fix: _fix,
+    hints: hints,
     args: args,
     related: related,
   );
