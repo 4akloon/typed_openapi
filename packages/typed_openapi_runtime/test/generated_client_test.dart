@@ -102,7 +102,7 @@ void main() {
       expect(
         result,
         isA<DecodeError<Pet, ApiError>>()
-            .having((e) => e.error.pointer, 'pointer', endsWith('/birthday'))
+            .having((e) => e.error.pointer, 'pointer', '/birthday')
             .having((e) => e.error.schema, 'schema', 'Pet')
             .having((e) => e.error.actual, 'actual', 'a date-time')
             .having((e) => e.statusCode, 'statusCode', 200),
@@ -190,6 +190,8 @@ void main() {
     );
   });
 
+  // A compile-time check of R10.7: the API class can be faked through
+  // `implements`.
   test('the API class is mocked with implements', () async {
     final PetsApi api = FakePetsApi();
     expect(

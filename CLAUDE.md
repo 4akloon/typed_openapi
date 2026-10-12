@@ -237,7 +237,7 @@ The only package generated clients depend on (dependencies: `dio`, `meta`).
 Pure Dart, works on the web except SSE with Dio's default browser adapter.
 Generated code is expected to look like `test/helpers/pets_api.dart`
 (illustrative, not a contract); `test/generated_client_test.dart` checks
-that the API composes, including a `implements` fake of a tag class.
+that the API composes, including an `implements` fake of a tag class.
 
 - `json/` - `JsonReader` (strict reads for generated `fromJson`: the only
   widening is int where a number is expected; `null` is an error only in a
@@ -262,9 +262,10 @@ that the API composes, including a `implements` fake of a tag class.
   decoder switches on).
 - `dio/` - `DioRequestSender(dio, {isWeb})` (`send`, `openEvents`; requests
   only through `dio.request`, never mutates the user's Dio, never retries;
-  catches only `DioException` and `JsonDecodeException`, an `Error` reaches
-  the caller; the query is built by the runtime, so interceptors see an
-  empty `queryParameters`), `CallOptions`. `openEvents` needs its stream
+  decoding catches only `DioException` and `JsonDecodeException`,
+  `openEvents` also turns an `Exception` raised while reading a non-stream
+  body into `TransportError`, and an `Error` is never caught; the query is built by the runtime, so interceptors see
+  an empty `queryParameters`), `CallOptions`. `openEvents` needs its stream
   listened to or cancelled; a listener cancel cancels the request.
 - `sse/` - `SseDecoder` (WHATWG, bytes -> `SseMessage`), `SseItemDecoder`
   (-> `SseEvent` / `SseDecodeError` / `SseDisconnected`; data problems are
