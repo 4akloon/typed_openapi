@@ -64,3 +64,35 @@
   `RuleContext`, `Finding`, `SpecEdit`, `EditOperation`, `SpecDocuments`.
 - A region of a spec that several `$ref`s, enclosing nodes or clients reach is
   read once, and an identical diagnostic is reported once.
+- Overrides: `clients.<name>.overrides` names a JSON or YAML file that
+  addresses operations (`operationId` or `METHOD /path`), their parameters
+  (`name` or `in:name`), request body and responses, and schemas of
+  `components.schemas` with their properties. Spec fields (`type`,
+  `format`, `nullable`, `required`, `items`, `additionalProperties`, `enum`,
+  `discriminator`, `$ref`, parameter `required`/`schema`, body and response
+  `contentType`/`schema`) replace the spec's values before the normalizer
+  runs (`null` removes a field; `nullable` follows the document's dialect;
+  in OpenAPI 3.0 a field other than `nullable` or `description` that would
+  sit beside a `$ref` is not written, TOA800: override the referenced schema
+  by name). Generation fields (`name`, `exclude`, `group`, `exhaustive`,
+  `dartType`, `triState`) are checked and kept for the generator. Every
+  entry may have a `reason`, printed in diagnostics about it. An empty file
+  is no overrides. A missing overrides file is TOA801, a directory or an
+  invalid value TOA802, an unknown key the error TOA803 (with "did you
+  mean" for a close known key), an override whose target is gone TOA804
+  (warning), an ambiguous address TOA805, two overrides of one node TOA806,
+  an override the spec already matches TOA807 (info, "can be removed"), and
+  a change through an operation of a node other operations share TOA808
+  (info). An overrides file that cannot be used is an error and the spec is
+  checked without it.
+- The fixes of `double-array`, `format-on-array`, `binary-object`,
+  `contradictory-object-type` and `nullable-enum-one-of` end with the
+  override to copy into the overrides file, when the schema is in
+  `components.schemas` or is one of its properties (`format-on-array` only
+  for a format whose element type is known; none for a schema with `$ref` in
+  OpenAPI 3.0 or a value YAML cannot carry).
+- Programmatic API: `OverrideLoader`, `OverrideSet`, `OverrideEntry`,
+  `OperationOverride`, `ParameterOverride`, `BodyOverride`,
+  `ResponseOverride`, `SchemaOverride`, `PropertyOverride`,
+  `DartTypeOverride`; `Normalizer.normalize` takes `overrides:` and
+  `NormalizedSpec.overrides` returns them.

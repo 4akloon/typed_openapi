@@ -46,6 +46,33 @@ defaults:
   rules: {dedupe-enum-values: false}
 ```
 
+Те, чого нормалізатор знати не може, виправляє файл override-ів — без змін на
+бекенді. Вкажи його в клієнті (`overrides: typed_openapi.overrides.yaml`) і
+адресуй специфікацію операціями та схемами, а не pointer-ами:
+
+```yaml
+operations:
+  getPet:                     # operationId або METHOD /path: 'GET /pets/{id}'
+    parameters:
+      id: {schema: {type: integer, format: int64}}   # path:id, якщо імена збігаються
+    responses:
+      '200': {contentType: application/json}
+schemas:
+  Pet:
+    reason: бекенд надсилає null для тварин без власника
+    properties:
+      owner: {nullable: true}
+      photo: {type: string, format: binary}
+```
+
+Override-и змінюють специфікацію до нормалізатора; `null` прибирає поле.
+Override, ціль якого зникла, дає warning, той, з яким специфікація вже
+збігається, — info, що його можна прибрати, а ключ з одруком — помилку з
+підказкою найближчого відомого ключа. Поля для генератора (`name`, `exclude`,
+`group`, `exhaustive`, `dartType`, `triState`) уже перевіряються і
+запрацюють разом із генерацією коду. Підказки правил, які не
+можуть виправити дефект самі, закінчуються override-ом, який можна скопіювати.
+
 У кожної знахідки є стабільний код (`TOA011`), JSON-pointer на місце в
 специфікації і, якщо парсер зміг визначити позицію, рядок і колонка. Код
 виходу `1` означає хоча б одну помилку, `64` — неправильні аргументи або

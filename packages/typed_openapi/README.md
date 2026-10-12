@@ -45,6 +45,33 @@ defaults:
   rules: {dedupe-enum-values: false}
 ```
 
+Fix what the normalizer cannot know in an overrides file, without touching
+the backend. Name it in the client (`overrides: typed_openapi.overrides.yaml`)
+and address the spec by operations and schemas, not by pointers:
+
+```yaml
+operations:
+  getPet:                     # operationId, or METHOD /path: 'GET /pets/{id}'
+    parameters:
+      id: {schema: {type: integer, format: int64}}   # path:id if names clash
+    responses:
+      '200': {contentType: application/json}
+schemas:
+  Pet:
+    reason: the backend sends null for pets without an owner
+    properties:
+      owner: {nullable: true}
+      photo: {type: string, format: binary}
+```
+
+Overrides change the spec before the normalizer runs; `null` removes a field.
+An override whose target is gone is a warning, one the spec already matches
+is an info that it can be removed, and a misspelled key is an error that
+suggests the closest known one. Fields for the generator (`name`, `exclude`,
+`group`, `exhaustive`, `dartType`, `triState`) are checked now and used once
+code generation lands. Hints of rules that cannot fix a
+defect themselves end with the override to copy.
+
 Every finding has a stable code (`TOA011`), a JSON pointer into the spec and,
 for files the parser could position, a line and column. Exit code `1` means
 at least one error, `64` wrong arguments or an unknown client, `78` the

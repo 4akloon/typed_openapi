@@ -104,8 +104,53 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   without `#` or `/` is a component name, also with a dot, when it is a key
   of `components.schemas`, and a remote value says remote refs are not read;
   `SchemaType.integer.accepts` takes whole-number doubles beyond int64.
+- `overrides/` - `OverrideLoader` reads a client's overrides file (JSON or
+  YAML, through `SpecLoader`) into an immutable `OverrideSet`: operations
+  (`operationId` or `METHOD /path`) with parameters (`name` or `in:name`),
+  `requestBody` and `responses`, schemas (`components.schemas` keys) with
+  their own `properties`. Keys are camelCase. An empty or comment-only file
+  and a null section are no overrides (no diagnostic). Each entry splits
+  into spec fields (`spec`, a map where `null` removes the field) and typed
+  generation fields (`name`, `exclude`, `group`, `exhaustive`, `dartType`,
+  `triState`) that M4 only keeps for the generator (`sse` is not accepted
+  until M10 settles its shape). A missing file is TOA801, a directory or a
+  bad value TOA802 (the value is ignored), an unknown key the error TOA803
+  with "did you mean" for a known key within Levenshtein distance 2.
+  `OverrideResolver` maps entries to model nodes (`OverrideTarget`; a
+  schema follows its `$ref` chain, a property does not, a parameter is the
+  node that defines it): missing node TOA804 (warning), ambiguous address
+  TOA805, two entries for one node TOA806 (none of them applies); a
+  parameter, body or response override with spec fields whose node lies
+  outside its operation (path-level, `$ref`'d, another file) is TOA808
+  (info, names the shared node). Two keys of one operation that reach the
+  same node through `$ref` (responses 400 and 422 sharing a component
+  response) are not an address-level conflict: each gets TOA808, and
+  `OverrideApplier` decides at apply time: the same value is applied once,
+  one field with different values is TOA806 at both and neither applies,
+  different fields both apply (except `contentType` + `schema` on a shared
+  response, which conflict by design). `OverrideApplier` turns spec
+  fields into `SpecEdit`s with set semantics (a value replaces the spec's
+  value, `null` removes it), dialect-aware `nullable` (3.0 `nullable`, 3.1+
+  `null` in `type`; a nullable reference is `allOf` + `nullable` in 3.0 and
+  `anyOf` with `{type: 'null'}` from 3.1; `nullable: true` on an
+  already-nullable reference is TOA807); a field the spec already has is
+  TOA807 (info), and two different edits of one node by different entries
+  are TOA806. In 3.0 a field other than `nullable`/`description` that would
+  sit beside a `$ref` is not written (TOA800 warning: override the
+  referenced schema by name); 3.1+ writes it. `Normalizer.normalize(...,
+  overrides:)` applies the edits once before its passes, so rules see the
+  overridden spec; `NormalizedSpec` carries the `OverrideSet`.
+  `OverrideSnippet` turns a schema location back into an override address
+  and block YAML; rules use it through `RuleContext.withOverride`
+  (TOA203-TOA206, TOA303; TOA204 only for a format whose element type is
+  known), and `TextReporter` indents the lines of a multi-line fix. No
+  snippet is offered when the flagged schema node has `$ref` in 3.0, or when
+  a value cannot be written as YAML (non-finite numbers).
 - `config/` - `ConfigLoader`, `ProjectConfig`, `ClientConfig`, `Preset`.
-- `check/` - `SpecChecker`: config -> load -> version -> `Normalizer`.
+- `check/` - `SpecChecker`: config -> load -> version -> overrides ->
+  `Normalizer`; an overrides file that cannot be used is reported (an
+  error) and the spec is checked without it; `generate` (M9) must skip
+  such a client.
 - `cli/` - `TypedOpenApiCli` (`cli.dart`, owns the `CommandRunner` and maps
   usage errors to exit code 64) and `CheckCommand` (`check_command.dart`,
   options `--config/-c` and `--format`, client names as positional
@@ -120,13 +165,17 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `RefKind`, `OpenApiDocument` and the other OAS objects), the entry points
   `SpecReader`, `SpecModel` and `SpecDocuments`, and the normalizer
   (`Normalizer`, `NormalizedSpec`, `NormalizerRule`, `RuleContext`,
-  `Finding`, `SpecEdit`, `EditOperation`). Not exported: `CheckCommand`, the
+  `Finding`, `SpecEdit`, `EditOperation`) and the overrides file
+  (`OverrideLoader`, `OverrideSet`, `OverrideEntry` and its subclasses,
+  `DartTypeOverride`). Not exported: `CheckCommand`, the
   internals of `parse/` (`OpenApiParser`, `OperationParser`, `SchemaParser`,
   `ObjectReader`, `ParseContext`, `SpecIndex`, `DialectChecker`), `resolve/`
   (`RefTarget`, `RefResolver`), `normalize/` (`TreeEditor`, the rule
-  classes), `YamlComposer` and `load/yaml/`.
+  classes), `overrides/` (`OverrideResolver`, `OverrideApplier`,
+  `OverrideSnippet`), `YamlComposer` and `load/yaml/`.
 
-Data flows loader -> parser -> resolver -> normalizer -> checker, every stage
+Data flows loader -> parser -> resolver -> overrides -> normalizer ->
+checker, every stage
 writing problems into one `DiagnosticBag`; reporters read the bag at the end.
 
 Rules of the pipeline:

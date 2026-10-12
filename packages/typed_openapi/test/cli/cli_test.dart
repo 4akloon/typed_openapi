@@ -85,6 +85,67 @@ clients:
     expect(err, isEmpty);
   });
 
+  test('reports stale, redundant and conflicting overrides', () async {
+    final dir = TempDir();
+    dir.write('api.yaml', '''
+openapi: 3.0.3
+info: {title: api, version: "1"}
+paths:
+  /pets/{id}:
+    get:
+      operationId: getPet
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses: {'200': {description: ok}}
+components:
+  schemas:
+    Pet: {type: object, format: binary}
+''');
+    dir.write('api.overrides.yaml', '''
+operations:
+  getPet: {name: fetchPet}
+  GET /pets/{id}: {name: loadPet}
+  deletePet:
+    reason: removed in v2
+    exclude: true
+schemas:
+  Pet: {type: string, nullable: false}
+''');
+    final path = dir.write('typed_openapi.yaml', '''
+clients:
+  api: {input: api.yaml, output: lib/api, overrides: api.overrides.yaml}
+''');
+    final (code, out, _) = await run(['check', '-c', path]);
+    expect(code, 1);
+    expect(
+      out,
+      'error TOA806 override-conflict: This override and the one at '
+      '#/operations/GET ~1pets~1{id} name the same node '
+      '(#/paths/~1pets~1{id}/get); neither is applied.\n'
+      '  --> api.overrides.yaml:2:11\n'
+      '  at #/operations/getPet\n'
+      '  fix: Merge them into one override.\n'
+      'error TOA806 override-conflict: This override and the one at '
+      '#/operations/getPet name the same node (#/paths/~1pets~1{id}/get); '
+      'neither is applied.\n'
+      '  --> api.overrides.yaml:3:19\n'
+      '  at #/operations/GET ~1pets~1{id}\n'
+      '  fix: Merge them into one override.\n'
+      'warning TOA804 override-target-not-found: No operation has '
+      'operationId "deletePet". The override is not applied. Reason given: '
+      '"removed in v2".\n'
+      '  --> api.overrides.yaml:5:5\n'
+      '  at #/operations/deletePet\n'
+      '  fix: Remove the override, or fix its address.\n'
+      'info TOA807 override-unchanged: The spec already has this '
+      '"nullable"; the override changes nothing and can be removed.\n'
+      '  --> api.overrides.yaml:8:33\n'
+      '  at #/schemas/Pet/nullable\n'
+      '  fix: Remove "nullable" from the override.\n'
+      'errors: 2, warnings: 1, infos: 1\n',
+    );
+  });
+
   test('reports broken references in the spec', () async {
     final dir = TempDir();
     dir.write('api.yaml', r'''
