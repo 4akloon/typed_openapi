@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:test/test.dart';
 import 'package:typed_openapi_runtime/typed_openapi_runtime.dart';
@@ -75,9 +76,28 @@ void main() {
       expect([for (final e in events) e.data], ['x', '�']);
     });
 
+    test('a second BOM is data: it spoils the field name', () async {
+      expect(
+        await decode([
+          [0xEF, 0xBB, 0xBF, 0xEF, 0xBB, 0xBF],
+          'data: a\n\n',
+        ]),
+        isEmpty,
+      );
+    });
+
+    test('CR, an empty chunk and LF are one line ending', () async {
+      final events = await decode(['data: a\r', <int>[], '\n\n']);
+      expect([for (final e in events) e.data], ['a']);
+    });
+
     test('a Stream<Uint8List>, as Dio gives, is accepted', () async {
       final events = await const SseDecoder()
-          .bind(Stream.value(utf8.encode('data: x\n\n')))
+          .bind(
+            Stream<Uint8List>.value(
+              Uint8List.fromList(utf8.encode('data: x\n\n')),
+            ),
+          )
           .toList();
       expect(events.single.data, 'x');
     });
@@ -113,6 +133,24 @@ void main() {
           const Duration(milliseconds: 1500),
           const Duration(milliseconds: 1500),
           const Duration(milliseconds: 1500),
+        ],
+      );
+    });
+
+    test('a retry beyond what a Duration holds is ignored', () async {
+      final events = await decode([
+        'retry: 9223372036854775807\ndata: a\n\n'
+            'retry: 9223372036854776\ndata: b\n\n'
+            'retry: ${'9' * 30}\ndata: c\n\n'
+            'retry: 9223372036854775\ndata: d\n\n',
+      ]);
+      expect(
+        [for (final e in events) e.retry],
+        [
+          null,
+          null,
+          null,
+          const Duration(milliseconds: 9223372036854775),
         ],
       );
     });

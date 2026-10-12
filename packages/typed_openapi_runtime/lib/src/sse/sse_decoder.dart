@@ -38,7 +38,6 @@ final class _SseSink implements EventSink<String> {
   final EventSink<SseMessage> _out;
   final StringBuffer _line = StringBuffer();
   final StringBuffer _data = StringBuffer();
-  bool _started = false;
   bool _afterCr = false;
   bool _hasData = false;
   String _eventType = '';
@@ -47,11 +46,9 @@ final class _SseSink implements EventSink<String> {
 
   @override
   void add(String chunk) {
+    // The Utf8Decoder in bind has already stripped a leading BOM; a second
+    // U+FEFF is data (it becomes part of the field name).
     var start = 0;
-    if (!_started && chunk.isNotEmpty) {
-      _started = true;
-      if (chunk.codeUnitAt(0) == 0xFEFF) start = 1;
-    }
     for (var i = start; i < chunk.length; i++) {
       final unit = chunk.codeUnitAt(i);
       if (unit == 0x0A && _afterCr) {
@@ -96,7 +93,7 @@ final class _SseSink implements EventSink<String> {
       case 'id' when !value.contains('\u0000'):
         _lastEventId = value;
       case 'retry' when _digits.hasMatch(value):
-        if (int.tryParse(value) case final millis?) {
+        if (int.tryParse(value) case final millis? when millis <= _maxRetry) {
           _retry = Duration(milliseconds: millis);
         }
     }
@@ -120,6 +117,9 @@ final class _SseSink implements EventSink<String> {
     _hasData = false;
     _eventType = '';
   }
+
+  /// The most milliseconds a [Duration] holds (its microseconds are an int64).
+  static const int _maxRetry = 9223372036854775;
 
   static final RegExp _digits = RegExp(r'^[0-9]+$');
 }
