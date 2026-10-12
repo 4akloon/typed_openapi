@@ -69,7 +69,10 @@ An override whose target is gone is a warning, one the spec already matches
 is an info that it can be removed, and a misspelled key is an error that
 suggests the closest known one. Fields for the generator (`name`, `exclude`,
 `group`, `exhaustive`, `dartType`, `triState`) name, leave out, group and
-type what is generated. Hints of rules that cannot fix a defect themselves
+type what is generated. A `group` is written in UpperCamelCase like the
+name of a class (`pet-store` is used as `PetStore`); a `name` of a method,
+argument or schema must be a valid Dart name, otherwise `TOA560` says which
+name is used instead. Hints of rules that cannot fix a defect themselves
 end with the override to copy.
 
 `check` also works out what will be generated: names, groups and Dart types.

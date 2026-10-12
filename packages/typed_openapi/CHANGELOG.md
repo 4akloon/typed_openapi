@@ -63,7 +63,8 @@
   - TOA561 media-type-as-bytes (info): a body whose media type is not JSON, a
     form, `multipart/form-data`, `text/*` or `text/event-stream` is bytes
     and its schema is not used; also names the media types of an operation
-    that are dropped for the chosen one.
+    that are dropped for the chosen one (variants of the chosen media type
+    and other JSON types are not reported).
   - TOA562 default-error-schema-missing (warning): `errors.default_schema` is
     not a key of `components.schemas`; the setting is ignored.
   - TOA563 client-empty (warning): no operation of the client is generated
@@ -76,8 +77,9 @@
   `naming.operation_prefix` is removed only from the start of an
   `operationId`, and not when its match is empty.
 - Hidden `typed_openapi ir [client...]` prints the IR as JSON for debugging;
-  its diagnostics go to stderr as text and its exit code is the one `check`
-  gives. Its format may change in any release.
+  its errors and warnings go to stderr as text, the infos are only counted,
+  and its exit code is the one `check` gives. Its format may change in any
+  release.
 - `typed_openapi check`: reads every client from `typed_openapi.yaml`, loads
   its spec (JSON or YAML) with source positions, detects the OpenAPI version
   and reports diagnostics with stable codes and JSON pointers, as text or JSON.

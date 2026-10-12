@@ -190,7 +190,9 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `checkedOverrideName` validates an override name, TOA560, and
   `checkLossyName` reports letters a name lost, TOA559; `defaultErrorSchema`
   is `errors.default_schema` if `components.schemas` has the key, else
-  TOA562), `SchemaMapper` (types, models, enums, unions, `allOf` merge,
+  TOA562), `SchemaShapes` (shape questions the mapper and `DirectionIndex`
+  share: null-only, enum values, the one schema a wrapper stands for),
+  `SchemaMapper` (types, models, enums, unions, `allOf` merge,
   single-schema collapse, custom types; declarations are created when first
   reached, so only reachable schemas exist, and named at the end: override
   names, then component keys, then inline names by depth. A declaration is
@@ -208,13 +210,16 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `exclude` wins, TOA558, a pattern that matches nothing is TOA557; `*` is
   one path segment, `**` any number; `operationId` filters match the raw
   id; tags are case-sensitive; overrides' `exclude`), `OperationBuilder`
-  (parameters in location order and then spec order; a body is JSON first,
-  then multipart, form, text, event stream; any other media type is bytes
-  (`Uint8List`) without its schema and the media types that are dropped are
-  named, TOA561; envelopes; errors, with `errors.default_schema` for
-  statuses without a body) and `IrBuilder` (operations written as a `$ref`
-  are skipped (TOA107); groups by tag, path or one class, with an override
-  `group` and TOA553-TOA555; method names, override names first, then
+  (parameters in location order and then spec order, the names overrides give
+  claimed first; a body is JSON first, then multipart, form, text, event
+  stream; any other media type is bytes (`Uint8List`) without its schema and
+  the media types that are dropped are named, TOA561, except variants of the
+  chosen type and other JSON types; envelopes; errors, with
+  `errors.default_schema` for statuses without a body) and `IrBuilder`
+  (operations written as a `$ref` are skipped (TOA107); groups by tag, path
+  or one class, with an override `group` (UpperCamelCase, or a value that
+  differs only by case or separators) and TOA553-TOA555; method names,
+  override names first, then
   `operationId` without the `operation_prefix`, then the path; TOA563 when
   no operation is generated, at the config client if filters left some
   out, else at `#/paths`; then everything above). `IrJson` dumps an IR; the
@@ -248,10 +253,11 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `--strict-baseline`, client names as positional arguments) and
   `BaselineCommand` (`baseline_command.dart`, subcommands `create` and
   `prune`) and the hidden `IrCommand` (`ir_command.dart`, prints the IR of
-  clients as JSON alone on stdout; the diagnostics of the run go to stderr as
-  text, a client with no IR is named there, and the exit code is the one
-  `check` gives); `bin/typed_openapi.dart` only calls
-  `TypedOpenApiCli().run(args)` and sets `exitCode`.
+  clients as JSON alone on stdout; the errors and warnings of the run go to
+  stderr as text with the count of the infos, a client with no IR is named
+  there, and the exit code is the one `check` gives);
+  `bin/typed_openapi.dart` only calls `TypedOpenApiCli().run(args)` and sets
+  `exitCode`.
 - `lib/typed_openapi.dart` exports the public API, each with a `show` list:
   `SpecChecker`, `ClientCheck`, `TypedOpenApiCli`, `ConfigLoader`,
   `ClientConfig`, `Preset`, `ProjectConfig`, `GenerationConfig`, `GroupBy`,
@@ -275,8 +281,9 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   (`RefTarget`, `RefResolver`), `normalize/` (`TreeEditor`, the rule
   classes), `overrides/` (`OverrideResolver`, `OverrideApplier`,
   `OverrideSnippet`), `ir/` internals (`IrContext`, `IrOverrides`,
-  `SchemaMapper`, `NameHint`, `DirectionIndex`, `OperationSelector`,
-  `OperationBuilder`, `SpecOperation`, `DartNames`, `NameScope`),
+  `SchemaMapper`, `SchemaShapes`, `NameHint`, `DirectionIndex`,
+  `OperationSelector`, `OperationBuilder`, `SpecOperation`, `DartNames`,
+  `NameScope`),
   `IrCommand`, `YamlComposer` and `load/yaml/`.
 
 Data flows loader -> parser -> resolver -> overrides -> normalizer -> IR
