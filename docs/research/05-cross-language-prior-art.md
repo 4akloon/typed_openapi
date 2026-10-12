@@ -1,295 +1,295 @@
-# 05. Prior art з інших мов і комерційних SDK-генераторів
+# 05. Prior art from other languages and commercial SDK generators
 
-Дата: 2026-10-11. Обсяг: конкретні патерни, які можна скопіювати, для R2, R3, R4, R5, R6.2/R6.4, R7, R8, R9, R10.5/R10.8, R11, R12, R13.1 і R14. Це не загальний огляд інструментів. Нормалізатор OpenAPI Generator тут згадано лише коротко, бо його розбирає окремий документ.
+Date: 2026-10-11. Scope: concrete patterns that can be copied, for R2, R3, R4, R5, R6.2/R6.4, R7, R8, R9, R10.5/R10.8, R11, R12, R13.1 and R14. This is not a general overview of tools. The OpenAPI Generator normalizer is mentioned here only briefly, because a separate document covers it.
 
-Метод: офіційні документи, README і вихідний код (через `gh api`). Кожне твердження має посилання. Якщо щось не вдалося перевірити, це сказано прямо. Позначки: **✅ взяти**, **⚠️ адаптувати**, **❌ уникати**.
-
----
-
-## 0. Коротко: 15 найцінніших патернів
-
-1. **Каталог діагностик Stainless** (R2.2). Код має форму `Категорія/Назва`, наприклад `Schema/ArrayMissingItems` чи `Name/Collision`. Рівнів чотири: Fatal, Error, Warning, Note. Текст повідомлення — шаблон із параметрами і порадою, що робити. Ігнорувати можна в конфігу: `diagnostics.ignored: {код: [{location, reason}]}`.
-2. **Відбиток (fingerprint) з oasdiff** (R2.3, R14). Рахується як `SHA256("{id}:{operation}:{path}:{args}")[:12]`. Текст повідомлення в хеш не входить, тому відбиток — найкращий ключ для baseline.
-3. **Масові придушення ESLint** (R2.3, ratchet). Файл має форму «файл → правило → count». Нові порушення ламають збірку. Якщо придушення більше не спрацьовує, процес завершується з ненульовим кодом і радить `--prune-suppressions`.
-4. **`Transform/Useless` у Stainless і «does nothing» / «did not match any targets» у Speakeasy** (R3.2). Override, що нічого не змінив або нічого не знайшов, дає окрему діагностику.
-5. **`strict: true` для overlay в oapi-codegen** (R3.2/R3.3). Режим увімкнено за замовчуванням, він «підсвічує дії, які нічого не змінюють».
-6. **Трансформації Stainless з обов'язковим `reason`** (R3). Є операції `update`, `append`, `merge`, `remove`, `copy` і `move`. `matches_schema` знаходить усі схеми, глибоко рівні шаблону, і замінює їх на `$ref`. Це дедуплікація «з коробки».
-7. **Фільтри `GET /path` з регулярними виразами в hey-api і `#METHOD` у Kiota** (R4). `exclude` має пріоритет. Схеми-сироти прибираються автоматично, щойно задано будь-який фільтр.
-8. **Відкриті enum: `x-speakeasy-unknown-values` / `forwardCompatibleEnumsByDefault` у Speakeasy і `Known`/`Value._UNKNOWN` у Stainless Java** (R8). Сире значення зберігається, enum з одним значенням лишаються закритими.
-9. **`OptNil[T]` в ogen з явною таблицею «required × nullable → поведінка декодера»** (R6.1/R7). Поруч `Unset` в openapi-python-client, `Omit` у Stainless Python і `JsonField` (missing/null/value) у Stainless Java.
-10. **`defaultMapping` у дискримінаторі OAS 3.2** (R9). Це стандартний спосіб задати запасний варіант для невідомого або відсутнього значення дискримінатора. Speakeasy повертає `{type: "UNKNOWN", raw}`.
-11. **`undocumented(statusCode:, payload)` у swift-openapi-generator і `Error<E>` у progenitor** (R11). Транспортні збої, задокументовані помилки, помилки декодування і незадокументовані відповіді — окремі варіанти.
-12. **Таблиця обробників `streaming.on_event` у Stainless** (R12). Обробники `event_type`, `data_starts_with` і `kind: fallthrough` мають дії `yield | done | break | error`. Fern додає `resumable` (Last-Event-ID, `retry:`, ліміт 5 спроб із скиданням) і `terminator`.
-13. **FastAPI вже видає `itemSchema` для `text/event-stream`, хоча документ має `openapi: 3.1.0`** (R1.4/R12). Нормалізатор має приймати ключ із 3.2 у документах 3.0 і 3.1.
-14. **Lock-файли Kiota і Speakeasy** (R13.1/R14). Зберігають хеш опису, хеш конфігу і версію генератора. **Editions у Stainless** — версіоновані набори змін виходу, які ламають сумісність (стосується R15.4).
-15. **`--fail-on` і `--severity-levels` в oasdiff** (R14). Перевірки враховують напрям даних (запит чи відповідь). Для Dart API є готовий `dart_apitool diff`.
+Method: official documentation, READMEs and source code (via gh api). Every claim has a reference. Where something could not be verified, this is stated directly. Markers: **✅ take**, **⚠️ adapt**, **❌ avoid**.
 
 ---
 
-## R2. Нормалізатор, діагностика, baseline, режим lint
+## 0. In brief: the 15 most valuable patterns
 
-### Як це роблять інші
+1. **Stainless diagnostics catalog** (R2.2). The code has the form `Category/Name`, for example `Schema/ArrayMissingItems` or `Name/Collision`. There are four levels: Fatal, Error, Warning, Note. The message text is a template with parameters and advice on what to do. It can be ignored in the config: `diagnostics.ignored: {code: [{location, reason}]}`.
+2. **Fingerprint from oasdiff** (R2.3, R14). It is computed as `SHA256("{id}:{operation}:{path}:{args}")[:12]`. The message text is not part of the hash, so the fingerprint is the best key for a baseline.
+3. **ESLint bulk suppressions** (R2.3, ratchet). The file has the form "file → rule → count". New violations break the build. If a suppression no longer triggers, the process exits with a non-zero code and recommends `--prune-suppressions`.
+4. **`Transform/Useless` in Stainless and "does nothing" / "did not match any targets" in Speakeasy** (R3.2). An override that changed nothing or matched nothing produces a separate diagnostic.
+5. **`strict: true` for the overlay in oapi-codegen** (R3.2/R3.3). The mode is on by default; it "highlights actions that change nothing".
+6. **Stainless transformations with a mandatory `reason`** (R3). The operations are `update`, `append`, `merge`, `remove`, `copy` and `move`. `matches_schema` finds all schemas deeply equal to the template and replaces them with `$ref`. This is deduplication out of the box.
+7. **Filters `GET /path` with regular expressions in hey-api and `#METHOD` in Kiota** (R4). `exclude` takes precedence. Orphan schemas are removed automatically as soon as any filter is set.
+8. **Open enums: `x-speakeasy-unknown-values` / `forwardCompatibleEnumsByDefault` in Speakeasy and `Known`/`Value._UNKNOWN` in Stainless Java** (R8). The raw value is kept, while enums with a single value stay closed.
+9. **`OptNil[T]` in ogen with an explicit table "required × nullable → decoder behavior"** (R6.1/R7). Alongside it: `Unset` in openapi-python-client, `Omit` in Stainless Python and `JsonField` (missing/null/value) in Stainless Java.
+10. **`defaultMapping` in the discriminator of OAS 3.2** (R9). It is the standard way to set a fallback variant for an unknown or missing discriminator value. Speakeasy returns `{type: "UNKNOWN", raw}`.
+11. **`undocumented(statusCode:, payload)` in swift-openapi-generator and `Error<E>` in progenitor** (R11). Transport failures, documented errors, decoding errors and undocumented responses are separate variants.
+12. **Handler table `streaming.on_event` in Stainless** (R12). The handlers `event_type`, `data_starts_with` and `kind: fallthrough` have actions `yield | done | break | error`. Fern adds `resumable` (Last-Event-ID, `retry:`, a limit of 5 attempts with reset) and `terminator`.
+13. **FastAPI already emits `itemSchema` for `text/event-stream`, although the document has `openapi: 3.1.0`** (R1.4/R12). The normalizer must accept a 3.2 key in 3.0 and 3.1 documents.
+14. **Lock files of Kiota and Speakeasy** (R13.1/R14). They store the hash of the description, the hash of the config and the generator version. **Editions in Stainless** are versioned sets of output changes that break compatibility (relevant to R15.4).
+15. **`--fail-on` and `--severity-levels` in oasdiff** (R14). The checks take into account the direction of the data (request or response). For Dart APIs there is a ready-made `dart_apitool diff`.
 
-**Stainless: каталог діагностик.** Довідник [Generator diagnostics](https://www.stainless.com/docs/reference/diagnostics/) — найближчий аналог того, чого вимагає R2.2.
-- Код має форму `Категорія/Назва`. Категорії: `Schema`, `Name`, `Endpoint`, `Method`, `Parameter`, `Pagination`, `Streaming`, `Transform`, `OAS`, `Reference` і окремо мовні (`Go/…`, `Java/…`). Приклади: `Schema/ArrayMissingItems`, `Schema/EnumDuplicateMembers`, `Schema/RequiredPropertyNotDefined`, `Schema/IsAmbiguous`, `Parameter/PathTemplateVariableMissing`, `Operation/PathTemplateVariableMissingParameter`, `Name/Collision`, `Transform/Useless`.
-- Рівні прив'язані до процесу релізу: 💀 Fatal (генерація неможлива), ❌ Error («усунути до 0.0.1»), ⚠️ Warning («до 1.0.0»), ✍️ Note («розглянути до 1.0.0»).
-- Повідомлення — шаблон із параметрами (`{oas_path}`, `{endpoint}`, `{fallback_name}`), і кожне каже, як виправити. Приклад `Schema/IsAmbiguous`: «у схеми немає `type`, тому трактуємо її як `unknown`… якщо вона справді приймає будь-що, додайте `x-stainless-any: true`… для багатьох таких схем застосуйте `update`-трансформацію з `matches_schema`». Діагностика пропонує конкретну дію, як того вимагає R2.5.
-- Придушення живе в конфігу ([DiagnosticsConfig](https://www.stainless.com/docs/reference/config/)): `diagnostics.ignored: Record<код, true | Array<{location, reason} | {target: мова, reason}>>`. Ігнорувати можна або все, або окремі місця, і кожне місце має обов'язковий `reason`.
-- Є [Language Server](https://www.stainless.com/docs/tools/stainless-language-server/), тож діагностики видно прямо в редакторі.
+---
 
-**Speakeasy: lint-правила з категоріями** ([linting](https://www.speakeasy.com/docs/sdks/prep-openapi/linting)).
-- ID у kebab-case з префіксом категорії: `generator-*` (генерація SDK), `semantic-*`, `style-*`, `oas3-*`, `owasp-*`. Приклади: `generator-duplicate-schema-name`, `generator-duplicate-path-params`, `generator-validate-enums`, `generator-duplicate-inline-schemas`.
-- У `.speakeasy/lint.yaml` визначаються ruleset-и з `extends`. Правило перевизначається через `id`, `severity: error|warn|hint`, `disabled: true` і `match` (регулярний вираз по тексту повідомлення).
-- Ruleset **`speakeasy-generation`** (32 правила, з них 26 `generator-*`) завжди застосовується перед генерацією, і перевизначити його не можна. Тобто частина правил принципово не знижується.
-- Механізму baseline немає.
+## R2. Normalizer, diagnostics, baseline, lint mode
 
-**Kiota: іменовані правила валідації** ([using](https://learn.microsoft.com/en-us/openapi/kiota/using)).
-- Правила: `DivergentResponseSchema`, `GetWithBody`, `InconsistentTypeFormat`, `KnownAndNotSupportedFormats`, `MissingDiscriminator`, `MultipleServerEntries`, `NoContentWithBody`, `NoServerEntry`, `UrlFormEncodedComplex`.
-- Усі видають warning і вимикаються за назвою: `--disable-validation-rules NoServerEntry` або `all`.
+### How others do it
 
-**OpenAPI Generator: нормалізатор** ([customization.md](https://github.com/OpenAPITools/openapi-generator/blob/master/docs/customization.md)). Іменовані правила, кожне вмикається окремо через `--openapi-normalizer RULE=true`: `REF_AS_PARENT_IN_ALLOF`, `SIMPLIFY_ONEOF_ANYOF`, `SIMPLIFY_BOOLEAN_ENUM`, `FIX_DUPLICATED_OPERATIONID`, `REMOVE_X_INTERNAL`, `FILTER` і інші. Детальний розбір — в окремому документі.
+**Stainless: diagnostics catalog.** The [Generator diagnostics](https://www.stainless.com/docs/reference/diagnostics/) reference is the closest analogue to what R2.2 requires.
+- The code has the form `Category/Name`. Categories: `Schema`, `Name`, `Endpoint`, `Method`, `Parameter`, `Pagination`, `Streaming`, `Transform`, `OAS`, `Reference`, and, separately, language ones (`Go/…`, `Java/…`). Examples: `Schema/ArrayMissingItems`, `Schema/EnumDuplicateMembers`, `Schema/RequiredPropertyNotDefined`, `Schema/IsAmbiguous`, `Parameter/PathTemplateVariableMissing`, `Operation/PathTemplateVariableMissingParameter`, `Name/Collision`, `Transform/Useless`.
+- Levels are tied to the release process: 💀 Fatal (generation impossible), ❌ Error ("fix before 0.0.1"), ⚠️ Warning ("before 1.0.0"), ✍️ Note ("consider before 1.0.0").
+- Messages are templates with parameters (`{oas_path}`, `{endpoint}`, `{fallback_name}`), and each says how to fix the problem. Example `Schema/IsAmbiguous`: "the schema has no `type`, so we treat it as `unknown`… if it really accepts anything, add `x-stainless-any: true`… for many such schemas apply an `update` transformation with `matches_schema`". The diagnostic proposes a concrete action, as R2.5 requires.
+- Suppression lives in the config ([DiagnosticsConfig](https://www.stainless.com/docs/reference/config/)): `diagnostics.ignored: Record<code, true | Array<{location, reason} | {target: language, reason}>>`. You can ignore either everything or individual locations, and each location has a mandatory `reason`.
+- There is a [Language Server](https://www.stainless.com/docs/tools/stainless-language-server/), so diagnostics are visible right in the editor.
+
+**Speakeasy: lint rules with categories** ([linting](https://www.speakeasy.com/docs/sdks/prep-openapi/linting)).
+- IDs are in kebab-case with a category prefix: `generator-*` (SDK generation), `semantic-*`, `style-*`, `oas3-*`, `owasp-*`. Examples: `generator-duplicate-schema-name`, `generator-duplicate-path-params`, `generator-validate-enums`, `generator-duplicate-inline-schemas`.
+- Rulesets are defined in `.speakeasy/lint.yaml` with `extends`. A rule is overridden via `id`, `severity: error|warn|hint`, `disabled: true` and `match` (a regular expression over the message text).
+- The **`speakeasy-generation`** ruleset (32 rules, 26 of them `generator-*`) is always applied before generation, and it cannot be overridden. That is, some rules are by design never lowered.
+- There is no baseline mechanism.
+
+**Kiota: named validation rules** ([using](https://learn.microsoft.com/en-us/openapi/kiota/using)).
+- Rules: `DivergentResponseSchema`, `GetWithBody`, `InconsistentTypeFormat`, `KnownAndNotSupportedFormats`, `MissingDiscriminator`, `MultipleServerEntries`, `NoContentWithBody`, `NoServerEntry`, `UrlFormEncodedComplex`.
+- All of them emit a warning and are disabled by name: `--disable-validation-rules NoServerEntry` or `all`.
+
+**OpenAPI Generator: normalizer** ([customization.md](https://github.com/OpenAPITools/openapi-generator/blob/master/docs/customization.md)). Named rules, each enabled separately via `--openapi-normalizer RULE=true`: `REF_AS_PARENT_IN_ALLOF`, `SIMPLIFY_ONEOF_ANYOF`, `SIMPLIFY_BOOLEAN_ENUM`, `FIX_DUPLICATED_OPERATIONID`, `REMOVE_X_INTERNAL`, `FILTER` and others. A detailed analysis is in a separate document.
 
 **Redocly CLI** ([lint](https://redocly.com/docs/cli/commands/lint), [rules](https://redocly.com/docs/cli/configuration/reference/rules)).
-- Рівні: `error | warn | off`. Вбудовані правила мають прості назви (`security-defined`), налаштовувані — префікс `rule/…`, правила плагінів — `plugin/rule`.
-- JSON-вивід містить `location[].pointer` (JSON Pointer), `source.ref`, `start`/`end` з `line`/`col` і `reportOnKey`.
-- **`--generate-ignore-file`** створює `.redocly.lint-ignore.yaml`. Це по суті baseline зі структурою «файл → ruleId → [JSON pointers]»:
+- Levels: `error | warn | off`. Built-in rules have simple names (`security-defined`), configurable ones use the prefix `rule/…`, and plugin rules are `plugin/rule`.
+- The JSON output contains `location[].pointer` (JSON Pointer), `source.ref`, `start`/`end` with `line`/`col`, and `reportOnKey`.
+- **`--generate-ignore-file`** creates `.redocly.lint-ignore.yaml`. In essence, this is a baseline with the structure "file → ruleId → [JSON pointers]":
   ```yaml
   museum-with-errors.yaml:
     operation-operationId:
       - '#/paths/~1museum-hours/get/operationId'
   ```
-- Проігноровані проблеми все одно рахуються, і вивід показує їхню кількість.
-- Формати: `codeframe`, `stylish`, `json`, `checkstyle`, `codeclimate`, `github-actions`, `markdown`, `summary`, `junit`.
+- Ignored problems are still counted, and the output shows how many there are.
+- Formats: `codeframe`, `stylish`, `json`, `checkstyle`, `codeclimate`, `github-actions`, `markdown`, `summary`, `junit`.
 
 **Spectral** ([overrides](https://github.com/stoplightio/spectral/blob/develop/docs/guides/4d-overrides.md), [CLI](https://github.com/stoplightio/spectral/blob/develop/docs/guides/2-cli.md)).
-- Правило можна вимкнути в конкретному місці: `overrides: [{files: ["legacy/**/*.oas.json#/paths/~1Pets~1%7BpetId%7D/get/parameters/0"], rules: {rule: "off"}}]`. Це glob файлу плюс JSON Pointer.
-- Застереження: overrides працюють лише для кореневих документів, а не для зовнішніх `$ref`.
-- `--fail-severity`. Формати включають `sarif`, `github-actions`, `junit`, `gitlab`.
+- A rule can be turned off at a specific location: `overrides: [{files: ["legacy/**/*.oas.json#/paths/~1Pets~1%7BpetId%7D/get/parameters/0"], rules: {rule: "off"}}]`. This is a file glob plus a JSON Pointer.
+- Caveat: overrides work only for root documents, not for external `$ref`s.
+- `--fail-severity`. Formats include `sarif`, `github-actions`, `junit`, `gitlab`.
 
 **vacuum** ([lint](https://quobix.com/vacuum/commands/lint/), [ignoring](https://quobix.com/vacuum/ignoring/)).
-- `--ignore-file` — YAML у формі «rule id → [точні шляхи результатів або вирази JSONPath]». Генерується командою `vacuum generate-ignorefile`.
-- Вбудоване придушення `x-lint-ignore: rule-id | [ids]` діє на об'єкт і все його піддерево.
+- `--ignore-file` is YAML in the form "rule id → [exact result paths or JSONPath expressions]". It is generated by the command `vacuum generate-ignorefile`.
+- The built-in suppression `x-lint-ignore: rule-id | [ids]` applies to the object and its entire subtree.
 - `--fail-severity error|warn|info|hint|none`.
 
-**Zally** ([README](https://github.com/zalando/zally), [rules.md](https://github.com/zalando/zally/blob/main/server/rules.md)). ID правил мають форму `M008`, `S005`, `H001`. Є вбудоване придушення `x-zally-ignore`, але є й окреме правило H002, яке нагадує, що ним варто користуватися «помірно, для тимчасових винятків».
+**Zally** ([README](https://github.com/zalando/zally), [rules.md](https://github.com/zalando/zally/blob/main/server/rules.md)). Rule IDs have the form `M008`, `S005`, `H001`. There is an inline suppression `x-zally-ignore`, but there is also a separate rule H002, which reminds users to use it "sparingly, for temporary exceptions".
 
-**Ratchet у лінтерах коду** — найкращий прототип для R2.3:
-- **ESLint, bulk suppressions** (v9.24, [документація](https://eslint.org/docs/latest/use/suppressions), [анонс](https://eslint.org/blog/2025/04/introducing-bulk-suppressions/)).
-  - `eslint --suppress-all` записує `eslint-suppressions.json` у формі «файл → правило → `{count}`».
-  - `count` — це стеля: якщо порушень стало більше, звітуються **всі**, а не лише нові.
-  - Якщо придушення більше не спрацьовують, процес завершується з ненульовим кодом і повідомленням «There are suppressions left that do not occur anymore. Consider re-running the command with `--prune-suppressions`».
-  - Вимкнути цю поведінку можна прапорцем `--pass-on-unpruned-suppressions` (v9.28).
-- **PHPStan** ([baseline](https://phpstan.org/user-guide/baseline)). `--generate-baseline` пише записи `message` (регулярний вираз) + `count` + `path`. Якщо проігнорована помилка зникла, PHPStan про це повідомляє (`reportUnmatchedIgnoredErrors`).
+**Ratchet in code linters** — the best prototype for R2.3:
+- **ESLint, bulk suppressions** (v9.24, [documentation](https://eslint.org/docs/latest/use/suppressions), [announcement](https://eslint.org/blog/2025/04/introducing-bulk-suppressions/)).
+  - `eslint --suppress-all` writes `eslint-suppressions.json` in the form "file → rule → `{count}`".
+  - `count` is a ceiling: if violations have increased, **all** are reported, not only the new ones.
+  - If suppressions no longer trigger, the process exits with a non-zero code and the message "There are suppressions left that do not occur anymore. Consider re-running the command with `--prune-suppressions`".
+  - This behavior can be disabled with the flag `--pass-on-unpruned-suppressions` (v9.28).
+- **PHPStan** ([baseline](https://phpstan.org/user-guide/baseline)). `--generate-baseline` writes entries with `message` (a regular expression) + `count` + `path`. If an ignored error has disappeared, PHPStan reports it (`reportUnmatchedIgnoredErrors`).
 
-**oasdiff: відбиток** ([FINGERPRINT.md](https://github.com/oasdiff/oasdiff/blob/main/docs/FINGERPRINT.md)).
-- Формула: `SHA256("{id}:{operation}:{path}:{args}")[:12]`, де `args` — значення, з яких будується повідомлення.
-- Текст повідомлення в хеш не входить, тож переформулювання відбиток не змінює.
-- Документація чесно перелічує, коли відбиток «плаває»: позиційні назви на кшталт `oneOf[subschema #4]` і перейменування.
+**oasdiff: fingerprint** ([FINGERPRINT.md](https://github.com/oasdiff/oasdiff/blob/main/docs/FINGERPRINT.md)).
+- Formula: `SHA256("{id}:{operation}:{path}:{args}")[:12]`, where `args` are the values the message is built from.
+- The message text is not part of the hash, so rewording does not change the fingerprint.
+- The documentation honestly lists when the fingerprint "drifts": positional names such as `oneOf[subschema #4]`, and renamings.
 
-### Що взяти для Dart
+### What to take for Dart
 
-- ✅ **Запис діагностики**:
+- ✅ **Diagnostic record**:
   ```
   {code: "SG012", name: "array-missing-items", severity: warning,
-   message: <шаблон+args>, pointer: "#/components/schemas/Pet/properties/tags",
-   source: {file, line, col}, fix: {text, override: <готовий YAML-фрагмент>},
+   message: <template+args>, pointer: "#/components/schemas/Pet/properties/tags",
+   source: {file, line, col}, fix: {text, override: <ready-made YAML fragment>},
    fingerprint: sha256(code|pointer|args)[:12]}
   ```
-  Числовий код `SG012` потрібен за R2.2, а людська назва в стилі Stainless робить код читабельним. Каталог документації (R15.5) генерується з того самого реєстру кодів, як сторінка Stainless.
-- ✅ **Рівні з бізнес-семантикою.** Кожному рівню error/warning/info дати пояснення в дусі Stainless («блокує генерацію», «генерує, але API погіршене», «підказка»). Додати внутрішній fatal для «неможливо продовжити».
-- ✅ **Незнижувані коди.** Позначка `overridable: false` для кодів, без яких генерація неможлива (як ruleset `speakeasy-generation`): нерозв'язний `$ref`, цикл без можливості розриву тощо.
-- ✅ **Перевизначення рівня і точкове придушення** в конфігу:
+  The numeric code `SG012` is needed by R2.2, and a human-readable name in the Stainless style makes the code readable. The documentation catalog (R15.5) is generated from the same code registry, as the Stainless page is.
+- ✅ **Levels with business semantics.** Give each level error/warning/info an explanation in the spirit of Stainless: "blocks generation", "generates, but the API gets worse", "hint". Add an internal fatal for "cannot continue".
+- ✅ **Non-lowerable codes.** The `overridable: false` flag for codes without which generation is impossible (like the `speakeasy-generation` ruleset): an unresolvable `$ref`, a cycle with no way to break it, and so on.
+- ✅ **Level override and point-specific suppression** in the config:
   `diagnostics: {SG012: warning, SG020: off, ignore: {SG031: [{pointer: "#/paths/~1legacy~1*", reason: "…"}]}}`.
-  `reason` має бути обов'язковим, як у Stainless. Pointer-и підтримують glob, як overrides у Spectral.
-- ✅ **Baseline** — окремий файл, відсортований детерміновано:
+  `reason` must be mandatory, as in Stainless. Pointers support globs, like overrides in Spectral.
+- ✅ **Baseline** — a separate file, deterministically sorted:
   ```yaml
   # openapi_dart.baseline.yaml
   specs/api.yaml:
     SG012:
       - {fingerprint: a3f8c21b9d04, pointer: "#/components/schemas/Pet/properties/tags"}
-    SG044: {count: 7}   # ESLint-стиль для «масових» кодів
+    SG044: {count: 7}   # ESLint-style for "bulk" codes
   ```
-  Поведінка:
-  - нова діагностика, якої немає в baseline, з рівнем не нижче `--fail-on` → помилка;
-  - якщо запис baseline більше не спрацьовує → діагностика `SG0xx stale-baseline-entry`, і CI падає, поки її не прибрати командою `baseline prune` (як ESLint). Опційно — `--allow-stale-baseline`;
-  - команди: `baseline create | update | prune`.
-- ✅ **Кожне спрацювання нормалізатора — це info-діагностика** зі своїм кодом і pointer-ом. Тоді звіт, baseline і рівні працюють однаково і для виправлень, і для проблем. Назви правил у kebab-case, як у Speakeasy. Набір правил — як у OpenAPI Generator.
-- ✅ **Формати виводу**: `text` (codeframe), `json` (з опублікованою JSON Schema виводу, як `oasdiff schema`), `sarif` (GitHub code scanning), `github-actions`, `junit`. Команда `check` / `lint` проходить той самий конвеєр без генерації коду (R2.4).
-- ⚠️ **Позиції line/col** можливі лише при YAML-парсингу з позиціями. Для JSON oasdiff прямо пише, що позицій немає ([SOURCE-LOCATOR.md](https://github.com/oasdiff/oasdiff/blob/main/docs/SOURCE-LOCATOR.md)). Pointer тому має бути первинним, а line/col — додатковим.
-- ⚠️ **Вбудоване придушення** (`x-<tool>-ignore: [SG012]`, як у vacuum і Zally) варто підтримати, але як вторинний механізм: специфікацією володіє бекенд, тож основне місце для придушень — конфіг клієнта.
-- ❌ **Не робити регулярний вираз по тексту повідомлення ключем придушення** (`match` у Speakeasy, `message` у PHPStan). Такий ключ ламається від переформулювання. Ключ — це код плюс pointer або fingerprint.
+  Behavior:
+  - a new diagnostic that is not in the baseline, at a level not below `--fail-on` → error;
+  - if a baseline entry no longer triggers → diagnostic `SG0xx stale-baseline-entry`, and CI fails until it is removed with the `baseline prune` command (as in ESLint). Optionally — `--allow-stale-baseline`;
+  - commands: `baseline create | update | prune`.
+- ✅ **Every normalizer firing is an info diagnostic** with its own code and pointer. Then the report, the baseline and the levels work the same way for fixes and for problems. Rule names are in kebab-case, as in Speakeasy. The set of rules follows OpenAPI Generator.
+- ✅ **Output formats**: `text` (codeframe), `json` (with a published output JSON Schema, like `oasdiff schema`), `sarif` (GitHub code scanning), `github-actions`, `junit`. The `check` / `lint` command runs the same pipeline without generating code (R2.4).
+- ⚠️ **Line/col positions** are possible only with YAML parsing that tracks positions. For JSON, oasdiff states plainly that there are no positions ([SOURCE-LOCATOR.md](https://github.com/oasdiff/oasdiff/blob/main/docs/SOURCE-LOCATOR.md)). The pointer must therefore be primary, and line/col secondary.
+- ⚠️ **Inline suppression** (`x-<tool>-ignore: [SG012]`, as in vacuum and Zally) is worth supporting, but as a secondary mechanism: the spec is owned by the backend, so the main place for suppressions is the client config.
+- ❌ **Do not use a regular expression over the message text as the suppression key** (`match` in Speakeasy, `message` in PHPStan). Such a key breaks on rewording. The key is the code plus a pointer or fingerprint.
 
 ---
 
-## R3. Override-и та overlays
+## R3. Overrides and overlays
 
-### Як це роблять інші
+### How others do it
 
-**OpenAPI Overlay — стандарт** ([поточна версія](https://spec.openapis.org/overlay/latest.html), [усі версії](https://spec.openapis.org/overlay/)).
-- Версії: 1.0.0 (схема 2024-10), 1.1.0 (додано `copy`), 1.2.0 (вересень 2026).
-- `Action` має поля `target` (RFC 9535 JSONPath), `description`, `update`, `remove` і `copy`.
-- Правила злиття для `update`: об'єкти зливаються рекурсивно, **масиви конкатенуються**, примітиви замінюються, інші комбінації — помилка.
-- За специфікацією target, що не вибрав жодного вузла, — **не помилка**: «the action succeeds without changing the target document».
+**OpenAPI Overlay — the standard** ([current version](https://spec.openapis.org/overlay/latest.html), [all versions](https://spec.openapis.org/overlay/)).
+- Versions: 1.0.0 (schema 2024-10), 1.1.0 (`copy` added), 1.2.0 (September 2026).
+- `Action` has the fields `target` (RFC 9535 JSONPath), `description`, `update`, `remove` and `copy`.
+- Merge rules for `update`: objects are merged recursively, **arrays are concatenated**, primitives are replaced, and other combinations are an error.
+- Under the specification, a target that selects no node is **not an error**: "the action succeeds without changing the target document".
 
-**Speakeasy: бібліотека overlay** ([apply.go](https://github.com/speakeasy-api/openapi/blob/main/overlay/apply.go), [CLI](https://www.speakeasy.com/docs/speakeasy-reference/cli/overlay)).
-- `ApplyToStrict` повертає помилку `selector "…" did not match any targets`. Це «override на неіснуючий елемент».
-- На кожну дію збираються попередження. `update`, який нічого не змінив, дає warning **«does nothing»** (`didMakeChange == false`). Це рівно сценарій R3.2: override збігся з уже виправленою специфікацією.
-- `speakeasy overlay compare` будує overlay з двох версій специфікації (до і після). Зручний сценарій: відредагувати копію специфікації і отримати overlay автоматично.
+**Speakeasy: overlay library** ([apply.go](https://github.com/speakeasy-api/openapi/blob/main/overlay/apply.go), [CLI](https://www.speakeasy.com/docs/speakeasy-reference/cli/overlay)).
+- `ApplyToStrict` returns the error `selector "…" did not match any targets`. This is an "override of a non-existent element".
+- Warnings are collected for each action. An `update` that changed nothing gives a warning **"does nothing"** (`didMakeChange == false`). This is exactly the R3.2 scenario: the override matched a spec that has already been fixed.
+- `speakeasy overlay compare` builds an overlay from two versions of the spec (before and after). A convenient workflow: edit a copy of the spec and get the overlay automatically.
 
-**oapi-codegen** ([README, розділ Overlay](https://github.com/oapi-codegen/oapi-codegen#modifying-the-input-openapi-specification-with-openapi-overlay), [configuration-schema.json](https://github.com/oapi-codegen/oapi-codegen/blob/main/configuration-schema.json)).
-- Overlay задається через `output-options.overlay: {path, strict}`. `strict` за замовчуванням `true` і «highlighting any actions that will not take any effect».
-- Overlay рекомендують саме тоді, коли специфікацією володіє інша команда.
-- Водночас документація попереджає: JSONPath складно писати і підтримувати.
+**oapi-codegen** ([README, Overlay section](https://github.com/oapi-codegen/oapi-codegen#modifying-the-input-openapi-specification-with-openapi-overlay), [configuration-schema.json](https://github.com/oapi-codegen/oapi-codegen/blob/main/configuration-schema.json)).
+- The overlay is set via `output-options.overlay: {path, strict}`. `strict` defaults to `true` and "highlighting any actions that will not take any effect".
+- The overlay is recommended precisely when the spec is owned by another team.
+- At the same time, the documentation warns that JSONPath is hard to write and maintain.
 
 **Fern: overrides.yml** ([overrides](https://buildwithfern.com/learn/api-definitions/openapi/overrides)).
-- Файл повторює структуру специфікації і глибоко зливається з нею.
-- Можна вказати кілька файлів; вони застосовуються по черзі, пізніші перемагають.
-- Overrides застосовуються **перед** overlays.
-- Є команда-заготовка `fern write-overrides`. Сам Fern тепер рекомендує overlays як більш стандартний варіант.
+- The file repeats the structure of the spec and deep-merges with it.
+- Several files can be given; they are applied in turn, and later ones win.
+- Overrides are applied **before** overlays.
+- There is a scaffolding command `fern write-overrides`. Fern itself now recommends overlays as the more standard option.
 
 **Stainless: transforms** ([config: OpenAPIConfig](https://www.stainless.com/docs/reference/config/), [transforms](https://www.stainless.com/docs/openapi/transforms/)).
-- Команди: `update`, `append`, `merge`, `remove`, `copy`, `move`. Кожна має **обов'язковий `reason`**. Ціль задається через JSONPath Plus.
-- `update` «fails if path doesn't exist», `append` падає, якщо властивість уже існує.
-- `matches_schema` знаходить усі схеми, глибоко рівні шаблону, і замінює їх на `$ref`. Це дедуплікація однакових inline-схем.
-- `{{value}}` дає шаблонізацію рядків.
-- Діагностики: `Transform/Failed` і **`Transform/Useless`**: «Transformation {command} had no effect… and can safely be removed».
+- Commands: `update`, `append`, `merge`, `remove`, `copy`, `move`. Each has a **mandatory `reason`**. The target is set via JSONPath Plus.
+- `update` "fails if path doesn't exist", and `append` fails if the property already exists.
+- `matches_schema` finds all schemas deeply equal to the template and replaces them with `$ref`. This is deduplication of identical inline schemas.
+- `{{value}}` provides string templating.
+- Diagnostics: `Transform/Failed` and **`Transform/Useless`**: "Transformation {command} had no effect… and can safely be removed".
 
-**Функціональні патчі.**
-- hey-api: `parser.patch.schemas.Foo = (schema) => {…}` до парсингу ([parser](https://heyapi.dev/openapi-ts/configuration/parser)).
-- orval: `input.override.transformer` — функція над усім документом, що виконується **до** валідації, тож нею можна лагодити й невалідні специфікації ([input.mdx](https://github.com/orval-labs/orval/blob/master/docs/content/docs/reference/configuration/input.mdx)).
-- openapi-python-client: `class_overrides` (`class_name` + `module_name`) і `content_type_overrides` ([README](https://github.com/openapi-generators/openapi-python-client)).
-- Redocly: decorators `filter-in`, `filter-out`, `remove-x-internal`, `remove-unused-components`, `*-override` під час bundle ([decorators](https://redocly.com/docs/cli/decorators)).
+**Functional patches.**
+- hey-api: `parser.patch.schemas.Foo = (schema) => {…}` before parsing ([parser](https://heyapi.dev/openapi-ts/configuration/parser)).
+- orval: `input.override.transformer` — a function over the whole document that runs **before** validation, so it can be used to fix even invalid specs ([input.mdx](https://github.com/orval-labs/orval/blob/master/docs/content/docs/reference/configuration/input.mdx)).
+- openapi-python-client: `class_overrides` (`class_name` + `module_name`) and `content_type_overrides` ([README](https://github.com/openapi-generators/openapi-python-client)).
+- Redocly: decorators `filter-in`, `filter-out`, `remove-x-internal`, `remove-unused-components`, `*-override` during bundle ([decorators](https://redocly.com/docs/cli/decorators)).
 
-**progenitor / typify (Rust)** ([lib.rs](https://github.com/oxidecomputer/progenitor/blob/main/progenitor-impl/src/lib.rs)). Override-и на рівні типів: `with_patch(type_name, TypePatch)` (перейменування, derive), `with_replacement(schema_type, rust_type, impls)` і `with_conversion(schema, type, impls)`.
+**progenitor / typify (Rust)** ([lib.rs](https://github.com/oxidecomputer/progenitor/blob/main/progenitor-impl/src/lib.rs)). Overrides at the type level: `with_patch(type_name, TypePatch)` (renaming, derive), `with_replacement(schema_type, rust_type, impls)` and `with_conversion(schema, type, impls)`.
 
-### Що взяти для Dart
+### What to take for Dart
 
-- ✅ **Три шари з фіксованим порядком** (як у Fern):
-  1. нормалізатор;
-  2. сирі патчі специфікації: Overlay 1.0/1.1 і JSON Patch (R3.3);
-  3. **семантичний файл override-ів** (R3.1).
+- ✅ **Three layers in a fixed order** (as in Fern):
+  1. the normalizer;
+  2. raw spec patches: Overlay 1.0/1.1 and JSON Patch (R3.3);
+  3. **a semantic overrides file** (R3.1).
 
-  Діагностики всіх шарів вказують на **оригінальні** місця в специфікації.
-- ✅ **Семантичні селектори замість JSONPath** у файлі override-ів: `operation: getUser` або `GET /users/{id}`, `schema: Pet`, `property: Pet.tags`, `parameter: getUser.query.limit`. JSONPath складний (визнає навіть oapi-codegen), а для згенерованих специфікацій він ще й крихкий. JSONPath лишається тільки в шарі Overlay.
-- ✅ **Кожен запис override має `reason`.** Без нього — warning, як у Stainless.
-- ✅ **Виявлення застарілих override-ів (R3.2)** — як у Speakeasy і Stainless:
-  - target не знайдено → warning `override-target-missing` («did not match any targets»);
-  - застосування нічого не змінило (вузол до == вузол після) → info `override-redundant` («can safely be removed»). Перевіряється тим, що override застосовується до нормалізованої специфікації і результат порівнюється до і після.
+  Diagnostics from all layers point to the **original** locations in the spec.
+- ✅ **Semantic selectors instead of JSONPath** in the overrides file: `operation: getUser` or `GET /users/{id}`, `schema: Pet`, `property: Pet.tags`, `parameter: getUser.query.limit`. JSONPath is complex (even oapi-codegen admits it), and for generated specs it is also fragile. JSONPath stays only in the Overlay layer.
+- ✅ **Each override entry has a `reason`.** Without it, it is a warning, as in Stainless.
+- ✅ **Detection of stale overrides (R3.2)** — as in Speakeasy and Stainless:
+  - target not found → warning `override-target-missing` ("did not match any targets");
+  - applying it changed nothing (node before == node after) → info `override-redundant` ("can safely be removed"). This is checked by applying the override to the normalized spec and comparing the result before and after.
 
-  Режим `strict` за замовчуванням увімкнено в CI (як `strict: true` в oapi-codegen): тоді warning-и стають помилками.
-- ✅ **Команда `overrides diff spec.orig.yaml spec.fixed.yaml`**, яка видає готовий файл override-ів або overlay (як `speakeasy overlay compare`). Це найшвидший шлях для команд із NestJS чи FastAPI: виправити копію руками і отримати override.
-- ✅ **Операція дедуплікації `dedupe: {matches_schema: …}`.** Вона замінює глибоко рівні inline-схеми на `$ref` і закриває типові дублікати DTO з NestJS.
-- ⚠️ **Overlay вимагає RFC 9535 JSONPath у Dart.** Треба перевірити відповідність пакета на pub.dev; на момент дослідження це не перевірено.
-- ⚠️ **Функціональні хуки** (як hey-api `patch` чи orval `transformer`) давати лише в програмному API (R15.1), не як основний механізм. Вони недекларативні, їх не можна діагностувати і показати в звіті.
+  The `strict` mode is enabled by default in CI (as `strict: true` in oapi-codegen): then warnings become errors.
+- ✅ **The command `overrides diff spec.orig.yaml spec.fixed.yaml`**, which outputs a ready-made overrides file or overlay (like `speakeasy overlay compare`). This is the fastest path for teams working with NestJS or FastAPI: fix a copy by hand and get the override.
+- ✅ **The deduplication operation `dedupe: {matches_schema: …}`.** It replaces deeply equal inline schemas with `$ref` and eliminates the typical DTO duplicates from NestJS.
+- ⚠️ **The Overlay requires RFC 9535 JSONPath in Dart.** The package's conformance needs to be checked on pub.dev; at the time of the research this was not verified.
+- ⚠️ **Functional hooks** (like hey-api `patch` or orval `transformer`) should be offered only in the programmatic API (R15.1), not as the main mechanism. They are non-declarative, cannot be diagnosed, and cannot be shown in the report.
 
 ---
 
-## R4. Фільтрація і tree-shaking
+## R4. Filtering and tree-shaking
 
-### Як це роблять інші
+### How others do it
 
 - **Kiota** ([using](https://learn.microsoft.com/en-us/openapi/kiota/using)).
-  - `--include-path` і `--exclude-path` приймають glob-и, наприклад `**/users/**`. Суфікс `#METHOD` фільтрує за методом: `**/users/**#GET`.
-  - Семантика: елемент включається, якщо «(немає include АБО збігся з include) І (немає exclude АБО не збігся з exclude)».
-  - Параметри зберігаються в `kiota-lock.json`.
+  - `--include-path` and `--exclude-path` accept globs, for example `**/users/**`. The `#METHOD` suffix filters by method: `**/users/**#GET`.
+  - Semantics: an element is included if "(there is no include OR it matched an include) AND (there is no exclude OR it did not match an exclude)".
+  - The parameters are stored in `kiota-lock.json`.
 - **hey-api** ([parser.filters](https://heyapi.dev/openapi-ts/configuration/parser)).
-  - Фільтруються `operations` (точні ключі `'GET /api/v1/foo'` або регулярні вирази `'/^[A-Z]+ /api/v1//'`), `tags`, `deprecated: false`, а також `schemas`, `parameters`, `requestBodies` і `responses`.
-  - `exclude` має пріоритет над `include`.
-  - `orphans: false` (прибрати схеми-сироти) вмикається за замовчуванням, щойно задано будь-який інший фільтр. Це і є tree-shaking.
-  - `preserveOrder: true` зберігає порядок.
+  - Filters apply to `operations` (exact keys `'GET /api/v1/foo'` or regular expressions `'/^[A-Z]+ /api/v1//'`), `tags`, `deprecated: false`, and also `schemas`, `parameters`, `requestBodies` and `responses`.
+  - `exclude` takes precedence over `include`.
+  - `orphans: false` (remove orphan schemas) is enabled by default as soon as any other filter is set. This is tree-shaking.
+  - `preserveOrder: true` keeps the order.
 - **orval** ([input.mdx](https://github.com/orval-labs/orval/blob/master/docs/content/docs/reference/configuration/input.mdx)).
   - `filters: {mode: include|exclude, tags: [string|RegExp], schemas: […]}`.
-  - Якщо задано `tags`, вихід автоматично обмежується схемами, на які **транзитивно** посилаються вибрані операції. `includeUnreferencedSchemas: true` вимикає це обмеження.
-  - Схеми, досяжні лише через прив'язки `$dynamicAnchor`, теж знаходяться автоматично.
-- **oapi-codegen**: `include-tags`, `exclude-tags`, `include-operation-ids`, `exclude-operation-ids`, `exclude-schemas`. Невикористані компоненти прибираються за замовчуванням, `skip-prune` це вимикає ([схема конфігу](https://github.com/oapi-codegen/oapi-codegen/blob/main/configuration-schema.json)).
-- **OpenAPI Generator**: нормалізатор `FILTER="operationId:addPet|getPetById ; tag:store"` (також `method:` і `path:`) позначає невідповідні операції як `x-internal: true` ([customization.md](https://github.com/OpenAPITools/openapi-generator/blob/master/docs/customization.md)).
-- **Stainless — модель opt-in** ([diagnostics](https://www.stainless.com/docs/reference/diagnostics/)).
-  - Генеруються лише ендпоінти, перелічені в `resources`.
-  - Ендпоінт зі специфікації, якого немає в конфігу, дає note `Endpoint/NotConfigured`.
-  - Явне виключення задається через `unspecified_endpoints: ["post /internal"]`.
-  - Ендпоінт у конфігу, якого вже немає в специфікації, дає error `Endpoint/NotFound`.
-  - Конфлікт між двома списками дає `Endpoint/BothSpecifiedAndUnspecified`.
-- **Маркери в специфікації**: `x-speakeasy-ignore: true` (на операції або параметрі) ([methods](https://www.speakeasy.com/docs/customize/methods)), `x-fern-ignore`, `x-internal` (Redocly `remove-x-internal`, OpenAPI Generator `REMOVE_X_INTERNAL`).
+  - If `tags` are set, the output is automatically limited to the schemas that the selected operations **transitively** reference. `includeUnreferencedSchemas: true` turns this restriction off.
+  - Schemas reachable only through `$dynamicAnchor` bindings are also found automatically.
+- **oapi-codegen**: `include-tags`, `exclude-tags`, `include-operation-ids`, `exclude-operation-ids`, `exclude-schemas`. Unused components are removed by default; `skip-prune` turns this off ([config schema](https://github.com/oapi-codegen/oapi-codegen/blob/main/configuration-schema.json)).
+- **OpenAPI Generator**: the normalizer `FILTER="operationId:addPet|getPetById ; tag:store"` (also `method:` and `path:`) marks non-matching operations as `x-internal: true` ([customization.md](https://github.com/OpenAPITools/openapi-generator/blob/master/docs/customization.md)).
+- **Stainless — opt-in model** ([diagnostics](https://www.stainless.com/docs/reference/diagnostics/)).
+  - Only endpoints listed in `resources` are generated.
+  - An endpoint from the spec that is missing from the config gives a note `Endpoint/NotConfigured`.
+  - An explicit exclusion is set via `unspecified_endpoints: ["post /internal"]`.
+  - An endpoint in the config that is no longer in the spec gives an error `Endpoint/NotFound`.
+  - A conflict between the two lists gives `Endpoint/BothSpecifiedAndUnspecified`.
+- **Markers in the spec**: `x-speakeasy-ignore: true` (on an operation or parameter) ([methods](https://www.speakeasy.com/docs/customize/methods)), `x-fern-ignore`, `x-internal` (Redocly `remove-x-internal`, OpenAPI Generator `REMOVE_X_INTERNAL`).
 
-### Що взяти для Dart
+### What to take for Dart
 
-- ✅ **Єдина граматика селекторів** для фільтрів і override-ів: `GET /users/**`, `* /admin/**`, `tag:Admin`, `op:getUser`, `/regex/`. Семантика Kiota, `exclude` перемагає.
-- ✅ **Tree-shaking за замовчуванням**, щойно задано фільтр (як hey-api і orval). Досяжність рахується через:
+- ✅ **A single grammar of selectors** for filters and overrides: `GET /users/**`, `* /admin/**`, `tag:Admin`, `op:getUser`, `/regex/`. Kiota semantics; `exclude` wins.
+- ✅ **Tree-shaking by default** as soon as a filter is set (as in hey-api and orval). Reachability is computed through:
   - `$ref`;
-  - цілі `discriminator.mapping`;
-  - батьківські схеми в `allOf`;
-  - схеми помилок і SSE-подій;
+  - `discriminator.mapping` targets;
+  - parent schemas in `allOf`;
+  - error schemas and SSE events;
   - `$dynamicRef`.
 
-  Звіт: info «відфільтровано N операцій, прибрано M схем». Опційно — команда `explain Schema`, яка показує, через що схема досяжна.
-- ✅ **Застарілі фільтри.** Селектор, що не збігся з жодною операцією, дає warning, як `Endpoint/NotFound` у Stainless. Це те саме правило, що й для застарілих override-ів у R3.2.
-- ⚠️ **Модель opt-in Stainless** («генерувати лише перелічене») — корисний окремий режим для великих специфікацій, а не режим за замовчуванням. Note `operation-not-selected` дає видимість того, що не згенеровано.
+  Report: info "N operations filtered out, M schemas removed". Optionally, an `explain Schema` command that shows through what the schema is reachable.
+- ✅ **Stale filters.** A selector that matches no operation gives a warning, like `Endpoint/NotFound` in Stainless. This is the same rule as for stale overrides in R3.2.
+- ⚠️ **The Stainless opt-in model** ("generate only what is listed") is a useful separate mode for large specs, not the default mode. The note `operation-not-selected` gives visibility into what has not been generated.
 
 ---
 
-## R5. Іменування
+## R5. Naming
 
-### Як це роблять інші
+### How others do it
 
 - **Speakeasy**
-  - `x-speakeasy-name-override` у корені документа — список правил «регулярний вираз по `operationId` → `methodNameOverride`», наприклад `^get.*` → `get`. Те саме розширення на рівні операції має пріоритет ([methods](https://www.speakeasy.com/docs/customize/methods)).
-  - Значення enum санітизуються ([enums](https://www.speakeasy.com/docs/customize/data-model/enums)):
-    - спецсимволи замінюються словами: `+` → Plus, `-` → Minus, `.` → Dot;
-    - колізії розв'язуються сталою стратегією: `foo/Foo/FOO` → `FOO_LOWER/FOO_MIXED/FOO_UPPER`;
-    - якщо колізію не вдалося розв'язати, валідація падає і просить задати `x-speakeasy-enums`.
-  - Для `x-speakeasy-enums` **рекомендують форму map**, бо масив ламається, коли його довжина не збігається з `enum`.
+  - `x-speakeasy-name-override` at the document root is a list of rules "regular expression over `operationId` → `methodNameOverride`", for example `^get.*` → `get`. The same extension at the operation level takes precedence ([methods](https://www.speakeasy.com/docs/customize/methods)).
+  - Enum values are sanitized ([enums](https://www.speakeasy.com/docs/customize/data-model/enums)):
+    - special characters are replaced with words: `+` → Plus, `-` → Minus, `.` → Dot;
+    - collisions are resolved by a fixed strategy: `foo/Foo/FOO` → `FOO_LOWER/FOO_MIXED/FOO_UPPER`;
+    - if a collision cannot be resolved, validation fails and asks for `x-speakeasy-enums` to be set.
+  - For `x-speakeasy-enums` **the map form is recommended**, because an array breaks when its length does not match `enum`.
 - **Stainless**
-  - Іменування явне: `resources.accounts.methods.retrieve: get /accounts/{account_id}` ([config](https://www.stainless.com/docs/reference/config/)).
-  - Діагностика **`Name/Collision`** перелічує бажані імена в порядку спроб, причину відмови для кожного (з місцем конфлікту) і запасне ім'я, яке зрештою використано. Наприкінці підказка: «якщо `{fallback_name}` прийнятне — ігноруйте, інакше `x-stainless-naming` або transform».
-  - Інші коди: `Schema/CannotInferName`, `Model/GeneratedNameClash`, `Java/NameIsReserved`, `Python/NameNotAllowed`, `Schema/CannotInferEnumMemberName` ([diagnostics](https://www.stainless.com/docs/reference/diagnostics/)). Для ініціалізмів є `custom_casings`.
-- **oapi-codegen** ([схема конфігу](https://github.com/oapi-codegen/oapi-codegen/blob/main/configuration-schema.json))
-  - `name-normalizer`: `ToCamelCase | ToCamelCaseWithDigits | ToCamelCaseWithInitialisms`, разом із `additional-initialisms`.
-  - `resolve-type-name-collisions: true` додає суфікс за секцією компонентів (schemas, parameters, requestBodies…). Без цього колізія — **помилка**, і її треба розв'язати вручну через `x-go-name`.
-  - `generate-types-for-anonymous-schemas` дає inline-схемам імена зі шляху (`GetRolesIdResponseBody_Data`).
+  - Naming is explicit: `resources.accounts.methods.retrieve: get /accounts/{account_id}` ([config](https://www.stainless.com/docs/reference/config/)).
+  - The diagnostic **`Name/Collision`** lists the preferred names in the order tried, the reason each was rejected (with the location of the conflict), and the fallback name that was finally used. At the end, a hint: "if `{fallback_name}` is acceptable — ignore it, otherwise use `x-stainless-naming` or a transform".
+  - Other codes: `Schema/CannotInferName`, `Model/GeneratedNameClash`, `Java/NameIsReserved`, `Python/NameNotAllowed`, `Schema/CannotInferEnumMemberName` ([diagnostics](https://www.stainless.com/docs/reference/diagnostics/)). For initialisms there is `custom_casings`.
+- **oapi-codegen** ([configuration schema](https://github.com/oapi-codegen/oapi-codegen/blob/main/configuration-schema.json))
+  - `name-normalizer`: `ToCamelCase | ToCamelCaseWithDigits | ToCamelCaseWithInitialisms`, together with `additional-initialisms`.
+  - `resolve-type-name-collisions: true` adds a suffix based on the components section (schemas, parameters, requestBodies…). Without it, a collision is an **error**, and it has to be resolved by hand via `x-go-name`.
+  - `generate-types-for-anonymous-schemas` gives inline schemas names derived from the path (`GetRolesIdResponseBody_Data`).
 - **orval** ([output.mdx](https://github.com/orval-labs/orval/blob/master/docs/content/docs/reference/configuration/output.mdx))
-  - `override.operationName(operation, route, verb)` повертає рядок **або кортеж `[methodName, typeNameBase]`**. Ім'я методу і база імен типів (`*Params`, `*Body`, `*Error`) тоді задаються незалежно. Корисно, коли однакові методи з різних сервісів мають отримати різні імена типів.
-  - `override.components.schemas: {prefix, suffix, itemPrefix}`; префікс застосовується і до `$ref`.
+  - `override.operationName(operation, route, verb)` returns a string **or a tuple `[methodName, typeNameBase]`**. The method name and the base of the type names (`*Params`, `*Body`, `*Error`) are then set independently. This is useful when identical methods from different services must get different type names.
+  - `override.components.schemas: {prefix, suffix, itemPrefix}`; the prefix also applies to `$ref`.
 - **hey-api** ([parser](https://heyapi.dev/openapi-ts/configuration/parser))
-  - `transforms.schemaName` — функція або шаблон `'Api{{name}}'`.
-  - Якщо перейменування дає колізію, **воно пропускається**. Тихий відкат — це протилежність R2.5.
+  - `transforms.schemaName` — a function or a template `'Api{{name}}'`.
+  - If a renaming produces a collision, **it is skipped**. A silent fallback is the opposite of R2.5.
   - `hooks.symbols.getName`.
 - **Kiota** ([models](https://learn.microsoft.com/en-us/openapi/kiota/models))
-  - Імена inline-схем: `<останній сегмент шляху><операція>RequestBody|Response` або `<Батьківський тип><член><порядковий номер>`.
-  - Імена членів enum беруться з `x-ms-enum`.
-- **openapi-python-client**: `class_overrides` і `use_path_prefixes_for_title_model_names` (довгі, але унікальні імена з повного шляху або `title`) ([README](https://github.com/openapi-generators/openapi-python-client)).
-- **Fern і ogen**: `x-fern-sdk-method-name`, `x-fern-sdk-group-name`, `x-fern-type-name`, `x-fern-parameter-name`, `x-fern-property-name` ([extensions](https://buildwithfern.com/learn/api-definitions/openapi/extensions/overview)); `x-ogen-name`, `x-ogen-properties`, `x-ogen-operation-group` ([ogen extensions](https://github.com/ogen-go/web/blob/main/docs/spec/extensions.md)).
+  - Names of inline schemas: `<last path segment><operation>RequestBody|Response` or `<Parent type><member><ordinal number>`.
+  - Enum member names are taken from `x-ms-enum`.
+- **openapi-python-client**: `class_overrides` and `use_path_prefixes_for_title_model_names` (long but unique names from the full path or `title`) ([README](https://github.com/openapi-generators/openapi-python-client)).
+- **Fern and ogen**: `x-fern-sdk-method-name`, `x-fern-sdk-group-name`, `x-fern-type-name`, `x-fern-parameter-name`, `x-fern-property-name` ([extensions](https://buildwithfern.com/learn/api-definitions/openapi/extensions/overview)); `x-ogen-name`, `x-ogen-properties`, `x-ogen-operation-group` ([ogen extensions](https://github.com/ogen-go/web/blob/main/docs/spec/extensions.md)).
 
-### Що взяти для Dart
+### What to take for Dart
 
-- ✅ **Конвеєр імені — чиста детермінована функція:**
-  1. **список кандидатів у порядку пріоритету**: override → `x-…-name` → `operationId`/ключ схеми → `title` → шлях;
-  2. санітизація (спецсимволи стають словами, як у Speakeasy);
-  3. регістр;
-  4. перевірка зарезервованих слів (ключові слова Dart і імена з `dart:core`: `List`, `Map`, `Type`, `Object`, `Function`, `Error`, `Iterable`…);
-  5. розв'язання колізій зі сталим тай-брейком: сортування за JSON pointer, а не за порядком обходу;
-  6. **діагностика, як `Name/Collision` у Stainless**: які імена пробувались, чому кожне відкинуто, де конфлікт, яке ім'я вибрано і який override поставити (R5.2 + R2.5).
-- ✅ **Політика колізій**: суфікс за секцією компонентів (як `resolve-type-name-collisions`: `UserParam` / `UserBody`) **з warning**. Режим `strict` робить це помилкою. Ніколи не відкатуватися мовчки, як hey-api.
-- ✅ **Окремо ім'я методу і база імен типів** (кортеж як в orval). Це закриває R5.1 і R5.3 при групуванні за тегами.
-- ✅ **Inline-схеми** за замовчуванням іменуються `<Parent><Property>`; якщо цього не вистачає — ім'ям зі шляху. **Дедуплікація inline-enum за структурним хешем** множини значень (R5.4); це той самий механізм, що `matches_schema` в R3.
-- ✅ **Перевизначення імен членів enum** приймати у формі map (`value → name`), а не масиву (досвід Speakeasy). Масив `x-enum-varnames` теж читати, але перевіряти довжину (діагностика).
+- ✅ **The name pipeline is a pure deterministic function:**
+  1. **a list of candidates in priority order**: override → `x-…-name` → `operationId`/schema key → `title` → path;
+  2. sanitization (special characters become words, as in Speakeasy);
+  3. case;
+  4. a check for reserved words (Dart keywords and names from `dart:core`: `List`, `Map`, `Type`, `Object`, `Function`, `Error`, `Iterable`…);
+  5. resolution of collisions with a stable tie-breaker: sorting by JSON pointer, not by traversal order;
+  6. **a diagnostic, like `Name/Collision` in Stainless**: which names were tried, why each was rejected, where the conflict is, which name was chosen, and which override to set (R5.2 + R2.5).
+- ✅ **Collision policy**: a suffix by components section (as `resolve-type-name-collisions`: `UserParam` / `UserBody`) **with a warning**. The `strict` mode makes this an error. Never fall back silently, as hey-api does.
+- ✅ **The method name and the base of type names separately** (a tuple as in orval). This covers R5.1 and R5.3 when grouping by tags.
+- ✅ **Inline schemas** are named `<Parent><Property>` by default; if that is not enough, by the name from the path. **Deduplication of inline enums by a structural hash** of the set of values (R5.4); this is the same mechanism as `matches_schema` in R3.
+- ✅ **Overrides of enum member names** should be accepted in the form of a map (`value → name`), not an array (Speakeasy's experience). The `x-enum-varnames` array is also read, but its length is checked (a diagnostic).
 
 ---
 
-## R6.2 / R6.4. Відповідність типів, довільний JSON, конверти і дженерики
+## R6.2 / R6.4. Type fidelity, arbitrary JSON, envelopes and generics
 
-### Як це роблять інші
+### How others do it
 
-**Довільний JSON як окремий тип, а не `dynamic`**
-- **Kiota**: ієрархія `UntypedNode` з класами `UntypedObject`, `UntypedArray`, `UntypedString`, `UntypedBoolean`, `UntypedInteger`, `UntypedLong`, `UntypedFloat`, `UntypedDouble`, `UntypedDecimal`, `UntypedNull` ([kiota-dotnet, serialization](https://github.com/microsoft/kiota-dotnet/tree/main/src/abstractions/serialization)). Невідомі властивості потрапляють в `AdditionalData` ([models](https://learn.microsoft.com/en-us/openapi/kiota/models)).
-- **Stainless Java** ([openai-java README, Undocumented API functionality](https://github.com/openai/openai-java#undocumented-api-functionality)): `JsonValue` з фабрикою `from(...)` і `Visitor` (`visitNull`, `visitBoolean`, `visitNumber`, `visitString`, `visitArray`, `visitObject`, **`visitMissing`**). Невідомі поля доступні через `_additionalProperties()`.
-- **ogen**: `jx.Raw` — сирі байти з методом `.Type()` ([any.md](https://github.com/ogen-go/web/blob/main/docs/types/any.md)).
+**Arbitrary JSON as a separate type, not `dynamic`**
+- **Kiota**: the `UntypedNode` hierarchy with the classes `UntypedObject`, `UntypedArray`, `UntypedString`, `UntypedBoolean`, `UntypedInteger`, `UntypedLong`, `UntypedFloat`, `UntypedDouble`, `UntypedDecimal`, `UntypedNull` ([kiota-dotnet, serialization](https://github.com/microsoft/kiota-dotnet/tree/main/src/abstractions/serialization)). Unknown properties go into `AdditionalData` ([models](https://learn.microsoft.com/en-us/openapi/kiota/models)).
+- **Stainless Java** ([openai-java README, Undocumented API functionality](https://github.com/openai/openai-java#undocumented-api-functionality)): `JsonValue` with a `from(...)` factory and a `Visitor` (`visitNull`, `visitBoolean`, `visitNumber`, `visitString`, `visitArray`, `visitObject`, **`visitMissing`**). Unknown fields are accessible through `_additionalProperties()`.
+- **ogen**: `jx.Raw` — raw bytes with a `.Type()` method ([any.md](https://github.com/ogen-go/web/blob/main/docs/types/any.md)).
 - **progenitor**: `serde_json::Value`.
-- **openapi-typescript**: `unknown`; прапорець `--empty-objects-unknown` ([CLI](https://openapi-ts.dev/cli)).
+- **openapi-typescript**: `unknown`; the flag `--empty-objects-unknown` ([CLI](https://openapi-ts.dev/cli)).
 - **Speakeasy**: `x-speakeasy-type-override: any` ([extensions](https://www.speakeasy.com/docs/speakeasy-reference/extensions)).
-- **Stainless `Schema/IsAmbiguous`**: схема без `type` трактується як unknown з note; намір підтверджується через `x-stainless-any: true`.
+- **Stainless `Schema/IsAmbiguous`**: a schema without `type` is treated as unknown with a note; the intent is confirmed via `x-stainless-any: true`.
 
-**Налаштовувана відповідність типів**
-- **oapi-codegen `type-mapping`** зливається поверх значень за замовчуванням:
+**Configurable type mapping**
+- **oapi-codegen `type-mapping`** is merged on top of the default values:
   ```yaml
   output-options:
     type-mapping:
@@ -298,17 +298,17 @@
           date-time: {type: time.Time, import: time}
           decimal:   {type: decimal.Decimal, import: github.com/shopspring/decimal}
   ```
-  Для окремої схеми є `x-go-type` / `x-go-type-import`.
-- **progenitor**: `with_replacement` і `with_conversion`.
-- **Kiota**: правило `KnownAndNotSupportedFormats` попереджає, якщо формат відомий, але не підтримується.
+  An individual schema has `x-go-type` / `x-go-type-import`.
+- **progenitor**: `with_replacement` and `with_conversion`.
+- **Kiota**: the `KnownAndNotSupportedFormats` rule warns when a format is known but not supported.
 
-**Конверти і дженерики**
+**Envelopes and generics**
 - **Stainless**
-  - `settings.unwrap_response_fields: [data]` — глобальний конверт; на рівні методу `unwrap_response: <поле> | false` ([config](https://www.stainless.com/docs/reference/config/)).
-  - Діагностики: `Method/MissingEnvelopeUnwrap` (з переліком полів, які знайдено, і підказкою `unwrap_field: false`), `Method/AmbiguousEnvelopeUnwrap`, `Response/TypeNotObjectForEnvelope`.
-  - Пагінація описується схемами з `type: cursor | cursor_id | cursor_url | offset | page_number | fake_page`. Поля позначаються `x-stainless-pagination-property.purpose`: `items`, `next_cursor_field`, `has_next_page`, `offset_total_count_field`… На виході — дженерик-класи сторінок і автоітератор.
-- **Speakeasy** `x-speakeasy-pagination`: `inputs` і `outputs` через JSONPath. **Fern** `x-fern-pagination`. **AutoRest** `x-ms-pageable: {itemName, nextLinkName, operationName}` ([autorest extensions](https://github.com/Azure/autorest/blob/main/docs/extensions/readme.md)).
-- **orval + `$dynamicRef`/`$dynamicAnchor`** (OAS 3.1, [output.mdx](https://github.com/orval-labs/orval/blob/master/docs/content/docs/reference/configuration/output.mdx)): шаблон стає `interface PaginatedResponse<itemType>`, а прив'язки — аліасами `type UserListResponse = PaginatedResponse<User>`.
+  - `settings.unwrap_response_fields: [data]` is a global envelope; at the method level, `unwrap_response: <field> | false` ([config](https://www.stainless.com/docs/reference/config/)).
+  - Diagnostics: `Method/MissingEnvelopeUnwrap` (listing the fields that were found, with the hint `unwrap_field: false`), `Method/AmbiguousEnvelopeUnwrap`, `Response/TypeNotObjectForEnvelope`.
+  - Pagination is described by schemas with `type: cursor | cursor_id | cursor_url | offset | page_number | fake_page`. Fields are marked with `x-stainless-pagination-property.purpose`: `items`, `next_cursor_field`, `has_next_page`, `offset_total_count_field`… The output is generic page classes and an auto-iterator.
+- **Speakeasy** `x-speakeasy-pagination`: `inputs` and `outputs` via JSONPath. **Fern** `x-fern-pagination`. **AutoRest** `x-ms-pageable: {itemName, nextLinkName, operationName}` ([autorest extensions](https://github.com/Azure/autorest/blob/main/docs/extensions/readme.md)).
+- **orval + `$dynamicRef`/`$dynamicAnchor`** (OAS 3.1, [output.mdx](https://github.com/orval-labs/orval/blob/master/docs/content/docs/reference/configuration/output.mdx)): the template becomes `interface PaginatedResponse<itemType>`, and the bindings become aliases `type UserListResponse = PaginatedResponse<User>`.
   ```yaml
   PaginatedResponse:
     $defs: {itemType: {$dynamicAnchor: itemType, not: {}}}
@@ -317,12 +317,12 @@
     $defs: {itemType: {$dynamicAnchor: itemType, $ref: '#/components/schemas/User'}}
     $ref: '#/components/schemas/PaginatedResponse'
   ```
-  **OAS 3.2 §4.24.6.2 прямо рекомендує** (SHOULD) підтримувати дженерики через `$dynamicRef` ([OAS 3.2](https://spec.openapis.org/oas/v3.2.0.html)).
+  **OAS 3.2 §4.24.6.2 explicitly recommends** (SHOULD) supporting generics via `$dynamicRef` ([OAS 3.2](https://spec.openapis.org/oas/v3.2.0.html)).
 
-### Що взяти для Dart
+### What to take for Dart
 
-- ✅ **`JsonValue` — sealed-ієрархія в runtime-пакеті**: `JsonNull`, `JsonBool`, `JsonNumber`, `JsonString`, `JsonArray`, `JsonObject`. Має `fromJson(Object?)`, `toJson()` і зручні `asString()` / `asMap()`. Pattern matching замінює Visitor зі Stainless. Схема без `type` дає info `untyped-schema` і тип `JsonValue`; підтвердити намір можна через `x-<tool>-any: true` або override.
-- ✅ **`type_mapping`, як в oapi-codegen, але з конвертером.** json_serializable потребує `JsonConverter`, тож запис мапінгу містить і тип, і конвертер:
+- ✅ **`JsonValue` is a sealed hierarchy in the runtime package**: `JsonNull`, `JsonBool`, `JsonNumber`, `JsonString`, `JsonArray`, `JsonObject`. It has `fromJson(Object?)`, `toJson()`, and convenient `asString()` / `asMap()`. Pattern matching replaces Stainless's Visitor. A schema without `type` gives an info `untyped-schema` and the type `JsonValue`; the intent can be confirmed via `x-<tool>-any: true` or an override.
+- ✅ **`type_mapping`, as in oapi-codegen, but with a converter.** json_serializable requires a `JsonConverter`, so a mapping entry contains both the type and the converter:
   ```yaml
   type_mapping:
     string:
@@ -330,382 +330,382 @@
         date: {type: Date, import: "package:my_app/date.dart", converter: DateConverter}
         decimal: {type: Decimal, import: "package:decimal/decimal.dart", converter: DecimalConverter}
   ```
-  Невідомий формат дає діагностику, як `KnownAndNotSupportedFormats` у Kiota.
-- ✅ **Конверти — три розпізнавачі в порядку пріоритету:**
-  1. override або конфіг: `envelope: {field: data, siblings: [meta]}`, як `unwrap_response_fields` у Stainless;
-  2. **`$dynamicRef`/`$dynamicAnchor`** (стандарт, перевірений в orval);
-  3. структурна евристика: схеми з однаковими «сусідніми» полями, що відрізняються лише типом `data`. Вона лише **пропонує** дженерик через діагностику і готовий override, але нічого не вмикає мовчки (R2.5).
+  An unknown format gives a diagnostic, like `KnownAndNotSupportedFormats` in Kiota.
+- ✅ **Envelopes: three recognizers in priority order:**
+  1. an override or config: `envelope: {field: data, siblings: [meta]}`, like `unwrap_response_fields` in Stainless;
+  2. **`$dynamicRef`/`$dynamicAnchor`** (the standard, verified in orval);
+  3. a structural heuristic: schemas with the same "sibling" fields that differ only in the type of `data`. It only **suggests** a generic through a diagnostic and a ready-made override, and never silently turns anything on (R2.5).
 
-  Неоднозначність дає діагностику на кшталт `AmbiguousEnvelopeUnwrap`. Для серіалізації — `genericArgumentFactories` у json_serializable.
-- ⚠️ **Пагінацію як окрему фічу** проєктувати вже зараз на словнику purpose зі Stainless (`items`, `next_cursor_field`…), щоб пізніше не ламати формат конфігу.
+  An ambiguity gives a diagnostic such as `AmbiguousEnvelopeUnwrap`. For serialization, use `genericArgumentFactories` in json_serializable.
+- ⚠️ **Design pagination as a separate feature** now, on the Stainless purpose vocabulary (`items`, `next_cursor_field`…), so that the config format does not break later.
 
 ---
 
-## R7. Три стани поля в PATCH
+## R7. Three states of a field in PATCH
 
-### Як це роблять інші
+### How others do it
 
-- **ogen** ([optional.md](https://github.com/ogen-go/web/blob/main/docs/types/optional.md)). `OptNilString { Value string; Set bool; Null bool }` з методами `IsSet()`, `IsNull()`, `Get()`, `Or()`, `SetTo()`, `Reset()`. Головне — **явна матриця поведінки декодера**, рівно те, що вимагає R6.1:
+- **ogen** ([optional.md](https://github.com/ogen-go/web/blob/main/docs/types/optional.md)). `OptNilString { Value string; Set bool; Null bool }` with the methods `IsSet()`, `IsNull()`, `Get()`, `Or()`, `SetTo()`, `Reset()`. The key point is an **explicit decoder behaviour matrix**, exactly what R6.1 requires:
 
-  | Схема | немає значення | `null` | значення |
+  | Schema | absent | `null` | value |
   |---|---|---|---|
   | required | Error | Error | OK |
   | optional | `Set=false` | Error | `Set=true` |
   | nullable, required | Error | `Null=true` | OK |
   | optional & nullable | `Set=false` | `Set=true, Null=true` | `Set=true, Null=false` |
 
-  Для масивів є окрема матриця, де `nil` і `[]` розрізняються.
-- **oapi-codegen** ([README, Nullable types](https://github.com/oapi-codegen/oapi-codegen#generating-nullable-types)). `output-options.nullable-type: true` генерує `nullable.Nullable[T]` з тегом `omitempty`. Без цієї опції `*string` не розрізняє «не надіслано» і `null`, і README прямо це визнає.
-- **openapi-python-client** ([types.py у golden record](https://github.com/openapi-generators/openapi-python-client/tree/main/end_to_end_tests/golden-records)). Сентинел `class Unset: __bool__ → False; UNSET = Unset()`. Поля мають тип `T | None | Unset = UNSET`, а `to_dict` пропускає `UNSET`.
-- **Stainless Python** ([`_types.py`](https://github.com/openai/openai-python/blob/main/src/openai/_types.py)). Параметри мають вигляд `temperature: Optional[float] | Omit = omit`. `NotGiven` використовують там, де `None` має власне значення («без таймауту»). На боці відповіді `model_fields_set` відрізняє відсутнє поле від `null` ([README](https://github.com/openai/openai-python#how-to-tell-whether-none-means-null-or-missing)).
-- **Stainless Java** `JsonField<T>`: `isMissing()`, `isNull()`, значення або `asUnknown()`. `JsonMissing.of()` примусово прибирає навіть обов'язкове поле. FAQ пояснює вибір: «Representing absent vs explicitly null values» ([openai-java FAQ](https://github.com/openai/openai-java#why-do-you-represent-fields-using-jsonfieldt-instead-of-just-plain-t)).
-- **Kiota BackingStore** (`--backing-store`) ([abstractions](https://learn.microsoft.com/en-us/openapi/kiota/abstractions), [models](https://learn.microsoft.com/en-us/openapi/kiota/models)). Значення живуть у сховищі з **відстеженням змін**: `InitializationCompleted`, `ReturnOnlyChangedValues`, `EnumerateKeysForValuesChangedToNull()`. Сценарій: отримати об'єкт через GET, змінити одне поле і відправити PATCH лише з ним.
+  For arrays there is a separate matrix, in which `nil` and `[]` are distinguished.
+- **oapi-codegen** ([README, Nullable types](https://github.com/oapi-codegen/oapi-codegen#generating-nullable-types)). `output-options.nullable-type: true` generates `nullable.Nullable[T]` with the `omitempty` tag. Without this option, `*string` does not distinguish "not sent" from `null`, and the README explicitly acknowledges this.
+- **openapi-python-client** ([types.py in the golden record](https://github.com/openapi-generators/openapi-python-client/tree/main/end_to_end_tests/golden-records)). A sentinel `class Unset: __bool__ → False; UNSET = Unset()`. Fields have the type `T | None | Unset = UNSET`, and `to_dict` skips `UNSET`.
+- **Stainless Python** ([`_types.py`](https://github.com/openai/openai-python/blob/main/src/openai/_types.py)). Parameters look like `temperature: Optional[float] | Omit = omit`. `NotGiven` is used where `None` has a meaning of its own ("no timeout"). On the response side, `model_fields_set` distinguishes a missing field from `null` ([README](https://github.com/openai/openai-python#how-to-tell-whether-none-means-null-or-missing)).
+- **Stainless Java** `JsonField<T>`: `isMissing()`, `isNull()`, the value, or `asUnknown()`. `JsonMissing.of()` forcibly removes even a required field. The FAQ explains the choice: "Representing absent vs explicitly null values" ([openai-java FAQ](https://github.com/openai/openai-java#why-do-you-represent-fields-using-jsonfieldt-instead-of-just-plain-t)).
+- **Kiota BackingStore** (`--backing-store`) ([abstractions](https://learn.microsoft.com/en-us/openapi/kiota/abstractions), [models](https://learn.microsoft.com/en-us/openapi/kiota/models)). Values live in a store with **change tracking**: `InitializationCompleted`, `ReturnOnlyChangedValues`, `EnumerateKeysForValuesChangedToNull()`. Scenario: fetch an object via GET, change one field, and send a PATCH with only that field.
 
-### Що взяти для Dart
+### What to take for Dart
 
-- ✅ **Sealed-тип у runtime-пакеті** (наприклад, `Patch<T>` / `Optional<T>`) з трьома станами: `Absent`, `Null`, `Value(T)`. Це прямий відповідник `OptNil` / `JsonField` з exhaustive pattern matching у Dart 3. Генерується лише для полів, які проходять правило з R7.2 (за замовчуванням optional + nullable у тілі PATCH).
-- ✅ **Матрицю ogen задокументувати як контракт.** Окрема таблиця для запиту, відповіді і PATCH (R6.1) з колонками «немає / null / значення» і описом, що робить декодер і що робить енкодер.
-- ⚠️ **json_serializable не вміє «пропустити ключ» з конвертера.** `includeIfNull` не відрізняє Absent від Null. Тому для моделей із tri-state полями генератор має видати свій `toJson`: або обгортку над `_$XToJson`, яка прибирає ключі зі значенням-сентинелом (як `UNSET` у Python), або повністю власний. Це треба вирішити в архітектурі серіалізації.
-- ✅ **R7.3** (поле з одним станом ніколи не шле null, якщо його не задано): за замовчуванням `includeIfNull: false` для optional полів запиту. Це поведінка `omit` у Stainless.
-- ⚠️ **BackingStore з Kiota** (відстеження змін) — цікава альтернатива для «PATCH з отриманого об'єкта», але складна, і моделі перестають бути простими. Не робити за замовчуванням; можливо, пізніше як режим.
-- ⚠️ **На боці відповіді tri-state за замовчуванням не показувати.** Достатньо опційного `fieldsSet` у стилі `model_fields_set` для тих, кому це потрібно.
+- ✅ **A sealed type in the runtime package** (for example, `Patch<T>` / `Optional<T>`) with three states: `Absent`, `Null`, `Value(T)`. It is the direct counterpart of `OptNil` / `JsonField`, with exhaustive pattern matching in Dart 3. It is generated only for fields that pass the rule from R7.2 (by default, optional + nullable in the PATCH body).
+- ✅ **Document the ogen matrix as a contract.** A separate table for the request, the response, and PATCH (R6.1), with the columns "absent / null / value" and a description of what the decoder does and what the encoder does.
+- ⚠️ **json_serializable cannot "skip a key" from a converter.** `includeIfNull` does not distinguish Absent from Null. So for models with tri-state fields, the generator has to emit its own `toJson`: either a wrapper over `_$XToJson` that removes the keys holding the sentinel value (like `UNSET` in Python), or a fully custom one. This has to be decided in the serialization architecture.
+- ✅ **R7.3** (a field with one state never sends null unless it is set): by default `includeIfNull: false` for optional request fields. This is the `omit` behaviour in Stainless.
+- ⚠️ **Kiota's BackingStore** (change tracking) is an interesting alternative for "PATCH from a fetched object", but it is complex, and the models stop being simple. Do not make it the default; possibly later as a mode.
+- ⚠️ **Do not expose tri-state on the response side by default.** An optional `fieldsSet` in the style of `model_fields_set` is enough for those who need it.
 
 ---
 
-## R8. Відкриті enum із сирим значенням
+## R8. Open enums with a raw value
 
-### Як це роблять інші
+### How others do it
 
 - **Speakeasy** ([enums](https://www.speakeasy.com/docs/customize/data-model/enums), [forward compatibility](https://www.speakeasy.com/docs/sdks/manage/forward-compatibility)).
-  - Схема відкривається або закривається через `x-speakeasy-unknown-values: allow | disallow`.
-  - Прапорець у `gen.yaml` `forwardCompatibleEnumsByDefault` з'явився в [v1.661.0](https://www.speakeasy.com/changelog/release/v1.661.0) і **увімкнений за замовчуванням** (крім Terraform). **Enum з одним значенням автоматично не відкриваються.**
-  - Представлення: TS — `"red" | "green" | Unrecognized<string>`; Python — `Union[Literal[...], UnrecognizedStr]`; Java — `BackgroundColor.of("purple")` з `isKnown()`.
-  - Закриті enum залишають свідомо: вони «допомагають помітити дрейф API в тестах».
-- **Stainless Java/Kotlin** ([FinishReason.kt у openai-java](https://github.com/openai/openai-java/blob/main/openai-java-core/src/main/kotlin/com/openai/models/chat/completions/ChatCompletion.kt)). Згенерований клас містить:
-  - приватний конструктор над `JsonField<String>` і константи `STOP = of("stop")`;
-  - `enum Known { STOP, … }` і `enum Value { STOP, …, _UNKNOWN }`;
-  - `value()`, що повертає `_UNKNOWN`; `known()`, що кидає `InvalidDataException`; `asString()`, `validate()`, `isValid()`.
+  - A schema is opened or closed via `x-speakeasy-unknown-values: allow | disallow`.
+  - The `forwardCompatibleEnumsByDefault` flag in `gen.yaml` appeared in [v1.661.0](https://www.speakeasy.com/changelog/release/v1.661.0) and is **enabled by default** (except for Terraform). **Enums with a single value are not opened automatically.**
+  - Representations: TS — `"red" | "green" | Unrecognized<string>`; Python — `Union[Literal[...], UnrecognizedStr]`; Java — `BackgroundColor.of("purple")` with `isKnown()`.
+  - Closed enums are kept deliberately: they "help catch API drift in tests".
+- **Stainless Java/Kotlin** ([FinishReason.kt in openai-java](https://github.com/openai/openai-java/blob/main/openai-java-core/src/main/kotlin/com/openai/models/chat/completions/ChatCompletion.kt)). The generated class contains:
+  - a private constructor over `JsonField<String>` and constants `STOP = of("stop")`;
+  - `enum Known { STOP, … }` and `enum Value { STOP, …, _UNKNOWN }`;
+  - `value()`, which returns `_UNKNOWN`; `known()`, which throws `InvalidDataException`; `asString()`, `validate()`, `isValid()`.
 
-  FAQ пояснює: «Java `enum` classes are not trivially forwards compatible».
-- **OpenAPI Generator** (dart-dio, swift, kotlin): `enumUnknownDefaultCase=true` додає `unknown_default_open_api` ([dart-dio](https://openapi-generator.tech/docs/generators/dart-dio)). Сире значення **губиться**, це антипатерн для R8.1.
-- **AutoRest** `x-ms-enum: {name, modelAsString, values: [{value, name, description}]}`. **`modelAsString: true` — значення за замовчуванням**, і такий enum вважається розширюваним (extensible) ([autorest extensions](https://github.com/Azure/autorest/blob/main/docs/extensions/readme.md)).
-- **Zalando `x-extensible-enum`**: oasdiff окремо знає, що додавання значення до такого enum у відповіді не ламає сумісність ([BREAKING-CHANGES.md](https://github.com/oasdiff/oasdiff/blob/main/docs/BREAKING-CHANGES.md#breaking-changes-to-enum-values)).
-- **Kiota — свідомо протилежне**: невідоме значення enum кидає виняток, щоб «fail as early as possible» ([models](https://learn.microsoft.com/en-us/openapi/kiota/models)). Це антиприклад для R8.1.
-- **oapi-codegen**: enum — це типізовані рядкові константи (відкриті за природою) з методом `Valid()`.
+  The FAQ explains: "Java `enum` classes are not trivially forwards compatible".
+- **OpenAPI Generator** (dart-dio, swift, kotlin): `enumUnknownDefaultCase=true` adds `unknown_default_open_api` ([dart-dio](https://openapi-generator.tech/docs/generators/dart-dio)). The raw value is **lost**; this is an anti-pattern for R8.1.
+- **AutoRest** `x-ms-enum: {name, modelAsString, values: [{value, name, description}]}`. **`modelAsString: true` is the default**, and such an enum is considered extensible ([autorest extensions](https://github.com/Azure/autorest/blob/main/docs/extensions/readme.md)).
+- **Zalando `x-extensible-enum`**: oasdiff separately knows that adding a value to such an enum in a response does not break compatibility ([BREAKING-CHANGES.md](https://github.com/oasdiff/oasdiff/blob/main/docs/BREAKING-CHANGES.md#breaking-changes-to-enum-values)).
+- **Kiota does the opposite on purpose**: an unknown enum value throws an exception, to "fail as early as possible" ([models](https://learn.microsoft.com/en-us/openapi/kiota/models)). This is a counterexample for R8.1.
+- **oapi-codegen**: enums are typed string constants (open by nature) with a `Valid()` method.
 
-### Що взяти для Dart
+### What to take for Dart
 
-- ✅ **Відкриті enum у відповідях за замовчуванням, закриті в запитах** (R8.1 + R8.2):
-  - request-тип — звичайний Dart `enum Status` (закритий, невідоме значення не надіслати);
-  - response-поле — `OpenEnum<Status>` = sealed `Known(Status)` | `Unknown(Object raw)`. Це прямий відповідник `Known`/`Value._UNKNOWN` зі Stainless.
+- ✅ **Open enums in responses by default, closed in requests** (R8.1 + R8.2):
+  - the request type is a plain Dart `enum Status` (closed; an unknown value cannot be sent);
+  - the response field is `OpenEnum<Status>` = sealed `Known(Status)` | `Unknown(Object raw)`. This is the direct counterpart of `Known`/`Value._UNKNOWN` in Stainless.
 
-  Якщо схема спільна для обох напрямів, генеруються два види. Конструктор `Unknown` у request-API недоступний.
-- ✅ **Правила Speakeasy**:
-  - enum з одним значенням лишається закритим (це константа);
-  - override на рівні схеми: `x-<tool>-unknown-values: allow | disallow`;
-  - для сумісності також читати `x-extensible-enum`, `x-ms-enum.modelAsString` і `x-speakeasy-unknown-values`.
-- ⚠️ **Конфлікт R8 з R14.2 через exhaustiveness у Dart.** Додавання значення в Dart `enum` чи підкласу в `sealed`-ієрархію **ламає компіляцію** `switch` у споживача, якщо там немає `_`/`default` ([exhaustiveness](https://dart.dev/language/branches#exhaustiveness-checking)). `Unknown` проблему не вирішує, бо новий *відомий* член теж додає case. Варіанти:
-  - (а) `enum_style: dart_enum`: зручно, але кожне нове значення — breaking зміна Dart API, і R14 має це показувати;
-  - (б) `enum_style: open_class`: клас із `static const`-екземплярами (або `extension type` над `String`); `switch` за константами не перевіряється на повноту, тож нове значення нічого не ламає.
+  If the schema is shared by both directions, two kinds are generated. The `Unknown` constructor is not available in the request API.
+- ✅ **Speakeasy rules**:
+  - an enum with a single value stays closed (it is a constant);
+  - an override at the schema level: `x-<tool>-unknown-values: allow | disallow`;
+  - for compatibility, also read `x-extensible-enum`, `x-ms-enum.modelAsString` and `x-speakeasy-unknown-values`.
+- ⚠️ **A conflict between R8 and R14.2 through exhaustiveness in Dart.** Adding a value to a Dart `enum`, or a subclass to a `sealed` hierarchy, **breaks compilation** of a consumer's `switch` if there is no `_`/`default` there ([exhaustiveness](https://dart.dev/language/branches#exhaustiveness-checking)). `Unknown` does not solve the problem, because a new *known* member also adds a case. Options:
+  - (a) `enum_style: dart_enum`: convenient, but every new value is a breaking change of the Dart API, and R14 has to show this;
+  - (b) `enum_style: open_class`: a class with `static const` instances (or an `extension type` over `String`); a `switch` over constants is not checked for exhaustiveness, so a new value breaks nothing.
 
-  Рекомендація: (б) для response-enum за замовчуванням, (а) як опція. Це висновок із мовної семантики Dart і досвіду Stainless (FAQ про `enum`); на генераторах перевірено не було.
+  Recommendation: (b) for response enums by default, (a) as an option. This conclusion comes from Dart's language semantics and Stainless's experience (the FAQ about `enum`); it has not been verified on generators.
 
 ---
 
-## R9. Поліморфізм: варіант для невідомого типу
+## R9. Polymorphism: a variant for an unknown type
 
-### Як це роблять інші
+### How others do it
 
 - **Speakeasy** ([forward compatibility](https://www.speakeasy.com/docs/sdks/manage/forward-compatibility)).
-  - `forwardCompatibleUnionsByDefault: tagged-only | false | true` з'явився в [v1.663.0](https://www.speakeasy.com/changelog/release/v1.663.0). Невідомий дискримінатор дає `{ type: "UNKNOWN"; raw: unknown }`.
-  - Для об'єднань без дискримінатора — `unionStrategy: populated-fields`: спробувати всі варіанти, взяти той, у якому заповнено найбільше полів, при рівності — той, де найменше приведень типів.
-- **OAS 3.2 `discriminator.defaultMapping`** ([OAS 3.2 §4.25](https://spec.openapis.org/oas/v3.2.0.html)). Обов'язковий, якщо властивість-дискримінатор optional. Застосовується, коли властивості **немає або для її значення немає мапінгу**. Це **стандартне** місце для варіанта «невідомий».
-- **ogen** ([sumtype.md](https://github.com/ogen-go/web/blob/main/docs/types/sumtype.md), [features](https://github.com/ogen-go/web/blob/main/docs/02-features.mdx)). `oneOf` стає struct з полем `Type` (enum) і полями варіантів. Дискримінатор виводиться **під час генерації** по драбині:
-  1. явний `discriminator`;
-  2. JSON-тип (для примітивів);
-  3. **унікальні поля**;
-  4. однакове поле з різними JSON-типами;
-  5. однакове поле з непересічними значеннями enum.
-- **Kiota** ([models](https://learn.microsoft.com/en-us/openapi/kiota/models)). `oneOf` — обгортка з окремою властивістю на кожен варіант. Якщо серед варіантів є object, дискримінатор «MUST»; правило `MissingDiscriminator` дає warning. Примітиви пробуються по черзі.
+  - `forwardCompatibleUnionsByDefault: tagged-only | false | true` appeared in [v1.663.0](https://www.speakeasy.com/changelog/release/v1.663.0). An unknown discriminator gives `{ type: "UNKNOWN"; raw: unknown }`.
+  - For unions without a discriminator, `unionStrategy: populated-fields`: try all variants and take the one with the most populated fields; on a tie, the one with the fewest type casts.
+- **OAS 3.2 `discriminator.defaultMapping`** ([OAS 3.2 §4.25](https://spec.openapis.org/oas/v3.2.0.html)). Required if the discriminator property is optional. It applies when the property is **absent or its value has no mapping**. This is the **standard** place for an "unknown" variant.
+- **ogen** ([sumtype.md](https://github.com/ogen-go/web/blob/main/docs/types/sumtype.md), [features](https://github.com/ogen-go/web/blob/main/docs/02-features.mdx)). `oneOf` becomes a struct with a `Type` field (enum) and the variant fields. The discriminator is inferred **at generation time** by a ladder:
+  1. an explicit `discriminator`;
+  2. the JSON type (for primitives);
+  3. **unique fields**;
+  4. a shared field with different JSON types;
+  5. a shared field with non-overlapping enum values.
+- **Kiota** ([models](https://learn.microsoft.com/en-us/openapi/kiota/models)). `oneOf` is a wrapper with a separate property for each variant. If any variant is an object, the discriminator is "MUST"; the `MissingDiscriminator` rule gives a warning. Primitives are tried in turn.
 - **Stainless**
-  - Діагностики ([diagnostics](https://www.stainless.com/docs/reference/diagnostics/)): `Java/SchemaUnionDiscriminatorMissing` («доведеться пробувати кожен варіант по черзі — неефективно або неоднозначно, якщо два варіанти мають однакові required»), `Go/DuplicateVariantDeserializationConditions`, `Schema/DiscriminatedUnionVariantMissingProperty`.
-  - Java-union має `_json()` (сирий JSON) і `Visitor` з методом `unknown(json: JsonValue?)`, який за замовчуванням кидає виняток ([ChatCompletionMessageParam.kt](https://github.com/openai/openai-java/blob/main/openai-java-core/src/main/kotlin/com/openai/models/chat/completions/ChatCompletionMessageParam.kt)).
-- **Fern** `x-fern-discriminator-context: data | protocol` розрізняє дискримінатор усередині JSON і дискримінатор у рамці протоколу, як `event:` в SSE ([discriminator-context](https://buildwithfern.com/learn/api-definitions/openapi/extensions/discriminator-context)).
+  - Diagnostics ([diagnostics](https://www.stainless.com/docs/reference/diagnostics/)): `Java/SchemaUnionDiscriminatorMissing` ("each variant has to be tried in turn: inefficient or ambiguous if two variants have identical required fields"), `Go/DuplicateVariantDeserializationConditions`, `Schema/DiscriminatedUnionVariantMissingProperty`.
+  - The Java union has `_json()` (raw JSON) and a `Visitor` with an `unknown(json: JsonValue?)` method, which by default throws an exception ([ChatCompletionMessageParam.kt](https://github.com/openai/openai-java/blob/main/openai-java-core/src/main/kotlin/com/openai/models/chat/completions/ChatCompletionMessageParam.kt)).
+- **Fern** `x-fern-discriminator-context: data | protocol` distinguishes a discriminator inside the JSON from a discriminator in the protocol framing, like `event:` in SSE ([discriminator-context](https://buildwithfern.com/learn/api-definitions/openapi/extensions/discriminator-context)).
 
-### Що взяти для Dart
+### What to take for Dart
 
-- ✅ **Sealed-ієрархія з варіантом `XUnknown(String? discriminatorValue, Map<String, Object?> raw)`** (R9.1). Також враховувати `defaultMapping` з OAS 3.2: якщо він заданий, запасним варіантом стає вказана схема, а не `Unknown`.
-- ✅ **`oneOf` без дискримінатора (R9.2)**: діагностика з налаштовуваною поведінкою `union_strategy: error | structural | raw` на рівні схеми.
-  - `structural` — драбина ogen, обчислена **під час генерації**: тип → унікальні required-поля → тип поля → непересічні const/enum.
-  - Якщо умови варіантів перетинаються, діагностика як `DuplicateVariantDeserializationConditions` пропонує override дискримінатора.
-  - Runtime-евристику `populated-fields` зі Speakeasy давати лише як явну опцію.
-- ✅ **Змішані примітиви (R9.3)** — обгортка `StringOrInt` з розрізненням за JSON-типом (type discriminator в ogen).
-- ⚠️ **Дискримінатор протоколу і дискримінатор у даних** (Fern) обов'язково врахувати для SSE в R12.
-- ⚠️ **Нагадування з R8 щодо exhaustiveness**: додати варіант у sealed — breaking для `switch` споживача. Варіант `Unknown` цього не рятує.
+- ✅ **A sealed hierarchy with a variant `XUnknown(String? discriminatorValue, Map<String, Object?> raw)`** (R9.1). Also take OAS 3.2's `defaultMapping` into account: if it is set, the schema it names becomes the fallback variant instead of `Unknown`.
+- ✅ **`oneOf` without a discriminator (R9.2)**: a diagnostic with configurable behaviour `union_strategy: error | structural | raw` at the schema level.
+  - `structural` is ogen's ladder, computed **at generation time**: type → unique required fields → field type → non-overlapping const/enum.
+  - If the variants' conditions overlap, a diagnostic such as `DuplicateVariantDeserializationConditions` suggests a discriminator override.
+  - Offer Speakeasy's runtime `populated-fields` heuristic only as an explicit option.
+- ✅ **Mixed primitives (R9.3)** — a `StringOrInt` wrapper that distinguishes by JSON type (a type discriminator in ogen).
+- ⚠️ **The protocol discriminator and the data discriminator** (Fern) must be taken into account for SSE in R12.
+- ⚠️ **A reminder from R8 about exhaustiveness**: adding a variant to a sealed type is breaking for a consumer's `switch`. The `Unknown` variant does not prevent this.
 
 ---
 
-## R10.5 / R10.8. Метадані запиту і security як метадані
+## R10.5 / R10.8. Request metadata and security as metadata
 
-### Як це роблять інші
+### How others do it
 
-- **progenitor** ([progenitor_client.rs](https://github.com/oxidecomputer/progenitor/blob/main/progenitor-client/src/progenitor_client.rs)): `OperationInfo { operation_id: &'static str }` передається в `ClientHooks::pre(&mut request, &info)` і `post`.
-- **openapi-fetch**: middleware `onRequest({ request, schemaPath, params, id, options })`. `schemaPath` — шаблон шляху на кшталт `/projects/{project_id}`, і за ним роблять маршрутизацію логіки ([middleware-auth](https://openapi-ts.dev/openapi-fetch/middleware-auth)).
-- **hey-api** ([згенерований sdk.gen.ts](https://github.com/hey-api/openapi-ts/blob/main/examples/openapi-ts-fetch/src/client/sdk.gen.ts), [auth.gen.ts](https://github.com/hey-api/openapi-ts/blob/main/examples/openapi-ts-fetch/src/client/core/auth.gen.ts)).
-  - Кожен виклик передає `security: [{ scheme: 'bearer', type: 'http' }]`.
-  - Клієнт викликає `auth(auth: Auth)` з `{type, scheme, in, name, key}`. Токен «attached only to requests that require auth».
-  - Це рівно R10.8: security — метадані, а не код у згенерованому методі.
-- **Kiota** `RequestInformation.RequestOptions: IEnumerable<IRequestOption>` — опції middleware на рівні запиту ([abstractions](https://learn.microsoft.com/en-us/openapi/kiota/abstractions)).
+- **progenitor** ([progenitor_client.rs](https://github.com/oxidecomputer/progenitor/blob/main/progenitor-client/src/progenitor_client.rs)): `OperationInfo { operation_id: &'static str }` is passed to `ClientHooks::pre(&mut request, &info)` and `post`.
+- **openapi-fetch**: middleware `onRequest({ request, schemaPath, params, id, options })`. `schemaPath` is a path template such as `/projects/{project_id}`, and logic is routed by it ([middleware-auth](https://openapi-ts.dev/openapi-fetch/middleware-auth)).
+- **hey-api** ([generated sdk.gen.ts](https://github.com/hey-api/openapi-ts/blob/main/examples/openapi-ts-fetch/src/client/sdk.gen.ts), [auth.gen.ts](https://github.com/hey-api/openapi-ts/blob/main/examples/openapi-ts-fetch/src/client/core/auth.gen.ts)).
+  - Each call passes `security: [{ scheme: 'bearer', type: 'http' }]`.
+  - The client calls `auth(auth: Auth)` with `{type, scheme, in, name, key}`. The token is "attached only to requests that require auth".
+  - This is exactly R10.8: security is metadata, not code in the generated method.
+- **Kiota** `RequestInformation.RequestOptions: IEnumerable<IRequestOption>` — middleware options at the request level ([abstractions](https://learn.microsoft.com/en-us/openapi/kiota/abstractions)).
 - **Stainless**
-  - TS: `{ maxRetries, timeout, signal, headers }` на кожен виклик, плюс `.withResponse()` / `.asResponse()` ([openai-node](https://github.com/openai/openai-node)).
+  - TS: `{ maxRetries, timeout, signal, headers }` on each call, plus `.withResponse()` / `.asResponse()` ([openai-node](https://github.com/openai/openai-node)).
   - Python: `extra_headers`, `extra_query`, `extra_body`, `timeout`, `.with_raw_response`, `.with_options()` ([openai-python](https://github.com/openai/openai-python)).
   - Java: `RequestOptions.builder().responseValidation(true)`.
-- **Speakeasy**: `x-speakeasy-retries` на рівні операції і `retries` як аргумент виклику ([retries](https://www.speakeasy.com/docs/customize/runtime/retries)).
-- **ogen**: типізований інтерфейс `SecuritySource` ([features](https://github.com/ogen-go/web/blob/main/docs/02-features.mdx)).
+- **Speakeasy**: `x-speakeasy-retries` at the operation level and `retries` as a call argument ([retries](https://www.speakeasy.com/docs/customize/runtime/retries)).
+- **ogen**: a typed `SecuritySource` interface ([features](https://github.com/ogen-go/web/blob/main/docs/02-features.mdx)).
 
-### Що взяти для Dart (dio)
+### What to take for Dart (dio)
 
-- ✅ **Метадані операції в `Options.extra` під одним ключем** з типізованим доступом із runtime-пакета:
+- ✅ **Operation metadata in `Options.extra` under a single key**, with typed access from the runtime package:
   ```dart
   // runtime
   final class OperationInfo {
     final String operationId, method, pathTemplate;
     final List<String> tags;
-    final List<List<SecurityRequirement>> security; // OR of AND, як в OAS
+    final List<List<SecurityRequirement>> security; // OR of AND, as in OAS
     static OperationInfo? of(RequestOptions o) => o.extra[_key] as OperationInfo?;
   }
   ```
-  Структуру `security` зберегти так, як в OAS: масив альтернатив, кожна з яких — набір схем з `scopes`. hey-api цю структуру спрощує.
-- ✅ **Параметри кожного виклику**: `CancelToken`, `onSendProgress`, `onReceiveProgress`, `Map<String, Object?>? extra`, `Options? options` (зливаються, а не замінюються). Згенерований код нічого не додає до клієнта (R10.1).
-- ✅ **Опційний `SecurityInterceptor`** у runtime на кшталт `auth` у hey-api: `resolve(SecurityScheme scheme) → FutureOr<String?>` підставляє лише ті схеми, яких вимагає операція. Згенерований код авторизацію **не** вбудовує.
+  Keep the `security` structure as in OAS: an array of alternatives, each of which is a set of schemes with `scopes`. hey-api simplifies this structure.
+- ✅ **Per-call parameters**: `CancelToken`, `onSendProgress`, `onReceiveProgress`, `Map<String, Object?>? extra`, `Options? options` (merged, not replaced). The generated code adds nothing to the client (R10.1).
+- ✅ **An optional `SecurityInterceptor`** in the runtime, like `auth` in hey-api: `resolve(SecurityScheme scheme) → FutureOr<String?>` supplies only the schemes that the operation requires. The generated code does **not** embed authorization.
 
 ---
 
-## R11. Типізовані помилки, Result чи винятки, незадокументований статус
+## R11. Typed errors, Result or exceptions, undocumented status
 
-### Як це роблять інші
+### How others do it
 
-- **Kiota: алгоритм вибору типу помилки** ([errors](https://learn.microsoft.com/en-us/openapi/kiota/errors)):
-  1. точний код;
-  2. діапазон `4XX` / `5XX`;
+- **Kiota: the algorithm for choosing the error type** ([errors](https://learn.microsoft.com/en-us/openapi/kiota/errors)):
+  1. the exact code;
+  2. the `4XX` / `5XX` range;
   3. `default`;
-  4. базовий `ApiException` з повідомленням «The server returned an unexpected status code and no error factory is registered for this code».
+  4. the base `ApiException` with the message "The server returned an unexpected status code and no error factory is registered for this code".
 
-  Інші деталі:
-  - `ResponseStatusCode` і `ResponseHeaders` є на базовому класі;
-  - **`x-ms-primary-error-message: true`** позначає поле, звідки береться текст повідомлення;
-  - мапінг вважається валідним, лише якщо схема — object щонайменше з одним полем.
-- **progenitor** — найчистіше розділення варіантів ([progenitor_client.rs](https://github.com/oxidecomputer/progenitor/blob/main/progenitor-client/src/progenitor_client.rs)):
+  Other details:
+  - `ResponseStatusCode` and `ResponseHeaders` are on the base class;
+  - **`x-ms-primary-error-message: true`** marks the field the message text is taken from;
+  - a mapping is considered valid only if the schema is an object with at least one field.
+- **progenitor** — the cleanest separation of variants ([progenitor_client.rs](https://github.com/oxidecomputer/progenitor/blob/main/progenitor-client/src/progenitor_client.rs)):
   ```rust
   pub enum Error<E> {
     InvalidRequest(String), CommunicationError(reqwest::Error), InvalidUpgrade(..),
-    ErrorResponse(ResponseValue<E>),            // задокументована помилка
+    ErrorResponse(ResponseValue<E>),            // documented error
     ResponseBodyError(reqwest::Error),
-    InvalidResponsePayload(Bytes, serde_json::Error), // очікуваний код, не декодувалось
-    UnexpectedResponse(reqwest::Response),      // не описано; «may represent a success or failure»
+    InvalidResponsePayload(Bytes, serde_json::Error), // expected code, payload could not be decoded
+    UnexpectedResponse(reqwest::Response),      // not described; "may represent a success or failure"
     Custom(String) }
   ```
-- **swift-openapi-generator** ([SOAR-0007](https://github.com/apple/swift-openapi-generator/blob/main/Sources/swift-openapi-generator/Documentation.docc/Proposals/SOAR-0007.md)). `Output` — enum з case на кожен задокументований статус плюс **`case undocumented(statusCode: Int, UndocumentedPayload)`**. До цього є **кидальні геттери**: `try await client.getGreeting().ok.body.json` кидає помилку, якщо статус не 200 або тіло не JSON. Одна модель обслуговує обидва стилі: Result-подібний `switch` і винятки.
+- **swift-openapi-generator** ([SOAR-0007](https://github.com/apple/swift-openapi-generator/blob/main/Sources/swift-openapi-generator/Documentation.docc/Proposals/SOAR-0007.md)). `Output` is an enum with a case for each documented status, plus **`case undocumented(statusCode: Int, UndocumentedPayload)`**. Alongside it are **throwing getters**: `try await client.getGreeting().ok.body.json` throws an error if the status is not 200 or the body is not JSON. One model serves both styles: a Result-like `switch` and exceptions.
 - **Stainless**
-  - Ієрархія: `APIError` поділяється на `APIConnectionError` (з `APITimeoutError`) і `APIStatusError(status_code, response)`. Від останнього: `BadRequestError` (400), `AuthenticationError` (401), `PermissionDeniedError` (403), `NotFoundError` (404), `UnprocessableEntityError` (422), `RateLimitError` (429), `InternalServerError` (≥500) ([openai-python](https://github.com/openai/openai-python#handling-errors)).
-  - Java додає `UnexpectedStatusCodeException` для інших статусів, `SseException` для помилок «після успішної початкової відповіді», `IoException` і `InvalidDataException` (лінива валідація: виняток лише при доступі до поля) ([openai-java](https://github.com/openai/openai-java#error-handling)).
+  - Hierarchy: `APIError` splits into `APIConnectionError` (with `APITimeoutError`) and `APIStatusError(status_code, response)`. From the latter: `BadRequestError` (400), `AuthenticationError` (401), `PermissionDeniedError` (403), `NotFoundError` (404), `UnprocessableEntityError` (422), `RateLimitError` (429), `InternalServerError` (≥500) ([openai-python](https://github.com/openai/openai-python#handling-errors)).
+  - Java adds `UnexpectedStatusCodeException` for other statuses, `SseException` for errors "after a successful initial response", `IoException` and `InvalidDataException` (lazy validation: the exception is thrown only on access to a field) ([openai-java](https://github.com/openai/openai-java#error-handling)).
 - **Speakeasy** ([errors](https://www.speakeasy.com/docs/customize/responses/errors)).
-  - `x-speakeasy-errors: {statusCodes: [4XX, 5XX, …], override: true}`. `default` не вважається помилкою, поки його не перелічено.
-  - Типізовані помилки мають «підняті» (hoisted) властивості.
-  - `SDKError` (статус, тіло як рядок, сира відповідь) — для незадокументованих статусів.
-  - `SDKValidationError` з `rawValue` і `pretty()`, `HTTPClientError` — для мережевих помилок.
-  - `x-speakeasy-error-message: true` задає поле з текстом повідомлення.
-- **openapi-python-client**: `Response[T]` з `parsed`; прапорець `raise_on_unexpected_status` (за замовчуванням `False`) кидає `UnexpectedStatus(status_code, content)`.
-- **hey-api** ([types.gen.ts](https://github.com/hey-api/openapi-ts/blob/main/examples/openapi-ts-fetch/src/client/client/types.gen.ts)): дженерик `ThrowOnError`. При `false` метод повертає `{data, error, response}` як розмічене об'єднання, при `true` — кидає виняток. Модель доставки обирається на рівні типу.
-- **ogen, convenient errors** ([convenient_errors.md](https://github.com/ogen-go/web/blob/main/docs/concepts/convenient_errors.md)): якщо **кожна** операція має однакову `default`-відповідь з одним JSON, генерується один спільний тип помилки. Перемикач `convenient_errors: auto | on | off`.
-- **openapi-fetch**: `onError` ловить лише помилки `fetch` (мережа, abort), а 4xx/5xx — ні. Транспорт відокремлено від HTTP.
+  - `x-speakeasy-errors: {statusCodes: [4XX, 5XX, …], override: true}`. `default` is not considered an error until it is listed.
+  - Typed errors have "hoisted" properties.
+  - `SDKError` (status, body as a string, raw response) — for undocumented statuses.
+  - `SDKValidationError` with `rawValue` and `pretty()`, `HTTPClientError` — for network errors.
+  - `x-speakeasy-error-message: true` sets the field with the message text.
+- **openapi-python-client**: `Response[T]` with `parsed`; the `raise_on_unexpected_status` flag (default `False`) throws `UnexpectedStatus(status_code, content)`.
+- **hey-api** ([types.gen.ts](https://github.com/hey-api/openapi-ts/blob/main/examples/openapi-ts-fetch/src/client/client/types.gen.ts)): the generic `ThrowOnError`. With `false`, the method returns `{data, error, response}` as a discriminated union; with `true`, it throws. The delivery model is chosen at the type level.
+- **ogen, convenient errors** ([convenient_errors.md](https://github.com/ogen-go/web/blob/main/docs/concepts/convenient_errors.md)): if **every** operation has the same `default` response with a single JSON, one shared error type is generated. The switch is `convenient_errors: auto | on | off`.
+- **openapi-fetch**: `onError` catches only `fetch` errors (network, abort), not 4xx/5xx. Transport is separated from HTTP.
 
-### Що взяти для Dart
+### What to take for Dart
 
-- ✅ **Sealed-ієрархія в runtime-пакеті** (R11.1, R11.3, R11.7, за зразком progenitor):
+- ✅ **A sealed hierarchy in the runtime package** (R11.1, R11.3, R11.7, modelled on progenitor):
   ```
   ApiFailure<E>
-   ├─ TransportFailure (DioException без response: connection, timeout, cancel)
+   ├─ TransportFailure (DioException without response: connection, timeout, cancel)
    ├─ HttpFailure (status, headers, rawBody)
-   │   ├─ DocumentedError<E>   // тіло E за мапінгом статусу
-   │   └─ UndocumentedResponse // R11.3; може бути і 2xx (як у progenitor)
+   │   ├─ DocumentedError<E>   // body E, per the status mapping
+   │   └─ UndocumentedResponse // R11.3; may also be 2xx (as in progenitor)
    └─ DecodeFailure (status, raw, schema, jsonPath)  // InvalidResponsePayload; R6.5
   ```
-- ✅ **Порядок вибору типу як у Kiota**: точний код → `4XX`/`5XX` → `default` → `UndocumentedResponse`.
-- ✅ **Спільна схема помилки генерується один раз** (R11.4): дедуплікація за `$ref` плюс евристика ogen для однакового `default` у всіх операціях. Поле з текстом повідомлення задається через `x-<tool>-error-message` (за аналогією з `x-ms-primary-error-message` і `x-speakeasy-error-message`).
-- ✅ **Модель доставки (R11.2) у стилі swift**: метод повертає `Future<T>` і кидає `ApiFailure`; поряд — варіант (`…Result()` або extension `.result`), який повертає `Result<T, ApiFailure<E>>`. Помилки dio при цьому йдуть звичайним шляхом через `onError` інтерсептори (R10.2), а згенерований код мапить `DioException` у типізовану помилку **після** ланцюга інтерсепторів. Конфіг: `errors: throw | result | both`.
-- ⚠️ **Лінива валідація** (`InvalidDataException` у Stainless Java) — цікава для сумісності вперед, але суперечить R6.5 («зрозуміла помилка декодування одразу»). Лишити суворе декодування за замовчуванням.
+- ✅ **Type selection order as in Kiota**: exact code → `4XX`/`5XX` → `default` → `UndocumentedResponse`.
+- ✅ **A shared error schema is generated once** (R11.4): deduplication by `$ref`, plus ogen's heuristic for an identical `default` across all operations. The field carrying the message text is set via `x-<tool>-error-message` (by analogy with `x-ms-primary-error-message` and `x-speakeasy-error-message`).
+- ✅ **Delivery model (R11.2) in the Swift style**: the method returns `Future<T>` and throws `ApiFailure`; alongside it is a variant (`…Result()` or an `.result` extension) that returns `Result<T, ApiFailure<E>>`. Dio errors take the regular path through `onError` interceptors (R10.2), and the generated code maps `DioException` to a typed error **after** the interceptor chain. Config: `errors: throw | result | both`.
+- ⚠️ **Lazy validation** (`InvalidDataException` in Stainless Java) is interesting for forward compatibility, but contradicts R6.5 ("a clear decoding error immediately"). Keep strict decoding as the default.
 
 ---
 
-## R12. SSE: типізовані події, `itemSchema`, перепідключення
+## R12. SSE: typed events, `itemSchema`, reconnection
 
-### Як це роблять інші
+### How others do it
 
 - **OAS 3.2** ([§4.14.4, §4.14.6.3](https://spec.openapis.org/oas/v3.2.0.html)).
-  - `text/event-stream` описується через `itemSchema`.
-  - Типова схема події: `{data: string (required), event: string, id: string, retry: integer ≥ 0}`.
-  - JSON у `data` описується через `contentMediaType: application/json` + `contentSchema`. Типи подій — через `oneOf` по `event` з `const`.
-  - Спершу потік парситься за WHATWG: коментарі й невідомі поля ігноруються, багаторядковий `data` склеюється через `\n`. Лише потім застосовується схема. `contentSchema` за замовчуванням не валідується.
-- **FastAPI вже видає `itemSchema`** ([fastapi/openapi/utils.py](https://github.com/fastapi/fastapi/blob/master/fastapi/openapi/utils.py), [SSE reference](https://fastapi.tiangolo.com/reference/sse/)).
-  - Для SSE-маршрутів: `text/event-stream: {itemSchema: {…, data: {type: string, contentMediaType: application/json, contentSchema: <Model>}}}`.
-  - Для генераторів: `application/jsonl: {itemSchema: …}`.
-  - Водночас `openapi_version` за замовчуванням — `"3.1.0"`. Отже, документ 3.1 містить ключ із 3.2. orval прямо згадує, що для «FastAPI's `itemSchema`» доводиться вимикати валідацію ([input.mdx](https://github.com/orval-labs/orval/blob/master/docs/content/docs/reference/configuration/input.mdx)).
+  - `text/event-stream` is described via `itemSchema`.
+  - A typical event schema: `{data: string (required), event: string, id: string, retry: integer ≥ 0}`.
+  - JSON in `data` is described via `contentMediaType: application/json` + `contentSchema`. Event types are given through `oneOf` on `event` with `const`.
+  - The stream is first parsed per WHATWG: comments and unknown fields are ignored, and multi-line `data` is joined with `\n`. Only then is the schema applied. `contentSchema` is not validated by default.
+- **FastAPI already emits `itemSchema`** ([fastapi/openapi/utils.py](https://github.com/fastapi/fastapi/blob/master/fastapi/openapi/utils.py), [SSE reference](https://fastapi.tiangolo.com/reference/sse/)).
+  - For SSE routes: `text/event-stream: {itemSchema: {…, data: {type: string, contentMediaType: application/json, contentSchema: <Model>}}}`.
+  - For generators: `application/jsonl: {itemSchema: …}`.
+  - At the same time, `openapi_version` defaults to `"3.1.0"`. So a 3.1 document contains a key from 3.2. orval explicitly mentions that for "FastAPI's `itemSchema`" validation has to be turned off ([input.mdx](https://github.com/orval-labs/orval/blob/master/docs/content/docs/reference/configuration/input.mdx)).
 - **Speakeasy** ([SSE](https://www.speakeasy.com/docs/customize/runtime/server-sent-events)).
-  - У схемі події дозволені лише поля `id`, `event`, `data`, `retry`; будь-що інше — помилка валідації.
-  - Типи подій задаються через `oneOf` + `discriminator.propertyName: event` з `const`.
-  - **`x-speakeasy-sse-sentinel: '[DONE]'`** ховає сентинел і завершує ітерацію.
-  - `inferSSEOverload` дає один метод з параметром `stream: true`. Окремі методи можна отримати через фрагмент URL (`/chat#streamed`).
+  - Only the fields `id`, `event`, `data`, `retry` are allowed in an event schema; anything else is a validation error.
+  - Event types are given via `oneOf` + `discriminator.propertyName: event` with `const`.
+  - **`x-speakeasy-sse-sentinel: '[DONE]'`** hides the sentinel and ends the iteration.
+  - `inferSSEOverload` gives one method with a `stream: true` parameter. Separate methods can be obtained via a URL fragment (`/chat#streamed`).
 - **Stainless** ([streaming](https://www.stainless.com/docs/sdks/configure/streaming/), [config](https://www.stainless.com/docs/reference/config/)).
-  - `streaming.on_event` — **упорядкована таблиця обробників**:
+  - `streaming.on_event` — **an ordered table of handlers**:
     ```yaml
     on_event:
       - data_starts_with: '[DONE]'
-        handle: done            # дочитати потік, ігноруючи решту
+        handle: done            # read the stream to the end, ignoring the rest
       - event_type: error
-        handle: error           # з error_property
+        handle: error           # with error_property
       - event_type: [ping, heartbeat]
         handle: continue
-      - kind: fallthrough       # ловить усе, включно з майбутніми типами подій
+      - kind: fallthrough       # catches everything, including future event types
         handle: yield
     ```
-  - `event_type: null` ловить події без рядка `event:`.
-  - `done` і `break` відрізняються: `done` дочитує з'єднання до кінця, `break` рве одразу.
-  - Діагностики: `Streaming/DuplicateFallthroughEvents`, `Streaming/ConflictingEventTypeHandling`.
-  - `param_discriminator` задає параметр `stream`, а `stream_event_model` — модель події.
+  - `event_type: null` catches events without an `event:` line.
+  - `done` and `break` differ: `done` reads the connection to the end, `break` aborts immediately.
+  - Diagnostics: `Streaming/DuplicateFallthroughEvents`, `Streaming/ConflictingEventTypeHandling`.
+  - `param_discriminator` sets the `stream` parameter, and `stream_event_model` the event model.
 - **Fern** ([SSE](https://buildwithfern.com/learn/api-definitions/openapi/endpoints/sse), [SSE metadata](https://buildwithfern.com/learn/sdks/deep-dives/sse-metadata)).
-  - Синтаксис: `x-fern-streaming: {format: sse, terminator: "[DONE]", resumable: true, stream-condition: $request.stream, response, response-stream}`.
-  - **`resumable`**: після обриву клієнт перепідключається і надсилає останній id в `Last-Event-ID`.
-    - Затримка береться з `retry:`; якщо його немає — 1 с, з обмеженням 30 с.
-    - **До 5 спроб поспіль; лічильник скидається з кожною отриманою подією.**
-    - Потрібен `terminator`, щоб відрізнити завершений потік від обірваного.
-  - `withMetadata()` дає доступ до `id`, `event` і `retry`.
+  - Syntax: `x-fern-streaming: {format: sse, terminator: "[DONE]", resumable: true, stream-condition: $request.stream, response, response-stream}`.
+  - **`resumable`**: after a disconnect, the client reconnects and sends the last id in `Last-Event-ID`.
+    - The delay is taken from `retry:`; if it is absent, it is 1 s, capped at 30 s.
+    - **Up to 5 consecutive attempts; the counter resets with every event received.**
+    - A `terminator` is required to tell a completed stream from an interrupted one.
+  - `withMetadata()` gives access to `id`, `event` and `retry`.
 - **ogen** ([README, SSE](https://github.com/ogen-go/ogen#server-sent-events)).
-  - `x-ogen-sse-event-shape: data-only` (за замовчуванням схема описує лише `data`) | `full` (уся «конверт»-подія з дискримінатором по `event`) | `full-array`.
-  - Подія відправляється, лише якщо є хоча б один рядок `data:`. `event` за замовчуванням — `"message"`.
-  - `id` і `retry` оновлюються навіть для подій, які не відправлено.
-  - Опції перепідключення: початковий Last-Event-ID, затримка, максимум спроб, розмір буфера, **максимальний розмір події** (`ErrEventTooLarge`: подія дочитується до кінця, потік не закривається).
-  - Інтерфейс: `Next`, `All`, `State`, `Close`.
-- **hey-api** ([serverSentEvents.gen.ts](https://github.com/hey-api/openapi-ts/blob/main/examples/openapi-ts-fetch/src/client/core/serverSentEvents.gen.ts)): опції `onSseEvent`, `onSseError`, `sseDefaultRetryDelay` (3000), `sseMaxRetryAttempts`, `sseMaxRetryDelay` (30000); експоненційний backoff і `Last-Event-ID`.
-- **Нюанси Stainless**: openai-python **не повторює стрім автоматично**, бо «replaying a request could duplicate output already delivered» ([README](https://github.com/openai/openai-python#handling-errors)). openai-java має окремий `SseException` для помилок після 200.
-- **swift-openapi-generator** ([Useful patterns](https://github.com/apple/swift-openapi-generator/blob/main/Sources/swift-openapi-generator/Documentation.docc/Articles/Useful-OpenAPI-patterns.md)): `asDecodedServerSentEventsWithJSONData(of:decoder:while:)`, де `while` — умова завершення, тобто сентинел.
+  - `x-ogen-sse-event-shape: data-only` (by default the schema describes only `data`) | `full` (the whole "envelope" event with a discriminator on `event`) | `full-array`.
+  - An event is sent only if there is at least one `data:` line. The default `event` is `"message"`.
+  - `id` and `retry` are updated even for events that were not sent.
+  - Reconnection options: initial Last-Event-ID, delay, maximum attempts, buffer size, **maximum event size** (`ErrEventTooLarge`: the event is read to the end; the stream is not closed).
+  - Interface: `Next`, `All`, `State`, `Close`.
+- **hey-api** ([serverSentEvents.gen.ts](https://github.com/hey-api/openapi-ts/blob/main/examples/openapi-ts-fetch/src/client/core/serverSentEvents.gen.ts)): options `onSseEvent`, `onSseError`, `sseDefaultRetryDelay` (3000), `sseMaxRetryAttempts`, `sseMaxRetryDelay` (30000); exponential backoff and `Last-Event-ID`.
+- **Stainless nuances**: openai-python **does not retry a stream automatically**, because "replaying a request could duplicate output already delivered" ([README](https://github.com/openai/openai-python#handling-errors)). openai-java has a separate `SseException` for errors after a 200.
+- **swift-openapi-generator** ([Useful patterns](https://github.com/apple/swift-openapi-generator/blob/main/Sources/swift-openapi-generator/Documentation.docc/Articles/Useful-OpenAPI-patterns.md)): `asDecodedServerSentEventsWithJSONData(of:decoder:while:)`, where `while` is the termination condition, that is, the sentinel.
 
-### Що взяти для Dart
+### What to take for Dart
 
-- ✅ **Парсер у runtime-пакеті строго за WHATWG.**
-  - Рядки розбиваються за CR, LF і CRLF; коментарі ігноруються; `data` склеюється.
-  - Подія відправляється, лише якщо є `data`. `event` за замовчуванням — `message`.
-  - `id` і `retry` оновлюються навіть без відправки (як в ogen). Є ліміт розміру події.
-  - На виході `SseEvent {id, event, data, retry}`.
-- ✅ **Джерела схем подій за пріоритетом**:
+- ✅ **The parser in the runtime package follows WHATWG strictly.**
+  - Lines are split on CR, LF and CRLF; comments are ignored; `data` is joined.
+  - An event is dispatched only if there is `data`. The default `event` is `message`.
+  - `id` and `retry` are updated even without dispatch (as in ogen). There is an event size limit.
+  - The output is `SseEvent {id, event, data, retry}`.
+- ✅ **Sources of event schemas, by priority**:
   1. override;
-  2. `itemSchema` — **у будь-якій заявленій версії OAS**: нормалізатор приймає його і в 3.0/3.1 з info-діагностикою (кейс FastAPI);
-  3. сумісні `x-` (`x-<tool>-sse`, опційно читати `x-speakeasy-sse-sentinel` і `x-fern-streaming`);
-  4. `schema` у режимі «data-only», як за замовчуванням в ogen.
-- ✅ **Типізовані події** — sealed з варіантом `UnknownEvent(SseEvent raw)` (R12.2). Дискримінатор з рамки протоколу (`event:`) явно відділено від дискримінатора всередині `data` (`x-fern-discriminator-context`).
-- ✅ **Таблиця обробників як у Stainless**: сентинел (`[DONE]`) дає `done`; подія типу error дає типізовану `SseStreamError` (окремо від HTTP-помилок, як `SseException` у Java); ping дає `skip`; fallthrough дає `yield Unknown`. Діагностики конфліктів правил — як у Stainless.
-- ✅ **Перепідключення (R12.5)** — політика Fern:
-  - `Last-Event-ID` і `retry:` з запасним значенням і обмеженням;
-  - N спроб поспіль зі скиданням лічильника на кожній події;
-  - повтор лише за наявності `terminator`.
+  2. `itemSchema` — **in any declared OAS version**: the normalizer accepts it in 3.0/3.1 too, with an info diagnostic (the FastAPI case);
+  3. compatible `x-` extensions (`x-<tool>-sse`, optionally reading `x-speakeasy-sse-sentinel` and `x-fern-streaming`);
+  4. `schema` in "data-only" mode, as the default in ogen.
+- ✅ **Typed events** — a sealed type with a variant `UnknownEvent(SseEvent raw)` (R12.2). The discriminator from the protocol framing (`event:`) is explicitly separated from the discriminator inside `data` (`x-fern-discriminator-context`).
+- ✅ **A handler table as in Stainless**: the sentinel (`[DONE]`) gives `done`; an error-type event gives a typed `SseStreamError` (separate from HTTP errors, like `SseException` in Java); ping gives `skip`; fallthrough gives `yield Unknown`. Diagnostics for rule conflicts — as in Stainless.
+- ✅ **Reconnection (R12.5)** — the Fern policy:
+  - `Last-Event-ID` and `retry:` with a fallback value and a cap;
+  - N consecutive attempts, with the counter reset on each event;
+  - retry only when a `terminator` is present.
 
-  **За замовчуванням вимкнено для POST**: повтор може задублювати результат (аргумент openai-python). Вмикається прапорцем `resumable` на операції.
-- ⚠️ **NDJSON/JSONL (R12.6)**: FastAPI вже видає `application/jsonl` з `itemSchema`. Парсер варто проєктувати так, щоб формат рамки був змінним (SSE або JSONL).
-
----
-
-## R13.1. Детермінований вихід
-
-### Як це роблять інші
-
-- **Kiota** `kiota-lock.json`: усі параметри генерації і **хеш опису**. Якщо опис і параметри не змінились, генерація пропускається. Файл призначений для коміту ([using](https://learn.microsoft.com/en-us/openapi/kiota/using)).
-- **Speakeasy** `gen.lock`: `docChecksum`, `docVersion`, `speakeasyVersion`, `generationVersion`, `configChecksum`, `releaseVersion`, версії фіч генератора і `releaseNotes` ([versioning](https://www.speakeasy.com/docs/sdks/manage/versioning)).
-- **OpenAPI Generator**: опція `hideGenerationTimestamp` (за замовчуванням `false` у Java), тобто **за замовчуванням вихід не детермінований** ([java](https://openapi-generator.tech/docs/generators/java)). Це ❌-приклад.
-- **openapi-typescript**: `--alphabetize`. **hey-api**: `preserveOrder`; без нього порядок не зберігається «for performance reasons».
-- **oasdiff**: явне правило вибору «спільна схема звітується в першій за алфавітом властивості»: «The same comparison always reports the change at the same property».
-- **Stainless editions**: `edition: "2025-10-08"` — «a versioned set of non-backwards-compatible changes» ([config](https://www.stainless.com/docs/reference/config/)). Генератор змінює вихід, а користувач переходить на нове видання явно. Це відповідь на R15.4: зміна виходу для того самого входу — breaking change. **Kiota** схожим чином має `--exclude-backward-compatible`.
-
-### Що взяти для Dart
-
-- ✅ **У згенерованому коді немає часу, абсолютних шляхів і версії генератора.** Версія живе лише в lock-файлі. Заголовок — стала фраза «GENERATED CODE — DO NOT EDIT».
-- ✅ **`openapi_dart.lock`** містить sha256 специфікації, конфігу, override-ів і baseline, версію генератора, edition і список згенерованих файлів з хешами. На ньому будуються команда `check --up-to-date` для CI і база порівняння для R14.
-- ✅ **Сталий порядок усюди**: сортування за канонічним ключем із тай-брейком за JSON pointer. Кожне правило вибору записане явно (як у oasdiff). Ніяких `HashSet` і `HashMap` у вихідних колекціях. Golden-тести запускаються двічі (і на різних ОС, з `\n`) і порівнюються побайтово.
-- ✅ **`edition` у конфігу** (ідея Stainless). Нові правила виходу йдуть за новим edition, і зміна генератора не ламає користувача без його згоди.
+  **Disabled by default for POST**: a retry may duplicate the result (the openai-python argument). It is enabled with the `resumable` flag on the operation.
+- ⚠️ **NDJSON/JSONL (R12.6)**: FastAPI already emits `application/jsonl` with `itemSchema`. The parser should be designed so that the framing format is pluggable (SSE or JSONL).
 
 ---
 
-## R14. Звіт про зміни між регенераціями, breaking changes Dart API
+## R13.1. Deterministic output
 
-### Як це роблять інші
+### How others do it
+
+- **Kiota** `kiota-lock.json`: all generation parameters and the **hash of the description**. If the description and the parameters have not changed, generation is skipped. The file is meant to be committed ([using](https://learn.microsoft.com/en-us/openapi/kiota/using)).
+- **Speakeasy** `gen.lock`: `docChecksum`, `docVersion`, `speakeasyVersion`, `generationVersion`, `configChecksum`, `releaseVersion`, versions of the generator's features, and `releaseNotes` ([versioning](https://www.speakeasy.com/docs/sdks/manage/versioning)).
+- **OpenAPI Generator**: option `hideGenerationTimestamp` (default `false` in Java), that is, **by default the output is not deterministic** ([java](https://openapi-generator.tech/docs/generators/java)). This is a ❌ example.
+- **openapi-typescript**: `--alphabetize`. **hey-api**: `preserveOrder`; without it the order is not preserved "for performance reasons".
+- **oasdiff**: an explicit selection rule "a shared schema is reported at the first property in alphabetical order": "The same comparison always reports the change at the same property".
+- **Stainless editions**: `edition: "2025-10-08"` — "a versioned set of non-backwards-compatible changes" ([config](https://www.stainless.com/docs/reference/config/)). The generator changes the output, and the user switches to the new edition explicitly. This is the answer to R15.4: a change of output for the same input is a breaking change. **Kiota** similarly has `--exclude-backward-compatible`.
+
+### What to take for Dart
+
+- ✅ **The generated code has no time, absolute paths, or generator version.** The version lives only in the lock file. The header is a fixed phrase "GENERATED CODE — DO NOT EDIT".
+- ✅ **`openapi_dart.lock`** contains the sha256 of the spec, config, overrides and baseline, the generator version, the edition, and the list of generated files with hashes. On it are built the `check --up-to-date` command for CI and the comparison base for R14.
+- ✅ **A stable order everywhere**: sorting by a canonical key with a tie-break by JSON pointer. Every selection rule is written explicitly (as in oasdiff). No `HashSet` and `HashMap` in output collections. Golden tests are run twice (and on different OSes, with `\n`) and compared byte by byte.
+- ✅ **`edition` in config** (Stainless idea). New output rules follow the new edition, and a generator change does not break the user without their consent.
+
+---
+
+## R14. Report on changes between regenerations, Dart API breaking changes
+
+### How others do it
 
 - **oasdiff** ([BREAKING-CHANGES.md](https://github.com/oasdiff/oasdiff/blob/main/docs/BREAKING-CHANGES.md)).
-  - Команди `breaking` і `changelog`. Сотні перевірок з ID на кшталт `response-success-status-removed`, `request-property-became-nullable`, `api-security-removed`; рівні `ERR`, `WARN`, `INFO`.
-  - `--fail-on ERR|WARN|INFO` задає, з якого рівня CI падає.
-  - `--severity-levels file`: рядки `check-id err|warn|info|none`.
-  - `--err-ignore` / `--warn-ignore`: текстові файли (можна markdown) з рядками «METHOD /path + опис».
-  - Формати: `json`, `yaml`, `markdown`, `html`, `githubactions`, `junit`, `singleline`. `oasdiff schema` видає JSON Schema виводу. Є відбиток зміни і позиції в YAML-джерелі.
-  - **Перевірки враховують напрям** ([NULLABILITY.md](https://github.com/oasdiff/oasdiff/blob/main/docs/NULLABILITY.md)): поле запиту стало nullable — не breaking; поле відповіді стало nullable — breaking. Усі три форми nullable (`nullable`, `type: [T, "null"]`, `oneOf` з null) вважаються еквівалентними.
-  - Зміна спільної схеми звітується один раз з «also at …».
-  - Окремо обробляється `x-extensible-enum`.
+  - Commands `breaking` and `changelog`. Hundreds of checks with IDs such as `response-success-status-removed`, `request-property-became-nullable`, `api-security-removed`; levels `ERR`, `WARN`, `INFO`.
+  - `--fail-on ERR|WARN|INFO` sets the level from which CI fails.
+  - `--severity-levels file`: lines `check-id err|warn|info|none`.
+  - `--err-ignore` / `--warn-ignore`: text files (markdown is allowed) with lines "METHOD /path + description".
+  - Formats: `json`, `yaml`, `markdown`, `html`, `githubactions`, `junit`, `singleline`. `oasdiff schema` outputs the JSON Schema of the output. There is a fingerprint of the change and positions in the YAML source.
+  - **Checks account for direction** ([NULLABILITY.md](https://github.com/oasdiff/oasdiff/blob/main/docs/NULLABILITY.md)): a request field that became nullable is not breaking; a response field that became nullable is breaking. All three forms of nullable (`nullable`, `type: [T, "null"]`, `oneOf` with null) are considered equivalent.
+  - A change to a shared schema is reported once, with "also at …".
+  - `x-extensible-enum` is handled separately.
 - **Speakeasy** ([versioning](https://www.speakeasy.com/docs/sdks/manage/versioning), [SDK changelogs](https://www.speakeasy.com/docs/sdks/manage/sdk-changelogs), [breaking changes](https://www.speakeasy.com/docs/sdks/manage/breaking-changes)).
-  - Bump версії рахується з трьох незалежних джерел: фічі генератора в `gen.lock`, `info.version` або checksum специфікації, checksum конфігу. Береться максимальний.
-  - Аналіз **вмісту** специфікації на breaking changes позначено як «coming soon».
-  - Changelog SDK: додані, видалені і змінені методи; видалення позначені як breaking.
-- **Fern** `--version AUTO` ([блог, серпень 2026](https://buildwithfern.com/post/automating-semantic-versioning-api-sdks-claude), [self-hosted](https://buildwithfern.com/learn/sdks/deep-dives/self-hosted-versioning)).
-  - Порівнює **згенерований SDK** попереднього і нового релізу. Результат — major, minor, patch або no_change, плюс changelog і PR summary. CI падає на major.
-  - Альтернатива — `fern ir` + `fern diff` на рівні проміжного представлення (IR).
-  - Документація визнає, що інструмент спирається на «AI diff analysis», і чесно описує хибні спрацювання (вставка поля в Go struct).
-  - Каже прямо: додавання значення enum «additive over HTTP but breaking in a closed-enum deserializer».
-- **Stainless**: breaking change detection — платна enterprise-фіча для GitHub CI ([docs](https://www.stainless.com/docs/enterprise/breaking-change-detection/)).
-- **Dart: `dart_apitool diff --old <ref> --new <ref>`** ([pub.dev](https://pub.dev/packages/dart_apitool)). Посилання бувають шляхом, `pub://name/version` або `git://…`. Є `--version-check-mode none|fully|onlyBreakingChanges`, `--report-format cli|markdown|json` і ненульовий код виходу, якщо semver порушено. Моделює публічний API пакета і порівнює дві версії.
+  - The version bump is computed from three independent sources: generator features in `gen.lock`, `info.version` or the spec checksum, and the config checksum. The maximum is taken.
+  - Analysis of the **content** of the specification for breaking changes is marked "coming soon".
+  - SDK changelog: added, removed and changed methods; removals are marked as breaking.
+- **Fern** `--version AUTO` ([blog, August 2026](https://buildwithfern.com/post/automating-semantic-versioning-api-sdks-claude), [self-hosted](https://buildwithfern.com/learn/sdks/deep-dives/self-hosted-versioning)).
+  - Compares the **generated SDK** of the previous and the new release. The result is major, minor, patch or no_change, plus changelog and PR summary. CI fails on major.
+  - The alternative is `fern ir` + `fern diff` at the level of the intermediate representation (IR).
+  - The documentation admits that the tool relies on "AI diff analysis", and honestly describes false positives (inserting a field into a Go struct).
+  - It says directly: adding an enum value is "additive over HTTP but breaking in a closed-enum deserializer".
+- **Stainless**: breaking change detection — a paid enterprise feature for GitHub CI ([docs](https://www.stainless.com/docs/enterprise/breaking-change-detection/)).
+- **Dart: `dart_apitool diff --old <ref> --new <ref>`** ([pub.dev](https://pub.dev/packages/dart_apitool)). References can be a path, `pub://name/version` or `git://…`. There are `--version-check-mode none|fully|onlyBreakingChanges`, `--report-format cli|markdown|json`, and a non-zero exit code if semver is violated. It models the package's public API and compares two versions.
 
-### Що взяти для Dart
+### What to take for Dart
 
-- ✅ **Два рівні звіту (R14.1).**
-  1. **Зміни специфікації** на нормалізованому IR. ID перевірок у стилі oasdiff, обов'язково **з урахуванням напряму** (запит чи відповідь). Можна запускати і сам oasdiff як зовнішній крок, але власний diff на IR точніший, бо бачить override-и.
-  2. **Зміни Dart API**, обчислені з «моделі поверхні» генератора: класи, конструктори (required чи optional параметри), поля і типи, члени enum, варіанти sealed. Класифікувати треба за правилами Dart, а не HTTP:
-     - новий required-параметр конструктора request-моделі — breaking;
-     - новий член `enum` або варіант `sealed` — breaking для exhaustive `switch` (див. R8/R9);
-     - нове optional поле — не breaking.
+- ✅ **Two levels of report (R14.1).**
+  1. **Specification changes** on the normalized IR. Check IDs in the oasdiff style, necessarily **accounting for direction** (request or response). One can also run oasdiff itself as an external step, but our own diff on the IR is more precise, because it sees overrides.
+  2. **Dart API changes**, computed from the generator's "surface model": classes, constructors (required or optional parameters), fields and types, enum members, sealed variants. They must be classified by Dart rules, not HTTP rules:
+     - a new required constructor parameter of a request model — breaking;
+     - a new `enum` member or `sealed` variant — breaking for an exhaustive `switch` (see R8/R9);
+     - a new optional field — not breaking.
 
-  Як страховка в CI — `dart_apitool diff` на згенерованому пакеті.
-- ✅ **Fingerprint і ignore для схвалених breaking changes** (oasdiff), `--fail-on`, `--severity-levels`. Формати markdown (для PR) і json.
-- ✅ **Bump семантичної версії рахувати як Speakeasy**: максимум із (зміни генератора або edition, зміни специфікації, зміни конфігу). Без LLM-аналізу, детерміновано.
-- ✅ **R14.2 перевіряти автоматично**: golden-тест «додали значення enum / варіант union / optional поле → згенерований код споживача з фікстур компілюється». Це ловить конфлікт exhaustiveness з R8 і R9.
+  As a safety net in CI — `dart_apitool diff` on the generated package.
+- ✅ **Fingerprint and ignore for approved breaking changes** (oasdiff), `--fail-on`, `--severity-levels`. Formats markdown (for PRs) and json.
+- ✅ **Compute the semantic version bump like Speakeasy**: the maximum of (generator or edition changes, spec changes, config changes). No LLM analysis, deterministic.
+- ✅ **Check R14.2 automatically**: a golden test "added an enum value / union variant / optional field → the consumer's generated code from fixtures compiles". This catches the exhaustiveness conflict with R8 and R9.
 
 ---
 
-## Таблиця де-факто `x-` розширень
+## Table of de facto `x-` extensions
 
-Позначки: «читають» означає перевірено в документації чи коді за посиланнями вище. Колонка «Для Dart» — рекомендація.
+Notes: "read" means verified in the documentation or code via the links above. The "For Dart" column is a recommendation.
 
-| Розширення | Призначення | Хто читає | Хто генерує | Для Dart |
+| Extension | Purpose | Who reads | Who generates | For Dart |
 |---|---|---|---|---|
-| `x-enum-varnames` | Імена членів enum (масив, довжина = `enum`) | OpenAPI Generator ([templating](https://github.com/OpenAPITools/openapi-generator/blob/master/docs/templating.md)), oapi-codegen, openapi-python-client, orval, openapi-typescript ([advanced](https://openapi-ts.dev/advanced)) | вручну або через overlay | ✅ читати (R8.4), перевіряти довжину |
-| `x-enumNames` | Те саме, «стиль NSwag/NJsonSchema» | oapi-codegen, orval, openapi-typescript | NSwag/NJsonSchema (ASP.NET); у `@nestjs/swagger` автоматичної генерації не знайдено | ✅ читати як аліас |
-| `x-enum-descriptions` / `x-enumDescriptions` | Опис кожного значення | OpenAPI Generator, openapi-typescript, orval (також варіанти в нижньому регістрі) | NJsonSchema / вручну | ✅ читати обидві форми → doc-коментарі |
-| OAS 3.1 `oneOf: [{const, title, description}]` | «Annotated enumerations» (OAS 3.2 §4.24.6.3, MAY) | oapi-codegen (enum-via-oneOf, `skip-enum-via-oneof`), orval | Pydantic/інші вручну | ✅ розпізнавати як enum з метаданими |
-| `x-extensible-enum` | Відкритий enum (Zalando) | oasdiff, Zally | вручну | ✅ трактувати як open enum |
-| `x-ms-enum` `{name, modelAsString, values[{value,name,description}]}` | Ім'я enum і членів; `modelAsString: true` (за замовчуванням) = розширюваний | AutoRest, Kiota (імена членів) | Azure-специфікації | ✅ читати `name` і `values`; `modelAsString` → open |
-| `x-speakeasy-unknown-values: allow\|disallow` | Відкритий чи закритий enum/union | Speakeasy | — | ⚠️ читати для сумісності |
-| `x-speakeasy-enums` (map\|array), `x-speakeasy-enum-descriptions` | Імена й описи членів | Speakeasy | — | ⚠️ опційно |
-| `x-nullable` | nullable зі Swagger 2.0 | OpenAPI Generator (migration doc), AutoRest | Swashbuckle/NSwag у 2.0 | ✅ нормалізатор → `nullable` (info) |
-| `x-internal` | Виключити з генерації чи публікації | Redocly (`remove-x-internal`), OpenAPI Generator (`REMOVE_X_INTERNAL`, `FILTER`) | вручну / нормалізатор | ✅ поважати як exclude |
-| `x-go-type` / `x-go-type-import` / `x-go-name` / `x-go-type-name` / `x-omitempty` / `x-order` / `x-deprecated-reason` | Мапінг типів і імен для Go | oapi-codegen; ogen читає `x-oapi-codegen-extra-tags` | — | ❌ не читати; ✅ скопіювати дизайн: `x-dart-type` + `x-dart-type-import` |
-| `x-ogen-name`, `x-ogen-properties`, `x-ogen-operation-group`, `x-ogen-sse-event-shape` | Імена, групи, форма SSE | ogen | — | ❌ / ідея `event-shape` ✅ |
-| `x-speakeasy-name-override`, `x-speakeasy-ignore`, `x-speakeasy-retries`, `x-speakeasy-pagination`, `x-speakeasy-errors`, `x-speakeasy-error-message`, `x-speakeasy-sse-sentinel`, `x-speakeasy-type-override: any`, `x-speakeasy-max-method-params` | Повний набір налаштувань SDK | Speakeasy | — | ⚠️ читати `sse-sentinel` і `error-message` опційно; решта — ідеї для власних `x-` |
-| `x-fern-sdk-method-name`, `x-fern-sdk-group-name`, `x-fern-type-name`, `x-fern-ignore`, `x-fern-streaming`, `x-fern-discriminator-context`, `x-fern-pagination`, `x-fern-enum` | Імена, групи, стріми, пагінація | Fern | — | ⚠️ ідеї; `discriminator-context` ✅ як концепт |
-| `x-stainless-pagination-property`, `x-stainless-any`, `x-stainless-naming` | Пагінація, явний any, імена | Stainless | — | ✅ ідея `x-<tool>-any` |
-| `x-ms-primary-error-message` | Поле з текстом помилки | Kiota | Microsoft Graph | ✅ читати (аліас до власного) |
-| `x-ms-pageable`, `x-ms-error-response`, `x-ms-client-name`, `x-ms-discriminator-value` | Пагінація, «це помилка», ім'я, значення дискримінатора | AutoRest | Azure | ⚠️ `x-ms-client-name` можна читати як ім'я |
-| `x-lint-ignore` / `x-zally-ignore` | Вбудоване придушення правил | vacuum / Zally | вручну | ⚠️ ідея для `x-<tool>-ignore` |
-| `x-oapi-codegen-extra-tags` | Довільні Go struct tags | oapi-codegen, ogen | — | ❌ |
+| `x-enum-varnames` | Names of enum members (array, length = `enum`) | OpenAPI Generator ([templating](https://github.com/OpenAPITools/openapi-generator/blob/master/docs/templating.md)), oapi-codegen, openapi-python-client, orval, openapi-typescript ([advanced](https://openapi-ts.dev/advanced)) | manually or via overlay | ✅ read (R8.4), check the length |
+| `x-enumNames` | The same, "NSwag/NJsonSchema style" | oapi-codegen, orval, openapi-typescript | NSwag/NJsonSchema (ASP.NET); no automatic generation found in `@nestjs/swagger` | ✅ read as an alias |
+| `x-enum-descriptions` / `x-enumDescriptions` | Description of each value | OpenAPI Generator, openapi-typescript, orval (also lowercase variants) | NJsonSchema / manually | ✅ read both forms → doc comments |
+| OAS 3.1 `oneOf: [{const, title, description}]` | "Annotated enumerations" (OAS 3.2 §4.24.6.3, MAY) | oapi-codegen (enum-via-oneOf, `skip-enum-via-oneof`), orval | Pydantic/others manually | ✅ recognize as an enum with metadata |
+| `x-extensible-enum` | Open enum (Zalando) | oasdiff, Zally | manually | ✅ treat as open enum |
+| `x-ms-enum` `{name, modelAsString, values[{value,name,description}]}` | Name of the enum and its members; `modelAsString: true` (default) = extensible | AutoRest, Kiota (member names) | Azure specifications | ✅ read `name` and `values`; `modelAsString` → open |
+| `x-speakeasy-unknown-values: allow\|disallow` | Open or closed enum/union | Speakeasy | — | ⚠️ read for compatibility |
+| `x-speakeasy-enums` (map\|array), `x-speakeasy-enum-descriptions` | Names and descriptions of members | Speakeasy | — | ⚠️ optional |
+| `x-nullable` | nullable from Swagger 2.0 | OpenAPI Generator (migration doc), AutoRest | Swashbuckle/NSwag in 2.0 | ✅ normalizer → `nullable` (info) |
+| `x-internal` | Exclude from generation or publication | Redocly (`remove-x-internal`), OpenAPI Generator (`REMOVE_X_INTERNAL`, `FILTER`) | manually / normalizer | ✅ respect as exclude |
+| `x-go-type` / `x-go-type-import` / `x-go-name` / `x-go-type-name` / `x-omitempty` / `x-order` / `x-deprecated-reason` | Type and name mapping for Go | oapi-codegen; ogen reads `x-oapi-codegen-extra-tags` | — | ❌ do not read; ✅ copy the design: `x-dart-type` + `x-dart-type-import` |
+| `x-ogen-name`, `x-ogen-properties`, `x-ogen-operation-group`, `x-ogen-sse-event-shape` | Names, groups, SSE shape | ogen | — | ❌ / idea `event-shape` ✅ |
+| `x-speakeasy-name-override`, `x-speakeasy-ignore`, `x-speakeasy-retries`, `x-speakeasy-pagination`, `x-speakeasy-errors`, `x-speakeasy-error-message`, `x-speakeasy-sse-sentinel`, `x-speakeasy-type-override: any`, `x-speakeasy-max-method-params` | Full set of SDK settings | Speakeasy | — | ⚠️ optionally read `sse-sentinel` and `error-message`; the rest are ideas for our own `x-` extensions |
+| `x-fern-sdk-method-name`, `x-fern-sdk-group-name`, `x-fern-type-name`, `x-fern-ignore`, `x-fern-streaming`, `x-fern-discriminator-context`, `x-fern-pagination`, `x-fern-enum` | Names, groups, streams, pagination | Fern | — | ⚠️ ideas; `discriminator-context` ✅ as a concept |
+| `x-stainless-pagination-property`, `x-stainless-any`, `x-stainless-naming` | Pagination, explicit any, names | Stainless | — | ✅ idea `x-<tool>-any` |
+| `x-ms-primary-error-message` | Field with the error text | Kiota | Microsoft Graph | ✅ read (alias for our own) |
+| `x-ms-pageable`, `x-ms-error-response`, `x-ms-client-name`, `x-ms-discriminator-value` | Pagination, "this is an error", name, discriminator value | AutoRest | Azure | ⚠️ `x-ms-client-name` can be read as the name |
+| `x-lint-ignore` / `x-zally-ignore` | Built-in rule suppression | vacuum / Zally | manually | ⚠️ idea for `x-<tool>-ignore` |
+| `x-oapi-codegen-extra-tags` | Arbitrary Go struct tags | oapi-codegen, ogen | — | ❌ |
 
-Підсумок для реєстру (R15.5): **читати** стандартні або широко вживані (`x-enum-varnames`, `x-enumNames`, `x-enum-descriptions`/`x-enumDescriptions`, `x-extensible-enum`, `x-ms-enum`, `x-nullable`, `x-internal`, анотовані `oneOf+const`). **Власні** — один простір імен `x-<tool>-*` за зразком Speakeasy, Fern і Stainless: `-name`, `-type`, `-type-import`, `-any`, `-unknown-values`, `-error-message`, `-sse`, `-ignore`, `-tristate`. Опційні **аліаси сумісності** (`x-speakeasy-sse-sentinel`, `x-ms-primary-error-message`) теж зафіксувати в реєстрі.
+Summary for the registry (R15.5): **read** the standard or widely used ones (`x-enum-varnames`, `x-enumNames`, `x-enum-descriptions`/`x-enumDescriptions`, `x-extensible-enum`, `x-ms-enum`, `x-nullable`, `x-internal`, annotated `oneOf+const`). **Our own** — one namespace `x-<tool>-*` following the example of Speakeasy, Fern and Stainless: `-name`, `-type`, `-type-import`, `-any`, `-unknown-values`, `-error-message`, `-sse`, `-ignore`, `-tristate`. Optional **compatibility aliases** (`x-speakeasy-sse-sentinel`, `x-ms-primary-error-message`) should also be recorded in the registry.
 
 ---
 
-## Джерела
+## Sources
 
 **Speakeasy**
 - Enums: https://www.speakeasy.com/docs/customize/data-model/enums
@@ -718,7 +718,7 @@
 - Linting: https://www.speakeasy.com/docs/sdks/prep-openapi/linting
 - Extensions: https://www.speakeasy.com/docs/speakeasy-reference/extensions
 - Overlay CLI: https://www.speakeasy.com/docs/speakeasy-reference/cli/overlay
-- Overlay apply (код): https://github.com/speakeasy-api/openapi/blob/main/overlay/apply.go
+- Overlay apply (code): https://github.com/speakeasy-api/openapi/blob/main/overlay/apply.go
 - Versioning / changelogs / breaking: https://www.speakeasy.com/docs/sdks/manage/versioning · https://www.speakeasy.com/docs/sdks/manage/sdk-changelogs · https://www.speakeasy.com/docs/sdks/manage/breaking-changes
 
 **Stainless**
@@ -728,34 +728,34 @@
 - Transforms: https://www.stainless.com/docs/openapi/transforms/
 - Breaking change detection: https://www.stainless.com/docs/enterprise/breaking-change-detection/
 - LSP: https://www.stainless.com/docs/tools/stainless-language-server/
-- SDK, згенеровані Stainless: https://github.com/openai/openai-java · https://github.com/openai/openai-python (`src/openai/_types.py`) · https://github.com/openai/openai-node
+- SDKs generated by Stainless: https://github.com/openai/openai-java · https://github.com/openai/openai-python (`src/openai/_types.py`) · https://github.com/openai/openai-node
 
 **Fern**
 - Extensions overview: https://buildwithfern.com/learn/api-definitions/openapi/extensions/overview
 - SSE: https://buildwithfern.com/learn/api-definitions/openapi/endpoints/sse
-- SSE metadata і reconnection: https://buildwithfern.com/learn/sdks/deep-dives/sse-metadata
+- SSE metadata and reconnection: https://buildwithfern.com/learn/sdks/deep-dives/sse-metadata
 - Discriminator context: https://buildwithfern.com/learn/api-definitions/openapi/extensions/discriminator-context
 - Overrides: https://buildwithfern.com/learn/api-definitions/openapi/overrides
 - Versioning: https://buildwithfern.com/post/automating-semantic-versioning-api-sdks-claude · https://buildwithfern.com/learn/sdks/deep-dives/self-hosted-versioning
 
-**TypeScript-генератори**
+**TypeScript generators**
 - hey-api parser: https://heyapi.dev/openapi-ts/configuration/parser
 - hey-api fetch client: https://heyapi.dev/openapi-ts/clients/fetch
-- hey-api приклад згенерованого клієнта: https://github.com/hey-api/openapi-ts/tree/main/examples/openapi-ts-fetch/src/client
+- hey-api example of a generated client: https://github.com/hey-api/openapi-ts/tree/main/examples/openapi-ts-fetch/src/client
 - orval input/output/enums: https://github.com/orval-labs/orval/tree/master/docs/content/docs
 - openapi-typescript CLI / advanced: https://openapi-ts.dev/cli · https://openapi-ts.dev/advanced
 - openapi-fetch middleware: https://openapi-ts.dev/openapi-fetch/middleware-auth
 
 **Kiota**
-- Using (фільтри, lock, validation rules): https://learn.microsoft.com/en-us/openapi/kiota/using
+- Using (filters, lock, validation rules): https://learn.microsoft.com/en-us/openapi/kiota/using
 - Errors: https://learn.microsoft.com/en-us/openapi/kiota/errors
 - Abstractions (BackingStore, RequestOptions): https://learn.microsoft.com/en-us/openapi/kiota/abstractions
-- Models (oneOf, enums, backing store, імена): https://learn.microsoft.com/en-us/openapi/kiota/models
+- Models (oneOf, enums, backing store, names): https://learn.microsoft.com/en-us/openapi/kiota/models
 - UntypedNode: https://github.com/microsoft/kiota-dotnet/tree/main/src/abstractions/serialization
 
 **Go / Python / Rust / Swift**
 - oapi-codegen: https://github.com/oapi-codegen/oapi-codegen · https://github.com/oapi-codegen/oapi-codegen/blob/main/configuration-schema.json · https://github.com/oapi-codegen/nullable
-- ogen: https://github.com/ogen-go/ogen · документація: https://github.com/ogen-go/web/tree/main/docs (types/optional.md, types/sumtype.md, types/any.md, concepts/convenient_errors.md, spec/extensions.md, 02-features.mdx)
+- ogen: https://github.com/ogen-go/ogen · documentation: https://github.com/ogen-go/web/tree/main/docs (types/optional.md, types/sumtype.md, types/any.md, concepts/convenient_errors.md, spec/extensions.md, 02-features.mdx)
 - openapi-python-client: https://github.com/openapi-generators/openapi-python-client
 - progenitor: https://github.com/oxidecomputer/progenitor (progenitor-client/src/progenitor_client.rs, progenitor-impl/src/lib.rs)
 - swift-openapi-generator: SOAR-0007 https://github.com/apple/swift-openapi-generator/blob/main/Sources/swift-openapi-generator/Documentation.docc/Proposals/SOAR-0007.md · Useful patterns https://github.com/apple/swift-openapi-generator/blob/main/Sources/swift-openapi-generator/Documentation.docc/Articles/Useful-OpenAPI-patterns.md
@@ -767,18 +767,18 @@
 - java `hideGenerationTimestamp`: https://openapi-generator.tech/docs/generators/java
 - AutoRest extensions: https://github.com/Azure/autorest/blob/main/docs/extensions/readme.md
 
-**Інструменти для специфікацій**
+**Tools for specifications**
 - oasdiff: https://github.com/oasdiff/oasdiff/tree/main/docs (BREAKING-CHANGES.md, FINGERPRINT.md, SOURCE-LOCATOR.md, NULLABILITY.md)
 - Spectral: https://github.com/stoplightio/spectral/blob/develop/docs/guides/4d-overrides.md · https://github.com/stoplightio/spectral/blob/develop/docs/guides/2-cli.md
 - Redocly: https://redocly.com/docs/cli/commands/lint · https://redocly.com/docs/cli/configuration/reference/rules · https://redocly.com/docs/cli/decorators
 - vacuum: https://quobix.com/vacuum/commands/lint/ · https://quobix.com/vacuum/ignoring/
 - Zally: https://github.com/zalando/zally · https://github.com/zalando/zally/blob/main/server/rules.md
 
-**Baseline і ratchet у лінтерах коду**
+**Baseline and ratchet in code linters**
 - ESLint suppressions: https://eslint.org/docs/latest/use/suppressions · https://eslint.org/blog/2025/04/introducing-bulk-suppressions/
 - PHPStan baseline: https://phpstan.org/user-guide/baseline
 
-**Стандарти і фреймворки**
+**Standards and frameworks**
 - OpenAPI 3.2.0: https://spec.openapis.org/oas/v3.2.0.html (§4.14.4, §4.14.6.3, §4.24.6.2, §4.24.6.3, §4.25 `defaultMapping`)
 - Overlay: https://spec.openapis.org/overlay/latest.html · https://spec.openapis.org/overlay/
 - FastAPI: https://github.com/fastapi/fastapi/blob/master/fastapi/openapi/utils.py · https://fastapi.tiangolo.com/reference/sse/
@@ -789,10 +789,10 @@
 
 ---
 
-### Що не вдалося перевірити
+### What could not be verified
 
-- Чи підтримує hey-api `x-enum-varnames` / `x-enumNames`: пошук по коду впав на rate limit GitHub, тож hey-api у таблицю не внесено.
-- Чи генерує `@nestjs/swagger` `x-enumNames` автоматично: підтвердження не знайдено.
-- Яка бібліотека Dart реалізує RFC 9535 JSONPath і наскільки повно: не перевірено.
-- Підтримка `extension type` у json_serializable (для варіанта (б) у R8): не перевірено.
-- Опис ogen («дискримінатор виводиться автоматично») не каже явно, що відбувається при неоднозначності — помилка генерації чи щось інше.
+- Whether hey-api supports `x-enum-varnames` / `x-enumNames`: the code search hit the GitHub rate limit, so hey-api was not added to the table.
+- Whether `@nestjs/swagger` generates `x-enumNames` automatically: no confirmation found.
+- Which Dart library implements RFC 9535 JSONPath and how completely: not verified.
+- Support of `extension type` in json_serializable (for option (b) in R8): not verified.
+- The description of ogen ("the discriminator is inferred automatically") does not say explicitly what happens on ambiguity: a generation error or something else.

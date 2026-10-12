@@ -1,83 +1,83 @@
-# План M4: override-и
+# M4 plan: overrides
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** `typed_openapi check` читає файл override-ів клієнта (`clients.<name>.overrides`, JSON або YAML), знаходить у специфікації операції, параметри, тіла, відповіді, схеми й властивості, які він адресує, застосовує його поля специфікації до сирого дерева до правил нормалізатора і звітує про застарілі, зайві, неоднозначні й конфліктні override-и в позиціях файлу override-ів; поля генерації перевіряються і зберігаються для M6; підказки п'яти правил M3, які лише діагностують, закінчуються готовим фрагментом override-у.
+**Goal:** `typed_openapi check` reads a client's overrides file (`clients.<name>.overrides`, JSON or YAML), finds in the spec the operations, parameters, bodies, responses, schemas and properties it addresses, applies its spec fields to the raw tree before the normalizer's rules, and reports stale, superfluous, ambiguous and conflicting overrides at the positions in the overrides file; generation fields are checked and kept for M6; the hints of the five M3 rules that only diagnose end with a ready override fragment.
 
-**Architecture:** Новий шар `lib/src/overrides/`: `OverrideLoader` читає файл через `SpecLoader` (компоновщик M3) у незмінну `OverrideSet` з типізованими записами; `OverrideResolver` перетворює логічні адреси на вузли `SpecModel` (`OverrideTarget`); `OverrideApplier` перетворює поля специфікації на `SpecEdit` рушія M3 з семантикою «set» і діалектним `nullable`; `Normalizer.normalize(..., overrides:)` застосовує ці правки один раз перед проходами правил і повертає `OverrideSet` у `NormalizedSpec`; `OverrideSnippet` обчислює з місця схеми адресу override-у і YAML-фрагмент, який правила додають до `fix` через `RuleContext.withOverride`. `SpecChecker` завантажує файл override-ів кожного клієнта.
+**Architecture:** A new layer `lib/src/overrides/`: `OverrideLoader` reads the file through `SpecLoader` (the M3 composer) into an immutable `OverrideSet` with typed entries; `OverrideResolver` turns logical addresses into `SpecModel` nodes (`OverrideTarget`); `OverrideApplier` turns spec fields into `SpecEdit`s of the M3 engine with "set" semantics and dialect-aware `nullable`; `Normalizer.normalize(..., overrides:)` applies these edits once before the rule passes and returns the `OverrideSet` in `NormalizedSpec`; `OverrideSnippet` computes from the schema's place the override address and the YAML fragment that rules add to `fix` through `RuleContext.withOverride`. `SpecChecker` loads the overrides file of each client.
 
-**Tech Stack:** Dart `>=3.10.0 <4.0.0`, чистий Dart; нових залежностей немає (`collection`, `path`, `source_span` уже прямі); тести на `package:test`.
+**Tech Stack:** Dart `>=3.10.0 <4.0.0`, pure Dart; no new dependencies (`collection`, `path`, `source_span` are already direct); tests on `package:test`.
 
-**Spec:** [docs/superpowers/specs/2026-10-12-m4-overrides-design.md](../specs/2026-10-12-m4-overrides-design.md) — рішення 1–10. Вимоги: R3.1, R3.2 ([requirements.md](../../requirements.md)); R6.8 (`{type, import, converter?}`), R7.2 (override тристановості), R5.3 (група) — лише як поля генерації. Уроки дослідження: [research/README](../../research/README.md) (R3: `reason`, «override не знайшов цілі», адреса — місце в специфікації, а не згенероване ім'я), [research/06 §B](../../research/06-spec-versions-and-defects.md) (чому не семантика Overlay). Рушій правок — [план M3](2026-10-11-m3-normalizer.md), задача 4. Правила коду — [CLAUDE.md](../../../CLAUDE.md).
+**Spec:** [docs/superpowers/specs/2026-10-12-m4-overrides-design.md](../specs/2026-10-12-m4-overrides-design.md) — decisions 1–10. Requirements: R3.1, R3.2 ([requirements.md](../../requirements.md)); R6.8 (`{type, import, converter?}`), R7.2 (override of tri-state), R5.3 (group) — only as generation fields. Lessons from the research: [research/README](../../research/README.md) (R3: `reason`, "override found no target", the address is the place in the spec, not the generated name), [research/06 §B](../../research/06-spec-versions-and-defects.md) (why not the Overlay semantics). The edit engine — [M3 plan](2026-10-11-m3-normalizer.md), task 4. Code rules — [CLAUDE.md](../../../CLAUDE.md).
 
 ## Global Constraints
 
-- SDK `>=3.10.0 <4.0.0`; обидва пакети — чистий Dart. Primary constructors (Dart 3.13) не використовуються.
-- Dart 3.10 активно: dot shorthands скрізь, де відомий тип контексту (`.overrideConflict`, `severity: .error`), null-aware елементи колекцій (`?_parameter(...)`), switch-вирази і patterns, records, модифікатори класів (`final`, `sealed`). У тестах аргументи `expect(...)` — повні імена (`DiagnosticCode.overrideConflict`).
-- ООП: жодних функцій верхнього рівня, крім `main` у `bin/` і тестах. Компоненти, що звітують, отримують `DiagnosticBag` через конструктор (`OverrideLoader(bag)`, `OverrideResolver(bag, set)`, `OverrideApplier(bag, set, documents, version)`).
-- Помилки вхідних даних (специфікація, конфіг, файл override-ів) не кидаються: вони йдуть у `DiagnosticBag`, решта читається. Нічого не вгадується: неоднозначність — діагностика (spec, рішення 8).
-- Кожен новий код — у `DiagnosticCode` з doc-коментарем, slug у kebab-case, рівень за замовчуванням; діагностика про override — у файлі override-ів, з JSON pointer запису (поля) і позицією, і з `reason`, якщо він є (spec, рішення 6–7).
-- Детермінізм (R13.1): записи — у порядку файлу, цілі — у порядку записів, правки — у порядку цілей; звіт сортує `DiagnosticBag.sorted`.
-- Знання структури OAS — у парсері й моделі; override-и знаходять вузли через `SpecModel` і змінюють лише сире дерево через `SpecEdit` (spec, рішення 2–3).
-- Error — лише для справжніх помилок (невалідне значення, невідомий ключ, неоднозначна адреса, конфлікт, відсутній файл); застарілий override — warning, зайвий і спільний вузол — info (R3.2).
-- Негативні тести на валідних входах для кожного шляху: валідний файл override-ів — жодної діагностики; поля генерації — жодної правки; спільний параметр двох операцій — не конфлікт.
-- Фікстури — вигадані й маленькі. Приватна специфікація компанії не використовується ні як фікстура, ні як джерело фікстур. Публічний корпус — лише для прогону `check`.
-- Лінти з кореневого `analysis_options.yaml`; `dart analyze packages` з кореня — `No issues found!`; `dart format lib test bin` (з `packages/typed_openapi`) — другий запуск змінює 0 файлів.
-- Тести не ходять у мережу; тимчасові файли — лише через `test/helpers/temp_dir.dart`.
-- Команди `dart test`, `dart format` — з `packages/typed_openapi`; `dart analyze packages`, `git apply` і `git` — з кореня репозиторію. Diff-и в плані застосовуються `git apply` (з кореня).
-- Кожен коміт — Conventional Commits і закінчується рядком `Co-Authored-By` моделі, що виконує задачу (у прикладах — `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`).
+- SDK `>=3.10.0 <4.0.0`; both packages are pure Dart. Primary constructors (Dart 3.13) are not used.
+- Dart 3.10 actively: dot shorthands wherever the context type is known (`.overrideConflict`, `severity: .error`), null-aware collection elements (`?_parameter(...)`), switch expressions and patterns, records, class modifiers (`final`, `sealed`). In tests the arguments of `expect(...)` are full names (`DiagnosticCode.overrideConflict`).
+- OOP: no top-level functions except `main` in `bin/` and tests. Components that report get a `DiagnosticBag` through the constructor (`OverrideLoader(bag)`, `OverrideResolver(bag, set)`, `OverrideApplier(bag, set, documents, version)`).
+- Input errors (spec, config, overrides file) are not thrown: they go to `DiagnosticBag`, and the rest is read. Nothing is guessed: ambiguity is a diagnostic (spec, decision 8).
+- Every new code goes into `DiagnosticCode` with a doc comment, a kebab-case slug and a default level; a diagnostic about an override is reported in the overrides file, at the JSON pointer of the entry (field) and its position, and with the `reason`, if there is one (spec, decisions 6–7).
+- Determinism (R13.1): entries in file order, targets in entry order, edits in target order; the report is sorted by `DiagnosticBag.sorted`.
+- Knowledge of the OAS structure lives in the parser and the model; overrides find nodes through `SpecModel` and change only the raw tree, through `SpecEdit` (spec, decisions 2–3).
+- Error — only for real errors (an invalid value, an unknown key, an ambiguous address, a conflict, a missing file); a stale override — warning; a superfluous one and a shared node — info (R3.2).
+- Negative tests on valid inputs for each path: a valid overrides file — no diagnostic; generation fields — no edit; a parameter shared by two operations — not a conflict.
+- Fixtures are invented and small. A private company spec is used neither as a fixture nor as a source of fixtures. The public corpus is used only for the `check` run.
+- Lints come from the root `analysis_options.yaml`; `dart analyze packages` from the root — `No issues found!`; `dart format lib test bin` (from `packages/typed_openapi`) — a second run changes 0 files.
+- Tests do not touch the network; temporary files only through `test/helpers/temp_dir.dart`.
+- The commands `dart test`, `dart format` run from `packages/typed_openapi`; `dart analyze packages`, `git apply` and `git` run from the repository root. The diffs in the plan are applied with `git apply` (from the root).
+- Every commit uses Conventional Commits and ends with a `Co-Authored-By` line of the model that performs the task (in the examples — `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`).
 
-## Ухвалені рішення
+## Decisions made
 
-Рішення специфікації M4 — обов'язкові. Тут — те, що специфікація лишає планові; формат файлу й семантику, які бачить користувач, підтвердили користувач (рішення 1, 2, 13, 14) і контролер (решта) після першої версії плану.
+The decisions of the M4 spec are mandatory. Here is what the spec leaves to the plan; the file format and the semantics that the user sees were confirmed by the user (decisions 1, 2, 13, 14) and by the controller (the rest) after the first version of the plan.
 
-1. **Формат файлу.** Корінь — `operations` і `schemas`. Ключ операції — `operationId` або `METHOD /path` (метод без урахування регістру, один із методів `PathItem.methods`; невідомий метод — TOA802). У операції: `reason`, `name`, `exclude`, `group`, `parameters`, `requestBody`, `responses`. Параметр — за `name` або `in:name` (`path:id`); у ньому `required`, `schema` (поля специфікації), `name`, `dartType` (генерації). `requestBody` і `responses.<code>`: `contentType`, `schema`. Схема (ключ `components.schemas`): `$ref`, `type`, `nullable`, `format`, `required` (список імен), `items`, `additionalProperties`, `enum`, `discriminator` (специфікації), `name`, `exclude`, `exhaustive`, `dartType`, `properties`. Властивість — ті самі поля специфікації, але `required` — булеве; генерації: `name`, `exclude`, `dartType`, `triState`. `dartType: {type, import, converter?}` (R6.8). Кожен запис може мати `reason`. Ключі — camelCase, як в OpenAPI (конфіг лишається snake_case: `line_width`); `type` — один рядок, без списку типів 3.1; `exclude` — на операціях, схемах і властивостях, не на параметрах. **`sse` у M4 не приймається** (його форма — справа M10, а зміна форми потім зламала б файли користувачів): зараз це невідомий ключ, TOA803.
-2. **`null` прибирає поле** специфікації (`format: null`, `type: null`): так закривається TOA204 (`format` на масиві) і TOA206 (`type: object` проти гілок). `type` — один рядок із семи типів JSON Schema, крім `null` (нульовість — через `nullable`).
-3. **Семантика «set» (spec, рішення 4) на рівні поля запису:** кожне перелічене поле замінює значення специфікації цілком (`items`, `schema`, `discriminator` — об'єкт цілком), неперелічені лишаються.
-4. **`$ref` у записі схеми чи властивості робить схему посиланням:** вузол замінюється цілком. Разом із `$ref` дозволені лише `nullable`, `reason`, поля генерації і `required` властивості; інші поля специфікації — TOA802 (рішення читача), `properties` у записі схеми з `$ref` — TOA802. Nullable-посилання: у 3.0 — `{allOf: [{$ref}], nullable: true}`, з 3.1 — `{anyOf: [{$ref}, {type: 'null'}]}`. Властивість, що вже є `$ref`, з override-ом `nullable` стає nullable-посиланням. M6 має читати обидві форми.
-5. **Діалектний `nullable` (spec, рішення 5)** за версією, яку оголошує документ: у 3.0 `nullable: true` додається, `nullable: false` прибирає поле. З 3.1 `null` додається в `type` або прибирається з нього; `type` в override-і зберігає нульовість схеми (`[integer, 'null']` + `type: number` → `[number, 'null']`). `nullable: true` для схеми без `type` у 3.1+ — TOA802 «додай `type`».
-6. **Цілі.** Схема — те, на чому закінчується ланцюжок `$ref` ключа `components.schemas` (зокрема в іншому файлі); властивість — вузол у власних `properties` цієї схеми, без переходу за `$ref` (змінюється лише ця властивість); параметр — вузол, що його визначає (параметр операції перекриває параметр шляху з тим самим `name` + `in`; `$ref` веде в `components.parameters`); тіло й відповідь — за `$ref`. Вебхуки, `additionalOperations` за `METHOD /path`, вкладені властивості й успадковані через `allOf` властивості не адресуються (див. «Відкладено»). **Спільний вузол:** коли override, адресований через операцію (її параметр, тіло, відповідь), має поля специфікації, а його вузол лежить поза операцією (параметр шляху, `$ref` на компонент, вузол в іншому файлі), — `TOA808 override-shared-target` (info) у позиції override-у: зміна стосується спільного вузла, повідомлення називає його місце (pointer, а для іншого файлу — `файл#pointer`). Override, адресований прямо ім'ям схеми, такої діагностики не дає.
-7. **Конфлікти двох рівнів.** Адресний: два записи називають один вузол (`getPet` і `GET /pets/{id}`; `id` і `path:id` в одній операції; дві схеми-аліаси) — TOA806 на кожному, жоден не застосовується, вкладені записи операції чи схеми — теж. Правковий: дві *різні* правки, що перекриваються (`SpecEdit.overlaps`), від різних записів — TOA806 на кожному полі, обидві не робляться; однакові правки (`sameAs`) робляться один раз. Так спільний параметр шляху, який дві операції роблять `required: true`, — не конфлікт, а `required: [a]` схеми разом із `required: true` властивості — конфлікт.
-8. **Тіло й відповідь.** `contentType` X: якщо X уже є — лишається тільки він; якщо media type один — він перейменовується на X; якщо немає жодного — додається `{X: {}}`; кілька і жоден не X — TOA805. `schema` без `contentType` — у єдиний media type; кілька — TOA805, жодного — TOA802 «додай `contentType`».
-9. **«Нічого не змінив» (TOA807) — по полю**, у позиції поля, а не запису: запис може змінювати одне поле і повторювати інше. Порівняння — зі специфікацією, як її прочитано (до правил нормалізатора): override, який повторює виправлення правила, зайвим не позначається. Поля генерації не порівнюються.
-10. **Застосування.** `Normalizer` читає модель один раз у тимчасовий журнал, розв'язує цілі, застосовує правки override-ів (`TreeEditor`, документи читаються один раз і передаються в проходи як `others`), а далі працює як у M3. Правка, яку не вдалося застосувати, — TOA800 у позиції override-у. Файл override-ів, який не можна використати (TOA801; TOA802 — синтаксис, корінь не об'єкт, каталог замість файлу з власним повідомленням «Overrides path … is a directory»), — помилка; `check` усе одно перевіряє специфікацію без нього, а `generate` (M9) мусить такого клієнта пропустити. Прогони `SpecChecker` розрізняються ще й файлом override-ів.
-11. **Фрагменти в підказках (spec, рішення 9)** — лише там, де override повністю закриває дефект: `double-array` (TOA203: `items` ← внутрішні `items`), `format-on-array` (TOA204: `format: null` і `items: {type, format}` — лише коли тип елементів випливає з відомого формату: `int32`/`int64` → `integer`, `float`/`double` → `number`, рядкові формати OpenAPI і JSON Schema (`date`, `date-time`, `time`, `duration`, `uuid`, `byte`, `binary`, `password`, `email`, `uri`, `hostname`, `ipv4` тощо) → `string`; для невідомого формату фрагмента немає, діагностика лишається), `binary-object` (TOA205: `type: string`), `contradictory-object-type` (TOA206: `type: null`), `nullable-enum-one-of` (TOA303: `$ref` + `nullable: true`). Не отримують: `array-without-items` (тип елементів невідомий), `example-type-mismatch` (невідомо, що правильне — приклад чи схема), `path-param-not-in-template`, `duplicate-operation-id` (потрібне ім'я на проводі чи нове ім'я — вгадування), `wildcard-media-type` (невідомо, який media type), правила дискримінатора. Адреса — `schemas.<key>` або `schemas.<key>.properties.<name>`; ключ, що визначає схему, має перевагу над ключем-аліасом; без адреси фрагмента немає. Фрагмент — блоковий YAML, значення — flow-стиль, рядки, які YAML прочитав би інакше (`on`, `1.5`, `#/...`), — у лапках JSON. `TextReporter` зсуває рядки багаторядкового `fix` на 4 пробіли.
-12. **Коди TOA801–TOA808** (TOA800 зайнятий).
-13. **Невідомий ключ — помилка (TOA803)**, а не warning: одрук `nulable: true` інакше мовчки не застосовувався б. Якщо відомий ключ того самого рівня на відстані Левенштейна ≤ 2, `fix` починається з `Did you mean "<ключ>"?` (з кількох — найближчий, за рівної відстані — перший за абеткою); далі — перелік дозволених ключів.
-14. **Позиція діагностики запису** — на значенні запису (`api.overrides.yaml:2:11`), а не на ключі: так компоновщик зберігає позиції за pointer; для запису блоком — перший ключ усередині.
+1. **File format.** The root is `operations` and `schemas`. The operation key is `operationId` or `METHOD /path` (the method is case-insensitive, one of the methods of `PathItem.methods`; an unknown method is TOA802). In an operation: `reason`, `name`, `exclude`, `group`, `parameters`, `requestBody`, `responses`. A parameter is addressed by `name` or `in:name` (`path:id`); it has `required`, `schema` (spec fields), `name`, `dartType` (generation). `requestBody` and `responses.<code>`: `contentType`, `schema`. A schema (key `components.schemas`): `$ref`, `type`, `nullable`, `format`, `required` (a list of names), `items`, `additionalProperties`, `enum`, `discriminator` (spec), `name`, `exclude`, `exhaustive`, `dartType`, `properties`. A property — the same spec fields, but `required` is a boolean; generation: `name`, `exclude`, `dartType`, `triState`. `dartType: {type, import, converter?}` (R6.8). Each entry may have a `reason`. Keys are camelCase, as in OpenAPI (the config stays snake_case: `line_width`); `type` is one string, not a list of 3.1 types; `exclude` is on operations, schemas and properties, not on parameters. **`sse` is not accepted in M4** (its shape is the business of M10, and changing the shape later would break the users' files): for now it is an unknown key, TOA803.
+2. **`null` removes the spec field** (`format: null`, `type: null`): this is how TOA204 (`format` on an array) and TOA206 (`type: object` against branches) are closed. `type` is one string from the seven JSON Schema types, except `null` (nullability goes through `nullable`).
+3. **"Set" semantics (spec, decision 4) at the level of an entry field:** each listed field replaces the spec's value entirely (`items`, `schema`, `discriminator` — the whole object); unlisted ones stay.
+4. **A `$ref` in a schema or property entry makes the schema a reference:** the node is replaced entirely. Together with `$ref` only `nullable`, `reason`, generation fields and a property's `required` are allowed; other spec fields — TOA802 (the reader's decision); `properties` in a schema entry with `$ref` — TOA802. Nullable reference: in 3.0 — `{allOf: [{$ref}], nullable: true}`, from 3.1 — `{anyOf: [{$ref}, {type: 'null'}]}`. A property that is already a `$ref`, with a `nullable` override, becomes a nullable reference. M6 must read both forms.
+5. **Dialect-aware `nullable` (spec, decision 5)** follows the version the document declares: in 3.0 `nullable: true` is added, `nullable: false` removes the field. From 3.1 `null` is added to `type` or removed from it; `type` in an override keeps the schema's nullability (`[integer, 'null']` + `type: number` → `[number, 'null']`). `nullable: true` for a schema without `type` in 3.1+ — TOA802 "add `type`".
+6. **Targets.** A schema is the node where the `$ref` chain of a `components.schemas` key ends (including in another file); a property is the node in that schema's own `properties`, without following its `$ref` (only that property changes); a parameter is the node that defines it (an operation's parameter overrides a path parameter with the same `name` + `in`; a `$ref` leads to `components.parameters`); a body and a response — through `$ref`. Webhooks, `additionalOperations` by `METHOD /path`, nested properties and properties inherited through `allOf` are not addressed (see "Deferred"). **Shared node:** when an override addressed through an operation (its parameter, body, response) has spec fields, and its node lies outside the operation (a path parameter, a `$ref` to a component, a node in another file), — `TOA808 override-shared-target` (info) at the position of the override: the change concerns a shared node, and the message names its place (the pointer, and for another file — `file#pointer`). An override addressed directly by the schema name gives no such diagnostic.
+7. **Conflicts on two levels.** Address level: two entries name one node (`getPet` and `GET /pets/{id}`; `id` and `path:id` in one operation; two alias schemas) — TOA806 on each, none is applied, and nested entries of the operation or schema too. Edit level: two *different* edits that overlap (`SpecEdit.overlaps`), from different entries — TOA806 on each field, neither is made; identical edits (`sameAs`) are made once. So a shared path parameter that two operations make `required: true` is not a conflict, but `required: [a]` of a schema together with `required: true` of a property is a conflict.
+8. **Body and response.** `contentType` X: if X is already there, only it stays; if there is one media type, it is renamed to X; if there is none, `{X: {}}` is added; several and none is X — TOA805. `schema` without `contentType` — into the single media type; several — TOA805, none — TOA802 "add `contentType`".
+9. **"Changed nothing" (TOA807) — per field**, at the position of the field, not of the entry: an entry may change one field and repeat another. The comparison is with the spec as it was read (before the normalizer's rules): an override that repeats a rule's fix is not marked as superfluous. Generation fields are not compared.
+10. **Application.** `Normalizer` reads the model once into a temporary journal, resolves the targets, applies the overrides' edits (`TreeEditor`; documents are read once and passed to the passes as `others`), and from there works as in M3. An edit that could not be applied — TOA800 at the position of the override. An overrides file that cannot be used (TOA801; TOA802 — syntax, the root is not an object, a directory instead of a file with its own message "Overrides path … is a directory") — an error; `check` still checks the spec without it, and `generate` (M9) must skip such a client. The `SpecChecker` runs also differ by the overrides file.
+11. **Fragments in hints (spec, decision 9)** — only where an override fully closes the defect: `double-array` (TOA203: `items` ← inner `items`), `format-on-array` (TOA204: `format: null` and `items: {type, format}` — only when the element type follows from a known format: `int32`/`int64` → `integer`, `float`/`double` → `number`, string formats of OpenAPI and JSON Schema (`date`, `date-time`, `time`, `duration`, `uuid`, `byte`, `binary`, `password`, `email`, `uri`, `hostname`, `ipv4` etc.) → `string`; for an unknown format there is no fragment, the diagnostic stays), `binary-object` (TOA205: `type: string`), `contradictory-object-type` (TOA206: `type: null`), `nullable-enum-one-of` (TOA303: `$ref` + `nullable: true`). They do not get one: `array-without-items` (the element type is unknown), `example-type-mismatch` (it is unknown what is right — the example or the schema), `path-param-not-in-template`, `duplicate-operation-id` (it would need a name on the wire or a new name — guessing), `wildcard-media-type` (it is unknown which media type), the discriminator rules. The address is `schemas.<key>` or `schemas.<key>.properties.<name>`; the key that defines the schema takes precedence over the alias key; without an address there is no fragment. The fragment is block YAML, the values are flow style, and strings that YAML would read differently (`on`, `1.5`, `#/...`) are in JSON quotes. `TextReporter` shifts the lines of a multi-line `fix` by 4 spaces.
+12. **Codes TOA801–TOA808** (TOA800 is taken).
+13. **An unknown key is an error (TOA803)**, not a warning: a typo `nulable: true` would otherwise be silently not applied. If a known key of the same level is at Levenshtein distance ≤ 2, the `fix` starts with `Did you mean "<key>"?` (of several — the nearest; at an equal distance — the first in alphabetical order); then comes the list of allowed keys.
+14. **The position of an entry's diagnostic** is on the value of the entry (`api.overrides.yaml:2:11`), not on the key: this is how the composer keeps positions by pointer; for a block entry — its first key inside.
 
-**Відкладено.** Не адресуються в M4: вебхуки, `additionalOperations` 3.2 за `METHOD /path` (за `operationId` — так), вкладені властивості, властивості з `allOf`, схеми поза `components.schemas` (схему параметра чи тіла змінює лише `schema` цілком). Пункти «Перенесено з M3» у roadmap, призначені на M4 (URI з percent-кодуванням у ключах `SpecDocuments`, зсув позицій після правок списку, повторне читання файлу, що не завантажився), переходять у M6; roadmap оновлює контролер.
+**Deferred.** Not addressed in M4: webhooks, `additionalOperations` 3.2 by `METHOD /path` (by `operationId` — yes), nested properties, properties from `allOf`, schemas outside `components.schemas` (the schema of a parameter or a body is changed only as a whole `schema`). The items "Moved from M3" in the roadmap, assigned to M4 (URIs with percent-encoding in `SpecDocuments` keys, a shift of positions after list edits, re-reading a file that did not load), move to M6; the controller updates the roadmap.
 
-## Нові коди діагностики
+## New diagnostic codes
 
-| Код | Slug | Рівень | Коли | Задача | Spec |
+| Code | Slug | Level | When | Task | Spec |
 |---|---|---|---|---|---|
-| TOA801 | `overrides-not-found` | error | Файлу override-ів, який указує клієнт, немає | 1 | brief |
-| TOA802 | `invalid-override` | error | Файл не читається (синтаксис, корінь не об'єкт, каталог, дублікати ключів — з рівнем джерела) або значення не того типу; значення ігнорується | 1, 3 | рішення 10 |
-| TOA803 | `unknown-override-key` | error | Невідомий ключ (зокрема `sse`); ігнорується; «did you mean» для близького відомого | 1 | рішення 13 |
-| TOA804 | `override-target-not-found` | warning | Ціль не знайдено | 2 | рішення 6 |
-| TOA805 | `override-target-ambiguous` | error | Адреса називає кілька вузлів (`operationId` двічі, ім'я параметра в кількох `in`, кілька media types) | 2, 3 | рішення 8 |
-| TOA806 | `override-conflict` | error | Два override-и одного вузла | 2, 3 | рішення 8 |
-| TOA807 | `override-unchanged` | info | Специфікація вже має це значення; override можна прибрати | 3 | рішення 6 |
-| TOA808 | `override-shared-target` | info | Override через операцію змінює спільний вузол (параметр шляху, `$ref`, інший файл) | 2 | рішення 6 |
+| TOA801 | `overrides-not-found` | error | The overrides file the client points to is missing | 1 | brief |
+| TOA802 | `invalid-override` | error | The file cannot be read (syntax, the root is not an object, a directory, duplicate keys — with the level of the source) or a value of the wrong type; the value is ignored | 1, 3 | decision 10 |
+| TOA803 | `unknown-override-key` | error | An unknown key (including `sse`); ignored; "did you mean" for a close known one | 1 | decision 13 |
+| TOA804 | `override-target-not-found` | warning | The target is not found | 2 | decision 6 |
+| TOA805 | `override-target-ambiguous` | error | The address names several nodes (`operationId` twice, a parameter name in several `in`, several media types) | 2, 3 | decision 8 |
+| TOA806 | `override-conflict` | error | Two overrides of one node | 2, 3 | decision 8 |
+| TOA807 | `override-unchanged` | info | The spec already has this value; the override can be removed | 3 | decision 6 |
+| TOA808 | `override-shared-target` | info | An override through an operation changes a shared node (a path parameter, a `$ref`, another file) | 2 | decision 6 |
 
-## Файли
+## Files
 
-Шляхи відносно `packages/typed_openapi/`.
+Paths relative to `packages/typed_openapi/`.
 
-| Файл | Відповідальність | Задача |
+| File | Responsibility | Task |
 |---|---|---|
-| `lib/src/overrides/override_set.dart` | `OverrideSet`, `OverrideEntry` і підкласи, `DartTypeOverride` | 1 |
-| `lib/src/overrides/override_loader.dart` | `OverrideLoader`: файл → `OverrideSet`, TOA801–TOA803 | 1 |
-| `lib/src/overrides/override_resolver.dart` | `OverrideResolver`, `OverrideTarget` і підкласи; TOA804–TOA806, TOA808 | 2 |
-| `lib/src/overrides/override_applier.dart` | `OverrideApplier`, `OverrideEdit`; поля → `SpecEdit`, TOA807, правкові конфлікти | 3 |
-| `lib/src/normalize/normalizer.dart`, `lib/src/check/spec_checker.dart` | `overrides:` у `normalize`, `NormalizedSpec.overrides`; завантаження файлу клієнта | 3 |
-| `lib/src/overrides/override_snippet.dart` | `OverrideSnippet`: місце → адреса, YAML | 4 |
-| `lib/src/normalize/normalizer_rule.dart`, `rules/schema_shape_rules.dart`, `rules/enum_rules.dart`, `lib/src/diagnostics/reporters.dart` | `RuleContext.withOverride`, фрагменти в п'яти правилах, багаторядковий `fix` | 4 |
-| `lib/src/diagnostics/diagnostic_code.dart` | нові коди | 1–3 |
-| `lib/typed_openapi.dart`, `CLAUDE.md`, `CHANGELOG.md`, `README.md`, `README.ua.md` | Експорт і документація | 5 |
+| `lib/src/overrides/override_set.dart` | `OverrideSet`, `OverrideEntry` and its subclasses, `DartTypeOverride` | 1 |
+| `lib/src/overrides/override_loader.dart` | `OverrideLoader`: file → `OverrideSet`, TOA801–TOA803 | 1 |
+| `lib/src/overrides/override_resolver.dart` | `OverrideResolver`, `OverrideTarget` and its subclasses; TOA804–TOA806, TOA808 | 2 |
+| `lib/src/overrides/override_applier.dart` | `OverrideApplier`, `OverrideEdit`; fields → `SpecEdit`, TOA807, edit conflicts | 3 |
+| `lib/src/normalize/normalizer.dart`, `lib/src/check/spec_checker.dart` | `overrides:` in `normalize`, `NormalizedSpec.overrides`; loading of the client's file | 3 |
+| `lib/src/overrides/override_snippet.dart` | `OverrideSnippet`: place → address, YAML | 4 |
+| `lib/src/normalize/normalizer_rule.dart`, `rules/schema_shape_rules.dart`, `rules/enum_rules.dart`, `lib/src/diagnostics/reporters.dart` | `RuleContext.withOverride`, fragments in the five rules, multi-line `fix` | 4 |
+| `lib/src/diagnostics/diagnostic_code.dart` | new codes | 1–3 |
+| `lib/typed_openapi.dart`, `CLAUDE.md`, `CHANGELOG.md`, `README.md`, `README.ua.md` | Exports and documentation | 5 |
 
-## Інтерфейси між задачами
+## Interfaces between tasks
 
 ```dart
 // overrides/override_set.dart (Task 1)
@@ -128,11 +128,11 @@ final class OverrideSnippet { const OverrideSnippet(SpecModel);
 String RuleContext.withOverride(String fix, SpecLocation schema, Map<String, Object?> fields);
 ```
 
-Кожну задачу перевірено так: код зібрано й перевірено на окремій гілці, потім задачі 1–5 відтворено з `main` (d33e8e8) лише з блоків коду цього плану (створення файлів, `git apply` diff-ів), і після кожної задачі `dart analyze packages` чистий, `dart format` удруге змінює 0 файлів, `dart test` зелений з кількістю тестів, указаною в задачі; кінцеве дерево збігається з перевіреним. Прогін `check` на публічному корпусі (14 специфікацій) після задачі 5 дає той самий JSON-звіт, що й `main` (1029 діагностик: 2 error, 853 warning, 174 info; у корпусі немає ні override-ів, ні знахідок TOA203–TOA206/TOA303).
+Each task was checked this way: the code was assembled and checked on a separate branch, then tasks 1–5 were reproduced from `main` (d33e8e8) using only the code blocks of this plan (creating files, `git apply` of diffs), and after each task `dart analyze packages` is clean, `dart format` changes 0 files on a second run, `dart test` is green with the number of tests stated in the task; the final tree matches the checked one. The `check` run on the public corpus (14 specs) after task 5 gives the same JSON report as `main` (1029 diagnostics: 2 error, 853 warning, 174 info; the corpus has neither overrides nor findings of TOA203–TOA206/TOA303).
 
 ---
 
-### Task 1: Файл override-ів: `OverrideSet` і `OverrideLoader` (TOA801–TOA803)
+### Task 1: Overrides file: `OverrideSet` and `OverrideLoader` (TOA801–TOA803)
 
 **Files:**
 - Create: `packages/typed_openapi/lib/src/overrides/override_set.dart`, `packages/typed_openapi/lib/src/overrides/override_loader.dart`, `packages/typed_openapi/test/overrides/override_loader_test.dart`
@@ -140,20 +140,20 @@ String RuleContext.withOverride(String fix, SpecLocation schema, Map<String, Obj
 
 **Interfaces:**
 - Consumes: `SpecLoader` (`load`, `parse`), `SpecDocument` (`root`, `file`, `spanOf`), `DiagnosticBag`, `JsonPointer`, `ParameterLocation`, `PathItem.methods`, `SchemaType` (M1–M3).
-- Produces: блок «override_set.dart (Task 1)» з «Інтерфейсів»; коди `overridesNotFound` (TOA801), `invalidOverride` (TOA802), `unknownOverrideKey` (TOA803).
+- Produces: the block "override_set.dart (Task 1)" from "Interfaces"; codes `overridesNotFound` (TOA801), `invalidOverride` (TOA802), `unknownOverrideKey` (TOA803).
 
-Поведінка, яку закріплюють тести:
-- Повний файл (усі розділи, ключ `operationId` і `METHOD /path`, `in:name`, `dartType` з `converter`, `format: null`, `$ref` + `nullable`) читається без діагностики; поля специфікації — у `spec` у порядку файлу, поля генерації — типізовані; JSON читається так само; `{}` — порожній набір без діагностики.
-- Відсутній файл — TOA801 (`null`); синтаксична помилка й корінь не-об'єкт — TOA802 (`null`); дублікат ключа — TOA802 з рівнем, який дав компоновщик; файл з диска називається `displayPath`, позиція — рядок:колонка значення.
-- Невідомі ключі на кожному рівні (корінь, операція, параметр, тіло, відповідь, схема, `dartType`, властивість) — TOA803 (error), решта запису читається; `nulable` — підказка `Did you mean "nullable"?`, далекий ключ (`exhaustiveness`) і `sse` — без підказки.
-- Каталог замість файлу — TOA802 «Overrides path … is a directory, not a file.» з підказкою про `overrides` клієнта.
-- Значення не того типу — TOA802 у pointer поля, ігнорується лише воно (запис-не-мапа ігнорується цілком).
-- `$ref` із полем специфікації, крім `nullable` (і `required` властивості), — TOA802 на полі; `properties` у записі схеми з `$ref` — TOA802, властивості відкидаються.
-- `FETCH /pets` — TOA802, запис відкидається; `body:id` — TOA802, параметр відкидається.
+Behaviour pinned down by the tests:
+- A full file (all sections, the key `operationId` and `METHOD /path`, `in:name`, `dartType` with `converter`, `format: null`, `$ref` + `nullable`) is read without a diagnostic; spec fields — in `spec`, in file order; generation fields — typed; JSON is read the same way; `{}` — an empty set without a diagnostic.
+- A missing file — TOA801 (`null`); a syntax error and a root that is not an object — TOA802 (`null`); a duplicate key — TOA802 with the level the composer gave; the file on disk is named by `displayPath`, the position — line:column of the value.
+- Unknown keys at each level (root, operation, parameter, body, response, schema, `dartType`, property) — TOA803 (error), the rest of the entry is read; `nulable` — the hint `Did you mean "nullable"?`; a distant key (`exhaustiveness`) and `sse` — without a hint.
+- A directory instead of a file — TOA802 "Overrides path … is a directory, not a file." with a hint about the client's `overrides`.
+- A value of the wrong type — TOA802 at the pointer of the field; only it is ignored (an entry that is not a map is ignored entirely).
+- A `$ref` with a spec field other than `nullable` (and a property's `required`) — TOA802 at the field; `properties` in a schema entry with `$ref` — TOA802, the properties are dropped.
+- `FETCH /pets` — TOA802, the entry is dropped; `body:id` — TOA802, the parameter is dropped.
 
-- [ ] **Step 1: Коди**
+- [ ] **Step 1: Codes**
 
-Diff `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart` (`git apply` з кореня):
+Diff `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart` (`git apply` from the root):
 
 ```diff
 diff --git a/packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart b/packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart
@@ -180,9 +180,9 @@ index 6933785..9cd1d37 100644
  
 ```
 
-- [ ] **Step 2: Тест, що не проходить**
+- [ ] **Step 2: A test that fails**
 
-Створи `packages/typed_openapi/test/overrides/override_loader_test.dart`:
+Create `packages/typed_openapi/test/overrides/override_loader_test.dart`:
 
 ```dart
 import 'package:test/test.dart';
@@ -551,14 +551,14 @@ operations:
 }
 ```
 
-- [ ] **Step 3: Запустити тест**
+- [ ] **Step 3: Run the test**
 
-Run (з `packages/typed_openapi`): `dart test test/overrides/override_loader_test.dart`
-Expected: FAIL — `override_loader.dart` і `override_set.dart` не існують.
+Run (from `packages/typed_openapi`): `dart test test/overrides/override_loader_test.dart`
+Expected: FAIL — `override_loader.dart` and `override_set.dart` do not exist.
 
-- [ ] **Step 4: Модель і читач**
+- [ ] **Step 4: Model and reader**
 
-Створи `packages/typed_openapi/lib/src/overrides/override_set.dart`:
+Create `packages/typed_openapi/lib/src/overrides/override_set.dart`:
 
 ```dart
 import 'package:source_span/source_span.dart';
@@ -795,7 +795,7 @@ final class OverrideSet {
 }
 ```
 
-Створи `packages/typed_openapi/lib/src/overrides/override_loader.dart`:
+Create `packages/typed_openapi/lib/src/overrides/override_loader.dart`:
 
 ```dart
 import 'dart:io';
@@ -1345,18 +1345,18 @@ final class _OverrideReader {
 }
 ```
 
-- [ ] **Step 5: Перевірити**
+- [ ] **Step 5: Check**
 
-Run (з `packages/typed_openapi`): `dart test`
-Expected: PASS, 350 тестів (`+350: All tests passed!`).
+Run (from `packages/typed_openapi`): `dart test`
+Expected: PASS, 350 tests (`+350: All tests passed!`).
 
-Run (з `packages/typed_openapi`): `dart format lib test bin` двічі
-Expected: другий запуск — `0 changed`.
+Run (from `packages/typed_openapi`): `dart format lib test bin` twice
+Expected: the second run — `0 changed`.
 
-Run (з кореня): `dart analyze packages`
+Run (from the root): `dart analyze packages`
 Expected: `No issues found!`
 
-- [ ] **Step 6: Коміт**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart packages/typed_openapi/lib/src/overrides/override_set.dart packages/typed_openapi/lib/src/overrides/override_loader.dart packages/typed_openapi/test/overrides/override_loader_test.dart
@@ -1365,27 +1365,27 @@ git commit -m "feat(typed_openapi): read the overrides file into an OverrideSet"
 ```
 
 
-### Task 2: Адресація: `OverrideResolver` (TOA804–TOA806, TOA808)
+### Task 2: Addressing: `OverrideResolver` (TOA804–TOA806, TOA808)
 
 **Files:**
 - Create: `packages/typed_openapi/lib/src/overrides/override_resolver.dart`, `packages/typed_openapi/test/overrides/override_resolver_test.dart`
 - Modify: `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart`
 
 **Interfaces:**
-- Consumes: `OverrideSet` і записи (задача 1); `SpecModel` (`document.paths`, `document.components.schemas`, `resolve`, `resolveSchema`), `Operation`, `PathItem`, `Parameter`, `SchemaObject` (M2); `SpecDocuments.displayPath` (M3).
-- Produces: блок «override_resolver.dart (Task 2)»; коди `overrideTargetNotFound` (TOA804), `overrideTargetAmbiguous` (TOA805), `overrideConflict` (TOA806), `overrideSharedTarget` (TOA808).
+- Consumes: `OverrideSet` and entries (task 1); `SpecModel` (`document.paths`, `document.components.schemas`, `resolve`, `resolveSchema`), `Operation`, `PathItem`, `Parameter`, `SchemaObject` (M2); `SpecDocuments.displayPath` (M3).
+- Produces: the block "override_resolver.dart (Task 2)"; codes `overrideTargetNotFound` (TOA804), `overrideTargetAmbiguous` (TOA805), `overrideConflict` (TOA806), `overrideSharedTarget` (TOA808).
 
-Поведінка, яку закріплюють тести:
-- Кожен вид цілі знаходиться без діагностики (записи без полів специфікації на спільних вузлах — без TOA808): операція за `operationId`, за `DELETE /pets/{id}` і за `get /pets`; параметр шляху `path:id`, параметр операції `query:id`, параметр через `$ref` у `components.parameters`; відповідь через `$ref`; тіло; схема; властивість (вузол властивості, не ціль її `$ref`; `owner` — схема). Ключ-аліас (`Animal: {$ref: Pet}`) веде до `Pet`.
-- Відсутня ціль — TOA804 (warning) з `reason` у повідомленні, у позиції запису у файлі override-ів; інші записи застосовуються: невідомий `operationId`, шлях не в `paths`, метод відсутній, параметр (з `in` і без), тіло, відповідь, схема, булева схема, властивість.
-- `operationId` двох операцій — TOA805 з підказкою `METHOD /path` для кожної (у порядку `paths`), вкладені записи не розв'язуються; ім'я параметра в `path` і `query` — TOA805 з підказкою `path:id, query:id`.
-- Два записи одного вузла — TOA806 на кожному, жоден (і нічого всередині) не застосовується: `getPet` + `GET /pets/{id}`, `id` + `path:id`, `Pet` + аліас `Animal`.
-- Поля специфікації через операцію на спільному вузлі — TOA808 (info) з місцем вузла: параметр шляху (`#/paths/~1pets~1{id}/parameters/0`), `$ref`-параметр, `$ref`-відповідь; на власному параметрі й тілі операції та на схемі за іменем — нічого; цілі все одно повертаються.
-- Негатив: дві операції, кожна зі своїм override-ом спільного параметра шляху (лише поля генерації), — не конфлікт на рівні адрес і без TOA808.
+Behaviour pinned down by the tests:
+- Each kind of target is found without a diagnostic (entries without spec fields on shared nodes — without TOA808): an operation by `operationId`, by `DELETE /pets/{id}` and by `get /pets`; a path parameter `path:id`, an operation parameter `query:id`, a parameter through `$ref` in `components.parameters`; a response through `$ref`; a body; a schema; a property (the node of the property, not the target of its `$ref`; `owner` — the schema). An alias key (`Animal: {$ref: Pet}`) leads to `Pet`.
+- A missing target — TOA804 (warning) with the `reason` in the message, at the position of the entry in the overrides file; the other entries are applied: an unknown `operationId`, a path not in `paths`, a missing method, a parameter (with `in` and without), a body, a response, a schema, a boolean schema, a property.
+- An `operationId` of two operations — TOA805 with the hint `METHOD /path` for each (in `paths` order); nested entries are not resolved; a parameter name in `path` and `query` — TOA805 with the hint `path:id, query:id`.
+- Two entries of one node — TOA806 on each; none (and nothing inside it) is applied: `getPet` + `GET /pets/{id}`, `id` + `path:id`, `Pet` + alias `Animal`.
+- Spec fields through an operation on a shared node — TOA808 (info) with the place of the node: a path parameter (`#/paths/~1pets~1{id}/parameters/0`), a `$ref` parameter, a `$ref` response; on the operation's own parameter and body, and on a schema by name — nothing; the targets are still returned.
+- Negative case: two operations, each with its own override of a shared path parameter (generation fields only) — not a conflict at the address level, and without TOA808.
 
-- [ ] **Step 1: Коди**
+- [ ] **Step 1: Codes**
 
-Diff `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart` (`git apply` з кореня):
+Diff `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart` (`git apply` from the root):
 
 ```diff
 diff --git a/packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart b/packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart
@@ -1417,9 +1417,9 @@ index 9cd1d37..8ac01ee 100644
  
 ```
 
-- [ ] **Step 2: Тест, що не проходить**
+- [ ] **Step 2: A test that fails**
 
-Створи `packages/typed_openapi/test/overrides/override_resolver_test.dart`:
+Create `packages/typed_openapi/test/overrides/override_resolver_test.dart`:
 
 ```dart
 import 'package:test/test.dart';
@@ -1749,14 +1749,14 @@ operations:
 }
 ```
 
-- [ ] **Step 3: Запустити тест**
+- [ ] **Step 3: Run the test**
 
-Run (з `packages/typed_openapi`): `dart test test/overrides/override_resolver_test.dart`
-Expected: FAIL — `override_resolver.dart` не існує.
+Run (from `packages/typed_openapi`): `dart test test/overrides/override_resolver_test.dart`
+Expected: FAIL — `override_resolver.dart` does not exist.
 
-- [ ] **Step 4: Резолвер**
+- [ ] **Step 4: Resolver**
 
-Створи `packages/typed_openapi/lib/src/overrides/override_resolver.dart`:
+Create `packages/typed_openapi/lib/src/overrides/override_resolver.dart`:
 
 ```dart
 import '../diagnostics/diagnostic_bag.dart';
@@ -2201,18 +2201,18 @@ final class _OperationIndex {
 }
 ```
 
-- [ ] **Step 5: Перевірити**
+- [ ] **Step 5: Check**
 
-Run (з `packages/typed_openapi`): `dart test`
-Expected: PASS, 358 тестів (`+358: All tests passed!`).
+Run (from `packages/typed_openapi`): `dart test`
+Expected: PASS, 358 tests (`+358: All tests passed!`).
 
-Run (з `packages/typed_openapi`): `dart format lib test bin` двічі
-Expected: другий запуск — `0 changed`.
+Run (from `packages/typed_openapi`): `dart format lib test bin` twice
+Expected: the second run — `0 changed`.
 
-Run (з кореня): `dart analyze packages`
+Run (from the root): `dart analyze packages`
 Expected: `No issues found!`
 
-- [ ] **Step 6: Коміт**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart packages/typed_openapi/lib/src/overrides/override_resolver.dart packages/typed_openapi/test/overrides/override_resolver_test.dart
@@ -2221,30 +2221,30 @@ git commit -m "feat(typed_openapi): resolve override addresses to spec nodes" \
 ```
 
 
-### Task 3: Застосування полів специфікації до нормалізатора (TOA807)
+### Task 3: Applying spec fields to the normalizer (TOA807)
 
 **Files:**
 - Create: `packages/typed_openapi/lib/src/overrides/override_applier.dart`, `packages/typed_openapi/test/overrides/override_applier_test.dart`
 - Modify: `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart`, `packages/typed_openapi/lib/src/normalize/normalizer.dart`, `packages/typed_openapi/lib/src/check/spec_checker.dart`, `packages/typed_openapi/test/check/spec_checker_test.dart`
 
 **Interfaces:**
-- Consumes: `OverrideLoader`, `OverrideSet` (задача 1); `OverrideResolver`, `OverrideTarget` (задача 2); `SpecEdit` (`add`, `remove`, `replace`, `overlaps`, `sameAs`), `TreeEditor`, `SpecDocuments`, `SpecDocument.withRoot` (M3); `ClientConfig.overrides` (M1).
-- Produces: блок «override_applier.dart, normalize (Task 3)»; код `overrideUnchanged` (TOA807).
+- Consumes: `OverrideLoader`, `OverrideSet` (task 1); `OverrideResolver`, `OverrideTarget` (task 2); `SpecEdit` (`add`, `remove`, `replace`, `overlaps`, `sameAs`), `TreeEditor`, `SpecDocuments`, `SpecDocument.withRoot` (M3); `ClientConfig.overrides` (M1).
+- Produces: the block "override_applier.dart, normalize (Task 3)"; code `overrideUnchanged` (TOA807).
 
-Поведінка, яку закріплюють тести:
-- 3.0: параметр (`schema`, `required`), тіло (`*/*` → `application/octet-stream` зі схемою), відповідь (`schema` у єдиний media type), схема (`discriminator`, `additionalProperties`), властивості (`format: null`, `nullable`, `items`, `enum`, `required: true` → ім'я в `required` власника) — дерево саме таке, як очікується; правила вже не дають TOA601, TOA205, TOA204 (рішення 3 специфікації); `NormalizedSpec.overrides` — прочитаний набір.
-- 3.1: `nullable: true` → `[string, 'null']`; `type: number` для `[integer, 'null']` → `[number, 'null']`; `nullable: false` → `string`; `nullable: true` без `type` — TOA802, схема не змінюється.
-- `$ref` і nullable-посилання: 3.0 — `allOf` + `nullable`, 3.1 — `anyOf` з `{type: 'null'}`; TOA303 після override-у зникає.
-- Поле, яке специфікація вже має, — TOA807 (info) у pointer поля з `reason`: `required`/`schema` параметра, `contentType`/`schema` відповіді, `type`, `nullable`, `format: null` (поля немає), `required: true`/`false` властивості; змінене поле поряд — без TOA807 і застосовується.
-- Різні правки одного вузла від різних записів — TOA806 на кожному полі, обидві не робляться (`schema` спільного параметра з двох операцій; `required` схеми + `required` властивості); однакові правки (`required: true` спільного параметра з двох операцій) — один раз, без конфлікту; кожен override спільного параметра — ще й TOA808.
-- Кілька media types: `schema` без `contentType` і `contentType`, якого немає, — TOA805; `contentType`, що є, лишає тільки його.
-- Вузли в іншому файлі змінюються в тому файлі: схема (ключ `$ref` у `pet.yaml`) — без діагностики; відповідь операції через `$ref` у `pet.yaml` — TOA808 «… shared node at pet.yaml#/Ok …».
-- Лише поля генерації — жодної діагностики і жодної правки.
-- `SpecChecker`: override клієнта прибирає TOA205; клієнт без override-ів на тому ж файлі дає TOA205; відсутній файл override-ів — TOA801 з відносним шляхом, а специфікацію все одно перевірено.
+Behaviour pinned down by the tests:
+- 3.0: a parameter (`schema`, `required`), a body (`*/*` → `application/octet-stream` with the schema), a response (`schema` in the single media type), a schema (`discriminator`, `additionalProperties`), properties (`format: null`, `nullable`, `items`, `enum`, `required: true` → the name in the owner's `required`) — the tree is exactly as expected; the rules no longer give TOA601, TOA205, TOA204 (decision 3 of the spec); `NormalizedSpec.overrides` — the read set.
+- 3.1: `nullable: true` → `[string, 'null']`; `type: number` for `[integer, 'null']` → `[number, 'null']`; `nullable: false` → `string`; `nullable: true` without `type` — TOA802, the schema is not changed.
+- `$ref` and nullable references: 3.0 — `allOf` + `nullable`, 3.1 — `anyOf` with `{type: 'null'}`; TOA303 disappears after the override.
+- A field the spec already has — TOA807 (info) at the pointer of the field with the `reason`: a parameter's `required`/`schema`, a response's `contentType`/`schema`, `type`, `nullable`, `format: null` (no such field), a property's `required: true`/`false`; a changed field next to it — without TOA807 and is applied.
+- Different edits of one node from different entries — TOA806 on each field, neither is made (`schema` of a shared parameter from two operations; `required` of a schema + `required` of a property); identical edits (`required: true` of a shared parameter from two operations) — once, without a conflict; each override of a shared parameter is also TOA808.
+- Several media types: `schema` without `contentType`, and a `contentType` that is not there — TOA805; a `contentType` that is there leaves only it.
+- Nodes in another file are changed in that file: a schema (a `$ref` key in `pet.yaml`) — without a diagnostic; an operation's response through a `$ref` in `pet.yaml` — TOA808 "… shared node at pet.yaml#/Ok …".
+- Generation fields only — no diagnostic and no edit.
+- `SpecChecker`: the client's override removes TOA205; a client without overrides on the same file gives TOA205; a missing overrides file — TOA801 with a relative path, and the spec is still checked.
 
-- [ ] **Step 1: Код**
+- [ ] **Step 1: Code**
 
-Diff `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart` (`git apply` з кореня):
+Diff `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart` (`git apply` from the root):
 
 ```diff
 diff --git a/packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart b/packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart
@@ -2263,9 +2263,9 @@ index 8ac01ee..3acacd0 100644
    /// a node in another file.
 ```
 
-- [ ] **Step 2: Тести, що не проходять**
+- [ ] **Step 2: Tests that fail**
 
-Створи `packages/typed_openapi/test/overrides/override_applier_test.dart`:
+Create `packages/typed_openapi/test/overrides/override_applier_test.dart`:
 
 ```dart
 import 'package:test/test.dart';
@@ -2758,7 +2758,7 @@ schemas:
 }
 ```
 
-Diff `packages/typed_openapi/test/check/spec_checker_test.dart` (`git apply` з кореня):
+Diff `packages/typed_openapi/test/check/spec_checker_test.dart` (`git apply` from the root):
 
 ```diff
 diff --git a/packages/typed_openapi/test/check/spec_checker_test.dart b/packages/typed_openapi/test/check/spec_checker_test.dart
@@ -2809,14 +2809,14 @@ index 237640c..8876421 100644
      final path = dir.write('typed_openapi.yaml', '''
 ```
 
-- [ ] **Step 3: Запустити тести**
+- [ ] **Step 3: Run the tests**
 
-Run (з `packages/typed_openapi`): `dart test test/overrides test/check`
-Expected: FAIL — `override_applier.dart` не існує, `normalize` не має параметра `overrides`.
+Run (from `packages/typed_openapi`): `dart test test/overrides test/check`
+Expected: FAIL — `override_applier.dart` does not exist, `normalize` has no `overrides` parameter.
 
-- [ ] **Step 4: Застосування**
+- [ ] **Step 4: Application**
 
-Створи `packages/typed_openapi/lib/src/overrides/override_applier.dart`:
+Create `packages/typed_openapi/lib/src/overrides/override_applier.dart`:
 
 ```dart
 import 'package:collection/collection.dart';
@@ -3292,9 +3292,9 @@ final class OverrideApplier {
 }
 ```
 
-- [ ] **Step 5: Нормалізатор і `SpecChecker`**
+- [ ] **Step 5: Normalizer and `SpecChecker`**
 
-Diff `packages/typed_openapi/lib/src/normalize/normalizer.dart` (`git apply` з кореня):
+Diff `packages/typed_openapi/lib/src/normalize/normalizer.dart` (`git apply` from the root):
 
 ```diff
 diff --git a/packages/typed_openapi/lib/src/normalize/normalizer.dart b/packages/typed_openapi/lib/src/normalize/normalizer.dart
@@ -3429,7 +3429,7 @@ index c9da2d4..ea342e1 100644
      final hint = switch (preset) {
 ```
 
-Diff `packages/typed_openapi/lib/src/check/spec_checker.dart` (`git apply` з кореня):
+Diff `packages/typed_openapi/lib/src/check/spec_checker.dart` (`git apply` from the root):
 
 ```diff
 diff --git a/packages/typed_openapi/lib/src/check/spec_checker.dart b/packages/typed_openapi/lib/src/check/spec_checker.dart
@@ -3507,18 +3507,18 @@ index d13ef21..dd639bb 100644
  }
 ```
 
-- [ ] **Step 6: Перевірити**
+- [ ] **Step 6: Check**
 
-Run (з `packages/typed_openapi`): `dart test`
-Expected: PASS, 367 тестів (`+367: All tests passed!`).
+Run (from `packages/typed_openapi`): `dart test`
+Expected: PASS, 367 tests (`+367: All tests passed!`).
 
-Run (з `packages/typed_openapi`): `dart format lib test bin` двічі
-Expected: другий запуск — `0 changed`.
+Run (from `packages/typed_openapi`): `dart format lib test bin` twice
+Expected: the second run — `0 changed`.
 
-Run (з кореня): `dart analyze packages`
+Run (from the root): `dart analyze packages`
 Expected: `No issues found!`
 
-- [ ] **Step 7: Коміт**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart packages/typed_openapi/lib/src/overrides/override_applier.dart packages/typed_openapi/lib/src/normalize/normalizer.dart packages/typed_openapi/lib/src/check/spec_checker.dart packages/typed_openapi/test/overrides/override_applier_test.dart packages/typed_openapi/test/check/spec_checker_test.dart
@@ -3527,26 +3527,26 @@ git commit -m "feat(typed_openapi): apply override spec fields before the normal
 ```
 
 
-### Task 4: Зворотна адреса і фрагменти override-у в підказках правил
+### Task 4: Reverse address and override fragments in the rule hints
 
 **Files:**
 - Create: `packages/typed_openapi/lib/src/overrides/override_snippet.dart`, `packages/typed_openapi/test/overrides/override_snippet_test.dart`
 - Modify: `packages/typed_openapi/lib/src/normalize/normalizer_rule.dart`, `packages/typed_openapi/lib/src/diagnostics/reporters.dart`, `packages/typed_openapi/lib/src/normalize/rules/schema_shape_rules.dart`, `packages/typed_openapi/lib/src/normalize/rules/enum_rules.dart`
 
 **Interfaces:**
-- Consumes: `SpecModel` (`document.components.schemas`, `resolveSchema`), `SchemaObject.properties`, `SpecLocation` (M2); `RuleContext`, правила `DoubleArray`, `FormatOnArray`, `BinaryObject`, `ContradictoryObjectType`, `NullableEnumOneOf` (M3); `OverrideLoader` і `Normalizer.normalize(..., overrides:)` (задачі 1, 3) — у тестах.
-- Produces: блок «override_snippet.dart, normalize (Task 4)».
+- Consumes: `SpecModel` (`document.components.schemas`, `resolveSchema`), `SchemaObject.properties`, `SpecLocation` (M2); `RuleContext`, rules `DoubleArray`, `FormatOnArray`, `BinaryObject`, `ContradictoryObjectType`, `NullableEnumOneOf` (M3); `OverrideLoader` and `Normalizer.normalize(..., overrides:)` (tasks 1, 3) — in tests.
+- Produces: the block "override_snippet.dart, normalize (Task 4)".
 
-Поведінка, яку закріплюють тести:
-- `addressOf`: схема `components.schemas` — за ключем, що її визначає (не за аліасом, також для властивостей); властивість — `schemas.<key>.properties.<name>`; схема в іншому файлі — за ключем, чий `$ref` туди веде; inline-схема параметра, `items`, властивість вкладеного об'єкта, сам ключ-аліас — `null`.
-- `forSchema`: блоковий YAML, значення у flow-стилі; `on`, `1.5`, `a b`, `#/...` — у лапках JSON; `null` — `null`.
-- Для кожного з п'яти правил: `fix` закінчується ` Override:` і фрагментом; цей фрагмент, прочитаний як файл override-ів, прибирає знахідку і не дає жодної діагностики файлу override-ів (перевірка «повний і правильний фрагмент»).
-- Негатив: та сама знахідка в схемі тіла запиту (без адреси) — `fix` без фрагмента; `format: money` на масиві — TOA204 без фрагмента (тип елементів невідомий), `format: date` поряд — з `items: {type: string, format: date}`.
-- `TextReporter` зсуває рядки багаторядкового `fix` на 4 пробіли.
+Behaviour pinned down by the tests:
+- `addressOf`: a schema of `components.schemas` — by the key that defines it (not by the alias, also for properties); a property — `schemas.<key>.properties.<name>`; a schema in another file — by the key whose `$ref` leads there; an inline schema of a parameter, `items`, a property of a nested object, the alias key itself — `null`.
+- `forSchema`: block YAML, values in flow style; `on`, `1.5`, `a b`, `#/...` — in JSON quotes; `null` — `null`.
+- For each of the five rules: `fix` ends with ` Override:` and the fragment; this fragment, read as an overrides file, removes the finding and gives no diagnostic from the overrides file (the check "complete and correct fragment").
+- Negative case: the same finding in a request body's schema (without an address) — `fix` without a fragment; `format: money` on an array — TOA204 without a fragment (the element type is unknown), `format: date` next to it — with `items: {type: string, format: date}`.
+- `TextReporter` shifts the lines of a multi-line `fix` by 4 spaces.
 
-- [ ] **Step 1: Тест, що не проходить**
+- [ ] **Step 1: A test that fails**
 
-Створи `packages/typed_openapi/test/overrides/override_snippet_test.dart`:
+Create `packages/typed_openapi/test/overrides/override_snippet_test.dart`:
 
 ```dart
 import 'package:test/test.dart';
@@ -3788,14 +3788,14 @@ paths:
 }
 ```
 
-- [ ] **Step 2: Запустити тест**
+- [ ] **Step 2: Run the test**
 
-Run (з `packages/typed_openapi`): `dart test test/overrides/override_snippet_test.dart`
-Expected: FAIL — `override_snippet.dart` не існує.
+Run (from `packages/typed_openapi`): `dart test test/overrides/override_snippet_test.dart`
+Expected: FAIL — `override_snippet.dart` does not exist.
 
-- [ ] **Step 3: Адреса і фрагмент**
+- [ ] **Step 3: Address and fragment**
 
-Створи `packages/typed_openapi/lib/src/overrides/override_snippet.dart`:
+Create `packages/typed_openapi/lib/src/overrides/override_snippet.dart`:
 
 ```dart
 import 'dart:convert';
@@ -3884,9 +3884,9 @@ final class OverrideSnippet {
 }
 ```
 
-- [ ] **Step 4: Контекст правил, звіт і правила**
+- [ ] **Step 4: Rule context, report and rules**
 
-Diff `packages/typed_openapi/lib/src/normalize/normalizer_rule.dart` (`git apply` з кореня):
+Diff `packages/typed_openapi/lib/src/normalize/normalizer_rule.dart` (`git apply` from the root):
 
 ```diff
 diff --git a/packages/typed_openapi/lib/src/normalize/normalizer_rule.dart b/packages/typed_openapi/lib/src/normalize/normalizer_rule.dart
@@ -3931,7 +3931,7 @@ index aa7b267..4867c45 100644
      DiagnosticCode code,
 ```
 
-Diff `packages/typed_openapi/lib/src/diagnostics/reporters.dart` (`git apply` з кореня):
+Diff `packages/typed_openapi/lib/src/diagnostics/reporters.dart` (`git apply` from the root):
 
 ```diff
 diff --git a/packages/typed_openapi/lib/src/diagnostics/reporters.dart b/packages/typed_openapi/lib/src/diagnostics/reporters.dart
@@ -3950,7 +3950,7 @@ index 540f31a..b9d58c9 100644
        'errors: ${diagnostics.count(.error)}, '
 ```
 
-Diff `packages/typed_openapi/lib/src/normalize/rules/schema_shape_rules.dart` (`git apply` з кореня):
+Diff `packages/typed_openapi/lib/src/normalize/rules/schema_shape_rules.dart` (`git apply` from the root):
 
 ```diff
 diff --git a/packages/typed_openapi/lib/src/normalize/rules/schema_shape_rules.dart b/packages/typed_openapi/lib/src/normalize/rules/schema_shape_rules.dart
@@ -4091,7 +4091,7 @@ index 475ff2c..8b6950f 100644
    }
 ```
 
-Diff `packages/typed_openapi/lib/src/normalize/rules/enum_rules.dart` (`git apply` з кореня):
+Diff `packages/typed_openapi/lib/src/normalize/rules/enum_rules.dart` (`git apply` from the root):
 
 ```diff
 diff --git a/packages/typed_openapi/lib/src/normalize/rules/enum_rules.dart b/packages/typed_openapi/lib/src/normalize/rules/enum_rules.dart
@@ -4116,18 +4116,18 @@ index 946032d..ade94fa 100644
    }
 ```
 
-- [ ] **Step 5: Перевірити**
+- [ ] **Step 5: Check**
 
-Run (з `packages/typed_openapi`): `dart test`
-Expected: PASS, 380 тестів (`+380: All tests passed!`).
+Run (from `packages/typed_openapi`): `dart test`
+Expected: PASS, 380 tests (`+380: All tests passed!`).
 
-Run (з `packages/typed_openapi`): `dart format lib test bin` двічі
-Expected: другий запуск — `0 changed`.
+Run (from `packages/typed_openapi`): `dart format lib test bin` twice
+Expected: the second run — `0 changed`.
 
-Run (з кореня): `dart analyze packages`
+Run (from the root): `dart analyze packages`
 Expected: `No issues found!`
 
-- [ ] **Step 6: Коміт**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add packages/typed_openapi/lib/src/overrides/override_snippet.dart packages/typed_openapi/lib/src/normalize/normalizer_rule.dart packages/typed_openapi/lib/src/diagnostics/reporters.dart packages/typed_openapi/lib/src/normalize/rules/schema_shape_rules.dart packages/typed_openapi/lib/src/normalize/rules/enum_rules.dart packages/typed_openapi/test/overrides/override_snippet_test.dart
@@ -4136,20 +4136,20 @@ git commit -m "feat(typed_openapi): add override snippets to the fixes of diagno
 ```
 
 
-### Task 5: Документація, публічний API, наскрізний тест CLI, прогін корпусу
+### Task 5: Documentation, public API, end-to-end CLI test, corpus run
 
 **Files:**
 - Modify: `CLAUDE.md`, `packages/typed_openapi/CHANGELOG.md`, `packages/typed_openapi/README.md`, `packages/typed_openapi/README.ua.md`, `packages/typed_openapi/lib/typed_openapi.dart`, `packages/typed_openapi/test/cli/cli_test.dart`
 
 **Interfaces:**
-- Consumes: усе з задач 1–4.
-- Produces: експорт `OverrideLoader`, `OverrideSet`, `OverrideEntry`, `OperationOverride`, `ParameterOverride`, `BodyOverride`, `ResponseOverride`, `SchemaOverride`, `PropertyOverride`, `DartTypeOverride` з `package:typed_openapi/typed_openapi.dart`. Не експортуються: `OverrideResolver`, `OverrideTarget`, `OverrideApplier`, `OverrideEdit`, `OverrideSnippet`.
+- Consumes: everything from tasks 1–4.
+- Produces: export of `OverrideLoader`, `OverrideSet`, `OverrideEntry`, `OperationOverride`, `ParameterOverride`, `BodyOverride`, `ResponseOverride`, `SchemaOverride`, `PropertyOverride`, `DartTypeOverride` from `package:typed_openapi/typed_openapi.dart`. Not exported: `OverrideResolver`, `OverrideTarget`, `OverrideApplier`, `OverrideEdit`, `OverrideSnippet`.
 
-Наскрізний тест закріплює весь текстовий звіт `check` для конфлікту двох адрес однієї операції, застарілого override-у з `reason` і зайвого поля (зі зміненим полем поряд), код виходу `1`. Він проходить одразу: функціональність уже є після задач 1–4, тест фіксує зовнішню поведінку.
+The end-to-end test pins the whole text report of `check` for a conflict of two addresses of one operation, a stale override with a `reason`, and a superfluous field (with a changed field next to it), exit code `1`. It passes at once: the functionality is already there after tasks 1–4; the test pins the external behaviour.
 
-- [ ] **Step 1: Наскрізний тест CLI**
+- [ ] **Step 1: End-to-end CLI test**
 
-Diff `packages/typed_openapi/test/cli/cli_test.dart` (`git apply` з кореня):
+Diff `packages/typed_openapi/test/cli/cli_test.dart` (`git apply` from the root):
 
 ```diff
 diff --git a/packages/typed_openapi/test/cli/cli_test.dart b/packages/typed_openapi/test/cli/cli_test.dart
@@ -4226,12 +4226,12 @@ index b338db0..200f3db 100644
      dir.write('api.yaml', r'''
 ```
 
-Run (з `packages/typed_openapi`): `dart test test/cli`
+Run (from `packages/typed_openapi`): `dart test test/cli`
 Expected: PASS.
 
-- [ ] **Step 2: Документація і експорт**
+- [ ] **Step 2: Documentation and export**
 
-Diff `CLAUDE.md` (`git apply` з кореня):
+Diff `CLAUDE.md` (`git apply` from the root):
 
 ```diff
 diff --git a/CLAUDE.md b/CLAUDE.md
@@ -4304,7 +4304,7 @@ index 7f3ae54..4ed777c 100644
  Rules of the pipeline:
 ```
 
-Diff `packages/typed_openapi/CHANGELOG.md` (`git apply` з кореня):
+Diff `packages/typed_openapi/CHANGELOG.md` (`git apply` from the root):
 
 ```diff
 diff --git a/packages/typed_openapi/CHANGELOG.md b/packages/typed_openapi/CHANGELOG.md
@@ -4344,7 +4344,7 @@ index a5204ce..200e60a 100644
 +  `NormalizedSpec.overrides` returns them.
 ```
 
-Diff `packages/typed_openapi/README.md` (`git apply` з кореня):
+Diff `packages/typed_openapi/README.md` (`git apply` from the root):
 
 ````diff
 diff --git a/packages/typed_openapi/README.md b/packages/typed_openapi/README.md
@@ -4387,7 +4387,7 @@ index 68b1aa0..b0986d8 100644
  at least one error, `64` wrong arguments or an unknown client, `78` the
 ````
 
-Diff `packages/typed_openapi/README.ua.md` (`git apply` з кореня):
+Diff `packages/typed_openapi/README.ua.md` (`git apply` from the root):
 
 ````diff
 diff --git a/packages/typed_openapi/README.ua.md b/packages/typed_openapi/README.ua.md
@@ -4398,39 +4398,39 @@ index 7922928..2467b25 100644
    rules: {dedupe-enum-values: false}
  ```
  
-+Те, чого нормалізатор знати не може, виправляє файл override-ів — без змін на
-+бекенді. Вкажи його в клієнті (`overrides: typed_openapi.overrides.yaml`) і
-+адресуй специфікацію операціями та схемами, а не pointer-ами:
++What the normalizer cannot know is fixed by the overrides file — without changes on
++the backend. Point the client at it (`overrides: typed_openapi.overrides.yaml`) and
++address the spec by operations and schemas, not by pointers:
 +
 +```yaml
 +operations:
-+  getPet:                     # operationId або METHOD /path: 'GET /pets/{id}'
++  getPet:                     # operationId or METHOD /path: 'GET /pets/{id}'
 +    parameters:
-+      id: {schema: {type: integer, format: int64}}   # path:id, якщо імена збігаються
++      id: {schema: {type: integer, format: int64}}   # path:id, if the names match
 +    responses:
 +      '200': {contentType: application/json}
 +schemas:
 +  Pet:
-+    reason: бекенд надсилає null для тварин без власника
++    reason: the backend sends null for animals without an owner
 +    properties:
 +      owner: {nullable: true}
 +      photo: {type: string, format: binary}
 +```
 +
-+Override-и змінюють специфікацію до нормалізатора; `null` прибирає поле.
-+Override, ціль якого зникла, дає warning, той, з яким специфікація вже
-+збігається, — info, що його можна прибрати, а ключ з одруком — помилку з
-+підказкою найближчого відомого ключа. Поля для генератора (`name`, `exclude`,
-+`group`, `exhaustive`, `dartType`, `triState`) уже перевіряються і
-+запрацюють разом із генерацією коду. Підказки правил, які не
-+можуть виправити дефект самі, закінчуються override-ом, який можна скопіювати.
-+
- У кожної знахідки є стабільний код (`TOA011`), JSON-pointer на місце в
- специфікації і, якщо парсер зміг визначити позицію, рядок і колонка. Код
- виходу `1` означає хоча б одну помилку, `64` — неправильні аргументи або
++Overrides change the spec before the normalizer; `null` removes the field.
++An override whose target has disappeared gives a warning, one that the spec already matches
++gives info that it can be removed, and a misspelled key — an error with
++a hint of the nearest known key. Fields for the generator (`name`, `exclude`,
++`group`, `exhaustive`, `dartType`, `triState`) are already checked and
++will start working together with code generation. Rule hints that cannot
++fix the defect themselves end with an override that can be copied.
+
+ Each finding has a stable code (`TOA011`) and a JSON pointer to the place in
+ the spec and, if the parser could determine the position, the line and column. The code
+ exit code `1` means at least one error, `64` — wrong arguments or
 ````
 
-Diff `packages/typed_openapi/lib/typed_openapi.dart` (`git apply` з кореня):
+Diff `packages/typed_openapi/lib/typed_openapi.dart` (`git apply` from the root):
 
 ```diff
 diff --git a/packages/typed_openapi/lib/typed_openapi.dart b/packages/typed_openapi/lib/typed_openapi.dart
@@ -4470,23 +4470,23 @@ index e6f9892..f813174 100644
  export 'src/resolve/spec_reader.dart' show SpecReader;
 ```
 
-- [ ] **Step 3: Перевірити**
+- [ ] **Step 3: Verify**
 
-Run (з `packages/typed_openapi`): `dart test`
-Expected: PASS, 381 тестів (`+381: All tests passed!`).
+Run (from `packages/typed_openapi`): `dart test`
+Expected: PASS, 381 tests (`+381: All tests passed!`).
 
-Run (з `packages/typed_openapi`): `dart format lib test bin` двічі
-Expected: другий запуск — `0 changed`.
+Run (from `packages/typed_openapi`): `dart format lib test bin` twice
+Expected: the second run — `0 changed`.
 
-Run (з кореня): `dart analyze packages`
+Run (from the root): `dart analyze packages`
 Expected: `No issues found!`
 
-- [ ] **Step 4: Прогін корпусу**
+- [ ] **Step 4: Corpus run**
 
-Запусти `check --format json` на конфігу публічного корпусу (research/08) на `main` і після задачі 5 і порівняй звіти.
-Expected: звіти однакові (у корпусі немає override-ів і знахідок TOA203–TOA206/TOA303; на момент планування — 1029 діагностик: 2 error, 853 warning, 174 info).
+Run `check --format json` on the config of the public corpus (research/08) on `main` and after task 5, and compare the reports.
+Expected: the reports are identical (the corpus has no overrides and no TOA203–TOA206/TOA303 findings; at planning time — 1029 diagnostics: 2 error, 853 warning, 174 info).
 
-- [ ] **Step 5: Коміт**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add CLAUDE.md packages/typed_openapi/CHANGELOG.md packages/typed_openapi/README.md packages/typed_openapi/README.ua.md packages/typed_openapi/lib/typed_openapi.dart packages/typed_openapi/test/cli/cli_test.dart
@@ -4494,7 +4494,7 @@ git commit -m "docs(typed_openapi): document overrides and export their API" \
   -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
-- [ ] **Step 6: Перевірити пакет**
+- [ ] **Step 6: Check the package**
 
-Run (з `packages/typed_openapi`, після коміту): `dart pub publish --dry-run`
+Run (from `packages/typed_openapi`, after the commit): `dart pub publish --dry-run`
 Expected: `Package has 0 warnings.`

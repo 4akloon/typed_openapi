@@ -1,109 +1,109 @@
-# План M2: модель специфікації і `$ref`
+# Plan M2: spec model and `$ref`
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** `typed_openapi check` читає кожну специфікацію в незмінну типізовану модель (надмножина OAS 3.0/3.1/3.2), розв'язує всі `$ref` усередині документа і між локальними файлами, визначає діалект за вмістом і повідомляє про невідомі ключі, значення неправильного типу, пропущені обов'язкові поля, биті, віддалені й зациклені посилання. Заразом закриває знахідки рев'ю M1 про завантаження (глибока вкладеність, ключі `1`/`"1"`, каталог замість файлу, порядок TOA005/TOA003, `.json` з дублікатом і синтаксичною помилкою).
+**Goal:** `typed_openapi check` reads every spec into an immutable typed model (a superset of OAS 3.0/3.1/3.2), resolves all `$ref` within the document and between local files, detects the dialect from the content, and reports unknown keys, values of the wrong type, missing required fields, and broken, remote and circular references. At the same time it closes the M1 review findings about loading (deep nesting, keys `1`/`"1"`, a directory instead of a file, the order of TOA005/TOA003, `.json` with a duplicate and a syntax error).
 
-**Architecture:** Три нові шари в `packages/typed_openapi/lib/src/` над наявним `load/`: `model/` — незмінні вузли (`SpecNode` з `SpecLocation` = абсолютний URI файлу + JSON pointer, `x-`-розширеннями і невідомими ключами; `RefOr<T>` = `Ref<T>` | `Inline<T>`; `Schema` = `BooleanSchema` | `SchemaObject`, де `$ref` — ключове слово); `parse/` — `OpenApiParser`, `OperationParser`, `SchemaParser` поверх `ObjectReader`, які нічого не кидають, а пишуть у `DiagnosticBag` і в спільний `SpecIndex` (усі вузли, усі `$ref`, усі версійно-специфічні конструкції); `resolve/` — `RefTarget` (розбір значення `$ref`), `SpecDocuments` (інші локальні файли, кожен один раз), `RefResolver` (ціль кожного `$ref`, вид цілі, цикли) і `SpecModel` (результат з `resolve`/`resolveSchema`). `SpecReader` з'єднує parse → resolve → `DialectChecker`; `SpecChecker` викликає його після детекції версії.
+**Architecture:** Three new layers in `packages/typed_openapi/lib/src/` above the existing `load/`: `model/` — immutable nodes (`SpecNode` with `SpecLocation` = absolute file URI + JSON pointer, `x-` extensions and unknown keys; `RefOr<T>` = `Ref<T>` | `Inline<T>`; `Schema` = `BooleanSchema` | `SchemaObject`, where `$ref` is a keyword); `parse/` — `OpenApiParser`, `OperationParser`, `SchemaParser` on top of `ObjectReader`, which throw nothing but write to `DiagnosticBag` and to the shared `SpecIndex` (all nodes, all `$ref`s, all version-specific constructs); `resolve/` — `RefTarget` (parsing of a `$ref` value), `SpecDocuments` (other local files, each once), `RefResolver` (the target of every `$ref`, the kind of target, cycles) and `SpecModel` (the result of `resolve`/`resolveSchema`). `SpecReader` connects parse → resolve → `DialectChecker`; `SpecChecker` calls it after version detection.
 
-**Tech Stack:** Dart `>=3.10.0 <4.0.0`, чистий Dart; наявні залежності `yaml`, `source_span`, `path`, `args`, `io`; тести на `package:test`. Нових залежностей немає.
+**Tech Stack:** Dart `>=3.10.0 <4.0.0`, pure Dart; the existing dependencies `yaml`, `source_span`, `path`, `args`, `io`; tests on `package:test`. No new dependencies.
 
-**Spec:** [docs/requirements.md](../../requirements.md) — R0.1, R1.2, R1.4, R2.1 (част.), R2.2, R2.5, R13.1. Версії й діалекти — [research/06 §A](../../research/06-spec-versions-and-defects.md) (A.1–A.3); каталог дефектів і діапазони кодів — [research/06 §C](../../research/06-spec-versions-and-defects.md) (C.0, C-2, C-3, C-16, C-17, C-47); архітектура парсера — [research/03 §4](../../research/03-tonik-swagger-to-dart-space-gen.md) і урок space_gen #358 (§3.5). Місце етапу — [roadmap.md](../../roadmap.md), розділ «Перенесено з M1». Правила коду — [CLAUDE.md](../../../CLAUDE.md) і [CONTRIBUTING.md](../../../CONTRIBUTING.md).
+**Spec:** [docs/requirements.md](../../requirements.md) — R0.1, R1.2, R1.4, R2.1 (part), R2.2, R2.5, R13.1. Versions and dialects — [research/06 §A](../../research/06-spec-versions-and-defects.md) (A.1–A.3); the catalog of defects and code ranges — [research/06 §C](../../research/06-spec-versions-and-defects.md) (C.0, C-2, C-3, C-16, C-17, C-47); parser architecture — [research/03 §4](../../research/03-tonik-swagger-to-dart-space-gen.md) and the lesson of space_gen #358 (§3.5). Where the stage fits — [roadmap.md](../../roadmap.md), section "Moved from M1". Code rules — [CLAUDE.md](../../../CLAUDE.md) and [CONTRIBUTING.md](../../../CONTRIBUTING.md).
 
 ## Global Constraints
 
-- SDK `>=3.10.0 <4.0.0`; обидва пакети — чистий Dart без Flutter. Primary constructors (Dart 3.13) не використовуються.
-- Можливості Dart 3.10 використовуються активно: dot shorthands скрізь, де відомий тип контексту (`.invalidRef`, `.v31`, `kind == .mediaType`), null-aware елементи колекцій (`name: ?read(...)`), switch-вирази і patterns, records (`(Object?,)?` для «значення може бути `null`»), модифікатори класів (`final`, `sealed`). У тестах аргументи `expect(...)` пишуться повними іменами (`DiagnosticCode.invalidRef`).
-- ООП: жодних функцій верхнього рівня, крім `main` у `bin/` і в тестах. Компоненти, що звітують про проблеми, отримують `DiagnosticBag` через конструктор (`SpecReader(bag)`, `RefResolver(bag)`, `DialectChecker(bag)`; парсери — через `ParseContext`).
-- R2.5: помилки у вхідних даних ніколи не кидаються як винятки — вони потрапляють у `DiagnosticBag`, решта документа читається далі. `StackOverflowError` не ловиться (лінт `avoid_catching_errors`): надто глибокий вхід відсіюється до рекурсивного розбору.
-- R2.2: кожна нова проблема — код `TOAnnn` у `DiagnosticCode` з doc-коментарем, slug у kebab-case, рівень за замовчуванням, файл, JSON pointer і, коли відомо, позиція. Діапазони — з research/06 §C.0: `0xx` документ і діалект, `1xx` посилання і структура.
-- R13.1: результат детермінований — вузли і діагностики йдуть у порядку документа, цикли й набори сортуються (`SpecLocation.compareTo`), звіт сортує `DiagnosticBag.sorted`.
-- Модель незмінна: поля `final`, колекції — `List.unmodifiable`/`Map.unmodifiable` або `const`.
-- Ідентичність вузла — абсолютний URI файлу + JSON pointer (`SpecLocation`), а не лише pointer (space_gen #358).
-- Лінти з кореневого `analysis_options.yaml` (`public_member_api_docs`, `sort_constructors_first`, `prefer_final_locals`, `require_trailing_commas`, `use_raw_strings`, `avoid_catching_errors` та інші). `dart analyze packages` з кореня — `No issues found!`; `dart format` з `trailing_commas: preserve` змінює 0 файлів.
-- Немає залежності від `analyzer`. Тести не ходять у мережу; тимчасові файли — лише через `test/helpers/temp_dir.dart`. Справжні специфікації компанії в репозиторій не потрапляють; у тестах — вигадані фрагменти.
-- Команди `dart test`, `dart format`, `dart pub publish --dry-run` — з `packages/typed_openapi`; `dart pub get`, `dart analyze packages` і всі `git`-команди — з кореня.
-- Кожен коміт закінчується рядком `Co-Authored-By` моделі, що виконує задачу (у прикладах нижче — `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`).
+- SDK `>=3.10.0 <4.0.0`; both packages are pure Dart without Flutter. Primary constructors (Dart 3.13) are not used.
+- Dart 3.10 features are used actively: dot shorthands wherever the context type is known (`.invalidRef`, `.v31`, `kind == .mediaType`), null-aware collection elements (`name: ?read(...)`), switch expressions and patterns, records (`(Object?,)?` for "a value that may be `null`"), class modifiers (`final`, `sealed`). In tests, the arguments of `expect(...)` are written with full names (`DiagnosticCode.invalidRef`).
+- OOP: no top-level functions, except `main` in `bin/` and in tests. Components that report problems receive a `DiagnosticBag` through the constructor (`SpecReader(bag)`, `RefResolver(bag)`, `DialectChecker(bag)`; parsers receive it through `ParseContext`).
+- R2.5: errors in input data are never thrown as exceptions; they go into the `DiagnosticBag`, and the rest of the document is read on. `StackOverflowError` is not caught (lint `avoid_catching_errors`): input that is too deep is filtered out before the recursive parse.
+- R2.2: every new problem has a `TOAnnn` code in `DiagnosticCode` with a doc comment, a kebab-case slug, a default severity, a file, a JSON pointer and, when known, a position. The ranges come from research/06 §C.0: `0xx` document and dialect, `1xx` references and structure.
+- R13.1: the result is deterministic: nodes and diagnostics follow the document order, cycles and sets are sorted (`SpecLocation.compareTo`), and the report is sorted by `DiagnosticBag.sorted`.
+- The model is immutable: fields are `final`, collections are `List.unmodifiable`/`Map.unmodifiable` or `const`.
+- A node's identity is the file's absolute URI + JSON pointer (`SpecLocation`), not the pointer alone (space_gen #358).
+- Lints come from the root `analysis_options.yaml` (`public_member_api_docs`, `sort_constructors_first`, `prefer_final_locals`, `require_trailing_commas`, `use_raw_strings`, `avoid_catching_errors` and others). `dart analyze packages` from the root prints `No issues found!`; `dart format` with `trailing_commas: preserve` changes 0 files.
+- No dependency on `analyzer`. Tests do not touch the network; temporary files go only through `test/helpers/temp_dir.dart`. Real company specifications never go into the repository; tests use invented fragments.
+- The commands `dart test`, `dart format`, `dart pub publish --dry-run` run from `packages/typed_openapi`; `dart pub get`, `dart analyze packages` and all `git` commands run from the root.
+- Every commit ends with a `Co-Authored-By` line for the model that performs the task (in the examples below — `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`).
 
-## Ухвалені рішення
+## Decisions made
 
-1. **Обсяг одного плану.** M2 не ділиться на M2a/M2b: 12 задач, кожна з власним тестовим циклом; після Task 7 модель уже читається, після Task 11 — резолвиться, Task 12 вмикає все в `check`. Розбиття дало б M2a без жодного видимого для користувача результату.
-2. **Lossless.** Сире дерево `SpecDocument` лишається поруч із моделлю і отримує `uri` та `valueAt(pointer)`. Модель типізує все, що потрібно для кодогену (перелік — у класах `model/`). Ключі, які специфікація визначає, але модель поки не типізує (`externalDocs`, `xml`, `links`, `callbacks`, `contact`, `license`, `termsOfService`), приймаються мовчки і доступні в `SpecDocument` за pointer вузла. Ключові слова JSON Schema 2020-12 без типізованого поля (`$defs`, `if`/`then`/`else`, `patternProperties`, `unevaluated*` …) зберігаються сирими в `SchemaObject.otherKeywords`. `x-`-ключі — у `extensions` кожного вузла. Ключі Paths Object і Responses Object, що починаються з `x-`, не стають шляхами чи статусами (лишаються в сирому дереві).
-3. **Невідомі ключі** (ні в 3.0, ні в 3.1, ні в 3.2, не `x-`) зберігаються в `unknownKeys` вузла і дають `TOA110 unknown-key` рівня **warning**: так ловляться опечатки (`nmae`) і залишки Swagger 2 (`type` у параметрі), а на реальній NestJS-специфікації (734 операції, 1434 схеми) таких ключів 0, тож шуму немає. Reference Object не можна розширювати, тому всі його ключі, крім `$ref`/`summary`/`description`, — невідомі.
-4. **Неправильний тип значення** (`required: true` замість списку, `minLength: -1`, `in: body`) — `TOA111 invalid-value`, **warning**: поле читається як відсутнє, решта вузла читається. Це саме те місце, де M3 поставить правило `bool-required-to-array` (C-1, C-49) — воно виправить сире дерево до розбору, і TOA111 там зникне. Явний `null` у типізованому полі — теж TOA111; у полях «будь-якого значення» (`default`, `const`, `example`, `enum`) `null` — нормальне значення, тому вони зберігаються як record `(Object?,)?`.
-5. **Обов'язкові поля** — `TOA112 missing-required-field`, **warning**, лише для полів, обов'язкових в усіх трьох версіях: `info`, `info.title`, `info.version`, `name` і `in` параметра, `type` схеми безпеки (і `name`/`scheme`/`flows`/`openIdConnectUrl` за її типом), `url` сервера, `default` серверної змінної, `name` тегу, `propertyName` дискримінатора, `content` тіла запиту. Залежні від версії вимоги (`paths` і `responses` у 3.0, `description` відповіді до 3.2) не перевіряються: це шум для документів 3.2 і робота нормалізатора (M3). У моделі такі поля nullable.
-6. **Діалект за вмістом.** Парсер читає кожну конструкцію будь-якої версії і лише відмічає версійно-специфічні (`SpecFeature`: `since`/`until`). `DialectChecker` порівнює їх з оголошеною версією: 3.1-конструкції в 3.0 — `TOA020` (warning, SG001), `nullable` у 3.1+ — `TOA021` (warning, SG002), 3.2-конструкції в старших — `TOA022` (info, SG003). Щоб не шуміти, кожна конструкція повідомляється **один раз** — у місці першого використання, з кількістю місць у тексті. Нічого не конвертується: `nullable` і `type: [T, "null"]` лежать у моделі як записані; зведення — M3.
-7. **`$ref` у схемі** — ключове слово (`SchemaObject.ref`), сусідні ключі зберігаються (3.1 застосовує їх разом із `$ref`). Для інших вузлів — `RefOr<T>`: `Ref<T>` (Reference Object з `summary`/`description`) або `Inline<T>`.
-8. **Резолвер.** Усі `$ref` записуються під час розбору (`RefUse`: де, що, якого виду ціль очікується). `RefResolver` обходить їх списком (новий файл додає свої `$ref` у кінець списку), ціль ідентифікує `SpecLocation`. Ціль, яку основний розбір не читав (інший файл, `x-shared`, `$defs`), розбирається на вимогу як очікуваний вид вузла. Інші файли читаються `SpecLoader` один раз (`SpecDocuments`), у діагностиках названі відносно показаного шляху кореневого документа. Віддалені URI (http, https, urn) не читаються (R1.1) — `TOA102`. Порожні, обрізані (`#/components/schemas/`), «на цілу секцію» (`#/components/schemas`) і не-pointer фрагменти (`#Pet`, `$anchor`) — `TOA100` (SG101). Ціль, якої немає, або файл, якого немає, — `TOA101` (SG102). Ціль іншого виду (параметр → схема) — `TOA104`. `$id` у схемі і `$self` у документі змінювали б базовий URI — модель їх зберігає, резолвер їх не застосовує і каже про це (`TOA105`).
-9. **Цикли.** Цикл — це лише ланцюжок посилань, що ніколи не доходить до вузла без `$ref` (`A → B → A`, `A → A`). Рекурсивна схема (`Node.children.items → Node`) — легальна. Кожен цикл повідомляється один раз (`TOA103`), у місці найменшого за `SpecLocation` учасника, з ланцюжком у повідомленні; `SpecModel.resolve` для таких посилань повертає `null`.
-10. **Глибока вкладеність.** `package:yaml` рекурсивно розбирає вкладеність і падає з `StackOverflowError` десь на 3 500 рівнях (виміряно в `dart test`). `NestingScanner` до розбору оцінює глибину зверху (дужки поза рядками й коментарями; для блочного YAML — відступ і маркери `- `) і відкидає текст глибший за 1000 рівнів (`TOA007`). Ліміт достатній: реальні специфікації мають десятки рівнів, а парсер моделі перевірено на 996-рівневій схемі. Той самий захист стоїть у `ConfigLoader` (`TOA902`).
-11. **Залишки рев'ю M1.** YAML-ключі, що стають однаковим JSON-ключем (`1` і `"1"`), — `TOA002` warning, перемагає останнє значення (як у JSON). Каталог замість файлу: специфікація — `TOA006` («is a directory»), конфіг — `TOA902`. `TOA005` («без позицій») повідомляється лише тоді, коли документ справді повертається, тобто після перевірки кореня (`TOA003`). `.json` з дублікатом і синтаксичною помилкою дає `TOA002` (warning) і `TOA001` (error) з позицією з `jsonDecode`.
-12. **`check` і версія.** Модель читається лише для документів, версію яких визначено (Swagger 2 і документ без `openapi` дають лише M1-діагностики). Звідси й зміна в наявних тестах: мінімальні фікстури `openapi: 3.x` отримують `info`, бо без нього тепер є `TOA112`.
+1. **Scope of one plan.** M2 is not split into M2a/M2b: 12 tasks, each with its own test cycle; after Task 7 the model is already read, after Task 11 it is resolved, and Task 12 enables everything in `check`. A split would give M2a with no result visible to the user.
+2. **Lossless.** The raw `SpecDocument` tree stays next to the model and gets `uri` and `valueAt(pointer)`. The model types everything that code generation needs (the list is in the classes of `model/`). Keys that the spec defines but the model does not yet type (`externalDocs`, `xml`, `links`, `callbacks`, `contact`, `license`, `termsOfService`) are accepted silently and are available in `SpecDocument` by the node's pointer. JSON Schema 2020-12 keywords without a typed field (`$defs`, `if`/`then`/`else`, `patternProperties`, `unevaluated*` …) are kept raw in `SchemaObject.otherKeywords`. `x-` keys go into the `extensions` of each node. Keys of the Paths Object and Responses Object that start with `x-` do not become paths or statuses (they stay in the raw tree).
+3. **Unknown keys** (in none of 3.0, 3.1 or 3.2, and not `x-`) are kept in the node's `unknownKeys` and give `TOA110 unknown-key` at **warning** level: this catches typos (`nmae`) and leftovers of Swagger 2 (`type` in a parameter), and on a real NestJS spec (734 operations, 1434 schemas) there are 0 such keys, so there is no noise. A Reference Object cannot be extended, so all of its keys except `$ref`/`summary`/`description` are unknown.
+4. **Wrong value type** (`required: true` instead of a list, `minLength: -1`, `in: body`) — `TOA111 invalid-value`, **warning**: the field is read as missing, and the rest of the node is read. This is exactly where M3 will put the `bool-required-to-array` rule (C-1, C-49): it will fix the raw tree before parsing, and TOA111 will disappear there. An explicit `null` in a typed field is also TOA111; in the fields of "any value" (`default`, `const`, `example`, `enum`) `null` is a normal value, so they are stored as a record `(Object?,)?`.
+5. **Required fields** — `TOA112 missing-required-field`, **warning**, only for fields required in all three versions: `info`, `info.title`, `info.version`, the `name` and `in` of a parameter, the `type` of a security scheme (and `name`/`scheme`/`flows`/`openIdConnectUrl` depending on its type), the `url` of a server, the `default` of a server variable, the `name` of a tag, the `propertyName` of a discriminator, the `content` of a request body. Version-dependent requirements (`paths` and `responses` in 3.0, the `description` of a response before 3.2) are not checked: for 3.2 documents this is noise, and it is the normalizer's job (M3). In the model such fields are nullable.
+6. **Dialect by content.** The parser reads every construct of any version and only marks the version-specific ones (`SpecFeature`: `since`/`until`). `DialectChecker` compares them with the declared version: 3.1 constructs in 3.0 — `TOA020` (warning, SG001), `nullable` in 3.1+ — `TOA021` (warning, SG002), 3.2 constructs in older versions — `TOA022` (info, SG003). To avoid noise, each construct is reported **once** — at the place of its first use, with the count of places in the text. Nothing is converted: `nullable` and `type: [T, "null"]` stay in the model as written; normalization is M3.
+7. **`$ref` in a schema** is a keyword (`SchemaObject.ref`); sibling keys are kept (3.1 applies them together with `$ref`). For other nodes — `RefOr<T>`: `Ref<T>` (a Reference Object with `summary`/`description`) or `Inline<T>`.
+8. **Resolver.** All `$ref`s are recorded during parsing (`RefUse`: where, what, and which kind of target is expected). `RefResolver` goes through them as a list (a new file adds its own `$ref`s to the end of the list); the target is identified by a `SpecLocation`. A target that the main parse did not read (another file, `x-shared`, `$defs`) is parsed on demand as the expected kind of node. Other files are read once by `SpecLoader` (`SpecDocuments`); in diagnostics they are named relative to the displayed path of the root document. Remote URIs (http, https, urn) are not read (R1.1) — `TOA102`. Empty, truncated (`#/components/schemas/`), "to a whole section" (`#/components/schemas`) and non-pointer fragments (`#Pet`, `$anchor`) — `TOA100` (SG101). A target that does not exist, or a file that does not exist — `TOA101` (SG102). A target of another kind (parameter → schema) — `TOA104`. `$id` in a schema and `$self` in a document would change the base URI — the model stores them, the resolver does not apply them and reports this (`TOA105`).
+9. **Cycles.** A cycle is only a chain of references that never reaches a node without `$ref` (`A → B → A`, `A → A`). A recursive schema (`Node.children.items → Node`) is legal. Each cycle is reported once (`TOA103`), at the place of the participant that is smallest by `SpecLocation`, with the chain in the message; `SpecModel.resolve` returns `null` for such references.
+10. **Deep nesting.** `package:yaml` parses nesting recursively and fails with `StackOverflowError` somewhere around 3 500 levels (measured in `dart test`). Before parsing, `NestingScanner` estimates the depth from the top (brackets outside strings and comments; for block YAML — the indentation and `- ` markers) and rejects text deeper than 1000 levels (`TOA007`). The limit is sufficient: real specifications have dozens of levels, and the model parser has been checked on a 996-level schema. The same guard is in `ConfigLoader` (`TOA902`).
+11. **Leftovers from the M1 review.** YAML keys that become the same JSON key (`1` and `"1"`) — `TOA002` warning; the last value wins (as in JSON). A directory instead of a file: for a specification — `TOA006` ("is a directory"), for a config — `TOA902`. `TOA005` ("without positions") is reported only when the document is actually returned, that is, after the root check (`TOA003`). A `.json` file with a duplicate and a syntax error gives `TOA002` (warning) and `TOA001` (error) with the position from `jsonDecode`.
+12. **`check` and the version.** The model is read only for documents whose version is determined (Swagger 2 and a document without `openapi` give only M1 diagnostics). Hence the change in the existing tests as well: minimal fixtures with `openapi: 3.x` get `info`, because without it there is now a `TOA112`.
 
-## Нові коди діагностики
+## New diagnostic codes
 
-| Код | Slug | Рівень | Коли | Research |
+| Code | Slug | Level | When | Research |
 |---|---|---|---|---|
-| TOA007 | `nesting-too-deep` | error | Текст глибший за 1000 рівнів | — |
-| TOA020 | `openapi-3-1-in-3-0` | warning | 3.1 / JSON Schema 2020-12 у документі 3.0 | SG001, C-17 |
-| TOA021 | `nullable-after-3-0` | warning | `nullable` у документі 3.1+ | SG002, C-16 |
-| TOA022 | `openapi-3-2-in-older` | info | Конструкції 3.2 у документі 3.0/3.1 | SG003, C-47 |
-| TOA100 | `invalid-ref` | error | Порожній, обрізаний, не-pointer `$ref` або `$ref` на цілу секцію | SG101, C-2 |
-| TOA101 | `unresolved-ref` | error | Цілі або файлу немає | SG102, C-3 |
-| TOA102 | `remote-ref` | error | `$ref` на http(s)/інший не-file URI | R1.1 |
-| TOA103 | `ref-cycle` | error | Цикл посилань без визначення | R1.2 |
-| TOA104 | `ref-kind-mismatch` | error | Ціль іншого виду | — |
-| TOA105 | `ref-base-ignored` | warning | `$id` у схемі або `$self` у документі | A.1 #10, A.2 #12 |
-| TOA110 | `unknown-key` | warning | Ключ, якого немає в жодній версії | A.3 п. 4 |
-| TOA111 | `invalid-value` | warning | Неправильний JSON-тип або недопустиме значення | C-1, C-49 |
-| TOA112 | `missing-required-field` | warning | Обов'язкове поле відсутнє | — |
+| TOA007 | `nesting-too-deep` | error | Text deeper than 1000 levels | — |
+| TOA020 | `openapi-3-1-in-3-0` | warning | 3.1 / JSON Schema 2020-12 in a 3.0 document | SG001, C-17 |
+| TOA021 | `nullable-after-3-0` | warning | `nullable` in a 3.1+ document | SG002, C-16 |
+| TOA022 | `openapi-3-2-in-older` | info | 3.2 constructs in a 3.0/3.1 document | SG003, C-47 |
+| TOA100 | `invalid-ref` | error | Empty, truncated, non-pointer `$ref`, or a `$ref` to a whole section | SG101, C-2 |
+| TOA101 | `unresolved-ref` | error | The target or the file does not exist | SG102, C-3 |
+| TOA102 | `remote-ref` | error | `$ref` to http(s) or another non-file URI | R1.1 |
+| TOA103 | `ref-cycle` | error | Reference cycle without a definition | R1.2 |
+| TOA104 | `ref-kind-mismatch` | error | Target of another kind | — |
+| TOA105 | `ref-base-ignored` | warning | `$id` in a schema or `$self` in a document | A.1 #10, A.2 #12 |
+| TOA110 | `unknown-key` | warning | Key that exists in no version | A.3 item 4 |
+| TOA111 | `invalid-value` | warning | Wrong JSON type or invalid value | C-1, C-49 |
+| TOA112 | `missing-required-field` | warning | Required field is missing | — |
 
-Наявні коди отримують нові випадки: `TOA002` (злиті YAML-ключі), `TOA006` (каталог замість специфікації), `TOA902` (каталог замість конфігу, надто глибокий конфіг).
+Existing codes get new cases: `TOA002` (merged YAML keys), `TOA006` (a directory instead of a specification), `TOA902` (a directory instead of a config, a config that is too deep).
 
-## Що свідомо не входить у M2
+## What is deliberately not part of M2
 
-- Будь-яке виправлення дефектів (зведення `nullable`, `required: bool` → список, `examples` за версією, порожній `$ref` → JSON value) — правила нормалізатора M3. M2 лише читає і повідомляє.
-- Перевірка імен: `security` → оголошені схеми безпеки, `tag.parent` → оголошений тег, значення `discriminator.mapping` (C-4), path-параметри проти шаблону шляху (C-6, C-7), ключі components за регексом (C-32) — M3.
-- Зміна базового URI через `$id`, `$self`, `$anchor`, `$dynamicRef` — лише діагностика `TOA105`/`TOA100`; коли знадобиться реальним специфікаціям.
-- Завантаження віддалених `$ref` — разом із локальним знімком і lock-файлом (M12).
-- Злиття ключів, сусідніх з `$ref` (3.1), і `allOf` — семантична IR (M6). `SpecModel.resolveSchema` повертає кінцеву ціль без злиття.
+- Any fixing of defects (normalizing `nullable`, `required: bool` → list, `examples` by version, an empty `$ref` → JSON value) — the normalizer rules of M3. M2 only reads and reports.
+- Name checks: `security` → declared security schemes, `tag.parent` → a declared tag, values of `discriminator.mapping` (C-4), path parameters against the path template (C-6, C-7), keys of components by regex (C-32) — M3.
+- Changing the base URI through `$id`, `$self`, `$anchor`, `$dynamicRef` — only the diagnostic `TOA105`/`TOA100`; it will be needed when real specifications require it.
+- Loading remote `$ref`s — together with a local snapshot and a lock file (M12).
+- Merging keys next to `$ref` (3.1) and `allOf` — the semantic IR (M6). `SpecModel.resolveSchema` returns the final target without merging.
 
-## Структура файлів
+## File structure
 
-Усі шляхи відносно `packages/typed_openapi/`, якщо не сказано інше.
+All paths are relative to `packages/typed_openapi/`, unless stated otherwise.
 
-| Файл | Відповідальність | Задача |
+| File | Responsibility | Task |
 |---|---|---|
 | `lib/src/load/spec_document.dart` | + `uri`, `valueAt(pointer)` | 1 |
-| `lib/src/load/spec_loader.dart` | каталог, злиті ключі, порядок TOA005, JSON-fallback, `uri`, захист глибини | 1, 2 |
-| `lib/src/config/config_loader.dart` | каталог, захист глибини | 1, 2 |
-| `lib/src/load/nesting_scanner.dart` | `NestingScanner` — оцінка глибини без розбору | 2 |
-| `lib/src/diagnostics/diagnostic_code.dart` | нові коди | 2, 4, 5, 8–11 |
+| `lib/src/load/spec_loader.dart` | directory, merged keys, TOA005 order, JSON fallback, `uri`, depth guard | 1, 2 |
+| `lib/src/config/config_loader.dart` | directory, depth guard | 1, 2 |
+| `lib/src/load/nesting_scanner.dart` | `NestingScanner` — depth estimate without parsing | 2 |
+| `lib/src/diagnostics/diagnostic_code.dart` | new codes | 2, 4, 5, 8–11 |
 | `lib/src/model/spec_node.dart` | `SpecLocation`, `SpecNode`, `RefKind`, `RefOr`, `Ref`, `Inline` | 3 |
-| `lib/src/parse/spec_feature.dart` | `SpecFeature` — версійно-специфічні конструкції | 4 |
+| `lib/src/parse/spec_feature.dart` | `SpecFeature` — version-specific constructs | 4 |
 | `lib/src/parse/parse_context.dart` | `RefUse`, `FeatureUse`, `SpecIndex`, `ParseContext` | 4 |
-| `lib/src/parse/object_reader.dart` | `ObjectReader` — типізоване читання полів, невідомі ключі | 4 |
+| `lib/src/parse/object_reader.dart` | `ObjectReader` — typed field reading, unknown keys | 4 |
 | `lib/src/model/schema.dart` | `Schema`, `BooleanSchema`, `SchemaObject`, `SchemaType`, `Discriminator` | 5 |
 | `lib/src/parse/schema_parser.dart` | `SchemaParser` | 5 |
-| `lib/src/model/operation.dart` | `PathItem`, `Operation`, `Parameter`, `RequestBody`, `Response`, `Header`, `MediaType`, `Encoding`, `Example`, `Server`, `ServerVariable`, `SecurityRequirement` і enum-и | 6 |
+| `lib/src/model/operation.dart` | `PathItem`, `Operation`, `Parameter`, `RequestBody`, `Response`, `Header`, `MediaType`, `Encoding`, `Example`, `Server`, `ServerVariable`, `SecurityRequirement` and the enums | 6 |
 | `lib/src/parse/operation_parser.dart` | `OperationParser` | 6 |
-| `lib/src/model/security.dart` | `SecurityScheme`, `OAuthFlows`, `OAuthFlow` і enum-и | 7 |
+| `lib/src/model/security.dart` | `SecurityScheme`, `OAuthFlows`, `OAuthFlow` and the enums | 7 |
 | `lib/src/model/document.dart` | `OpenApiDocument`, `Info`, `Tag`, `Components` | 7 |
-| `lib/src/parse/openapi_parser.dart` | `OpenApiParser` — документ і фрагменти для `$ref` | 7 |
+| `lib/src/parse/openapi_parser.dart` | `OpenApiParser` — document and fragments for `$ref` targets | 7 |
 | `lib/src/load/openapi_version.dart` | + `OpenApiVersion.label` | 8 |
 | `lib/src/parse/dialect_checker.dart` | `DialectChecker` | 8 |
 | `lib/src/resolve/ref_target.dart` | `RefTarget`, `ResolvableRef`, `BrokenRef` | 9 |
-| `lib/src/resolve/spec_documents.dart` | `SpecDocuments` — файли специфікації за URI | 10 |
+| `lib/src/resolve/spec_documents.dart` | `SpecDocuments` — specification files by URI | 10 |
 | `lib/src/resolve/spec_model.dart` | `SpecModel` | 10 |
-| `lib/src/resolve/ref_resolver.dart` | `RefResolver` (+ цикли в Task 11) | 10, 11 |
+| `lib/src/resolve/ref_resolver.dart` | `RefResolver` (+ cycles in Task 11) | 10, 11 |
 | `lib/src/resolve/spec_reader.dart` | `SpecReader` — parse → resolve → dialect | 12 |
-| `lib/src/check/spec_checker.dart` | викликає `SpecReader` | 12 |
-| `lib/typed_openapi.dart` | експорт моделі, `SpecReader`, `SpecModel` | 12 |
-| `CHANGELOG.md`, `README.md`, `README.ua.md`, `CLAUDE.md` (корінь) | документація | 12 |
-| `test/helpers/spec_fixture.dart` | `SpecFixture` — документ + контекст розбору для тестів | 4 |
-| `test/load/nesting_scanner_test.dart`, `test/load/spec_document_test.dart`, `test/model/spec_node_test.dart`, `test/parse/*_test.dart`, `test/resolve/*_test.dart` | нові тести | 1–12 |
+| `lib/src/check/spec_checker.dart` | calls `SpecReader` | 12 |
+| `lib/typed_openapi.dart` | export of the model, `SpecReader`, `SpecModel` | 12 |
+| `CHANGELOG.md`, `README.md`, `README.ua.md`, `CLAUDE.md` (root) | documentation | 12 |
+| `test/helpers/spec_fixture.dart` | `SpecFixture` — document + parse context for tests | 4 |
+| `test/load/nesting_scanner_test.dart`, `test/load/spec_document_test.dart`, `test/model/spec_node_test.dart`, `test/parse/*_test.dart`, `test/resolve/*_test.dart` | new tests | 1–12 |
 
-## Інтерфейси між задачами
+## Interfaces between tasks
 
 ```dart
 // load (Tasks 1-2)
@@ -152,11 +152,11 @@ final class SpecModel { OpenApiDocument document; SpecNode? nodeAt(SpecLocation)
 final class SpecReader { SpecModel read(SpecDocument, OpenApiVersion); }
 ```
 
-Тестів до початку — 51, після всіх задач — 132; `dart analyze packages` без зауважень, `dart pub publish --dry-run` без попереджень.
+Tests before starting: 51; after all tasks: 132. `dart analyze packages` reports no issues, and `dart pub publish --dry-run` reports no warnings.
 
 ---
 
-### Task 1: Завантаження: залишки рев'ю M1 і URI документа
+### Task 1: Loading: leftovers of the M1 review and the document URI
 
 **Files:**
 - Create: `packages/typed_openapi/test/load/spec_document_test.dart`
@@ -168,18 +168,18 @@ final class SpecReader { SpecModel read(SpecDocument, OpenApiVersion); }
 
 **Interfaces:**
 - Consumes: `SpecLoader`, `ConfigLoader`, `DiagnosticBag`, `DiagnosticCode`, `JsonPointer` (M1).
-- Produces: `SpecDocument.uri` (`Uri`, абсолютний, нормалізований), `(Object?,)? SpecDocument.valueAt(JsonPointer)`, `SpecLoader.parse(String text, String file, {Uri? uri})`; `SpecLoader.load` передає `uri` файлу.
+- Produces: `SpecDocument.uri` (`Uri`, absolute, normalized), `(Object?,)? SpecDocument.valueAt(JsonPointer)`, `SpecLoader.parse(String text, String file, {Uri? uri})`; `SpecLoader.load` passes the `uri` of the file.
 
-Поведінка, яку закріплюють тести:
-- `SpecDocument` знає абсолютний `uri` свого файлу (база для відносних `$ref`) і віддає вузол за pointer: `valueAt` повертає record `(value,)`, щоб відрізнити явний `null` від відсутнього вузла; індекси списку — лише десяткові числа без провідних нулів.
-- YAML-ключі `200` і `"200"` в одному об'єкті — warning `TOA002` з pointer і позицією другого ключа, перемагає останнє значення.
-- `.json` з дублікатом і синтаксичною помилкою — `TOA002` warning і `TOA001` error з позицією від `jsonDecode`; без дубліката поведінка M1 не змінюється.
-- `.json`, чий корінь не об'єкт, — `TOA003`, і вже без `TOA005`.
-- Каталог замість файлу: специфікація — `TOA006` «is a directory», конфіг — `TOA902`.
+Behaviour the tests pin down:
+- `SpecDocument` knows the absolute `uri` of its file (the base for relative `$ref`s) and returns a node by pointer: `valueAt` returns a record `(value,)` to tell an explicit `null` from a missing node; list indexes are only decimal numbers without leading zeros.
+- YAML keys `200` and `"200"` in one object — warning `TOA002` with the pointer and the position of the second key; the last value wins.
+- A `.json` file with a duplicate and a syntax error — `TOA002` warning and `TOA001` error with the position from `jsonDecode`; without a duplicate the M1 behaviour does not change.
+- A `.json` whose root is not an object — `TOA003`, and no longer `TOA005`.
+- A directory instead of a file: for a specification — `TOA006` "is a directory", for a config — `TOA902`.
 
-- [ ] **Step 1: Написати тест, що не проходить**
+- [ ] **Step 1: Write a test that fails**
 
-Створи `packages/typed_openapi/test/load/spec_document_test.dart`:
+Create `packages/typed_openapi/test/load/spec_document_test.dart`:
 
 ```dart
 import 'package:path/path.dart' as p;
@@ -229,9 +229,9 @@ void main() {
 }
 ```
 
-- [ ] **Step 2: Додати тести в `spec_loader_test.dart`**
+- [ ] **Step 2: Add tests to `spec_loader_test.dart`**
 
-У `packages/typed_openapi/test/load/spec_loader_test.dart` після фрагмента:
+In `packages/typed_openapi/test/load/spec_loader_test.dart`, after the fragment:
 
 ```dart
     test('a root that is not an object is an error', () {
@@ -241,7 +241,7 @@ void main() {
     });
 ```
 
-встав:
+insert:
 
 ```dart
     test('YAML keys 1 and "1" are one JSON key: a warning, last wins', () {
@@ -286,9 +286,9 @@ void main() {
     });
 ```
 
-- [ ] **Step 3: Додати тести в `spec_loader_test.dart`**
+- [ ] **Step 3: Add tests to `spec_loader_test.dart`**
 
-У `packages/typed_openapi/test/load/spec_loader_test.dart` після фрагмента:
+In `packages/typed_openapi/test/load/spec_loader_test.dart`, after the fragment:
 
 ```dart
       File(path).writeAsBytesSync([0xFF, 0xFE, 0x41]);
@@ -298,7 +298,7 @@ void main() {
     });
 ```
 
-встав:
+insert:
 
 ```dart
     test('reports a directory given as the spec', () {
@@ -310,15 +310,15 @@ void main() {
     });
 ```
 
-- [ ] **Step 4: Додати тести в `config_loader_test.dart`**
+- [ ] **Step 4: Add tests to `config_loader_test.dart`**
 
-У `packages/typed_openapi/test/config/config_loader_test.dart` перед фрагментом:
+In `packages/typed_openapi/test/config/config_loader_test.dart`, before the fragment:
 
 ```dart
   test('reports unknown keys as warnings and keeps going', () {
 ```
 
-встав:
+insert:
 
 ```dart
   test('reports a directory given as the config', () {
@@ -330,14 +330,14 @@ void main() {
   });
 ```
 
-- [ ] **Step 5: Переконатися, що тести падають**
+- [ ] **Step 5: Make sure the tests fail**
 
-Run (з `packages/typed_openapi`): `dart test test/load test/config`
-Expected: FAIL, перша помилка — `The method 'valueAt' isn't defined for the type 'SpecDocument'.`
+Run (from `packages/typed_openapi`): `dart test test/load test/config`
+Expected: FAIL, the first error — `The method 'valueAt' isn't defined for the type 'SpecDocument'.`
 
-- [ ] **Step 6: Переписати `spec_document.dart`**
+- [ ] **Step 6: Rewrite `spec_document.dart`**
 
-Заміни весь вміст `packages/typed_openapi/lib/src/load/spec_document.dart` на:
+Replace the entire contents of `packages/typed_openapi/lib/src/load/spec_document.dart` with:
 
 ```dart
 import 'package:source_span/source_span.dart';
@@ -401,9 +401,9 @@ final class SpecDocument {
 }
 ```
 
-- [ ] **Step 7: Переписати `spec_loader.dart`**
+- [ ] **Step 7: Rewrite `spec_loader.dart`**
 
-Заміни весь вміст `packages/typed_openapi/lib/src/load/spec_loader.dart` на:
+Replace the entire contents of `packages/typed_openapi/lib/src/load/spec_loader.dart` with:
 
 ```dart
 import 'dart:convert';
@@ -614,9 +614,9 @@ final class SpecLoader {
 }
 ```
 
-- [ ] **Step 8: Змінити `config_loader.dart`**
+- [ ] **Step 8: Change `config_loader.dart`**
 
-У `packages/typed_openapi/lib/src/config/config_loader.dart` заміни:
+In `packages/typed_openapi/lib/src/config/config_loader.dart`, replace:
 
 ```dart
     final source = File(path);
@@ -634,7 +634,7 @@ final class SpecLoader {
       text = source.readAsStringSync();
 ```
 
-на:
+with:
 
 ```dart
     final type = FileSystemEntity.typeSync(path);
@@ -661,17 +661,17 @@ final class SpecLoader {
       text = File(path).readAsStringSync();
 ```
 
-- [ ] **Step 9: Переконатися, що тести проходять**
+- [ ] **Step 9: Make sure the tests pass**
 
-Run (з `packages/typed_openapi`): `dart test test/load test/config`
+Run (from `packages/typed_openapi`): `dart test test/load test/config`
 Expected: `+34: All tests passed!`
 
-- [ ] **Step 10: Формат, аналізатор, увесь набір тестів**
+- [ ] **Step 10: Format, analyzer, the whole test suite**
 
-Run (з `packages/typed_openapi`): `dart format --output=none --set-exit-if-changed lib test bin && dart test`
+Run (from `packages/typed_openapi`): `dart format --output=none --set-exit-if-changed lib test bin && dart test`
 Expected: `Formatted 28 files (0 changed)`, `+61: All tests passed!`
 
-Run (з кореня): `dart analyze packages`
+Run (from the root): `dart analyze packages`
 Expected: `No issues found!`
 
 - [ ] **Step 11: Commit**
@@ -683,7 +683,7 @@ git commit -m 'fix(typed_openapi): loader edge cases left from the M1 review' -m
 
 ---
 
-### Task 2: Захист від надто глибокої вкладеності (TOA007)
+### Task 2: Protection against excessive nesting depth (TOA007)
 
 **Files:**
 - Create: `packages/typed_openapi/lib/src/load/nesting_scanner.dart`
@@ -698,14 +698,14 @@ git commit -m 'fix(typed_openapi): loader edge cases left from the M1 review' -m
 - Consumes: `SpecLoader.parse`, `ConfigLoader.load` (Task 1).
 - Produces: `final class NestingScanner { const NestingScanner(); static const maxDepth = 1000; int? findTooDeep(String text, {int limit = maxDepth}); }`; `DiagnosticCode.nestingTooDeep` (`TOA007`).
 
-Поведінка, яку закріплюють тести:
-- `NestingScanner.findTooDeep` повертає зсув першого символу, на якому оцінка глибини перевищує ліміт, або `null`. Дужки в рядках (`"…"`, `'…'` з `''`) і коментарях не рахуються; апостроф усередині слова (`it's`) не відкриває рядок.
-- Блочний YAML: відступ рядка плюс маркери `- ` на його початку; flow-колекція (`[`/`{`) починає рахунок від відступу свого рядка, тож pretty-printed JSON рахується точно.
-- 20 000 рівнів сканер проходить без рекурсії; `SpecLoader.parse` і `ConfigLoader.load` повертають `null` з діагностикою, а не падають.
+Behaviour the tests pin down:
+- `NestingScanner.findTooDeep` returns the offset of the first character at which the depth estimate exceeds the limit, or `null`. Brackets inside strings (`"…"`, `'…'` with `''`) and comments are not counted; an apostrophe inside a word (`it's`) does not open a string.
+- Block YAML: the indentation of the line plus the `- ` markers at its start; a flow collection (`[`/`{`) starts counting from the indentation of its own line, so pretty-printed JSON is counted exactly.
+- The scanner handles 20 000 levels without recursion; `SpecLoader.parse` and `ConfigLoader.load` return `null` with a diagnostic instead of crashing.
 
-- [ ] **Step 1: Написати тест, що не проходить**
+- [ ] **Step 1: Write a test that fails**
 
-Створи `packages/typed_openapi/test/load/nesting_scanner_test.dart`:
+Create `packages/typed_openapi/test/load/nesting_scanner_test.dart`:
 
 ```dart
 import 'package:test/test.dart';
@@ -752,24 +752,24 @@ c: [1, 2]
 }
 ```
 
-- [ ] **Step 2: Додати тести в `spec_loader_test.dart`**
+- [ ] **Step 2: Add tests to `spec_loader_test.dart`**
 
-У `packages/typed_openapi/test/load/spec_loader_test.dart` заміни:
+In `packages/typed_openapi/test/load/spec_loader_test.dart`, replace:
 
 ```dart
 import 'package:typed_openapi/src/load/spec_loader.dart';
 ```
 
-на:
+with:
 
 ```dart
 import 'package:typed_openapi/src/load/nesting_scanner.dart';
 import 'package:typed_openapi/src/load/spec_loader.dart';
 ```
 
-- [ ] **Step 3: Додати тести в `spec_loader_test.dart`**
+- [ ] **Step 3: Add tests to `spec_loader_test.dart`**
 
-У `packages/typed_openapi/test/load/spec_loader_test.dart` після фрагмента:
+In `packages/typed_openapi/test/load/spec_loader_test.dart`, after the fragment:
 
 ```dart
     test('a root that is not an object is an error', () {
@@ -779,7 +779,7 @@ import 'package:typed_openapi/src/load/spec_loader.dart';
     });
 ```
 
-встав:
+insert:
 
 ```dart
     test('nesting deeper than the limit is an error, not a crash', () {
@@ -798,15 +798,15 @@ import 'package:typed_openapi/src/load/spec_loader.dart';
     });
 ```
 
-- [ ] **Step 4: Додати тести в `config_loader_test.dart`**
+- [ ] **Step 4: Add tests to `config_loader_test.dart`**
 
-У `packages/typed_openapi/test/config/config_loader_test.dart` перед фрагментом:
+In `packages/typed_openapi/test/config/config_loader_test.dart`, before the fragment:
 
 ```dart
   test('reports unknown keys as warnings and keeps going', () {
 ```
 
-встав:
+insert:
 
 ```dart
   test('reports a config nested too deeply instead of crashing', () {
@@ -821,29 +821,29 @@ import 'package:typed_openapi/src/load/spec_loader.dart';
   });
 ```
 
-- [ ] **Step 5: Переконатися, що тести падають**
+- [ ] **Step 5: Make sure the tests fail**
 
-Run (з `packages/typed_openapi`): `dart test test/load test/config`
-Expected: FAIL, перша помилка — `cannot read 'lib/src/load/nesting_scanner.dart': No such file or directory`
+Run (from `packages/typed_openapi`): `dart test test/load test/config`
+Expected: FAIL, the first error — `cannot read 'lib/src/load/nesting_scanner.dart': No such file or directory`
 
-- [ ] **Step 6: Додати коди в каталог**
+- [ ] **Step 6: Add the codes to the catalogue**
 
-У `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart` після фрагмента:
+In `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart`, after the fragment:
 
 ```dart
   inputUnreadable('TOA006', 'input-unreadable', .error),
 ```
 
-встав:
+insert:
 
 ```dart
   /// The document nests deeper than the parser can follow.
   nestingTooDeep('TOA007', 'nesting-too-deep', .error),
 ```
 
-- [ ] **Step 7: Створити `nesting_scanner.dart`**
+- [ ] **Step 7: Create `nesting_scanner.dart`**
 
-Створи `packages/typed_openapi/lib/src/load/nesting_scanner.dart`:
+Create `packages/typed_openapi/lib/src/load/nesting_scanner.dart`:
 
 ```dart
 /// Finds text that nests too deeply to parse, without parsing it.
@@ -942,30 +942,30 @@ final class NestingScanner {
 }
 ```
 
-- [ ] **Step 8: Змінити `spec_loader.dart`**
+- [ ] **Step 8: Change `spec_loader.dart`**
 
-У `packages/typed_openapi/lib/src/load/spec_loader.dart` заміни:
+In `packages/typed_openapi/lib/src/load/spec_loader.dart`, replace:
 
 ```dart
 import 'spec_document.dart';
 ```
 
-на:
+with:
 
 ```dart
 import 'nesting_scanner.dart';
 import 'spec_document.dart';
 ```
 
-- [ ] **Step 9: Змінити `spec_loader.dart`**
+- [ ] **Step 9: Change `spec_loader.dart`**
 
-У `packages/typed_openapi/lib/src/load/spec_loader.dart` перед фрагментом:
+In `packages/typed_openapi/lib/src/load/spec_loader.dart`, before the fragment:
 
 ```dart
     final YamlNode node;
 ```
 
-встав:
+insert:
 
 ```dart
     final tooDeep = const NestingScanner().findTooDeep(text);
@@ -983,30 +983,30 @@ import 'spec_document.dart';
     }
 ```
 
-- [ ] **Step 10: Змінити `config_loader.dart`**
+- [ ] **Step 10: Change `config_loader.dart`**
 
-У `packages/typed_openapi/lib/src/config/config_loader.dart` заміни:
+In `packages/typed_openapi/lib/src/config/config_loader.dart`, replace:
 
 ```dart
 import '../diagnostics/json_pointer.dart';
 ```
 
-на:
+with:
 
 ```dart
 import '../diagnostics/json_pointer.dart';
 import '../load/nesting_scanner.dart';
 ```
 
-- [ ] **Step 11: Змінити `config_loader.dart`**
+- [ ] **Step 11: Change `config_loader.dart`**
 
-У `packages/typed_openapi/lib/src/config/config_loader.dart` перед фрагментом:
+In `packages/typed_openapi/lib/src/config/config_loader.dart`, before the fragment:
 
 ```dart
     final YamlNode root;
 ```
 
-встав:
+insert:
 
 ```dart
     final tooDeep = const NestingScanner().findTooDeep(text);
@@ -1021,17 +1021,17 @@ import '../load/nesting_scanner.dart';
     }
 ```
 
-- [ ] **Step 12: Переконатися, що тести проходять**
+- [ ] **Step 12: Make sure the tests pass**
 
-Run (з `packages/typed_openapi`): `dart test test/load test/config`
+Run (from `packages/typed_openapi`): `dart test test/load test/config`
 Expected: `+43: All tests passed!`
 
-- [ ] **Step 13: Формат, аналізатор, увесь набір тестів**
+- [ ] **Step 13: Format, analyzer, the whole test suite**
 
-Run (з `packages/typed_openapi`): `dart format --output=none --set-exit-if-changed lib test bin && dart test`
+Run (from `packages/typed_openapi`): `dart format --output=none --set-exit-if-changed lib test bin && dart test`
 Expected: `Formatted 30 files (0 changed)`, `+70: All tests passed!`
 
-Run (з кореня): `dart analyze packages`
+Run (from the root): `dart analyze packages`
 Expected: `No issues found!`
 
 - [ ] **Step 14: Commit**
@@ -1043,7 +1043,7 @@ git commit -m 'fix(typed_openapi): report deep nesting instead of overflowing th
 
 ---
 
-### Task 3: Ядро моделі: `SpecLocation`, `SpecNode`, `RefOr`
+### Task 3: Model core: `SpecLocation`, `SpecNode`, `RefOr`
 
 **Files:**
 - Create: `packages/typed_openapi/lib/src/model/spec_node.dart`
@@ -1051,15 +1051,15 @@ git commit -m 'fix(typed_openapi): report deep nesting instead of overflowing th
 
 **Interfaces:**
 - Consumes: `JsonPointer` (M1).
-- Produces: `SpecLocation(Uri document, JsonPointer pointer)` з `==`, `hashCode`, `compareTo`, `toString` (`file:///…#/…`); `abstract class SpecNode({required SpecLocation location, Map<String, Object?> extensions, Map<String, Object?> unknownKeys})` з `JsonPointer get pointer`; `enum RefKind` (`noun`, `withArticle`); `sealed class RefOr<T extends SpecNode>`, `final class Ref<T> extends SpecNode implements RefOr<T>` (`ref`, `kind`, `summary`, `description`), `final class Inline<T> implements RefOr<T>` (`value`).
+- Produces: `SpecLocation(Uri document, JsonPointer pointer)` with `==`, `hashCode`, `compareTo`, `toString` (`file:///…#/…`); `abstract class SpecNode({required SpecLocation location, Map<String, Object?> extensions, Map<String, Object?> unknownKeys})` with `JsonPointer get pointer`; `enum RefKind` (`noun`, `withArticle`); `sealed class RefOr<T extends SpecNode>`, `final class Ref<T> extends SpecNode implements RefOr<T>` (`ref`, `kind`, `summary`, `description`), `final class Inline<T> implements RefOr<T>` (`value`).
 
-Поведінка, яку закріплюють тести:
-- `SpecLocation` рівні, коли збігаються і файл, і pointer; однаковий pointer у двох файлах — різні вузли (space_gen #358). Сортування — за файлом, потім за pointer.
-- `RefKind.withArticle` дає `an example`, `a request body` — для повідомлень резолвера.
+Behaviour the tests pin down:
+- `SpecLocation` values are equal when both the file and the pointer match; the same pointer in two files gives different nodes (space_gen #358). Sorting is by file, then by pointer.
+- `RefKind.withArticle` gives `an example`, `a request body` — for the resolver's messages.
 
-- [ ] **Step 1: Написати тест, що не проходить**
+- [ ] **Step 1: Write a test that fails**
 
-Створи `packages/typed_openapi/test/model/spec_node_test.dart`:
+Create `packages/typed_openapi/test/model/spec_node_test.dart`:
 
 ```dart
 import 'package:test/test.dart';
@@ -1100,14 +1100,14 @@ void main() {
 }
 ```
 
-- [ ] **Step 2: Переконатися, що тести падають**
+- [ ] **Step 2: Make sure the tests fail**
 
-Run (з `packages/typed_openapi`): `dart test test/model`
-Expected: FAIL, перша помилка — `cannot read 'lib/src/model/spec_node.dart': No such file or directory`
+Run (from `packages/typed_openapi`): `dart test test/model`
+Expected: FAIL, the first error — `cannot read 'lib/src/model/spec_node.dart': No such file or directory`
 
-- [ ] **Step 3: Створити `spec_node.dart`**
+- [ ] **Step 3: Create `spec_node.dart`**
 
-Створи `packages/typed_openapi/lib/src/model/spec_node.dart`:
+Create `packages/typed_openapi/lib/src/model/spec_node.dart`:
 
 ```dart
 import '../diagnostics/json_pointer.dart';
@@ -1251,17 +1251,17 @@ final class Inline<T extends SpecNode> implements RefOr<T> {
 }
 ```
 
-- [ ] **Step 4: Переконатися, що тести проходять**
+- [ ] **Step 4: Make sure the tests pass**
 
-Run (з `packages/typed_openapi`): `dart test test/model`
+Run (from `packages/typed_openapi`): `dart test test/model`
 Expected: `+4: All tests passed!`
 
-- [ ] **Step 5: Формат, аналізатор, увесь набір тестів**
+- [ ] **Step 5: Format, analyzer, the whole test suite**
 
-Run (з `packages/typed_openapi`): `dart format --output=none --set-exit-if-changed lib test bin && dart test`
+Run (from `packages/typed_openapi`): `dart format --output=none --set-exit-if-changed lib test bin && dart test`
 Expected: `Formatted 32 files (0 changed)`, `+74: All tests passed!`
 
-Run (з кореня): `dart analyze packages`
+Run (from the root): `dart analyze packages`
 Expected: `No issues found!`
 
 - [ ] **Step 6: Commit**
@@ -1273,7 +1273,7 @@ git commit -m 'feat(typed_openapi): spec node locations and references' -m 'Co-A
 
 ---
 
-### Task 4: `ObjectReader`, `ParseContext` і `SpecFeature` (TOA110–TOA112)
+### Task 4: `ObjectReader`, `ParseContext` and `SpecFeature` (TOA110–TOA112)
 
 **Files:**
 - Create: `packages/typed_openapi/lib/src/parse/spec_feature.dart`
@@ -1285,19 +1285,19 @@ git commit -m 'feat(typed_openapi): spec node locations and references' -m 'Co-A
 
 **Interfaces:**
 - Consumes: `SpecDocument` (Task 1), `SpecLocation`, `SpecNode`, `RefKind`, `Ref`, `Inline`, `RefOr` (Task 3), `OpenApiVersion` (M1).
-- Produces: `enum SpecFeature` (`label`, `since`, `until`); `RefUse(site, ref, kind)`, `FeatureUse(feature, file, pointer, span)`, `SpecIndex` (`nodes`, `refs`, `features`); `ParseContext` (`locate`, `report`, `note`, `register`, `reader`, `refOr`); `ObjectReader` (геттери з блоку «Інтерфейси між задачами», `static String describe(Object?)`); коди `unknownKey` (TOA110), `invalidValue` (TOA111), `missingRequiredField` (TOA112); тестовий `SpecFixture(String text, {String file})` з `diagnostics`, `document`, `index`, `context`, `codes`, `pointers`.
+- Produces: `enum SpecFeature` (`label`, `since`, `until`); `RefUse(site, ref, kind)`, `FeatureUse(feature, file, pointer, span)`, `SpecIndex` (`nodes`, `refs`, `features`); `ParseContext` (`locate`, `report`, `note`, `register`, `reader`, `refOr`); `ObjectReader` (the getters from the block "Interfaces between tasks", `static String describe(Object?)`); codes `unknownKey` (TOA110), `invalidValue` (TOA111), `missingRequiredField` (TOA112); test `SpecFixture(String text, {String file})` with `diagnostics`, `document`, `index`, `context`, `codes`, `pointers`.
 
-Поведінка, яку закріплюють тести:
-- Геттери `ObjectReader` повертають значення потрібного типу або `null`; неправильний тип — `TOA111` warning у pointer поля з повідомленням `"name" must be a string, not the number 5; it is ignored.`
-- `count` приймає `3.0` як `3`, відкидає від'ємні й дробові; `choice` перелічує допустимі значення в повідомленні.
-- Елементи списків і словників неправильного типу повідомляються окремо і пропускаються; `rawList` зберігає `null`.
-- `map(..., skipExtensions: true)` не робить `x-`-ключі записами (Paths, Responses).
-- `requiredString`/`requiredChoice`/`requiredObject` повідомляють `TOA112` у pointer об'єкта.
-- `extensions` — усі `x-`-ключі; `unknownKeys()` повідомляє `TOA110` про кожен непрочитаний ключ і повертає їх. Тому `unknownKeys()` викликається останнім аргументом конструктора вузла: Dart обчислює аргументи зліва направо.
+Behaviour the tests pin down:
+- The `ObjectReader` getters return a value of the required type or `null`; a wrong type is a `TOA111` warning at the field's pointer, with the message `"name" must be a string, not the number 5; it is ignored.`
+- `count` accepts `3.0` as `3` and rejects negative and fractional values; `choice` lists the allowed values in the message.
+- Elements of lists and maps of the wrong type are reported separately and skipped; `rawList` keeps `null`.
+- `map(..., skipExtensions: true)` does not make `x-` keys entries (Paths, Responses).
+- `requiredString`/`requiredChoice`/`requiredObject` report `TOA112` at the object's pointer.
+- `extensions` — all `x-` keys; `unknownKeys()` reports `TOA110` for each unread key and returns them. That is why `unknownKeys()` is called as the last argument of the node's constructor: Dart evaluates arguments left to right.
 
-- [ ] **Step 1: Створити тестовий хелпер `spec_fixture.dart`**
+- [ ] **Step 1: Create the test helper `spec_fixture.dart`**
 
-Створи `packages/typed_openapi/test/helpers/spec_fixture.dart`:
+Create `packages/typed_openapi/test/helpers/spec_fixture.dart`:
 
 ```dart
 import 'package:typed_openapi/src/diagnostics/diagnostic_bag.dart';
@@ -1343,9 +1343,9 @@ final class SpecFixture {
 }
 ```
 
-- [ ] **Step 2: Написати тест, що не проходить**
+- [ ] **Step 2: Write a test that fails**
 
-Створи `packages/typed_openapi/test/parse/object_reader_test.dart`:
+Create `packages/typed_openapi/test/parse/object_reader_test.dart`:
 
 ```dart
 import 'package:test/test.dart';
@@ -1451,20 +1451,20 @@ void main() {
 }
 ```
 
-- [ ] **Step 3: Переконатися, що тести падають**
+- [ ] **Step 3: Make sure the tests fail**
 
-Run (з `packages/typed_openapi`): `dart test test/parse`
-Expected: FAIL, перша помилка — `cannot read 'lib/src/parse/object_reader.dart': No such file or directory`
+Run (from `packages/typed_openapi`): `dart test test/parse`
+Expected: FAIL, the first error — `cannot read 'lib/src/parse/object_reader.dart': No such file or directory`
 
-- [ ] **Step 4: Додати коди в каталог**
+- [ ] **Step 4: Add the codes to the catalogue**
 
-У `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart` перед фрагментом:
+In `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart`, before the fragment:
 
 ```dart
   /// The configuration file does not exist.
 ```
 
-встав:
+insert:
 
 ```dart
   /// An object has a key that no OpenAPI version defines; it is ignored.
@@ -1478,9 +1478,9 @@ Expected: FAIL, перша помилка — `cannot read 'lib/src/parse/object
   missingRequiredField('TOA112', 'missing-required-field', .warning),
 ```
 
-- [ ] **Step 5: Створити `spec_feature.dart`**
+- [ ] **Step 5: Create `spec_feature.dart`**
 
-Створи `packages/typed_openapi/lib/src/parse/spec_feature.dart`:
+Create `packages/typed_openapi/lib/src/parse/spec_feature.dart`:
 
 ```dart
 import '../load/openapi_version.dart';
@@ -1609,9 +1609,9 @@ enum SpecFeature {
 }
 ```
 
-- [ ] **Step 6: Створити `parse_context.dart`**
+- [ ] **Step 6: Create `parse_context.dart`**
 
-Створи `packages/typed_openapi/lib/src/parse/parse_context.dart`:
+Create `packages/typed_openapi/lib/src/parse/parse_context.dart`:
 
 ```dart
 import 'package:source_span/source_span.dart';
@@ -1759,9 +1759,9 @@ final class ParseContext {
 }
 ```
 
-- [ ] **Step 7: Створити `object_reader.dart`**
+- [ ] **Step 7: Create `object_reader.dart`**
 
-Створи `packages/typed_openapi/lib/src/parse/object_reader.dart`:
+Create `packages/typed_openapi/lib/src/parse/object_reader.dart`:
 
 ```dart
 import '../diagnostics/json_pointer.dart';
@@ -1997,17 +1997,17 @@ final class ObjectReader {
 }
 ```
 
-- [ ] **Step 8: Переконатися, що тести проходять**
+- [ ] **Step 8: Make sure the tests pass**
 
-Run (з `packages/typed_openapi`): `dart test test/parse`
+Run (from `packages/typed_openapi`): `dart test test/parse`
 Expected: `+8: All tests passed!`
 
-- [ ] **Step 9: Формат, аналізатор, увесь набір тестів**
+- [ ] **Step 9: Format, analyzer, the whole test suite**
 
-Run (з `packages/typed_openapi`): `dart format --output=none --set-exit-if-changed lib test bin && dart test`
+Run (from `packages/typed_openapi`): `dart format --output=none --set-exit-if-changed lib test bin && dart test`
 Expected: `Formatted 37 files (0 changed)`, `+82: All tests passed!`
 
-Run (з кореня): `dart analyze packages`
+Run (from the root): `dart analyze packages`
 Expected: `No issues found!`
 
 - [ ] **Step 10: Commit**
@@ -2019,7 +2019,7 @@ git commit -m 'feat(typed_openapi): object reader with key and type diagnostics'
 
 ---
 
-### Task 5: Модель і парсер схем (TOA105)
+### Task 5: Schema model and parser (TOA105)
 
 **Files:**
 - Create: `packages/typed_openapi/lib/src/model/schema.dart`
@@ -2029,18 +2029,18 @@ git commit -m 'feat(typed_openapi): object reader with key and type diagnostics'
 
 **Interfaces:**
 - Consumes: `ParseContext`, `ObjectReader`, `RefUse`, `SpecFeature` (Task 4).
-- Produces: `sealed class Schema extends SpecNode`, `BooleanSchema(value)`, `SchemaObject` (поля — у коді нижче), `enum SchemaType` (`wire`, `byWire`; `nullType` — це `"null"`), `Discriminator(propertyName, mapping, defaultMapping)`; `final class SchemaParser { const SchemaParser(ParseContext); Schema? parse(Object? raw, JsonPointer pointer, {bool booleanIsClassic = false}); }`; код `refBaseIgnored` (TOA105).
+- Produces: `sealed class Schema extends SpecNode`, `BooleanSchema(value)`, `SchemaObject` (fields are in the code below), `enum SchemaType` (`wire`, `byWire`; `nullType` is `"null"`), `Discriminator(propertyName, mapping, defaultMapping)`; `final class SchemaParser { const SchemaParser(ParseContext); Schema? parse(Object? raw, JsonPointer pointer, {bool booleanIsClassic = false}); }`; code `refBaseIgnored` (TOA105).
 
-Поведінка, яку закріплюють тести:
-- 3.0-схема читається повністю, кожна вкладена схема має свій pointer і реєструється в `SpecIndex.nodes`.
-- Конструкції 2020-12 (`type`-список, `"null"`, `const`, `examples`, числовий `exclusiveMinimum`, `prefixItems`, булеві схеми, `content*`, `$defs`) читаються і відмічаються як `SpecFeature`; `nullable` — теж (як конструкція лише 3.0). `additionalProperties: false` не відмічається: це 3.0.
-- `$ref` із сусідами зберігається разом із ними і записується в `SpecIndex.refs` з видом `schema`.
-- `default: null` → `(null,)`, `enum: [a, null]` зберігає `null`.
-- `required: true` і невідомий `type: file` — `TOA111`, решта схеми читається. `$id` — `TOA105`.
+Behaviour the tests pin down:
+- A 3.0 schema is read in full; each nested schema has its own pointer and is registered in `SpecIndex.nodes`.
+- 2020-12 constructs (a `type` list, `"null"`, `const`, `examples`, a numeric `exclusiveMinimum`, `prefixItems`, boolean schemas, `content*`, `$defs`) are read and marked as `SpecFeature`; `nullable` too (as a 3.0-only construct). `additionalProperties: false` is not marked: it belongs to 3.0.
+- A `$ref` with siblings is stored together with them and recorded in `SpecIndex.refs` with the kind `schema`.
+- `default: null` → `(null,)`; `enum: [a, null]` keeps `null`.
+- `required: true` and an unknown `type: file` — `TOA111`; the rest of the schema is read. `$id` — `TOA105`.
 
-- [ ] **Step 1: Написати тест, що не проходить**
+- [ ] **Step 1: Write a test that fails**
 
-Створи `packages/typed_openapi/test/parse/schema_parser_test.dart`:
+Create `packages/typed_openapi/test/parse/schema_parser_test.dart`:
 
 ```dart
 import 'package:test/test.dart';
@@ -2231,20 +2231,20 @@ schema:
 }
 ```
 
-- [ ] **Step 2: Переконатися, що тести падають**
+- [ ] **Step 2: Make sure the tests fail**
 
-Run (з `packages/typed_openapi`): `dart test test/parse`
-Expected: FAIL, перша помилка — `cannot read 'lib/src/model/schema.dart': No such file or directory`
+Run (from `packages/typed_openapi`): `dart test test/parse`
+Expected: FAIL, the first error — `cannot read 'lib/src/model/schema.dart': No such file or directory`
 
-- [ ] **Step 3: Додати коди в каталог**
+- [ ] **Step 3: Add the codes to the catalog**
 
-У `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart` перед фрагментом:
+In `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart` before the snippet:
 
 ```dart
   /// An object has a key that no OpenAPI version defines; it is ignored.
 ```
 
-встав:
+insert:
 
 ```dart
   /// `$id` or `$self` would change the base URI of `$ref`s; this tool
@@ -2252,9 +2252,9 @@ Expected: FAIL, перша помилка — `cannot read 'lib/src/model/schema
   refBaseIgnored('TOA105', 'ref-base-ignored', .warning),
 ```
 
-- [ ] **Step 4: Створити `schema.dart`**
+- [ ] **Step 4: Create `schema.dart`**
 
-Створи `packages/typed_openapi/lib/src/model/schema.dart`:
+Create `packages/typed_openapi/lib/src/model/schema.dart`:
 
 ```dart
 import 'spec_node.dart';
@@ -2527,9 +2527,9 @@ final class Discriminator extends SpecNode {
 }
 ```
 
-- [ ] **Step 5: Створити `schema_parser.dart`**
+- [ ] **Step 5: Create `schema_parser.dart`**
 
-Створи `packages/typed_openapi/lib/src/parse/schema_parser.dart`:
+Create `packages/typed_openapi/lib/src/parse/schema_parser.dart`:
 
 ```dart
 import '../diagnostics/json_pointer.dart';
@@ -2795,17 +2795,17 @@ final class SchemaParser {
 }
 ```
 
-- [ ] **Step 6: Переконатися, що тести проходять**
+- [ ] **Step 6: Make sure the tests pass**
 
-Run (з `packages/typed_openapi`): `dart test test/parse`
+Run (from `packages/typed_openapi`): `dart test test/parse`
 Expected: `+18: All tests passed!`
 
-- [ ] **Step 7: Формат, аналізатор, увесь набір тестів**
+- [ ] **Step 7: Format, analyzer, the whole test suite**
 
-Run (з `packages/typed_openapi`): `dart format --output=none --set-exit-if-changed lib test bin && dart test`
+Run (from `packages/typed_openapi`): `dart format --output=none --set-exit-if-changed lib test bin && dart test`
 Expected: `Formatted 40 files (0 changed)`, `+92: All tests passed!`
 
-Run (з кореня): `dart analyze packages`
+Run (from the root): `dart analyze packages`
 Expected: `No issues found!`
 
 - [ ] **Step 8: Commit**
@@ -2817,7 +2817,7 @@ git commit -m 'feat(typed_openapi): schema model and parser' -m 'Co-Authored-By:
 
 ---
 
-### Task 6: Path items, операції та їхні частини
+### Task 6: Path items, operations and their parts
 
 **Files:**
 - Create: `packages/typed_openapi/lib/src/model/operation.dart`
@@ -2826,17 +2826,17 @@ git commit -m 'feat(typed_openapi): schema model and parser' -m 'Co-Authored-By:
 
 **Interfaces:**
 - Consumes: `ParseContext.refOr`, `ObjectReader` (Task 4), `SchemaParser`, `Schema` (Task 5).
-- Produces: моделі `PathItem` (`static const methods`), `Operation`, `Parameter` (`placement` — це поле `in`), `ParameterLocation`, `ParameterStyle`, `RequestBody`, `Response`, `Header`, `MediaType`, `Encoding`, `Example`, `Server`, `ServerVariable`, `SecurityRequirement`; `final class OperationParser { const OperationParser(ParseContext, SchemaParser); … }` з публічними `pathItem`, `parameter`, `requestBody`, `response`, `header`, `mediaType`, `example` (усі `RefOr<T>? Function(Object? raw, JsonPointer)`), `server`, `securityRequirement`.
+- Produces: models `PathItem` (`static const methods`), `Operation`, `Parameter` (`placement` is the field `in`), `ParameterLocation`, `ParameterStyle`, `RequestBody`, `Response`, `Header`, `MediaType`, `Encoding`, `Example`, `Server`, `ServerVariable`, `SecurityRequirement`; `final class OperationParser { const OperationParser(ParseContext, SchemaParser); … }` with the public `pathItem`, `parameter`, `requestBody`, `response`, `header`, `mediaType`, `example` (all `RefOr<T>? Function(Object? raw, JsonPointer)`), `server`, `securityRequirement`.
 
-Поведінка, яку закріплюють тести:
-- Path item, операція, параметри (inline і `$ref`), відповіді за статусом у порядку документа (без `x-`), заголовки, `content`, тіла, encoding, examples читаються з pointer на кожному вузлі; усі `$ref` записуються з очікуваним видом.
-- `security` операції: `null` — не задано (успадковується), `[]` — явно без безпеки.
-- 3.2: операція `query`, `additionalOperations`, `in: querystring`, `summary` відповіді, `itemSchema` — читаються і відмічаються.
-- Параметр у стилі Swagger 2 (`type` замість `schema`) — `TOA110`; без `name` — `TOA112`; `in: body` — `TOA111`. Reference Object з чужими ключами — `TOA110`; вузол не-об'єкт — `TOA111` «This response must be an object, not a string.»
+The behaviour the tests pin down:
+- Path item, operation, parameters (inline and `$ref`), responses by status in document order (without `x-`), headers, `content`, bodies, encoding, examples are read from the pointer on every node; all `$ref`s are recorded with the expected kind.
+- Operation `security`: `null` — not set (inherited), `[]` — explicitly no security.
+- 3.2: the `query` operation, `additionalOperations`, `in: querystring`, the response `summary`, `itemSchema` — are read and flagged.
+- A Swagger 2 style parameter (`type` instead of `schema`) — `TOA110`; without `name` — `TOA112`; `in: body` — `TOA111`. A Reference Object with foreign keys — `TOA110`; a node that is not an object — `TOA111` "This response must be an object, not a string."
 
-- [ ] **Step 1: Написати тест, що не проходить**
+- [ ] **Step 1: Write a failing test**
 
-Створи `packages/typed_openapi/test/parse/operation_parser_test.dart`:
+Create `packages/typed_openapi/test/parse/operation_parser_test.dart`:
 
 ```dart
 import 'package:test/test.dart';
@@ -3027,14 +3027,14 @@ item:
 }
 ```
 
-- [ ] **Step 2: Переконатися, що тести падають**
+- [ ] **Step 2: Make sure the tests fail**
 
-Run (з `packages/typed_openapi`): `dart test test/parse`
-Expected: FAIL, перша помилка — `cannot read 'lib/src/model/operation.dart': No such file or directory`
+Run (from `packages/typed_openapi`): `dart test test/parse`
+Expected: FAIL, the first error — `cannot read 'lib/src/model/operation.dart': No such file or directory`
 
-- [ ] **Step 3: Створити `operation.dart`**
+- [ ] **Step 3: Create `operation.dart`**
 
-Створи `packages/typed_openapi/lib/src/model/operation.dart`:
+Create `packages/typed_openapi/lib/src/model/operation.dart`:
 
 ```dart
 import 'schema.dart';
@@ -3505,9 +3505,9 @@ final class SecurityRequirement extends SpecNode {
 }
 ```
 
-- [ ] **Step 4: Створити `operation_parser.dart`**
+- [ ] **Step 4: Create `operation_parser.dart`**
 
-Створи `packages/typed_openapi/lib/src/parse/operation_parser.dart`:
+Create `packages/typed_openapi/lib/src/parse/operation_parser.dart`:
 
 ```dart
 import '../diagnostics/json_pointer.dart';
@@ -3830,17 +3830,17 @@ final class OperationParser {
 }
 ```
 
-- [ ] **Step 5: Переконатися, що тести проходять**
+- [ ] **Step 5: Make sure the tests pass**
 
-Run (з `packages/typed_openapi`): `dart test test/parse`
+Run (from `packages/typed_openapi`): `dart test test/parse`
 Expected: `+25: All tests passed!`
 
-- [ ] **Step 6: Формат, аналізатор, увесь набір тестів**
+- [ ] **Step 6: Format, analyzer, the whole test suite**
 
-Run (з `packages/typed_openapi`): `dart format --output=none --set-exit-if-changed lib test bin && dart test`
+Run (from `packages/typed_openapi`): `dart format --output=none --set-exit-if-changed lib test bin && dart test`
 Expected: `Formatted 43 files (0 changed)`, `+99: All tests passed!`
 
-Run (з кореня): `dart analyze packages`
+Run (from the root): `dart analyze packages`
 Expected: `No issues found!`
 
 - [ ] **Step 7: Commit**
@@ -3852,7 +3852,7 @@ git commit -m 'feat(typed_openapi): path items, operations and their parts' -m '
 
 ---
 
-### Task 7: Документ, components і схеми безпеки: `OpenApiParser`
+### Task 7: Document, components and security schemes: `OpenApiParser`
 
 **Files:**
 - Create: `packages/typed_openapi/lib/src/model/document.dart`
@@ -3861,18 +3861,18 @@ git commit -m 'feat(typed_openapi): path items, operations and their parts' -m '
 - Create: `packages/typed_openapi/test/parse/openapi_parser_test.dart`
 
 **Interfaces:**
-- Consumes: `OperationParser`, моделі Task 6, `SchemaParser` (Task 5), `ParseContext`, `SpecIndex` (Task 4).
-- Produces: `SecurityScheme` (`placement` — це `in`), `SecuritySchemeType`, `ApiKeyLocation`, `OAuthFlows`, `OAuthFlow`; `OpenApiDocument`, `Info`, `Tag`, `Components`; `final class OpenApiParser { factory OpenApiParser(DiagnosticBag, SpecDocument, SpecIndex); OpenApiDocument parse(OpenApiVersion? version); SpecNode? parseFragment(JsonPointer pointer, RefKind kind); }`.
+- Consumes: `OperationParser`, the models of Task 6, `SchemaParser` (Task 5), `ParseContext`, `SpecIndex` (Task 4).
+- Produces: `SecurityScheme` (`placement` is `in`), `SecuritySchemeType`, `ApiKeyLocation`, `OAuthFlows`, `OAuthFlow`; `OpenApiDocument`, `Info`, `Tag`, `Components`; `final class OpenApiParser { factory OpenApiParser(DiagnosticBag, SpecDocument, SpecIndex); OpenApiDocument parse(OpenApiVersion? version); SpecNode? parseFragment(JsonPointer pointer, RefKind kind); }`.
 
-Поведінка, яку закріплюють тести:
-- Увесь документ: `info` з розширеннями, сервери зі змінними, глобальна `security`, теги, `paths` (без `x-`-ключів), `components` (схеми, схеми безпеки всіх типів з потоками OAuth). Документ реєструється в `SpecIndex`.
-- Пропущені обов'язкові поля (`info.version`, `tag.name`, `name` для `apiKey`) і невідомі ключі (`host`) повідомляються, читання триває.
-- Конструкції 3.1/3.2 рівня документа відмічаються; `$self` — ще й `TOA105`.
-- `parseFragment(pointer, kind)` читає будь-який вузол сирого дерева як потрібний вид — так резолвер читатиме цілі `$ref` поза `components` і в інших файлах.
+The behaviour the tests pin down:
+- The whole document: `info` with extensions, servers with variables, global `security`, tags, `paths` (without `x-` keys), `components` (schemas, security schemes of all types with OAuth flows). The document is registered in `SpecIndex`.
+- Missing required fields (`info.version`, `tag.name`, `name` for `apiKey`) and unknown keys (`host`) are reported, and reading continues.
+- Document-level 3.1/3.2 constructs are flagged; `$self` is also `TOA105`.
+- `parseFragment(pointer, kind)` reads any node of the raw tree as the required kind — so the resolver will read `$ref` targets outside `components` and in other files.
 
-- [ ] **Step 1: Написати тест, що не проходить**
+- [ ] **Step 1: Write a failing test**
 
-Створи `packages/typed_openapi/test/parse/openapi_parser_test.dart`:
+Create `packages/typed_openapi/test/parse/openapi_parser_test.dart`:
 
 ```dart
 import 'package:test/test.dart';
@@ -4029,14 +4029,14 @@ x-shared:
 }
 ```
 
-- [ ] **Step 2: Переконатися, що тести падають**
+- [ ] **Step 2: Make sure the tests fail**
 
-Run (з `packages/typed_openapi`): `dart test test/parse`
-Expected: FAIL, перша помилка — `cannot read 'lib/src/model/document.dart': No such file or directory`
+Run (from `packages/typed_openapi`): `dart test test/parse`
+Expected: FAIL, the first error — `cannot read 'lib/src/model/document.dart': No such file or directory`
 
-- [ ] **Step 3: Створити `security.dart`**
+- [ ] **Step 3: Create `security.dart`**
 
-Створи `packages/typed_openapi/lib/src/model/security.dart`:
+Create `packages/typed_openapi/lib/src/model/security.dart`:
 
 ```dart
 import 'spec_node.dart';
@@ -4182,9 +4182,9 @@ final class OAuthFlow extends SpecNode {
 }
 ```
 
-- [ ] **Step 4: Створити `document.dart`**
+- [ ] **Step 4: Create `document.dart`**
 
-Створи `packages/typed_openapi/lib/src/model/document.dart`:
+Create `packages/typed_openapi/lib/src/model/document.dart`:
 
 ```dart
 import '../load/openapi_version.dart';
@@ -4352,9 +4352,9 @@ final class Components extends SpecNode {
 }
 ```
 
-- [ ] **Step 5: Створити `openapi_parser.dart`**
+- [ ] **Step 5: Create `openapi_parser.dart`**
 
-Створи `packages/typed_openapi/lib/src/parse/openapi_parser.dart`:
+Create `packages/typed_openapi/lib/src/parse/openapi_parser.dart`:
 
 ```dart
 import '../diagnostics/diagnostic_bag.dart';
@@ -4600,17 +4600,17 @@ final class OpenApiParser {
 }
 ```
 
-- [ ] **Step 6: Переконатися, що тести проходять**
+- [ ] **Step 6: Make sure the tests pass**
 
-Run (з `packages/typed_openapi`): `dart test test/parse`
+Run (from `packages/typed_openapi`): `dart test test/parse`
 Expected: `+29: All tests passed!`
 
-- [ ] **Step 7: Формат, аналізатор, увесь набір тестів**
+- [ ] **Step 7: Format, analyzer, the whole test suite**
 
-Run (з `packages/typed_openapi`): `dart format --output=none --set-exit-if-changed lib test bin && dart test`
+Run (from `packages/typed_openapi`): `dart format --output=none --set-exit-if-changed lib test bin && dart test`
 Expected: `Formatted 47 files (0 changed)`, `+103: All tests passed!`
 
-Run (з кореня): `dart analyze packages`
+Run (from the root): `dart analyze packages`
 Expected: `No issues found!`
 
 - [ ] **Step 8: Commit**
@@ -4622,7 +4622,7 @@ git commit -m 'feat(typed_openapi): document, components and security schemes' -
 
 ---
 
-### Task 8: Діалект за вмістом: `DialectChecker` (TOA020–TOA022)
+### Task 8: Dialect by content: `DialectChecker` (TOA020–TOA022)
 
 **Files:**
 - Create: `packages/typed_openapi/lib/src/parse/dialect_checker.dart`
@@ -4631,17 +4631,17 @@ git commit -m 'feat(typed_openapi): document, components and security schemes' -
 - Modify: `packages/typed_openapi/lib/src/load/openapi_version.dart`
 
 **Interfaces:**
-- Consumes: `FeatureUse`, `SpecFeature` (Task 4), `OpenApiParser` (Task 7) — у тестах.
-- Produces: `OpenApiVersion.label` (`'3.0'`, `'3.1'`, `'3.2'`); `final class DialectChecker { const DialectChecker(DiagnosticBag); void check(List<FeatureUse> uses, OpenApiVersion version); }`; коди `openApi31InOpenApi30` (TOA020), `nullableAfterOpenApi30` (TOA021), `openApi32InOlder` (TOA022).
+- Consumes: `FeatureUse`, `SpecFeature` (Task 4), `OpenApiParser` (Task 7) — in tests.
+- Produces: `OpenApiVersion.label` (`'3.0'`, `'3.1'`, `'3.2'`); `final class DialectChecker { const DialectChecker(DiagnosticBag); void check(List<FeatureUse> uses, OpenApiVersion version); }`; codes `openApi31InOpenApi30` (TOA020), `nullableAfterOpenApi30` (TOA021), `openApi32InOlder` (TOA022).
 
-Поведінка, яку закріплюють тести:
-- 3.1-конструкції в документі 3.0 — `TOA020` warning, по одному на конструкцію, у місці першого використання; повідомлення каже, скільки місць.
-- `nullable` у 3.1 і 3.2 — `TOA021` warning з позицією.
-- 3.2-конструкції в 3.0/3.1 — `TOA022` info; у 3.2 — нічого.
+The behaviour the tests pin down:
+- 3.1 constructs in a 3.0 document — `TOA020` warning, one per construct, at the place of its first use; the message says how many places there are.
+- `nullable` in 3.1 and 3.2 — `TOA021` warning with a position.
+- 3.2 constructs in 3.0/3.1 — `TOA022` info; in 3.2 — nothing.
 
-- [ ] **Step 1: Написати тест, що не проходить**
+- [ ] **Step 1: Write a failing test**
 
-Створи `packages/typed_openapi/test/parse/dialect_checker_test.dart`:
+Create `packages/typed_openapi/test/parse/dialect_checker_test.dart`:
 
 ```dart
 import 'package:test/test.dart';
@@ -4727,14 +4727,14 @@ paths:
 }
 ```
 
-- [ ] **Step 2: Переконатися, що тести падають**
+- [ ] **Step 2: Make sure the tests fail**
 
-Run (з `packages/typed_openapi`): `dart test test/parse`
-Expected: FAIL, перша помилка — `cannot read 'lib/src/parse/dialect_checker.dart': No such file or directory`
+Run (from `packages/typed_openapi`): `dart test test/parse`
+Expected: FAIL, the first error — `cannot read 'lib/src/parse/dialect_checker.dart': No such file or directory`
 
-- [ ] **Step 3: Додати коди в каталог**
+- [ ] **Step 3: Add the codes to the catalog**
 
-У `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart` після фрагмента:
+In `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart` after the snippet:
 
 ```dart
     'openapi-version-not-string',
@@ -4742,7 +4742,7 @@ Expected: FAIL, перша помилка — `cannot read 'lib/src/parse/dialec
   ),
 ```
 
-встав:
+insert:
 
 ```dart
   /// A 3.0 document uses an OpenAPI 3.1 or JSON Schema 2020-12 construct;
@@ -4758,9 +4758,9 @@ Expected: FAIL, перша помилка — `cannot read 'lib/src/parse/dialec
   openApi32InOlder('TOA022', 'openapi-3-2-in-older', .info),
 ```
 
-- [ ] **Step 4: Змінити `openapi_version.dart`**
+- [ ] **Step 4: Change `openapi_version.dart`**
 
-У `packages/typed_openapi/lib/src/load/openapi_version.dart` заміни:
+In `packages/typed_openapi/lib/src/load/openapi_version.dart` replace:
 
 ```dart
 enum OpenApiVersion {
@@ -4775,7 +4775,7 @@ enum OpenApiVersion {
 }
 ```
 
-на:
+with:
 
 ```dart
 enum OpenApiVersion {
@@ -4795,9 +4795,9 @@ enum OpenApiVersion {
 }
 ```
 
-- [ ] **Step 5: Створити `dialect_checker.dart`**
+- [ ] **Step 5: Create `dialect_checker.dart`**
 
-Створи `packages/typed_openapi/lib/src/parse/dialect_checker.dart`:
+Create `packages/typed_openapi/lib/src/parse/dialect_checker.dart`:
 
 ```dart
 import '../diagnostics/diagnostic_bag.dart';
@@ -4863,17 +4863,17 @@ final class DialectChecker {
 }
 ```
 
-- [ ] **Step 6: Переконатися, що тести проходять**
+- [ ] **Step 6: Make sure the tests pass**
 
-Run (з `packages/typed_openapi`): `dart test test/parse`
+Run (from `packages/typed_openapi`): `dart test test/parse`
 Expected: `+33: All tests passed!`
 
-- [ ] **Step 7: Формат, аналізатор, увесь набір тестів**
+- [ ] **Step 7: Format, analyzer, the whole test suite**
 
-Run (з `packages/typed_openapi`): `dart format --output=none --set-exit-if-changed lib test bin && dart test`
+Run (from `packages/typed_openapi`): `dart format --output=none --set-exit-if-changed lib test bin && dart test`
 Expected: `Formatted 49 files (0 changed)`, `+107: All tests passed!`
 
-Run (з кореня): `dart analyze packages`
+Run (from the root): `dart analyze packages`
 Expected: `No issues found!`
 
 - [ ] **Step 8: Commit**
@@ -4885,7 +4885,7 @@ git commit -m 'feat(typed_openapi): detect the schema dialect by content' -m 'Co
 
 ---
 
-### Task 9: Розбір значення `$ref`: `RefTarget` (TOA100, TOA102)
+### Task 9: Parsing a `$ref` value: `RefTarget` (TOA100, TOA102)
 
 **Files:**
 - Create: `packages/typed_openapi/lib/src/resolve/ref_target.dart`
@@ -4894,16 +4894,16 @@ git commit -m 'feat(typed_openapi): detect the schema dialect by content' -m 'Co
 
 **Interfaces:**
 - Consumes: `SpecLocation` (Task 3), `JsonPointer`, `DiagnosticCode`.
-- Produces: `sealed class RefTarget { factory RefTarget.parse(String ref, Uri base); }`, `ResolvableRef(SpecLocation location)`, `BrokenRef(DiagnosticCode code, String reason, {String? fix})`; коди `invalidRef` (TOA100), `remoteRef` (TOA102).
+- Produces: `sealed class RefTarget { factory RefTarget.parse(String ref, Uri base); }`, `ResolvableRef(SpecLocation location)`, `BrokenRef(DiagnosticCode code, String reason, {String? fix})`; codes `invalidRef` (TOA100), `remoteRef` (TOA102).
 
-Поведінка, яку закріплюють тести:
-- Локальний pointer лишається в тому самому документі; відносний файл розв'язується від URI документа; без фрагмента — корінь файлу.
-- Фрагмент percent-декодується (`%7Bid%7D` → `{id}`), екранування `~0`/`~1` зберігаються в pointer.
-- `https:`, `urn:` — `TOA102`. Порожній рядок, `#/components/schemas/`, `#/`, `#/components/schemas`, `#/components`, `#Pet`, поганий `%`, поганий `~`, невалідний URI — `TOA100` з поясненням.
+The behaviour the tests pin down:
+- A local pointer stays in the same document; a relative file is resolved against the document's URI; without a fragment — the root of the file.
+- The fragment is percent-decoded (`%7Bid%7D` → `{id}`), the escapes `~0`/`~1` are kept in the pointer.
+- `https:`, `urn:` — `TOA102`. An empty string, `#/components/schemas/`, `#/`, `#/components/schemas`, `#/components`, `#Pet`, a malformed `%`, a malformed `~`, an invalid URI — `TOA100` with an explanation.
 
-- [ ] **Step 1: Написати тест, що не проходить**
+- [ ] **Step 1: Write a failing test**
 
-Створи `packages/typed_openapi/test/resolve/ref_target_test.dart`:
+Create `packages/typed_openapi/test/resolve/ref_target_test.dart`:
 
 ```dart
 import 'package:test/test.dart';
@@ -4973,20 +4973,20 @@ void main() {
 }
 ```
 
-- [ ] **Step 2: Переконатися, що тести падають**
+- [ ] **Step 2: Make sure the tests fail**
 
-Run (з `packages/typed_openapi`): `dart test test/resolve`
-Expected: FAIL, перша помилка — `cannot read 'lib/src/resolve/ref_target.dart': No such file or directory`
+Run (from `packages/typed_openapi`): `dart test test/resolve`
+Expected: FAIL, the first error — `cannot read 'lib/src/resolve/ref_target.dart': No such file or directory`
 
-- [ ] **Step 3: Додати коди в каталог**
+- [ ] **Step 3: Add the codes to the catalog**
 
-У `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart` перед фрагментом:
+In `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart` before the snippet:
 
 ```dart
   /// `$id` or `$self` would change the base URI of `$ref`s; this tool
 ```
 
-встав:
+insert:
 
 ```dart
   /// A `$ref` is empty, truncated or not a URI with a JSON pointer.
@@ -4996,9 +4996,9 @@ Expected: FAIL, перша помилка — `cannot read 'lib/src/resolve/ref_
   remoteRef('TOA102', 'remote-ref', .error),
 ```
 
-- [ ] **Step 4: Створити `ref_target.dart`**
+- [ ] **Step 4: Create `ref_target.dart`**
 
-Створи `packages/typed_openapi/lib/src/resolve/ref_target.dart`:
+Create `packages/typed_openapi/lib/src/resolve/ref_target.dart`:
 
 ```dart
 import '../diagnostics/diagnostic_code.dart';
@@ -5117,17 +5117,17 @@ final class BrokenRef extends RefTarget {
 }
 ```
 
-- [ ] **Step 5: Переконатися, що тести проходять**
+- [ ] **Step 5: Make sure the tests pass**
 
-Run (з `packages/typed_openapi`): `dart test test/resolve`
+Run (from `packages/typed_openapi`): `dart test test/resolve`
 Expected: `+6: All tests passed!`
 
-- [ ] **Step 6: Формат, аналізатор, увесь набір тестів**
+- [ ] **Step 6: Format, analyzer, the whole test suite**
 
-Run (з `packages/typed_openapi`): `dart format --output=none --set-exit-if-changed lib test bin && dart test`
+Run (from `packages/typed_openapi`): `dart format --output=none --set-exit-if-changed lib test bin && dart test`
 Expected: `Formatted 51 files (0 changed)`, `+113: All tests passed!`
 
-Run (з кореня): `dart analyze packages`
+Run (from the root): `dart analyze packages`
 Expected: `No issues found!`
 
 - [ ] **Step 7: Commit**
@@ -5139,7 +5139,7 @@ git commit -m 'feat(typed_openapi): parse $ref values' -m 'Co-Authored-By: Claud
 
 ---
 
-### Task 10: Резолвер `$ref`: локальні та файлові посилання (TOA101, TOA104)
+### Task 10: The `$ref` resolver: local and file references (TOA101, TOA104)
 
 **Files:**
 - Create: `packages/typed_openapi/lib/src/resolve/spec_documents.dart`
@@ -5149,21 +5149,21 @@ git commit -m 'feat(typed_openapi): parse $ref values' -m 'Co-Authored-By: Claud
 - Modify: `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart`
 
 **Interfaces:**
-- Consumes: `RefTarget` (Task 9), `OpenApiParser.parseFragment` (Task 7), `SpecIndex`, `RefUse` (Task 4), `SpecLoader`, `SpecDocument.valueAt` (Task 1), усі моделі.
-- Produces: `final class SpecDocuments { SpecDocuments(SpecLoader, SpecDocument root); SpecDocument? operator [](Uri uri); String displayPath(Uri uri); }`; `final class SpecModel { SpecModel({required OpenApiDocument document, required Map<SpecLocation, SpecNode> nodes, required Map<SpecLocation, SpecLocation> targets}); nodeAt, targetOf, resolve<T>, resolveSchema }`; `final class RefResolver { const RefResolver(DiagnosticBag); SpecModel resolve(OpenApiDocument document, SpecIndex index, SpecDocuments documents); }`; коди `unresolvedRef` (TOA101), `refKindMismatch` (TOA104).
+- Consumes: `RefTarget` (Task 9), `OpenApiParser.parseFragment` (Task 7), `SpecIndex`, `RefUse` (Task 4), `SpecLoader`, `SpecDocument.valueAt` (Task 1), all the models.
+- Produces: `final class SpecDocuments { SpecDocuments(SpecLoader, SpecDocument root); SpecDocument? operator [](Uri uri); String displayPath(Uri uri); }`; `final class SpecModel { SpecModel({required OpenApiDocument document, required Map<SpecLocation, SpecNode> nodes, required Map<SpecLocation, SpecLocation> targets}); nodeAt, targetOf, resolve<T>, resolveSchema }`; `final class RefResolver { const RefResolver(DiagnosticBag); SpecModel resolve(OpenApiDocument document, SpecIndex index, SpecDocuments documents); }`; codes `unresolvedRef` (TOA101), `refKindMismatch` (TOA104).
 
-Поведінка, яку закріплюють тести:
-- Локальні посилання розв'язуються, зокрема через ланцюжок аліасів у `components`; `SpecModel.resolve`/`resolveSchema` повертають кінцевий вузол, `targetOf` — безпосередню ціль.
-- Рекурсивна схема — без діагностик, `resolveSchema` повертає саму схему.
-- Висяче посилання — `TOA101` у pointer `…/$ref` з позицією; `resolveSchema` → `null`.
-- `#/components/schemas/` — `TOA100` у місці запису.
-- Посилання в інші файли: ціль ідентифікується файлом + pointer (однаковий pointer у двох файлах — різні вузли), `$ref` усередині іншого файлу розв'язуються від нього, діагностики там названі `specs/common/errors.yaml`.
-- Відсутній файл — `TOA101` з назвою файлу; URL — `TOA102`; файл, на який посилаються двічі, читається (і повідомляється його синтаксична помилка) один раз.
-- Параметр → схема — `TOA104`; ціль поза `components` (`#/x-shared/limit`) читається як очікуваний вид і реєструється.
+The behaviour the tests pin down:
+- Local references are resolved, including through a chain of aliases in `components`; `SpecModel.resolve`/`resolveSchema` return the final node, `targetOf` — the direct target.
+- A recursive schema — no diagnostics, `resolveSchema` returns the schema itself.
+- A dangling reference — `TOA101` at the pointer `…/$ref` with a position; `resolveSchema` → `null`.
+- `#/components/schemas/` — `TOA100` at the place where it is written.
+- References to other files: a target is identified by file + pointer (the same pointer in two files — different nodes), a `$ref` inside another file is resolved from that file, and the diagnostics there name `specs/common/errors.yaml`.
+- A missing file — `TOA101` with the file name; a URL — `TOA102`; a file referenced twice is read (and its syntax error reported) once.
+- A parameter → schema — `TOA104`; a target outside `components` (`#/x-shared/limit`) is read as the expected kind and registered.
 
-- [ ] **Step 1: Написати тест, що не проходить**
+- [ ] **Step 1: Write a failing test**
 
-Створи `packages/typed_openapi/test/resolve/ref_resolver_test.dart`:
+Create `packages/typed_openapi/test/resolve/ref_resolver_test.dart`:
 
 ```dart
 import 'package:path/path.dart' as p;
@@ -5397,35 +5397,35 @@ paths:
 }
 ```
 
-- [ ] **Step 2: Переконатися, що тести падають**
+- [ ] **Step 2: Make sure the tests fail**
 
-Run (з `packages/typed_openapi`): `dart test test/resolve`
-Expected: FAIL, перша помилка — `cannot read 'lib/src/resolve/ref_resolver.dart': No such file or directory`
+Run (from `packages/typed_openapi`): `dart test test/resolve`
+Expected: FAIL, the first error — `cannot read 'lib/src/resolve/ref_resolver.dart': No such file or directory`
 
-- [ ] **Step 3: Додати коди в каталог**
+- [ ] **Step 3: Add the codes to the catalog**
 
-У `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart` перед фрагментом:
+In `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart` before the snippet:
 
 ```dart
   /// A `$ref` points to a remote URL; only local files are read.
 ```
 
-встав:
+insert:
 
 ```dart
   /// A `$ref` points to a file or a node that does not exist.
   unresolvedRef('TOA101', 'unresolved-ref', .error),
 ```
 
-- [ ] **Step 4: Додати коди в каталог**
+- [ ] **Step 4: Add the codes to the catalog**
 
-У `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart` перед фрагментом:
+In `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart` before the snippet:
 
 ```dart
   /// `$id` or `$self` would change the base URI of `$ref`s; this tool
 ```
 
-встав:
+insert:
 
 ```dart
   /// A `$ref` points to a node of another kind, such as a schema where a
@@ -5433,9 +5433,9 @@ Expected: FAIL, перша помилка — `cannot read 'lib/src/resolve/ref_
   refKindMismatch('TOA104', 'ref-kind-mismatch', .error),
 ```
 
-- [ ] **Step 5: Створити `spec_documents.dart`**
+- [ ] **Step 5: Create `spec_documents.dart`**
 
-Створи `packages/typed_openapi/lib/src/resolve/spec_documents.dart`:
+Create `packages/typed_openapi/lib/src/resolve/spec_documents.dart`:
 
 ```dart
 import 'dart:io';
@@ -5487,9 +5487,9 @@ final class SpecDocuments {
 }
 ```
 
-- [ ] **Step 6: Створити `spec_model.dart`**
+- [ ] **Step 6: Create `spec_model.dart`**
 
-Створи `packages/typed_openapi/lib/src/resolve/spec_model.dart`:
+Create `packages/typed_openapi/lib/src/resolve/spec_model.dart`:
 
 ```dart
 import '../model/document.dart';
@@ -5560,9 +5560,9 @@ final class SpecModel {
 }
 ```
 
-- [ ] **Step 7: Створити `ref_resolver.dart`**
+- [ ] **Step 7: Create `ref_resolver.dart`**
 
-Створи `packages/typed_openapi/lib/src/resolve/ref_resolver.dart`:
+Create `packages/typed_openapi/lib/src/resolve/ref_resolver.dart`:
 
 ```dart
 import '../diagnostics/diagnostic_bag.dart';
@@ -5692,17 +5692,17 @@ final class RefResolver {
 }
 ```
 
-- [ ] **Step 8: Переконатися, що тести проходять**
+- [ ] **Step 8: Make sure the tests pass**
 
-Run (з `packages/typed_openapi`): `dart test test/resolve`
+Run (from `packages/typed_openapi`): `dart test test/resolve`
 Expected: `+15: All tests passed!`
 
-- [ ] **Step 9: Формат, аналізатор, увесь набір тестів**
+- [ ] **Step 9: Format, analyzer, the whole test suite**
 
-Run (з `packages/typed_openapi`): `dart format --output=none --set-exit-if-changed lib test bin && dart test`
+Run (from `packages/typed_openapi`): `dart format --output=none --set-exit-if-changed lib test bin && dart test`
 Expected: `Formatted 55 files (0 changed)`, `+122: All tests passed!`
 
-Run (з кореня): `dart analyze packages`
+Run (from the root): `dart analyze packages`
 Expected: `No issues found!`
 
 - [ ] **Step 10: Commit**
@@ -5714,7 +5714,7 @@ git commit -m 'feat(typed_openapi): resolve $ref inside a document and across fi
 
 ---
 
-### Task 11: Цикли посилань (TOA103)
+### Task 11: Reference cycles (TOA103)
 
 **Files:**
 - Modify: `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart`
@@ -5723,16 +5723,16 @@ git commit -m 'feat(typed_openapi): resolve $ref inside a document and across fi
 
 **Interfaces:**
 - Consumes: `RefResolver`, `SpecDocuments` (Task 10), `SpecLocation.compareTo` (Task 3).
-- Produces: приватні `RefResolver._reportCycles`/`_reportCycle`; код `refCycle` (TOA103). Публічний API не змінюється.
+- Produces: private `RefResolver._reportCycles`/`_reportCycle`; code `refCycle` (TOA103). The public API does not change.
 
-Поведінка, яку закріплюють тести:
-- `A → B → A` (зокрема з `description` поруч із `$ref`) і `A → A` — один `TOA103` у pointer `$ref` найменшого учасника, повідомлення з ланцюжком; `resolveSchema` → `null`.
-- `A → B → C → B` — один цикл `B → C → B`, а не по діагностиці на кожен вхід у нього; `resolve(A)` → `null`.
-- Цикл через інший файл називає той файл (`other.yaml#/B`).
+The behaviour the tests pin down:
+- `A → B → A` (in particular with a `description` next to the `$ref`) and `A → A` — one `TOA103` at the `$ref` pointer of the smallest participant, the message with the chain; `resolveSchema` → `null`.
+- `A → B → C → B` — one cycle `B → C → B`, not a diagnostic for each entry into it; `resolve(A)` → `null`.
+- A cycle through another file names that file (`other.yaml#/B`).
 
-- [ ] **Step 1: Написати тест, що не проходить**
+- [ ] **Step 1: Write a failing test**
 
-Допиши в кінець `main()` у `packages/typed_openapi/test/resolve/ref_resolver_test.dart` (перед останньою `}`):
+Append to the end of `main()` in `packages/typed_openapi/test/resolve/ref_resolver_test.dart` (before the last `}`):
 
 ```dart
   group('cycles', () {
@@ -5806,50 +5806,50 @@ components:
   });
 ```
 
-- [ ] **Step 2: Переконатися, що тести падають**
+- [ ] **Step 2: Make sure the tests fail**
 
-Run (з `packages/typed_openapi`): `dart test test/resolve`
-Expected: FAIL, перша помилка — `Member not found: 'refCycle'.`
+Run (from `packages/typed_openapi`): `dart test test/resolve`
+Expected: FAIL, the first error — `Member not found: 'refCycle'.`
 
-- [ ] **Step 3: Додати коди в каталог**
+- [ ] **Step 3: Add the codes to the catalog**
 
-У `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart` перед фрагментом:
+In `packages/typed_openapi/lib/src/diagnostics/diagnostic_code.dart` before the snippet:
 
 ```dart
   /// A `$ref` points to a node of another kind, such as a schema where a
 ```
 
-встав:
+insert:
 
 ```dart
   /// `$ref`s point at each other in a loop that never reaches a definition.
   refCycle('TOA103', 'ref-cycle', .error),
 ```
 
-- [ ] **Step 4: Змінити `ref_resolver.dart`**
+- [ ] **Step 4: Change `ref_resolver.dart`**
 
-У `packages/typed_openapi/lib/src/resolve/ref_resolver.dart` перед фрагментом:
+In `packages/typed_openapi/lib/src/resolve/ref_resolver.dart` before the snippet:
 
 ```dart
     return SpecModel(document: document, nodes: index.nodes, targets: targets);
 ```
 
-встав:
+insert:
 
 ```dart
     _reportCycles(targets, documents);
 ```
 
-- [ ] **Step 5: Змінити `ref_resolver.dart`**
+- [ ] **Step 5: Change `ref_resolver.dart`**
 
-У `packages/typed_openapi/lib/src/resolve/ref_resolver.dart` перед фрагментом:
+In `packages/typed_openapi/lib/src/resolve/ref_resolver.dart` before the snippet:
 
 ```dart
 
   static RefKind? _kindOf(SpecNode node) => switch (node) {
 ```
 
-встав:
+insert:
 
 ```dart
   /// Reports every loop of `$ref`s that never reaches a node without one.
@@ -5904,17 +5904,17 @@ Expected: FAIL, перша помилка — `Member not found: 'refCycle'.`
   }
 ```
 
-- [ ] **Step 6: Переконатися, що тести проходять**
+- [ ] **Step 6: Make sure the tests pass**
 
-Run (з `packages/typed_openapi`): `dart test test/resolve`
+Run (from `packages/typed_openapi`): `dart test test/resolve`
 Expected: `+19: All tests passed!`
 
-- [ ] **Step 7: Формат, аналізатор, увесь набір тестів**
+- [ ] **Step 7: Format, analyzer, the whole test suite**
 
-Run (з `packages/typed_openapi`): `dart format --output=none --set-exit-if-changed lib test bin && dart test`
+Run (from `packages/typed_openapi`): `dart format --output=none --set-exit-if-changed lib test bin && dart test`
 Expected: `Formatted 55 files (0 changed)`, `+126: All tests passed!`
 
-Run (з кореня): `dart analyze packages`
+Run (from the root): `dart analyze packages`
 Expected: `No issues found!`
 
 - [ ] **Step 8: Commit**
@@ -5926,7 +5926,7 @@ git commit -m 'feat(typed_openapi): report $ref loops' -m 'Co-Authored-By: Claud
 
 ---
 
-### Task 12: `SpecReader`, `check` на новій моделі, публічний API і документація
+### Task 12: `SpecReader`, `check` on the new model, the public API and the documentation
 
 **Files:**
 - Create: `packages/typed_openapi/lib/src/resolve/spec_reader.dart`
@@ -5941,17 +5941,17 @@ git commit -m 'feat(typed_openapi): report $ref loops' -m 'Co-Authored-By: Claud
 - Modify: `CLAUDE.md`
 
 **Interfaces:**
-- Consumes: усе попереднє.
-- Produces: `final class SpecReader { const SpecReader(DiagnosticBag); SpecModel read(SpecDocument document, OpenApiVersion version); }`; `SpecChecker.check` читає модель після детекції версії; публічний API експортує моделі, `SpecModel`, `SpecReader`.
+- Consumes: everything above.
+- Produces: `final class SpecReader { const SpecReader(DiagnosticBag); SpecModel read(SpecDocument document, OpenApiVersion version); }`; `SpecChecker.check` reads the model after version detection; the public API exports the models, `SpecModel`, `SpecReader`.
 
-Поведінка, яку закріплюють тести:
-- `SpecReader.read` одним викликом розбирає документ, розв'язує посилання і перевіряє діалект; схема глибиною до ліміту `NestingScanner` читається без переповнення стека.
-- `SpecChecker` після детекції версії читає модель: битий `$ref` в іншому файлі і пропущене поле видно в `check`; діалект перевіряється проти оголошеної версії; документ без визначеної версії в модель не читається.
-- CLI друкує `TOA100` з pointer. Мінімальні фікстури наявних тестів отримують `info`.
+The behaviour the tests pin down:
+- `SpecReader.read` in one call parses the document, resolves references and checks the dialect; a schema nested up to the `NestingScanner` limit is read without a stack overflow.
+- After version detection, `SpecChecker` reads the model: a broken `$ref` in another file and a missing field are visible in `check`; the dialect is checked against the declared version; a document without a determined version is not read into the model.
+- The CLI prints `TOA100` with the pointer. The minimal fixtures of the existing tests get `info`.
 
-- [ ] **Step 1: Написати тест, що не проходить**
+- [ ] **Step 1: Write a failing test**
 
-Створи `packages/typed_openapi/test/resolve/spec_reader_test.dart`:
+Create `packages/typed_openapi/test/resolve/spec_reader_test.dart`:
 
 ```dart
 import 'package:test/test.dart';
@@ -6007,15 +6007,15 @@ components:
 }
 ```
 
-- [ ] **Step 2: Додати тести в `spec_checker_test.dart`**
+- [ ] **Step 2: Add tests to `spec_checker_test.dart`**
 
-У `packages/typed_openapi/test/check/spec_checker_test.dart` заміни:
+In `packages/typed_openapi/test/check/spec_checker_test.dart` replace:
 
 ```dart
     dir.write('specs/ok.yaml', 'openapi: 3.0.3\n');
 ```
 
-на:
+with:
 
 ```dart
     dir.write(
@@ -6024,9 +6024,9 @@ components:
     );
 ```
 
-- [ ] **Step 3: Додати тести в `spec_checker_test.dart`**
+- [ ] **Step 3: Add tests to `spec_checker_test.dart`**
 
-Допиши в кінець `main()` у `packages/typed_openapi/test/check/spec_checker_test.dart` (перед останньою `}`):
+Append to the end of `main()` in `packages/typed_openapi/test/check/spec_checker_test.dart` (before the last `}`):
 
 ```dart
   test('reads each spec into the model and follows its references', () {
@@ -6092,15 +6092,15 @@ clients:
   });
 ```
 
-- [ ] **Step 4: Додати тести в `cli_test.dart`**
+- [ ] **Step 4: Add tests to `cli_test.dart`**
 
-У `packages/typed_openapi/test/cli/cli_test.dart` заміни:
+In `packages/typed_openapi/test/cli/cli_test.dart` replace:
 
 ```dart
     dir.write('specs/ok.yaml', 'openapi: 3.1.0\n');
 ```
 
-на:
+with:
 
 ```dart
     dir.write(
@@ -6109,9 +6109,9 @@ clients:
     );
 ```
 
-- [ ] **Step 5: Додати тести в `cli_test.dart`**
+- [ ] **Step 5: Add tests to `cli_test.dart`**
 
-Допиши в кінець `main()` у `packages/typed_openapi/test/cli/cli_test.dart` (перед останньою `}`):
+Append to the end of `main()` in `packages/typed_openapi/test/cli/cli_test.dart` (before the last `}`):
 
 ```dart
   test('reports broken references in the spec', () async {
@@ -6137,14 +6137,14 @@ components:
   });
 ```
 
-- [ ] **Step 6: Переконатися, що тести падають**
+- [ ] **Step 6: Make sure the tests fail**
 
-Run (з `packages/typed_openapi`): `dart test`
-Expected: FAIL, перша помилка — `cannot read 'lib/src/resolve/spec_reader.dart': No such file or directory`
+Run (from `packages/typed_openapi`): `dart test`
+Expected: FAIL, the first error — `cannot read 'lib/src/resolve/spec_reader.dart': No such file or directory`
 
-- [ ] **Step 7: Створити `spec_reader.dart`**
+- [ ] **Step 7: Create `spec_reader.dart`**
 
-Створи `packages/typed_openapi/lib/src/resolve/spec_reader.dart`:
+Create `packages/typed_openapi/lib/src/resolve/spec_reader.dart`:
 
 ```dart
 import '../diagnostics/diagnostic_bag.dart';
@@ -6183,9 +6183,9 @@ final class SpecReader {
 }
 ```
 
-- [ ] **Step 8: Переписати `spec_checker.dart`**
+- [ ] **Step 8: Rewrite `spec_checker.dart`**
 
-Заміни весь вміст `packages/typed_openapi/lib/src/check/spec_checker.dart` на:
+Replace the whole content of `packages/typed_openapi/lib/src/check/spec_checker.dart` with:
 
 ```dart
 import 'package:path/path.dart' as p;
@@ -6235,9 +6235,9 @@ final class SpecChecker {
 }
 ```
 
-- [ ] **Step 9: Переписати `typed_openapi.dart`**
+- [ ] **Step 9: Rewrite `typed_openapi.dart`**
 
-Заміни весь вміст `packages/typed_openapi/lib/typed_openapi.dart` на:
+Replace the whole content of `packages/typed_openapi/lib/typed_openapi.dart` with:
 
 ```dart
 /// OpenAPI 3.x to Dart client generator.
@@ -6295,16 +6295,16 @@ export 'src/resolve/spec_model.dart' show SpecModel;
 export 'src/resolve/spec_reader.dart' show SpecReader;
 ```
 
-- [ ] **Step 10: Змінити `CHANGELOG.md`**
+- [ ] **Step 10: Change `CHANGELOG.md`**
 
-У `packages/typed_openapi/CHANGELOG.md` заміни:
+In `packages/typed_openapi/CHANGELOG.md` replace:
 
 ```markdown
 - Programmatic API: `ConfigLoader`, `SpecLoader`, `OpenApiVersionDetector`,
   `SpecChecker`, `TextReporter`, `JsonReporter`, `TypedOpenApiCli`.
 ```
 
-на:
+with:
 
 ```markdown
 - Programmatic API: `ConfigLoader`, `SpecLoader`, `OpenApiVersionDetector`,
@@ -6325,15 +6325,15 @@ export 'src/resolve/spec_reader.dart' show SpecReader;
   as such.
 ```
 
-- [ ] **Step 11: Змінити `README.md`**
+- [ ] **Step 11: Change `README.md`**
 
-У `packages/typed_openapi/README.md` перед фрагментом:
+In `packages/typed_openapi/README.md` before the snippet:
 
 ```markdown
 Every finding has a stable code (`TOA011`), a JSON pointer into the spec and,
 ```
 
-встав:
+insert:
 
 ```markdown
 `check` reads the whole spec, follows its `$ref`s (also into other local
@@ -6341,25 +6341,25 @@ files) and reports unknown keys, wrong value types, broken or looping
 references and constructs that the declared OpenAPI version does not have.
 ```
 
-- [ ] **Step 12: Змінити `README.ua.md`**
+- [ ] **Step 12: Edit `README.ua.md`**
 
-У `packages/typed_openapi/README.ua.md` перед фрагментом:
-
-```markdown
-У кожної знахідки є стабільний код (`TOA011`), JSON-pointer на місце в
-```
-
-встав:
+In `packages/typed_openapi/README.ua.md`, before the fragment:
 
 ```markdown
-`check` читає всю специфікацію, проходить її `$ref` (зокрема в інші локальні
-файли) і повідомляє про невідомі ключі, значення неправильного типу, биті або
-зациклені посилання і конструкції, яких немає в оголошеній версії OpenAPI.
+Each finding has a stable code (`TOA011`) and a JSON pointer to the place in
 ```
 
-- [ ] **Step 13: Змінити `CLAUDE.md`**
+insert:
 
-У `CLAUDE.md` заміни:
+```markdown
+`check` reads the whole spec, follows its `$ref`s (including into other local
+files) and reports unknown keys, values of the wrong type, broken or
+circular references, and constructs that are absent from the declared OpenAPI version.
+```
+
+- [ ] **Step 13: Edit `CLAUDE.md`**
+
+In `CLAUDE.md` replace:
 
 ```markdown
 ## Architecture of M1 (`dart run typed_openapi check`)
@@ -6386,7 +6386,7 @@ Data flows loader -> checker, every stage writing problems into one
 `DiagnosticBag`; reporters read the bag at the end.
 ```
 
-на:
+with:
 
 ```markdown
 ## Architecture (`dart run typed_openapi check`)
@@ -6429,17 +6429,17 @@ Data flows loader -> parser -> resolver -> checker, every stage writing
 problems into one `DiagnosticBag`; reporters read the bag at the end.
 ```
 
-- [ ] **Step 14: Переконатися, що тести проходять**
+- [ ] **Step 14: Make sure the tests pass**
 
-Run (з `packages/typed_openapi`): `dart test`
+Run (from `packages/typed_openapi`): `dart test`
 Expected: `+132: All tests passed!`
 
-- [ ] **Step 15: Формат, аналізатор, увесь набір тестів**
+- [ ] **Step 15: Format, analyzer, the whole test suite**
 
-Run (з `packages/typed_openapi`): `dart format --output=none --set-exit-if-changed lib test bin && dart test`
+Run (from `packages/typed_openapi`): `dart format --output=none --set-exit-if-changed lib test bin && dart test`
 Expected: `Formatted 57 files (0 changed)`, `+132: All tests passed!`
 
-Run (з кореня): `dart analyze packages`
+Run (from the root): `dart analyze packages`
 Expected: `No issues found!`
 
 - [ ] **Step 16: Commit**
@@ -6451,11 +6451,11 @@ git commit -m 'feat(typed_openapi): check reads specs into the model' -m 'Co-Aut
 
 ---
 
-## Фінальна перевірка
+## Final check
 
-- [ ] **Step 1: Повна перевірка пакета**
+- [ ] **Step 1: Full check of the package**
 
-Run (з `packages/typed_openapi`):
+Run (from `packages/typed_openapi`):
 
 ```bash
 dart format --output=none --set-exit-if-changed lib test bin && dart test && dart pub publish --dry-run
@@ -6463,24 +6463,24 @@ dart format --output=none --set-exit-if-changed lib test bin && dart test && dar
 
 Expected: `Formatted 57 files (0 changed)`, `+132: All tests passed!`, `Package has 0 warnings.`
 
-Run (з кореня): `dart analyze packages`
+Run (from the root): `dart analyze packages`
 Expected: `No issues found!`
 
-- [ ] **Step 2: Прогін на реальній специфікації (поза репозиторієм)**
+- [ ] **Step 2: Run on a real spec (outside the repository)**
 
-Поклади `typed_openapi.yaml` у тимчасовий каталог поза репозиторієм з одним клієнтом, чий `input` — абсолютний шлях до NestJS-специфікації з research/06 §C.1a (саму специфікацію в репозиторій не копіювати), і запусти `dart run typed_openapi check -c <шлях>`.
+Put `typed_openapi.yaml` in a temporary directory outside the repository with one client whose `input` is the absolute path to the NestJS spec from research/06 §C.1a (do not copy the spec itself into the repository), and run `dart run typed_openapi check -c <path>`.
 
-Expected (перевірено на прототипі, OAS 3.0.0, 3 MB, 734 операції, 1434 схеми): `errors: 3, warnings: 9, infos: 0` — три `TOA100 invalid-ref` на `$ref: '#/components/schemas/'`, вісім `TOA111 invalid-value` на `required: true/false` усередині `items` (C-49), один `TOA020` («"examples" in a schema»); жодного `TOA110`. Час: ~0,25 с скомпільованим `dart compile exe` (~125 MB RSS), ~0,8 с через `dart run`.
+Expected (checked on the prototype, OAS 3.0.0, 3 MB, 734 operations, 1434 schemas): `errors: 3, warnings: 9, infos: 0` — three `TOA100 invalid-ref` on `$ref: '#/components/schemas/'`, eight `TOA111 invalid-value` on `required: true/false` inside `items` (C-49), one `TOA020` ("examples" in a schema); no `TOA110`. Time: ~0.25 s compiled with `dart compile exe` (~125 MB RSS), ~0.8 s via `dart run`.
 
-## Покриття вимог
+## Requirements coverage
 
-| Вимога | Де |
+| Requirement | Where |
 |---|---|
-| R0.1 — OAS 3.0 і 3.1 | Модель-надмножина (Tasks 3, 5–7), діалект (Task 8) |
-| R1.2 — `$ref` у документі й між файлами, цикли | Tasks 9–11 |
+| R0.1 — OAS 3.0 and 3.1 | Superset model (Tasks 3, 5–7), dialect (Task 8) |
+| R1.2 — `$ref` in a document and between files, cycles | Tasks 9–11 |
 | R1.4 — 3.2 `itemSchema` | `MediaType.itemSchema` (Task 6), `TOA022` (Task 8) |
-| R2.1 (част.) — порожній і висячий `$ref` як діагностики | `TOA100`, `TOA101` (Tasks 9–10); виправлення — M3 |
-| R2.2 — коди, pointer, позиції | Усі нові коди з pointer і span; позиції — і в інших файлах |
-| R2.5 — нічого не вгадувати мовчки | Невідомі ключі, неправильні типи, пропущені поля, проігноровані `$id`/`$self` — усе діагностики |
-| R13.1 — детермінізм | Порядок документа, сортування циклів, `DiagnosticBag.sorted` |
-| Перенесено з M1 | Tasks 1–2 |
+| R2.1 (partly) — empty and dangling `$ref` as diagnostics | `TOA100`, `TOA101` (Tasks 9–10); fix — M3 |
+| R2.2 — codes, pointer, positions | All new codes with pointer and span; positions also in other files |
+| R2.5 — guess nothing silently | Unknown keys, wrong types, missing fields, ignored `$id`/`$self` — all diagnostics |
+| R13.1 — determinism | Document order, sorting of cycles, `DiagnosticBag.sorted` |
+| Moved from M1 | Tasks 1–2 |

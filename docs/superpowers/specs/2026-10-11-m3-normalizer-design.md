@@ -1,56 +1,56 @@
-# M3: нормалізатор — дизайн
+# M3: normalizer — design
 
-Дата: 2026-10-11. Вимоги: R2.1, R2.5, R0.2 ([requirements.md](../../requirements.md)). Каталог дефектів: [research/06 §C](../../research/06-spec-versions-and-defects.md). Корпус: [research/08](../../research/08-test-corpus.md).
+Date: 2026-10-11. Requirements: R2.1, R2.5, R0.2 ([requirements.md](../../requirements.md)). Defect catalog: [research/06 §C](../../research/06-spec-versions-and-defects.md). Corpus: [research/08](../../research/08-test-corpus.md).
 
-## Рішення
+## Decisions
 
-1. **Однозначні виправлення, решта — діагностика.** Правило виправляє специфікацію лише тоді, коли відповідь випливає з самої специфікації або з протоколу (HTTP, JSON). Якщо треба вгадати задум бекенду, правило дає діагностику з поясненням, що виправити в джерелі, і з готовим override-ом (формат override-ів — M4).
-2. **Лише те, що є в OpenAPI.** Конструкції поза специфікацією не підтримуються, а отримують зрозумілу діагностику:
-   - `$ref` там, де OAS його не дозволяє (стиль бандлерів Redocly / swagger-cli) — підказка «збери специфікацію бандлером»;
-   - теги YAML поза JSON Schema ruleset (`!!timestamp`, `!!binary`, `!!set`, власні `!tag`) — помилка; значення читається як його текст, щоб показати решту проблем файлу.
-3. **Правила працюють над моделлю.** Правило читає типізовану модель M2 (`SpecModel`) і видає знахідки: діагностику і, для виправлень, правки сирого дерева (`SpecEdit`: документ, JSON-pointer, операція). Нормалізатор застосовує правки і перечитує модель, поки правки є, але не більше 3 проходів. Знання структури OAS лишається тільки в парсері. M4 застосовуватиме override-и тим самим механізмом правок.
-4. **Діагностика парсера — з останнього проходу.** Проміжні проходи пишуть у тимчасовий журнал. У звіт потрапляють діагностика останнього читання і знахідки правил. Тому `required: true`, виправлене правилом, не дає ще й TOA111 від першого читання.
-5. **Інтерпретація для Dart — у M6, не в M3.** `allOf` з одним `$ref`, inline-enum, конверти, `anyOf` з `null`, `const` → enum, імена методів і груп, `strip-controller-prefix` — це рішення мапінгу, а не дефекти специфікації.
-6. **Свій компоновщик YAML.** Дерево і позиції будуються з подій парсера `package:yaml` (`Parser` — внутрішній модуль, версія закріплена в M2), без `loadYamlNode`. Один ітеративний прохід дає глибину (TOA007), бюджет розгортання аліасів (TOA008), дублікати ключів (TOA002), теги (див. п. 2) і нерядкові ключі. Ключі-колекції не хешуються, тож «бомба в ключі» неможлива за побудовою. Перевірка за подіями з M2 і конвертер `_toPlain` зникають.
-7. **Пресети не вмикають правила, а уточнюють підказки.** Усі правила M3 стосуються специфікації і ввімкнені в кожному пресеті. Пресет (`nestjs`, `fastapi`, `springdoc`, `aspnet`) додає до повідомлення, як виправити дефект у коді фреймворку (рецепти — [research/06 §D](../../research/06-spec-versions-and-defects.md)). Кожне правило вимикається в конфігу: `rules: {<ім'я>: false}` у `defaults` або в клієнті; невідоме ім'я — TOA903.
+1. **Unambiguous fixes; the rest is diagnostics.** A rule fixes the spec only when the answer follows from the spec itself or from the protocol (HTTP, JSON). If the backend's intent has to be guessed, the rule gives a diagnostic that explains what to fix in the source, and a ready override (the override format — M4).
+2. **Only what is in OpenAPI.** Constructs outside the spec are not supported and get a clear diagnostic:
+   - `$ref` where OAS does not allow it (the style of the Redocly / swagger-cli bundlers) — a hint "bundle the spec with a bundler";
+   - YAML tags outside the JSON Schema ruleset (`!!timestamp`, `!!binary`, `!!set`, custom `!tag`) — an error; the value is read as its text, to show the file's other problems.
+3. **Rules work over the model.** A rule reads the typed M2 model (`SpecModel`) and produces findings: a diagnostic and, for fixes, edits of the raw tree (`SpecEdit`: document, JSON pointer, operation). The normalizer applies the edits and rereads the model while there are edits, but no more than 3 passes. Knowledge of OAS structure stays only in the parser. M4 will apply overrides by the same edit mechanism.
+4. **Parser diagnostics — from the last pass.** Intermediate passes write to a scratch log. The report gets the diagnostics of the last read and the findings of the rules. So `required: true`, fixed by a rule, does not also give TOA111 from the first read.
+5. **Interpretation for Dart — in M6, not in M3.** `allOf` with one `$ref`, inline enum, envelopes, `anyOf` with `null`, `const` → enum, names of methods and groups, `strip-controller-prefix` — these are mapping decisions, not defects of the spec.
+6. **Our own YAML composer.** The tree and positions are built from the events of the `package:yaml` parser (`Parser` — an internal module, version pinned in M2), without `loadYamlNode`. One iterative pass gives depth (TOA007), the alias expansion budget (TOA008), duplicate keys (TOA002), tags (see item 2) and non-scalar keys. Collection keys are not hashed, so a "key bomb" is impossible by construction. The check by the M2 events and the `_toPlain` converter go away.
+7. **Presets do not enable rules, they refine hints.** All M3 rules concern the spec and are enabled in every preset. A preset (`nestjs`, `fastapi`, `springdoc`, `aspnet`) adds to the message how to fix the defect in the framework's code (recipes — [research/06 §D](../../research/06-spec-versions-and-defects.md)). Each rule is turned off in the config: `rules: {<name>: false}` in `defaults` or in the client; an unknown name — TOA903.
 
-## Правила M3
+## M3 rules
 
-### Виправлення
+### Fixes
 
-| Правило | Дефект (§C) | Що робить | Код / рівень |
+| Rule | Defect (§C) | What it does | Code / level |
 |---|---|---|---|
-| `bool-required-to-array` | C-1, C-49 | `required: true` у схемі властивості → ім'я в `required[]` батьківської схеми; `required: false` прибирається | TOA201 / warning |
-| `dedupe-enum-values` | C-9, C-52 | Однакові (JSON-рівні) значення `enum` прибираються, лишається перше входження. Значення, що різняться лише регістром, не зливаються | TOA301 / warning |
-| `declare-missing-path-params` | C-6 | Змінна шаблону шляху без оголошеного параметра → `{name, in: path, required: true, schema: {type: string}}`. Однозначно: сегмент шляху на проводі — рядок | TOA501 / warning |
-| `drop-invalid-default` | C-28 | `default`, що не відповідає `type` схеми, ігнорується (як значення з TOA111) | TOA211 / warning |
+| `bool-required-to-array` | C-1, C-49 | `required: true` in a property schema → the name goes into `required[]` of the parent schema; `required: false` is removed | TOA201 / warning |
+| `dedupe-enum-values` | C-9, C-52 | Equal (JSON-level) `enum` values are removed, the first occurrence is kept. Values that differ only by case are not merged | TOA301 / warning |
+| `declare-missing-path-params` | C-6 | A path template variable without a declared parameter → `{name, in: path, required: true, schema: {type: string}}`. Unambiguous: a path segment on the wire is a string | TOA501 / warning |
+| `drop-invalid-default` | C-28 | A `default` that does not match the schema's `type` is ignored (like a value with TOA111) | TOA211 / warning |
 
-### Лише діагностика
+### Diagnostics only
 
-| Перевірка | Дефект (§C) | Код / рівень |
+| Check | Defect (§C) | Code / level |
 |---|---|---|
-| Path-параметр оголошено, а в шаблоні його немає (або інший регістр) | C-7 | TOA502 / error |
-| Немає `operationId` | C-34 | TOA503 / info |
-| Однакові `operationId` | C-36 | TOA504 / error |
-| Масив без `items` у документі 3.0 | C-5 | TOA202 / warning |
-| Подвійний масив: `items` з `type: array` і булевим `required` | C-49 | TOA203 / warning |
-| `format` на масиві без `items` | C-50 | TOA204 / warning |
-| `type: object` з `format: binary` | C-51 | TOA205 / warning |
-| `type: object` поряд з `oneOf`/`anyOf`, де жодна гілка не об'єкт | C-22 | TOA206 / warning |
-| JSON-тип `example` суперечить `type` (об'єкт проти масиву тощо) | C-60 | TOA207 / warning |
-| Nullable enum через `oneOf` з `{enum: [null]}` і `$ref` | C-54 | TOA303 / warning |
-| Властивість-дискримінатор не `required` у підсхемах | C-42 | TOA401 / info |
-| `discriminator.mapping` веде в нікуди (якщо M2 ще не резолвить mapping) | C-4 | TOA402 / error |
-| `*/*` як media type | C-38 | TOA601 / warning |
-| Ключ у `components` не відповідає `^[a-zA-Z0-9\.\-_]+$` | C-32 | TOA106 / warning |
-| `$ref` у місці, де OAS його не дозволяє (замість TOA110) | — | TOA107 / warning |
-| `$ref: #/...` без лапок у YAML: значення стало `null`, бо `#` почав коментар | — | TOA108 / warning |
-| Тег YAML поза JSON Schema ruleset | — | TOA009 / error |
-| Ключ мапи — не рядок (колекція, число, null) | — | TOA00x / error (номер — у плані) |
+| A path parameter is declared, but is absent from the template (or differs in case) | C-7 | TOA502 / error |
+| No `operationId` | C-34 | TOA503 / info |
+| Duplicate `operationId` | C-36 | TOA504 / error |
+| An array without `items` in a 3.0 document | C-5 | TOA202 / warning |
+| Double array: `items` with `type: array` and a boolean `required` | C-49 | TOA203 / warning |
+| `format` on an array without `items` | C-50 | TOA204 / warning |
+| `type: object` with `format: binary` | C-51 | TOA205 / warning |
+| `type: object` next to `oneOf`/`anyOf`, where no branch is an object | C-22 | TOA206 / warning |
+| The JSON type of `example` contradicts `type` (an object against an array, etc.) | C-60 | TOA207 / warning |
+| Nullable enum through `oneOf` with `{enum: [null]}` and `$ref` | C-54 | TOA303 / warning |
+| The discriminator property is not `required` in the subschemas | C-42 | TOA401 / info |
+| `discriminator.mapping` leads nowhere (if M2 does not yet resolve the mapping) | C-4 | TOA402 / error |
+| `*/*` as a media type | C-38 | TOA601 / warning |
+| A key in `components` does not match `^[a-zA-Z0-9\.\-_]+$` | C-32 | TOA106 / warning |
+| `$ref` in a place where OAS does not allow it (instead of TOA110) | — | TOA107 / warning |
+| `$ref: #/...` without quotes in YAML: the value became `null`, because `#` started a comment | — | TOA108 / warning |
+| A YAML tag outside the JSON Schema ruleset | — | TOA009 / error |
+| A map key that is not a string (a collection, a number, null) | — | TOA00x / error (the number is in the plan) |
 
-## Що не входить
+## Out of scope
 
-- Override-и і їх застосування — M4. M3 лише друкує пропозицію override-у в тексті діагностики.
-- Перевизначення рівнів, baseline — M5.
-- Інтерпретаційні правила й іменування — M6.
-- `$ref` будь-де, YAML 1.1 — не підтримуються (п. 2).
+- Overrides and their application — M4. M3 only prints an override suggestion in the diagnostic text.
+- Overriding levels, baseline — M5.
+- Interpretation rules and naming — M6.
+- `$ref` anywhere, YAML 1.1 — not supported (item 2).

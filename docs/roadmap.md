@@ -1,208 +1,208 @@
-# Карта етапів typed_openapi
+# typed_openapi stage map
 
-Дата: 2026-10-11. Кожен етап — окремий план у `superpowers/plans/`, і кожен дає робочий, протестований результат. Вимоги: [requirements.md](requirements.md); ухвалені рішення: [research/README.md](research/README.md).
+Date: 2026-10-11. Each stage is a separate plan in `superpowers/plans/`, and each delivers a working, tested result. Requirements: [requirements.md](requirements.md); accepted decisions: [research/README.md](research/README.md).
 
-## Етапи
+## Stages
 
-| # | Етап | Що з'являється | Вимоги | Залежить від |
+| # | Stage | What appears | Requirements | Depends on |
 |---|---|---|---|---|
-| M1 | Каркас і `check` | Діагностика (стабільні коди, JSON-pointer, позиції, формати text/json), завантаження JSON і YAML, конфіг кількох клієнтів, CLI `check`, програмний API. План: [2026-10-11-m1-check-cli.md](superpowers/plans/2026-10-11-m1-check-cli.md) | R1.1, R1.3, R2.2 (част.), R2.4, R15.1, R15.2 (част.) | — |
-| M2 | Модель специфікації і `$ref` | Lossless-дерево → типізована модель (надмножина OAS 3.2); резолвер `$ref` усередині документа і між файлами, цикли; діалект за вмістом (TOA020–022, у research — SG001–003); облік невідомих ключів. План: [2026-10-11-m2-spec-model-refs.md](superpowers/plans/2026-10-11-m2-spec-model-refs.md) | R0.1, R1.2, R1.4, R2.1 (част.) | M1 |
-| M3 | Нормалізатор | Свій компоновщик YAML на подіях парсера; правила над моделлю: однозначні виправлення, решта — діагностика ([дизайн](superpowers/specs/2026-10-11-m3-normalizer-design.md)). Спершу — задачі з прогону корпусу (див. «Перенесено з M2»). Рушій іменованих правил з увімкненням кожного окремо, звіт про кожне спрацювання, пресети; правила `generic` і `nestjs` (каталог у [research/06 §C](research/06-spec-versions-and-defects.md)) | R2.1, R2.5 | M2 |
-| M4 | Override-и | `typed_openapi.overrides.yaml` з логічною адресацією (операція, схема, властивість, параметр); поля специфікації застосовуються до правил нормалізатора, поля генерації зберігаються для M6; застарілий або нульовий override → діагностика; підказки правил M3 з готовим фрагментом override-у ([дизайн](superpowers/specs/2026-10-12-m4-overrides-design.md)). Overlay 1.2 / JSON Patch — пізніше | R3.1, R3.2, (R3.3) | M3 |
-| M5 | Baseline і рівні | Baseline з fingerprint, `baseline create` / `prune`, перевизначення рівнів у конфігу (зокрема `off`), формати `sarif` і `github-actions`, шляхи відносно робочого каталогу ([дизайн](superpowers/specs/2026-10-12-m5-baseline-severity-design.md)) | R2.3, R2.2 (решта) | M3 |
-| M6 | Семантична IR і Dart-мапінг | Іменування і колізії, inline-схеми; фільтри і tree-shaking; матриця required × nullable; типи і формати; `allOf`; конверти; власні типи і конвертери; правило тристановості | R4, R5, R6.1–R6.4, R6.8, R7.2 | M3, M4 |
-| M7 | Runtime | `ApiResult` і помилки, `Patch<T>`, `JsonReader` з pointer, `JsonValue`, кодеки стилів параметрів, `sendRequest` на Dio, SSE-декодер за WHATWG | R6.5, R7.1, R10.1–R10.3, R10.5, R11.2, R11.3, R11.7, R12.3 | — (паралельно з M2–M6) |
-| M8 | Емітер моделей | Класи (не `final`) з `fromJson`/`toJson`, глибокі `==`/`hashCode`, `toString` без секретів; open enum, union з unknown (дискримінатор, JSON-тип, `union: structural`), поліморфізм через `allOf`, tri-state, обмеження й значення як doc-коментарі, власна розкладка коду без `dart_style` (`// dart format off`), детермінізм, команда `generate` для моделей: атомарна підміна каталогу виходу і маніфест файлів. Без `copyWith` | R6.5–R6.8, R7, R8, R9, R13 | M6, M7 |
-| M9 | Емітер операцій і `generate` | Групи за тегом, кореневий клієнт, параметри і тіла (JSON, multipart, form, binary), відповіді, типізовані помилки, security-метадані, servers; `generate` (з M8 уже пише моделі) дописує операції | R5.3, R10.4, R10.6–R10.9, R11.1, R11.4–R11.6 | M8 |
-| M10 | SSE | Методи зі `Stream` подій, схеми з `itemSchema`, `x-` або override, перепідключення з `Last-Event-ID` | R12.1, R12.2, R12.4, R12.5 (R12.6 пізніше) | M9, M7 |
-| M11 | Корпус і golden-тести | Публічні специфікації (Petstore, Stripe, GitHub, OpenAI, Kubernetes) компілюються і проходять аналізатор; runtime-тести декодування; матриця версій SDK і форматера; fuzz екранування рядків | R15.3, R15.4, R2.6 | M9 |
-| M12 | Еволюція | `diff` між регенераціями з категоріями змін (зокрема source-breaking для вичерпного `switch`), lock-файл | R14 | M9 |
-| M13 | Документація і продукт | Матриця підтримки, реєстр `x-`, каталог кодів, рецепти для NestJS / FastAPI / Spring / ASP.NET, JSON Schema конфігу, `lint`-режим для бекенду, опційний `build_runner` | R15.2, R15.5, R15.6, R15.1 (част.) | усі |
+| M1 | Skeleton and `check` | Diagnostics (stable codes, JSON pointer, positions, text/json formats), loading of JSON and YAML, config with several clients, CLI `check`, programmatic API. Plan: [2026-10-11-m1-check-cli.md](superpowers/plans/2026-10-11-m1-check-cli.md) | R1.1, R1.3, R2.2 (partial), R2.4, R15.1, R15.2 (partial) | — |
+| M2 | Spec model and `$ref` | Lossless tree → typed model (a superset of OAS 3.2); `$ref` resolver within a document and between files, cycles; dialect detected from content (TOA020–022, in research — SG001–003); tracking of unknown keys. Plan: [2026-10-11-m2-spec-model-refs.md](superpowers/plans/2026-10-11-m2-spec-model-refs.md) | R0.1, R1.2, R1.4, R2.1 (partial) | M1 |
+| M3 | Normalizer | Own YAML composer on parser events; rules over the model: unambiguous fixes, the rest as diagnostics ([design](superpowers/specs/2026-10-11-m3-normalizer-design.md)). First — tasks from the corpus run (see "Moved from M2"). Engine of named rules, each switched on separately, a report of every firing, presets; `generic` and `nestjs` rules (catalog in [research/06 §C](research/06-spec-versions-and-defects.md)) | R2.1, R2.5 | M2 |
+| M4 | Overrides | `typed_openapi.overrides.yaml` with logical addressing (operation, schema, property, parameter); spec fields are applied to normalizer rules, generation fields are kept for M6; a stale or null override → diagnostic; M3 rule hints with a ready override snippet ([design](superpowers/specs/2026-10-12-m4-overrides-design.md)). Overlay 1.2 / JSON Patch — later | R3.1, R3.2, (R3.3) | M3 |
+| M5 | Baseline and severity levels | Baseline with fingerprints, `baseline create` / `prune`, severity level overrides in the config (including `off`), `sarif` and `github-actions` formats, paths relative to the working directory ([design](superpowers/specs/2026-10-12-m5-baseline-severity-design.md)) | R2.3, R2.2 (rest) | M3 |
+| M6 | Semantic IR and Dart mapping | Naming and collisions, inline schemas; filters and tree-shaking; required × nullable matrix; types and formats; `allOf`; envelopes; custom types and converters; tri-state rule | R4, R5, R6.1–R6.4, R6.8, R7.2 | M3, M4 |
+| M7 | Runtime | `ApiResult` and errors, `Patch<T>`, `JsonReader` with pointer, `JsonValue`, parameter style codecs, `sendRequest` on Dio, SSE decoder per WHATWG | R6.5, R7.1, R10.1–R10.3, R10.5, R11.2, R11.3, R11.7, R12.3 | — (in parallel with M2–M6) |
+| M8 | Model emitter | Classes (not `final`) with `fromJson`/`toJson`, deep `==`/`hashCode`, `toString` without secrets; open enum, union with unknown (discriminator, JSON type, `union: structural`), polymorphism via `allOf`, tri-state, constraints and values as doc comments, own code layout without `dart_style` (`// dart format off`), determinism, the `generate` command for models: atomic swap of the output directory and a file manifest. No `copyWith` | R6.5–R6.8, R7, R8, R9, R13 | M6, M7 |
+| M9 | Operation emitter and `generate` | Groups by tag, root client, parameters and bodies (JSON, multipart, form, binary), responses, typed errors, security metadata, servers; `generate` (which already writes models from M8) adds the operations | R5.3, R10.4, R10.6–R10.9, R11.1, R11.4–R11.6 | M8 |
+| M10 | SSE | Methods returning a `Stream` of events, schemas with `itemSchema`, `x-` or override, reconnection with `Last-Event-ID` | R12.1, R12.2, R12.4, R12.5 (R12.6 later) | M9, M7 |
+| M11 | Corpus and golden tests | Public specifications (Petstore, Stripe, GitHub, OpenAI, Kubernetes) compile and pass the analyzer; runtime decoding tests; matrix of SDK and formatter versions; fuzz of string escaping | R15.3, R15.4, R2.6 | M9 |
+| M12 | Evolution | `diff` between regenerations with change categories (including source-breaking for an exhaustive `switch`), lock file | R14 | M9 |
+| M13 | Documentation and product | Support matrix, `x-` registry, code catalog, recipes for NestJS / FastAPI / Spring / ASP.NET, JSON Schema of the config, `lint` mode for the backend, optional `build_runner` | R15.2, R15.5, R15.6, R15.1 (partial) | all |
 
-## Порядок
+## Order
 
-1. M1 → M2 → M3 — критичний шлях.
-2. M7 (runtime) не залежить від парсера; його можна робити паралельно з M2–M6.
-3. M4 і M5 можна робити паралельно після M3.
-4. Перший корисний результат: після M3 команда `check` уже ловить дефекти реальних NestJS-специфікацій ([research/06 §C.1a](research/06-spec-versions-and-defects.md)).
-5. Перший згенерований клієнт — після M9.
+1. M1 → M2 → M3 — the critical path.
+2. M7 (runtime) does not depend on the parser; it can be done in parallel with M2–M6.
+3. M4 and M5 can be done in parallel after M3.
+4. The first useful result: after M3 the `check` command already catches defects in real NestJS specifications ([research/06 §C.1a](research/06-spec-versions-and-defects.md)).
+5. The first generated client — after M9.
 
-## Правила для планів
+## Rules for plans
 
-- Один план = один етап. Задачі по 2–5 хвилин, TDD, коміт на задачу.
-- План містить увесь код без заглушок. Код перевіряється (тести, `dart analyze`, `dart format`) до того, як потрапляє в план.
-- Нові коди діагностики додаються в каталог `DiagnosticCode` з doc-коментарем: M13 генерує з нього публічний каталог.
+- One plan = one stage. Tasks of 2–5 minutes each, TDD, one commit per task.
+- The plan contains all the code, without stubs. The code is checked (tests, `dart analyze`, `dart format`) before it goes into the plan.
+- New diagnostic codes are added to the `DiagnosticCode` catalog with a doc comment: M13 generates the public catalog from it.
 
-## Перенесено з M1
+## Moved from M1
 
-Знахідки рев'ю M1, які свідомо відкладено:
+M1 review findings that were deliberately deferred:
 
-| Що | Куди |
+| What | Where |
 |---|---|
-| YAML-ключі `1` і `"1"` мовчки зливаються в один | M2, Task 1 плану (TOA002) |
-| Шляхи у звіті: конфіг — як введено, специфікації — відносно конфігу; обрати одну базу | до формату `github-actions` (M5) |
-| Дуже глибока вкладеність (20 000 рівнів) дає `StackOverflowError` | M2, Task 2 плану (TOA007) |
-| `--help` друкує через `print`, ігноруючи переданий `out` | коли знадобиться тест довідки |
-| Каталог замість файлу в `input`/`--config` описується як «не існує» | M2, Task 1 плану |
-| `JsonPointer.parse` не перевіряє екранування `~` | коли pointer-и почнуть приходити від користувача (M4) |
-| Порядок TOA005/TOA003 і лише TOA002 для `.json` з дублікатом і синтаксичною помилкою | M2, Task 1 плану |
+| YAML keys `1` and `"1"` silently merge into one | M2, Task 1 of the plan (TOA002) |
+| Paths in the report: the config as entered, specifications relative to the config; choose one base | before the `github-actions` format (M5) |
+| Very deep nesting (20 000 levels) gives `StackOverflowError` | M2, Task 2 of the plan (TOA007) |
+| `--help` prints via `print`, ignoring the passed `out` | when a help test is needed |
+| A directory instead of a file in `input`/`--config` is described as "does not exist" | M2, Task 1 of the plan |
+| `JsonPointer.parse` does not check the `~` escaping | when pointers start coming from the user (M4) |
+| Order of TOA005/TOA003, and only TOA002 for a `.json` with a duplicate and a syntax error | M2, Task 1 of the plan |
 
-## Перенесено з M2
+## Moved from M2
 
-Перші задачі M3 — з прогону `check` на корпусі ([research/08 §Перший прогін](research/08-test-corpus.md)); без них дві з 13 реальних специфікацій фактично не перевіряються:
+The first M3 tasks come from the `check` run on the corpus ([research/08 §First run](research/08-test-corpus.md)); without them two of the 13 real specifications are in effect not checked:
 
-1. Теги YAML поза JSON Schema ruleset (`!!timestamp`, `!!binary`, `!!set`, власні) — зрозуміла помилка з посиланням на правило OAS; читання продовжується, щоб показати решту проблем (Artemis, springdoc: `example: !!timestamp '…'`). Підтримки YAML 1.1 немає: OAS вимагає YAML 1.2 з JSON Schema ruleset.
-2. `$ref` там, де OAS його не дозволяє (операція, `description`): окрема діагностика замість TOA110 з підказкою «специфікація розрахована на бандлер — збери її `redocly bundle`» (DigitalOcean). Підстановки «`$ref` будь-де» немає: це конвенція бандлерів, а не OpenAPI.
-3. Підказка для `$ref: #/...` без лапок у YAML (`#` починає коментар, значення стає `null`; Grace).
+1. YAML tags outside the JSON Schema ruleset (`!!timestamp`, `!!binary`, `!!set`, custom ones) — a clear error with a reference to the OAS rule; reading continues to show the remaining problems (Artemis, springdoc: `example: !!timestamp '…'`). There is no YAML 1.1 support: OAS requires YAML 1.2 with the JSON Schema ruleset.
+2. `$ref` where OAS does not allow it (an operation, `description`): a separate diagnostic instead of TOA110, with the hint "the specification is meant for a bundler — build it with `redocly bundle`" (DigitalOcean). There is no substitution of "`$ref` anywhere": it is a bundler convention, not OpenAPI.
+3. A hint for `$ref: #/...` without quotes in YAML (`#` starts a comment, the value becomes `null`; Grace).
 
-Знахідки рев'ю M2, які свідомо відкладено:
+M2 review findings that were deliberately deferred:
 
-| Що | Куди |
+| What | Where |
 |---|---|
-| `$ref` на `file:///` читає будь-який локальний файл без обмеження каталогу і розміру | до `generate` (M9) і `diff` (M12); обмеження розміру — разом із ним |
-| Сусідні ключі поруч із `$ref` у Path Item (дозволені в OAS) не зливаються з ціллю | M9 (емітер операцій): M6 цього не робить, бо парсер M2 кладе їх у `Ref.unknownKeys` (TOA110) і злиття потребує зміни парсера |
-| Файлові системи без розрізнення регістру: `A.yaml` і `a.yaml` — два документи | коли знадобиться (діагностика або нормалізація URI) |
-| YAML merge key `<<` не підказує, що OpenAPI-інструменти його часто не підтримують | M3 (правило нормалізатора або підказка) |
-| Модель незмінна лише поверхнево: списки і мапи всередині вузлів — read-only, але не глибоко | M3, коли нормалізатор почне будувати нові вузли |
-| `$ref` у `callbacks` і `links` не резолвляться | до емітера операцій (M9) |
-| `in` у `apiKey`-схемі безпеки не обов'язкове при читанні | до security-метаданих (M9) |
-| Позиції в діагностиках для файлів за `$ref` — відносні шляхи, а не абсолютні URI | M5 (формати `sarif`, `github-actions`) |
-| Місце, прочитане як вузли двох різних типів, мовчки повертає `null` для другого | M3 (діагностика конфлікту типів) |
-| Діагностика на вузлі, отриманому через YAML-аліас, вказує на позицію якоря | коли знадобиться (рідкісний випадок) |
-| Глибокий документ без аліасів зберігає довгий pointer на кожен вузол (пам'ять O(вузли × глибина)) | коли знадобиться (pointer-и як ланцюжок батьків) |
-| Сканер `package:yaml` квадратичний на довгому flow-рядку; дужки, сховані в лапках (`["]",` × N), обходять попередній підрахунок: ~1 MB → ~57 с (без падіння) | M3: свій компоновщик на власній копії сканера з двома правками; апстрім — [dart-lang/tools#2657](https://github.com/dart-lang/tools/issues/2657) |
-| Немає тестів на кілька YAML-документів у файлі і на випадок із дужками в лапках | паралельний трек стійкості |
-| Перевірка за подіями ловить лише `YamlException`; `assert` парсера в checked-режимі може вилетіти | M3 (свій компоновщик) |
-| Перевірка за подіями рахує глибину і в ключах-колекціях, конвертер — ні | M3 (свій компоновщик, одна глибина) |
+| A `$ref` to `file:///` reads any local file without a directory or size limit | before `generate` (M9) and `diff` (M12); the size limit together with it |
+| Sibling keys next to `$ref` in a Path Item (allowed in OAS) are not merged with the target | M9 (operation emitter): M6 does not do this, because the M2 parser puts them into `Ref.unknownKeys` (TOA110) and merging requires a change to the parser |
+| Case-insensitive file systems: `A.yaml` and `a.yaml` are two documents | when needed (diagnostic or URI normalization) |
+| The YAML merge key `<<` gives no hint that OpenAPI tools often do not support it | M3 (a normalizer rule or a hint) |
+| The model is immutable only on the surface: lists and maps inside nodes are read-only, but not deeply | M3, when the normalizer starts building new nodes |
+| `$ref` in `callbacks` and `links` does not resolve | before the operation emitter (M9) |
+| `in` in an `apiKey` security scheme is not required when reading | before the security metadata (M9) |
+| Positions in diagnostics for files reached through `$ref` are relative paths, not absolute URIs | M5 (`sarif`, `github-actions` formats) |
+| A place read as nodes of two different types silently returns `null` for the second | M3 (diagnostic for a type conflict) |
+| A diagnostic on a node obtained through a YAML alias points to the anchor's position | when needed (a rare case) |
+| A deep document without aliases keeps a long pointer for each node (memory O(nodes × depth)) | when needed (pointers as a parent chain) |
+| The `package:yaml` scanner is quadratic on a long flow line; brackets hidden in quotes (`["]",` × N) bypass the preliminary count: ~1 MB → ~57 s (no crash) | M3: own composer on an own copy of the scanner with two edits; upstream — [dart-lang/tools#2657](https://github.com/dart-lang/tools/issues/2657) |
+| No tests for several YAML documents in one file and for the case with brackets in quotes | a parallel robustness track |
+| The check on events catches only `YamlException`; a parser `assert` in checked mode may escape | M3 (own composer) |
+| The check on events counts depth also in collection keys, the converter does not | M3 (own composer, a single depth) |
 
-## Перенесено з M3
+## Moved from M3
 
-Знахідки рев'ю M3, які свідомо відкладено (усі — на невалідних специфікаціях або косметичні; детерміновані):
+M3 review findings that were deliberately deferred (all of them are on invalid specifications or cosmetic; deterministic):
 
-| Що | Куди |
+| What | Where |
 |---|---|
-| `$ref` на місці цілої мапи (`paths: {$ref}`, `components.schemas: {$ref}`, `security: [{$ref}]`) дає TOA111, а не TOA107 з підказкою про бандлер | коли знадобиться |
-| Спільний для кількох шляхів Path Item (через `$ref`): дублікати TOA501, оманливий TOA502 при різних іменах змінних | зроблено в M6: кожен шлях отримує власні операції; однакові імена методів — TOA551 з override-ом |
-| Чутливість до регістру: `/{id}/{ID}` з одним оголошеним `id` нічого не звітує; OAS 3.2 `additionalOperations` не перевіряються | зроблено в M6: змінна без параметра з точним іменем — TOA556 (error), операція не генерується; `additionalOperations` входять в IR з методом як написано |
-| Дедуп enum зливає цілі й дробові понад 2^53 (`9007199254740993` і `9007199254740992.0`) | коли знадобиться |
-| `DiagnosticBag` ігнорує `fix` при дедупі: на спільному файлі губиться підказка пресету другого клієнта | M5 (baseline і рівні) |
-| TOA402 приймає будь-який наявний вузол як ціль `mapping` (зокрема `#`) | коли знадобиться |
-| URI з percent-кодуванням у ключах `SpecDocuments` vs `document.uri`; позиції після правок списку зсуваються; файл, що не завантажився, перечитується на кожному проході | не знадобилося ні в M4, ні в M6: коли знадобиться |
-| Підказки пресетів: aspnet для TOA401 (§D.4.5 замість §D.4.4), nestjs для TOA303 не прибирає дефект C-54; кілька підказок лише опосередковано з §D | M13 (рецепти) |
-| Тестові прогалини: негативні кейси правил форми схем, enum, path-параметрів, `operationId`, дискримінатора | разом із наступними змінами цих правил |
+| A `$ref` in place of a whole map (`paths: {$ref}`, `components.schemas: {$ref}`, `security: [{$ref}]`) gives TOA111, not TOA107 with a bundler hint | when needed |
+| A Path Item shared by several paths (through `$ref`): duplicate TOA501, a misleading TOA502 with different variable names | done in M6: each path gets its own operations; identical method names — TOA551 with an override |
+| Case sensitivity: `/{id}/{ID}` with one declared `id` reports nothing; OAS 3.2 `additionalOperations` are not checked | done in M6: a variable without a parameter with the exact name — TOA556 (error), the operation is not generated; `additionalOperations` enter the IR with the method as written |
+| Enum dedup merges integers and fractions beyond 2^53 (`9007199254740993` and `9007199254740992.0`) | when needed |
+| `DiagnosticBag` ignores `fix` during dedup: on a shared file the preset hint of the second client is lost | M5 (baseline and levels) |
+| TOA402 accepts any existing node as a `mapping` target (including `#`) | when needed |
+| URIs with percent-encoding in `SpecDocuments` keys vs `document.uri`; positions shift after list edits; a file that failed to load is re-read on every pass | not needed in either M4 or M6: when needed |
+| Preset hints: aspnet for TOA401 (§D.4.5 instead of §D.4.4), nestjs for TOA303 does not remove defect C-54; several hints are only indirectly based on §D | M13 (recipes) |
+| Test gaps: negative cases for the rules on schema shape, enum, path parameters, `operationId`, discriminator | together with the next changes to these rules |
 
-## Перенесено з M4
+## Moved from M4
 
-Знахідки рев'ю M4, які свідомо відкладено:
+M4 review findings that were deliberately deferred:
 
-| Що | Куди |
+| What | Where |
 |---|---|
-| `NormalizedSpec.overrides` містить і записи, які не застосовано (TOA804/805/806), з їхніми полями генерації; `generate` не відрізняє «файл override-ів непридатний» від «override-ів немає» | M9 (пропуск клієнта в `generate`); IR вже бере лише записи, які застосовано (`IrOverrides`), а `check` перевіряє специфікацію без непридатного файлу |
-| Проблеми, які вносить сам override, звітуються на pointer-і специфікації, а не на override-і | M5 |
-| `_content`: при `null`-медіаоб'єкті береться значення іншого media type | коли знадобиться (лише дефектні специфікації) |
-| 3.0: після розгортання nullable-`$ref` сусідні поля `$ref` лишаються, але 3.0 їх ігнорує; схема з `anyOf` і `oneOf` із null розгортає лише `anyOf`; `type: 'null'` + override `type: null` → TOA807 без змін | коли знадобиться |
-| Адресація: `{petId}` проти `{id}` без пояснення; `2xx` у нижньому регістрі; `QUERY` у 3.2 `additionalOperations`; операція, записана як `$ref`; спільний через `$ref` Path Item без TOA808; вкладені TOA804/805 під записами з TOA806; абсолютний `file:///` у повідомленні про булеву схему | коли знадобиться |
-| Не адресуються: webhooks, вкладені властивості, властивості, успадковані через `allOf` | не знадобилося в M6 (поля з частин `allOf` беруть override-и своїх компонентів за розташуванням): коли знадобиться |
-| Фрагменти override-у: TOA203 в один flow-рядок; без фрагмента для аліасу з сусідами `$ref`; тести «туди-назад» лише для 3.0 компонентів | коли знадобиться |
+| `NormalizedSpec.overrides` contains also entries that were not applied (TOA804/805/806), with their generation fields; `generate` does not distinguish "the overrides file is unusable" from "there are no overrides" | M9 (skipping a client in `generate`); the IR already takes only the entries that were applied (`IrOverrides`), and `check` checks the specification without the unusable file |
+| Problems introduced by the override itself are reported at the specification's pointer, not at the override | M5 |
+| `_content`: with a `null` media object the value of another media type is taken | when needed (defective specifications only) |
+| 3.0: after expanding a nullable `$ref`, the sibling fields of `$ref` remain, but 3.0 ignores them; a schema with `anyOf` and `oneOf` containing null expands only `anyOf`; `type: 'null'` + override `type: null` → TOA807 unchanged | when needed |
+| Addressing: `{petId}` versus `{id}` without explanation; `2xx` in lower case; `QUERY` in 3.2 `additionalOperations`; an operation written as `$ref`; a Path Item shared through `$ref` without TOA808; nested TOA804/805 under entries with TOA806; an absolute `file:///` in the message about a boolean schema | when needed |
+| Not addressable: webhooks, nested properties, properties inherited through `allOf` | not needed in M6 (fields from `allOf` parts take the overrides of their components by location): when needed |
+| Override snippets: TOA203 on one flow line; no snippet for an alias with `$ref` siblings; round-trip tests only for 3.0 components | when needed |
 
-## Перенесено з M5
+## Moved from M5
 
-Знахідки рев'ю M5, які свідомо відкладено:
+M5 review findings that were deliberately deferred:
 
-| Що | Куди |
+| What | Where |
 |---|---|
-| Windows: шляхи з літерою диска (`_fileName`, мертва гілка `PathException`), семантика `int` у вебі (dart2js) | M11 (матриця платформ) |
-| SARIF: результати з файлом, але без позиції (`region`), і без файлу — перевірити `upload-sarif` у GitHub code scanning | M11 |
-| Показ шляхів: файл за `$ref` абсолютний, коли сама специфікація поза робочим каталогом; symlink-каталог (macOS `/tmp`) показує файли абсолютними | коли знадобиться (зіставлення baseline не зачеплене) |
-| Якір: перший аліас / перший спільний Path Item перемагає; якір параметра через `$ref` — за індексом | коли знадобиться |
-| Приписування проблеми override-у порівнює з моделлю до виправлень нормалізатора; дедуп лишає `related` першого клієнта | коли знадобиться (інформаційне) |
-| Дубль коду злиття «sorted + baselined» у 4 репортерах; `RelatedLocation.location` дублює `Diagnostic.location` | рефакторинг при наступних змінах репортерів |
-| `prune` завжди переписує файл і каже «removed 0», коли лише зменшив `count`; fingerprint рахується двічі в `create` | коли знадобиться |
-| Тести: шляхи (symlink, пробіли, не-ASCII), інший робочий каталог для baseline, екранування GH-властивостей, `addBaselined` | разом із наступними змінами цих частин |
+| Windows: paths with a drive letter (`_fileName`, a dead `PathException` branch), `int` semantics on the web (dart2js) | M11 (platform matrix) |
+| SARIF: results with a file but without a position (`region`), and without a file — check `upload-sarif` in GitHub code scanning | M11 |
+| Path display: a file reached through `$ref` is absolute when the specification itself is outside the working directory; a symlinked directory (macOS `/tmp`) shows files as absolute | when needed (baseline matching is not affected) |
+| Anchor: the first alias / the first shared Path Item wins; a parameter's anchor through `$ref` is by index | when needed |
+| Attribution of an override's problem compares against the model before the normalizer's fixes; dedup keeps `related` of the first client | when needed (informational) |
+| Duplicated merge code for "sorted + baselined" in 4 reporters; `RelatedLocation.location` duplicates `Diagnostic.location` | refactoring with the next changes to the reporters |
+| `prune` always rewrites the file and says "removed 0" when it only decreased `count`; the fingerprint is computed twice in `create` | when needed |
+| Tests: paths (symlink, spaces, non-ASCII), a different working directory for the baseline, escaping of GH properties, `addBaselined` | together with the next changes to these parts |
 
-## Перенесено з M6
+## Moved from M6
 
-Знахідки рев'ю M6 і відкладене в плані, які свідомо лишено. Перші чотири рядки — прогалини в контракті «IR → емітер»: їх треба закрити в плані M8/M9, а не відкривати знову.
+M6 review findings and items deferred in the plan, which were deliberately left. The first four rows are gaps in the "IR → emitter" contract: they must be closed in the M8/M9 plan, not reopened.
 
-| Що | Куди |
+| What | Where |
 |---|---|
-| Тіло запиту: `encoding` медіатипу (для форм — `style`/`explode` кожної властивості, для multipart — `contentType` і заголовки частин, ім'я файлу) розібрано, але в IR його немає, і діагностики немає. У корпусі: 312 із 611 тіл `x-www-form-urlencoded` Stripe мають `encoding` (deepObject/explode); файлові частини — `Uint8List` без імені й типу (R10.4) | M9: додати в `RequestBodyIr` або явно читати зі специфікації за `location` |
-| Імена типів, які створює емітер, не названі в IR: sealed-тип помилок `ErrorsByStatus` і його варіанти (1047 операцій корпусу), класи варіантів union-а й варіант unknown (R9.1), тип успіху, коли тіла 2xx різні (31 операція, напр. Discord `guildSearch`: 200 `GuildSearchResponse` / 202 `SearchIndexNotReadyResponse`). Природні імена вже зайняті: для `getPet` з 404 inline і 500 без тіла inline-модель — `GetPetError`, тож sealed `GetPetError` зіткнувся б із нею. `NameScope` внутрішній, у `ClientIr` лишаються фінальні імена, тому емітер мусив би відновлювати простір імен, зарезервовані набори й TOA550/551 сам | M8/M9: вирішити в плані M8 — або називати в IR (після декларацій, з діагностиками), або віддати емітерам простір імен бібліотеки |
-| Обмеження (R6.7) відсутні в `FieldIr`, `default` — у `ParameterIr`; план казав «у вузлах», але це неточно: M8 мусив би виводити їх зі специфікації за `location`. `description`, `deprecated`, `defaultValue` поля є (3.1+: власні поруч із `$ref` мають перевагу над цільовими) | M8 (R6.7, doc-коментарі, значення за замовчуванням конструктора); `default` параметра — M9 |
-| Параметр `in: querystring` (OpenAPI 3.2) пропускається з TOA564, бо runtime не має параметра «весь query-рядок»; `style` перевіряється проти `in` (виправлено в M6: TOA564, запасний — стиль за замовчуванням) | M9: підтримка `querystring`, коли runtime її отримає |
-| `SingleError(type, const [])` — що означає порожній список `statuses`: «усі 4xx/5xx» (так, коли задано `errors.default_schema`, а операція не має описаних помилок); `ir.dart` каже лише «задокументовані статуси» | M9: описати в doc-коментарі й читати як «усі» |
-| Операція, чия єдина відповідь — `default` з тілом, не має типу успіху (`default` завжди помилка); у корпусі такої немає | M9 |
-| Згенерована бібліотека API імпортує `package:dio`, а `Response`, `Options`, `Headers` — часті імена схем; `DartNames.takenTypeNames` їх не резервує | M9: або додати `Dio` і виправити контракт «імпортувати dio і `dart:typed_data` через `show`», або резервувати експорти dio; записати вибір |
-| Шаблон змінної шляху в IR (`\{([^}]*)\}`, `ir_builder.dart`, `operation_builder.dart`) відрізняється від runtime (`\{([^{}]+)\}`): `/c/{}` — TOA556 в IR, а runtime читає `{}` як текст | M9: одне визначення |
-| TOA561 `media-type-as-bytes` покриває дві знахідки (тіло стає байтами; відкинуто альтернативні медіатипи); усі 57 випадків корпусу — друга, тож `severity: {media-type-as-bytes: off}` глушить і першу. Нумерація: рішення 3 плану віднесло медіатипи й помилки до 6xx, а TOA561/TOA562 у 5xx | M9: розділити код і вирівняти нумерацію, поки коди не опубліковано (каталог — M13) |
-| Дублікати типів варіантів union-а лишаються мовчки: `anyOf: [string, {string, uuid}, $ref A, $ref A]` дає `String \| String \| A \| A`; без дискримінатора емітер не відрізнить варіанти | M8 (разом з `oneOf` без дискримінатора, R9.2) |
-| `{}` у тілі PATCH ніколи не тристановий (`JsonValue` не nullable, а правило `.patch` вимагає nullable значення): явний `null` для довільного JSON-поля не надіслати (R7.1) | M8 |
-| TOA450 на inline-варіантах не підказує значення, яке можна вивести: коли властивість-дискримінатор варіанта — єдиний `const`/enum (OpenAI ×3) | M8 (R9) |
-| Адреса override-у для імені inline-типу (R5.4 «з override»): форма залежить від того, які inline-типи друкує емітер моделей (поле, елемент масиву, значення мапи, варіант union-а); до того ім'я закріплюється перейменуванням батька | M8 |
-| Перший, хто дійшов до спільної inline-декларації, дає їй ім'я (`first-use naming`) | M8, коли імена потраплять у код |
-| Поліморфізм через `allOf` (дискримінатор на базі, нащадки — `allOf: [$ref: Base, …]`): база лишається моделлю, TOA452 | M8 (ієрархія разом з union-ами, R9) |
-| `oneOf` без дискримінатора (R9.2): вузол IR є, поведінки й діагностики ще немає | M8 |
-| Заголовок enum-значення з `const`-гілки (`title`/`description`, Discord `NO_BOT`) не береться за ім'я значення | M8 |
-| Режим конверта «дженерик-обгортка» і його ключ конфігу | M9 |
-| Вебхуки, `callbacks`, security-метадані, `servers` | M9 (SSE-події — M10) |
-| SSE: IR бере `itemSchema` (або `schema`) для `text/event-stream` як тип вмісту; в OAS 3.2 `itemSchema` описує подію цілком (`data`/`event`/`id`), тому тип може бути конвертом події, а не даними; 4 потоки корпусу не оглянуто | M10 |
-| R5.3: «описові» теги (`Pet operations controller`) не розпізнаються (warning лише для тегів без ASCII); перейменування тегу override-ом (`tags: {pet-controller: Pets}`) потребує розділу `tags` у файлі override-ів | M9 (емітер груп) |
-| Валідація `import`/`type` власних типів (R6.8); екранування в емітері | M8 |
-| Параметр шляху з `required: false` примусово стає обов'язковим (територія нормалізатора M3) | коли знадобиться |
-| `prefixItems` (кортежі), `patternProperties`, `if/then/else`, `not` не мапляться (масив без `items` — `List<JsonValue>`) | коли знадобиться |
-| R5.1 «суфікс версії»: `naming.operation_prefix` зрізає лише початок `operationId` | коли знадобиться (реальний випадок) |
-| `paths: {}` без операцій мовчить (специфікація з вебхуками чи лише компонентами легітимна) | коли знадобиться |
-| Цілий enum із дробовим числом без дробу (`type: integer, enum: [1.0, 2]`) — `EnumKind.number` з ім'ям `value1_0` | коли знадобиться |
-| Числове ім'я властивості читається як індекс списку в `_tokensName` (`SchemaMapper`) | коли знадобиться |
-| Дуже довгий ланцюжок `$ref` (~1300) — глибина стеку і O(N²); нереалістично | коли знадобиться |
-| `NameScope.claim('')`, прогалини в списку `dart:core` у `takenTypeNames` (`RuneIterator`, `UriData`, …) | коли знадобиться |
-| Гігієна IR: вкладені списки не `unmodifiable` (const-конструктори), `PatchType(String?)` не примусовий, дубль `DeclId` — виграє останній, `IrJson` не друкує `statuses`, `import` і значення за замовчуванням | коли знадобиться |
-| Некоректне значення в клієнті повертається до вбудованого значення за замовчуванням, а не до `defaults` | M13 (документація конфігу) |
-| `DirectionIndex` кешував «не напрямкова» всередині циклу залежно від порядку запитів | зроблено в M6 (10a): відповідь залежить лише від множини досяжних схем |
-| `deprecated: false` поруч із `$ref` не скасовує позначку цілі (у моделі — простий `bool`); опис цілі, записаний у її власній `allOf`-частині лише з анотаціями, не доходить до поля | коли знадобиться (лише doc-коментарі) |
-| `IrJson` не друкує описи, тож вплив анотацій поруч із `$ref` видно лише в тестах | M8 (якщо дамп знадобиться для doc-коментарів) |
-| TOA561 і TOA564 покривають по дві різні знахідки (відкинуті альтернативи / байти; недопустимий `style` / `querystring`) і лежать у 5xx, хоча план відводив media types 6xx | до 1.0 (каталог кодів, M13) |
+| Request body: the media type's `encoding` (for forms — `style`/`explode` of each property, for multipart — `contentType` and part headers, file name) is parsed, but the IR has none of it, and there is no diagnostic. In the corpus: 312 of 611 Stripe `x-www-form-urlencoded` bodies have `encoding` (deepObject/explode); file parts are `Uint8List` without a name or type (R10.4) | M9: add to `RequestBodyIr` or read explicitly from the specification by `location` |
+| Names of types that the emitter creates are not named in the IR: the sealed error type `ErrorsByStatus` and its variants (1047 operations of the corpus), the variant classes of a union and the unknown variant (R9.1), the success type when the 2xx bodies differ (31 operations, e.g. Discord `guildSearch`: 200 `GuildSearchResponse` / 202 `SearchIndexNotReadyResponse`). The natural names are already taken: for `getPet` with an inline 404 and a 500 without a body the inline model is `GetPetError`, so the sealed `GetPetError` would clash with it. `NameScope` is internal and `ClientIr` keeps only the final names, so the emitter would have to rebuild the namespace, the reserved sets and TOA550/551 itself | M8/M9: decide in the M8 plan — either name them in the IR (after the declarations, with diagnostics), or give the emitters the library's namespace |
+| Constraints (R6.7) are missing from `FieldIr`, `default` is in `ParameterIr`; the plan said "on the nodes", but that is inaccurate: M8 would have to derive them from the specification by `location`. The `description`, `deprecated`, `defaultValue` fields are there (3.1+: own ones next to `$ref` take precedence over the target's) | M8 (R6.7, doc comments, constructor default values); a parameter's `default` — M9 |
+| `in: querystring` parameter (OpenAPI 3.2) is skipped with TOA564, because the runtime has no "whole query string" parameter; `style` is checked against `in` (fixed in M6: TOA564, fallback — default style) | M9: support `querystring` when the runtime gets it |
+| `SingleError(type, const [])` — what an empty `statuses` list means: "all 4xx/5xx" (yes, when `errors.default_schema` is set and the operation has no described errors); `ir.dart` says only "documented statuses" | M9: describe it in the doc comment and read it as "all" |
+| An operation whose only response is `default` with a body has no success type (`default` is always an error); there is no such operation in the corpus | M9 |
+| The generated API library imports `package:dio`, and `Response`, `Options`, `Headers` are common schema names; `DartNames.takenTypeNames` does not reserve them | M9: either add `Dio` and fix the contract "import dio and `dart:typed_data` via `show`", or reserve the dio exports; record the choice |
+| The path variable pattern in the IR (`\{([^}]*)\}`, `ir_builder.dart`, `operation_builder.dart`) differs from the runtime (`\{([^{}]+)\}`): `/c/{}` is TOA556 in the IR, while the runtime reads `{}` as text | M9: one definition |
+| TOA561 `media-type-as-bytes` covers two findings (the body becomes bytes; alternative media types were dropped); all 57 corpus cases are the second, so `severity: {media-type-as-bytes: off}` also silences the first. Numbering: decision 3 of the plan put media types and errors in 6xx, while TOA561/TOA562 are in 5xx | M9: split the code and align the numbering, while the codes are not yet published (catalog — M13) |
+| Duplicate types of union variants remain silently: `anyOf: [string, {string, uuid}, $ref A, $ref A]` gives `String \| String \| A \| A`; without a discriminator the emitter cannot tell the variants apart | M8 (together with `oneOf` without a discriminator, R9.2) |
+| `{}` in a PATCH body is never tri-state (`JsonValue` is not nullable, and the `.patch` rule requires a nullable value): an explicit `null` for an arbitrary JSON field cannot be sent (R7.1) | M8 |
+| TOA450 on inline variants does not suggest a value that could be derived: when the variant's discriminator property is the only `const`/enum (OpenAI ×3) | M8 (R9) |
+| The override address for an inline type's name (R5.4 "with override"): the form depends on which inline types the model emitter prints (a field, an array element, a map value, a union variant); until then the name is fixed by renaming the parent | M8 |
+| The first one to reach a shared inline declaration gives it its name (`first-use naming`) | M8, when the names reach the code |
+| Polymorphism through `allOf` (discriminator on the base, descendants — `allOf: [$ref: Base, …]`): the base stays a model, TOA452 | M8 (the hierarchy together with the unions, R9) |
+| `oneOf` without a discriminator (R9.2): the IR node exists, but there is no behavior or diagnostic yet | M8 |
+| The title of an enum value from a `const` branch (`title`/`description`, Discord `NO_BOT`) is not taken as the value's name | M8 |
+| The envelope mode "generic wrapper" and its config key | M9 |
+| Webhooks, `callbacks`, security metadata, `servers` | M9 (SSE events — M10) |
+| SSE: the IR takes `itemSchema` (or `schema`) for `text/event-stream` as the content type; in OAS 3.2 `itemSchema` describes the event as a whole (`data`/`event`/`id`), so the type may be an event envelope rather than the data; the 4 corpus streams have not been reviewed | M10 |
+| R5.3: "descriptive" tags (`Pet operations controller`) are not recognized (a warning only for tags without ASCII); renaming a tag with an override (`tags: {pet-controller: Pets}`) requires a `tags` section in the overrides file | M9 (group emitter) |
+| Validation of `import`/`type` of custom types (R6.8); escaping in the emitter | M8 |
+| A path parameter with `required: false` is forcibly made required (the normalizer's territory, M3) | when needed |
+| `prefixItems` (tuples), `patternProperties`, `if/then/else`, `not` are not mapped (an array without `items` — `List<JsonValue>`) | when needed |
+| R5.1 "version suffix": `naming.operation_prefix` strips only the start of `operationId` | when needed (a real case) |
+| `paths: {}` without operations is silent (a specification with webhooks or only components is legitimate) | when needed |
+| An integer enum with a fractional number without a fraction (`type: integer, enum: [1.0, 2]`) — `EnumKind.number` with the name `value1_0` | when needed |
+| A numeric property name is read as a list index in `_tokensName` (`SchemaMapper`) | when needed |
+| A very long `$ref` chain (~1300) — stack depth and O(N²); unrealistic | when needed |
+| `NameScope.claim('')`, gaps in the `dart:core` list in `takenTypeNames` (`RuneIterator`, `UriData`, …) | when needed |
+| IR hygiene: nested lists are not `unmodifiable` (const constructors), `PatchType(String?)` is not enforced, a duplicate `DeclId` — the last one wins, `IrJson` does not print `statuses`, `import` and default values | when needed |
+| An invalid value in a client falls back to the built-in default value, not to `defaults` | M13 (config documentation) |
+| `DirectionIndex` cached "not directional" inside a loop depending on the order of queries | done in M6 (10a): the answer depends only on the set of reachable schemas |
+| `deprecated: false` next to `$ref` does not cancel the target's mark (in the model it is a plain `bool`); a description of the target written in its own annotations-only `allOf` part does not reach the field | when needed (doc comments only) |
+| `IrJson` does not print descriptions, so the effect of annotations next to `$ref` is visible only in tests | M8 (if the dump is needed for doc comments) |
+| TOA561 and TOA564 each cover two different findings (dropped alternatives / bytes; invalid `style` / `querystring`) and sit in 5xx, although the plan allotted media types 6xx | before 1.0 (code catalog, M13) |
 
-Виправлено в M6 за підсумковим рев'ю: `allOf` з одним `$ref` і частинами лише з анотаціями — посилання на ціль (nullable, якщо частина так каже); `description`, `default`, `deprecated` поруч із `$ref` у 3.1+ мають перевагу над цільовими; TOA564; заголовки `Accept`, `Content-Type`, `Authorization` не генеруються; імена власних типів резервуються (TOA551); TOA552 для значень enum — info з порадою `x-enum-varnames`; `unknown` зарезервовано серед значень enum (`unknown_`).
+Fixed in M6 following the final review: an `allOf` with one `$ref` and annotation-only parts — a reference to the target (nullable if a part says so); `description`, `default`, `deprecated` next to `$ref` in 3.1+ take precedence over the target's; TOA564; the `Accept`, `Content-Type`, `Authorization` headers are not generated; custom type names are reserved (TOA551); TOA552 for enum values is info with the hint `x-enum-varnames`; `unknown` is reserved among enum values (`unknown_`).
 
-## Перенесено з M8
+## Moved from M8
 
-Знахідки й рішення M8, які свідомо відкладено (план: [2026-10-12-m8-models.md](superpowers/plans/2026-10-12-m8-models.md), розділ «Відкладено»):
+M8 findings and decisions that were deliberately deferred (plan: [2026-10-12-m8-models.md](superpowers/plans/2026-10-12-m8-models.md), section "Deferred"):
 
-| Що | Куди |
+| What | Where |
 |---|---|
-| Sealed-типи статусів операції (`CreatePetError`, `CreatePetResponse`) і їхні варіанти | M9: імена виділяються в просторі імен бібліотеки IR після імен M8, тож жодне ім'я моделі не зміниться |
-| Override-адреса для імен inline-типів (R5.4); ідея — поле `typeName` у записі властивості (`schemas.Pet.properties.status.typeName: PetState`), без адреси для елементів масивів, значень мап і варіантів union-ів | коли знадобиться (рішення користувача: відкладено) |
-| Ім'я значення enum з `title` const-гілки (Discord `NO_BOT`) як `x-enum-varnames` | коли знадобиться (рішення користувача: відкладено) |
-| ~~Stripe: 390 полів `anyOf: [string, {enum: ['']}]`~~ | вирішено в M8: гілку enum відкидає TOA455 (info), поле — `String`, відкинуті значення — у doc-коментарі «Known values»; для `oneOf` тип приймає й значення, яке `oneOf` відхилив би, — свідомо |
-| Підтипи поліморфної бази не враховуються в `DirectionIndex` (поділ на `Pet`/`PetInput` для них не робиться) | коли знадобиться |
-| `IrJson` не друкує константи, обмеження, імена допоміжних типів | коли знадобиться |
-| `generate --format` (json, sarif) | M9, разом з операціями |
-| Хеш входів не враховує версію Dart SDK і `dart_style` (не використовується) | коли знадобиться |
-| Ключі `union` на властивості, яку override не може застосувати, мовчки не дають діагностики (TOA807 лише для схем) | коли знадобиться |
-| `IrJson` не друкує спосіб вибору варіанта union-а (`dispatch`) і імена варіантів | коли знадобиться |
-| Override `name` і `exhaustive` на запасних `JsonValue` не діють (як і в M6) | коли знадобиться |
-| `declarations()` області імен викликається один раз (його викликає лише `IrBuilder`) | коли з'явиться другий виклик |
-| Константи з `null` не відрізняються від відсутніх (втрат немає); обмеження, що втрачаються в ланцюжках `allOf`/`$ref`, лише задокументовано | коли знадобиться |
-| `JsonReader.constant` не збігається з нескалярною константою (емітер викликає його лише зі скалярами); NaN у `DeepEquality` на dart2js відрізняється від VM (у JSON NaN немає); `Set` порівнюється за ідентичністю | M11 (матриця платформ) |
-| Значення «Known values» не документуються для union-а, що є елементом масиву чи псевдонімом компонента (поля з описом там немає); довгі рядки «Known values» переносяться нерівно | коли знадобиться |
-| Довгі рядки `toJson` у згенерованому коді не переносяться (безпечно під `// dart format off`) | коли знадобиться |
-| Підтип поліморфної бази лише в файлі, на який нічого не посилається, не знаходиться (файл не читається) | поведінка за задумом; задокументовано |
-| `generate`: `--dry-run`, константа версії генератора (її охороняє тест) | M9 або коли знадобиться |
-| Імена файлів моделей (`ModelLibrary.fileNames`) займаються в одній області за порядком `ir.declarations`, відсортованим за іменем. Якщо M9 додасть типи операцій у той самий список чи теку, новий тип, що сортується раніше й дає те саме snake-ім'я, перемістить наявну модель у `x2.dart`: зламається `import` її файлу, а вихід зміниться | M9: файли операцій займають імена у власній теці й у власній області (або після моделей), так що файли моделей не рухаються |
-| Підміна каталогу виходу не переносить власника, ACL і розширені атрибути старого каталогу (режим доступу переноситься) | коли знадобиться |
-| Тести з регістром і жорсткими посиланнями перевірено лише на macOS (APFS); Linux і Windows — у матриці M11 | M11 |
+| Sealed types of operation statuses (`CreatePetError`, `CreatePetResponse`) and their variants | M9: names are allocated in the IR library's namespace after the M8 names, so no model name will change |
+| Override address for inline type names (R5.4); the idea is a `typeName` field in a property entry (`schemas.Pet.properties.status.typeName: PetState`), with no address for array elements, map values, and union variants | when needed (the user's decision: deferred) |
+| The enum value name from a `const` branch's `title` (Discord `NO_BOT`) as `x-enum-varnames` | when needed (the user's decision: deferred) |
+| ~~Stripe: 390 fields `anyOf: [string, {enum: ['']}]`~~ | resolved in M8: the enum branch is dropped by TOA455 (info), the field is `String`, the dropped values go into the "Known values" doc comment; for `oneOf` the type also accepts a value that `oneOf` would reject — deliberately |
+| Subtypes of a polymorphic base are not counted in `DirectionIndex` (the split into `Pet`/`PetInput` is not done for them) | when needed |
+| `IrJson` does not print constants, constraints, helper type names | when needed |
+| `generate --format` (json, sarif) | M9, together with the operations |
+| The input hash does not account for the Dart SDK version and `dart_style` (not used) | when needed |
+| `union` keys on a property that an override cannot apply silently produce no diagnostic (TOA807 only for schemas) | when needed |
+| `IrJson` does not print the union variant selection method (`dispatch`) and the variant names | when needed |
+| Override `name` and `exhaustive` on fallback `JsonValue` have no effect (as in M6) | when needed |
+| `declarations()` of the namespace is called once (only `IrBuilder` calls it) | when a second call appears |
+| Constants with `null` are not distinguished from absent ones (no loss); constraints lost in `allOf`/`$ref` chains are only documented | when needed |
+| `JsonReader.constant` does not match a non-scalar constant (the emitter calls it only with scalars); NaN in `DeepEquality` on dart2js differs from the VM (JSON has no NaN); `Set` is compared by identity | M11 (platform matrix) |
+| "Known values" are not documented for a union that is an array element or a component alias (there is no field with a description there); long "Known values" lines wrap unevenly | when needed |
+| Long `toJson` lines in generated code are not wrapped (safe under `// dart format off`) | when needed |
+| A subtype of a polymorphic base that is only in a file nothing refers to is not found (the file is not read) | behavior by design; documented |
+| `generate`: `--dry-run`, a generator version constant (guarded by a test) | M9 or when needed |
+| Model file names (`ModelLibrary.fileNames`) are allocated in one scope in the order of `ir.declarations`, sorted by name. If M9 adds operation types to the same list or directory, a new type that sorts earlier and yields the same snake name will move an existing model to `x2.dart`: its file's `import` breaks, and the output changes | M9: operation files take names in their own directory and in their own scope (or after the models), so model files do not move |
+| Swapping the output directory does not carry over the owner, ACLs and extended attributes of the old directory (the access mode is carried over) | when needed |
+| Case and hard-link tests have been checked only on macOS (APFS); Linux and Windows — in the M11 matrix | M11 |
 
-## Перенесено з M7
+## Moved from M7
 
-Знахідки рев'ю M7, які свідомо відкладено:
+M7 review findings that were deliberately deferred:
 
-| Що | Куди |
+| What | Where |
 |---|---|
-| `openEvents`: тіло помилки з невалідним UTF-8 декодується поблажливо (`allowMalformed`), а `send` дає `DecodeError`; відповідь зі статусу потоку без `ResponseBody` — `UndocumentedStatus` з порожнім тілом; розмір тіла помилки не обмежено (як і в `send`) | M10 (SSE) |
-| Операція з бінарною/текстовою успішною відповіддю і JSON-помилками не має прямого засобу декодування; `RawResponse.parse` оминає перевірку глибини | M9 |
-| `double` `1.0` у параметрі: `x=1.0` на VM і Wasm, `x=1` на dart2js | M11 (матриця платформ) |
-| Ланцюжок `whenCancel` залишає замикання на довгоживучому токені користувача на кожен виклик `openEvents` (того ж порядку, що й у самого Dio) | коли знадобиться |
-| README не описує захист `//` у query для відносного `baseUrl` | M9 (документація `generate`) |
-| Браузер не надсилає заголовок `Cookie` (cookie-параметри на вебі не працюють) — твердження з документації, не перевірене в браузері | M11 |
+| `openEvents`: an error body with invalid UTF-8 is decoded leniently (`allowMalformed`), while `send` gives `DecodeError`; a response from a stream status without `ResponseBody` — `UndocumentedStatus` with an empty body; the size of the error body is not limited (as in `send`) | M10 (SSE) |
+| An operation with a binary/text success response and JSON errors has no direct decoding means; `RawResponse.parse` bypasses the depth check | M9 |
+| A `double` `1.0` in a parameter: `x=1.0` on VM and Wasm, `x=1` on dart2js | M11 (platform matrix) |
+| The `whenCancel` chain leaves a closure on a long-lived user token for each `openEvents` call (of the same order as Dio itself) | when needed |
+| The README does not describe the `//` guard in the query for a relative `baseUrl` | M9 (`generate` documentation) |
+| The browser does not send the `Cookie` header (cookie parameters do not work on the web) — a claim from the documentation, not verified in a browser | M11 |

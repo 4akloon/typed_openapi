@@ -1,25 +1,25 @@
-# Вимоги до OpenAPI → Dart кодогенератора (від автора проєкту)
+# Requirements for an OpenAPI → Dart code generator (from the project author)
 
-Ціль: власний OpenAPI codegen для Dart, що покриває функціонал конкурентів і всі можливості OpenAPI ≥ 3.0, працює на **dio** та **json_serializable**.
+Goal: an in-house OpenAPI codegen for Dart that covers the features of competitors and all capabilities of OpenAPI ≥ 3.0, works on **dio** and **json_serializable**.
 
-## 0. Позиціонування і не-цілі
+## 0. Positioning and non-goals
 
-* R0.1 [MUST] Генерує клієнт для Dart і Flutter з OpenAPI 3.0 і 3.1. Генерований код — чистий Dart, без Flutter.
-* R0.2 [MUST] Цільова аудиторія — команди, у яких специфікація неідеальна: згенерована з коду (NestJS, FastAPI, Spring, ASP.NET) і з дефектами. Через це толерантність до дефектів і механізм override-ів — одна з головних можливостей, а не дрібна деталь.
-* R0.3 Не-цілі: серверні заглушки, Swagger 2.0 (принаймні на старті), генерація domain-моделей і репозиторіїв, мок-сервер.
+* R0.1 [MUST] Generates a client for Dart and Flutter from OpenAPI 3.0 and 3.1. The generated code is plain Dart, without Flutter.
+* R0.2 [MUST] The target audience is teams whose spec is imperfect: generated from code (NestJS, FastAPI, Spring, ASP.NET) and containing defects. For this reason, tolerance of defects and the override mechanism are one of the main capabilities, not a minor detail.
+* R0.3 Non-goals: server stubs, Swagger 2.0 (at least at the start), generation of domain models and repositories, a mock server.
 
-## 1. Вхід і розбір специфікації
+## 1. Input and spec parsing
 
-* R1.1 [MUST] Вхід — локальний файл JSON або YAML. URL з авторизацією підтримується лише як опційне завантаження, а генерація завжди йде з локального знімка, щоб збірка була відтворюваною.
-* R1.2 [MUST] Розв'язує `$ref` усередині документа і на інші файли, ловить циклічні посилання.
-* R1.3 [MUST] Кілька специфікацій в одному проєкті, кожна з окремим конфігом і вихідним каталогом. Один запуск генерує кілька клієнтів.
-   * Один файл конфігу з розділом `clients`; спільні налаштування задаються один раз і успадковуються, кожен клієнт може їх перевизначити (як `schemes:` у swagger_parser).
-   * У кожного клієнта свої override-и, baseline, запис у lock-файлі й діагностика.
-   * Кожен клієнт — окрема бібліотека зі своїм простором імен: однакові імена моделей (`User`) у двох клієнтах не конфліктують (R4.3), спільного barrel-файлу між клієнтами немає.
-   * Вихідні каталоги різних клієнтів не можуть перетинатися: це error-діагностика (у swagger_parser кілька `schemes` перезаписують спільний `export.dart`, #405).
-   * CLI генерує або перевіряє всі клієнти разом чи один за назвою.
-   * Усі клієнти використовують один і той самий `typed_openapi_runtime`.
-   * Спільні моделі між клієнтами (наприклад, одна схема помилки на кілька сервісів) — не в v1.
+* R1.1 [MUST] Input is a local JSON or YAML file. A URL with authorization is supported only as an optional download, and generation always runs from a local snapshot so that the build is reproducible.
+* R1.2 [MUST] Resolves `$ref` inside the document and to other files, and catches circular references.
+* R1.3 [MUST] Several specs in one project, each with its own config and output directory. One run generates several clients.
+   * One config file with a `clients` section; shared settings are set once and inherited, and each client can override them (like `schemes:` in swagger_parser).
+   * Each client has its own overrides, baseline, entry in the lock file and diagnostics.
+   * Each client is a separate library with its own namespace: identical model names (`User`) in two clients do not conflict (R4.3), and there is no shared barrel file between clients.
+   * Output directories of different clients cannot overlap: this is an error diagnostic (in swagger_parser, several `schemes` overwrite a shared `export.dart`, #405).
+   * The CLI generates or checks all clients together or one by name.
+   * All clients use the same `typed_openapi_runtime`.
+   * Shared models between clients (for example, one error schema for several services) are not in v1.
 
    ```yaml
    # typed_openapi.yaml
@@ -36,145 +36,145 @@
        output: lib/src/api/payments
        preset: fastapi
    ```
-* R1.4 [SHOULD] OAS 3.2 як мінімум у частині `itemSchema` для стрімів. Решту 3.2 можна додати пізніше.
+* R1.4 [SHOULD] OAS 3.2 at least in the `itemSchema` part for streams. The rest of 3.2 can be added later.
 
-## 2. Толерантність до дефектів і діагностика
+## 2. Tolerance of defects and diagnostics
 
-* R2.1 [MUST] Нормалізатор специфікації. Набір іменованих правил знаходить типові дефекти. Однозначні (відповідь випливає зі специфікації або протоколу: `required: bool` у схемі, дублікати значень enum, неоголошені path-параметри) правило виправляє; решта — діагностика з поясненням, що виправити в джерелі, і готовим override-ом (R2.5). Конструкції поза OpenAPI (`$ref` у недозволених місцях, теги YAML 1.1) не підтримуються, лише діагностуються. Кожне правило вмикається і вимикається окремо. Кожне спрацювання потрапляє в звіт. Дизайн: [superpowers/specs/2026-10-11-m3-normalizer-design.md](superpowers/specs/2026-10-11-m3-normalizer-design.md).
-* R2.2 [MUST] Діагностика з рівнями error, warning та info. У кожного повідомлення стабільний код (як `SG012`), JSON-pointer на місце в специфікації і пояснення, що виправити в джерелі. Рівень кожного коду можна перевизначити в конфігу.
-* R2.3 [MUST] Baseline / ratchet. Наявні порушення можна зафіксувати у файлі. Нові, яких немає в baseline, валять генерацію. Коли порушення зникає, інструмент пропонує прибрати його з baseline.
-* R2.4 [SHOULD] Режим «лише перевірка» (`check`/`lint`): той самий аналіз без генерації. Ним може користуватись CI бекенд-команди.
-* R2.5 [MUST] Нічого не вгадувати мовчки. Якщо інструмент не може однозначно згенерувати код, він видає діагностику і пропонує конкретний override.
+* R2.1 [MUST] Specification normalizer. A set of named rules finds typical defects. Unambiguous ones (the answer follows from the spec or the protocol: `required: bool` in a schema, duplicate enum values, undeclared path parameters) are fixed by the rule; the rest are a diagnostic explaining what to fix in the source, plus a ready-made override (R2.5). Constructs outside OpenAPI (`$ref` in disallowed places, YAML 1.1 tags) are not supported, only diagnosed. Each rule is turned on and off separately. Every firing goes into the report. Design: [superpowers/specs/2026-10-11-m3-normalizer-design.md](superpowers/specs/2026-10-11-m3-normalizer-design.md).
+* R2.2 [MUST] Diagnostics with levels error, warning and info. Each message has a stable code (like `SG012`), a JSON pointer to the place in the spec, and an explanation of what to fix in the source. The level of each code can be overridden in the config.
+* R2.3 [MUST] Baseline / ratchet. Existing violations can be recorded in a file. New ones that are not in the baseline fail generation. When a violation disappears, the tool suggests removing it from the baseline.
+* R2.4 [SHOULD] "Check only" mode (`check`/`lint`): the same analysis without generation. The backend team's CI can use it.
+* R2.5 [MUST] Never guess silently. If the tool cannot generate code unambiguously, it issues a diagnostic and proposes a specific override.
 
-## 3. Override-и
+## 3. Overrides
 
-* R3.1 [MUST] Окремий файл override-ів, який адресує місце в специфікації: операцію за `operationId` або шлях+метод, схему, властивість чи параметр. Ним можна змінити: ім'я; тип; `required` і `nullable`; формат; дискримінатор `oneOf`; content-type тіла; схеми SSE-подій; виключення елемента з генерації.
-* R3.2 [MUST] Override на елемент, якого вже немає, дає warning і не ламає генерацію. Override, який збігся з виправленою специфікацією, дає підказку, що його можна прибрати.
-* R3.3 [SHOULD] Override-и можна задавати і як JSON Patch чи overlay (OpenAPI Overlay 1.0).
+* R3.1 [MUST] A separate overrides file that addresses a place in the spec: an operation by `operationId` or path+method, a schema, a property or a parameter. With it one can change: the name; the type; `required` and `nullable`; the format; the `oneOf` discriminator; the body content type; the schemas of SSE events; exclusion of an element from generation.
+* R3.2 [MUST] An override on an element that no longer exists gives a warning and does not break generation. An override that matches the fixed spec gives a hint that it can be removed.
+* R3.3 [SHOULD] Overrides can also be given as JSON Patch or as an overlay (OpenAPI Overlay 1.0).
 
-## 4. Вибір того, що генерувати
+## 4. Choosing what to generate
 
-* R4.1 [MUST] Фільтрація за тегами, `operationId` і шляхами (glob), у режимах include та exclude.
-* R4.2 [MUST] Tree-shaking: генеруються лише схеми, досяжні з вибраних операцій.
-* R4.3 [MUST] Вихід можна безпечно співставити з уже наявним кодом користувача: префікс або простір імен, власна бібліотека, жодних глобальних побічних ефектів.
+* R4.1 [MUST] Filtering by tags, `operationId` and paths (glob), in include and exclude modes.
+* R4.2 [MUST] Tree-shaking: only schemas reachable from the selected operations are generated.
+* R4.3 [MUST] The output can be safely combined with the user's existing code: a prefix or a namespace, its own library, no global side effects.
 
-## 5. Іменування
+## 5. Naming
 
-* R5.1 [MUST] Імена операцій з `operationId` або зі шляху+методу. Трансформації: regex-префікс, регістр, суфікс версії.
-   * Ім'я методу відповідає схемі: `operationId` у lowerCamelCase. Інструмент нічого не скорочує і не дописує евристиками. Будь-яка трансформація — лише явна, у конфігу або в пресеті (напр. пресет `nestjs` зрізає `XController_`: `UserController_get` → `get`; без пресету — `userControllerGet`).
-   * Імена схем — як у специфікації: суфікси на кшталт `Dto` автоматично не прибираються.
-* R5.2 [MUST] Детерміноване розв'язання колізій з діагностикою: зарезервовані слова та імена з `dart:core`; однакові імена в path і query; дублікати назв схем; імена, що після нормалізації збігаються.
-* R5.3 [MUST] Групування операцій у класи за тегом (налаштовується), з нормалізацією «брудних» тегів.
-   * Клас на тег з суфіксом `Api` (`UsersApi`); шаблон імені налаштовується (`naming.group: '{Tag}Api'`). Кореневий клас клієнта має групи як поля: `zeely.users.getUser()`.
-   * Операція з кількома тегами потрапляє в групу першого тегу (без дублювання методів), решта тегів — info-діагностика.
-   * Операції без тегу — у `DefaultApi` (ім'я налаштовується) + діагностика.
-   * Нормалізація тегів: регістр, пробіли, `-`, `_`. Теги, що після нормалізації збігаються, об'єднуються з діагностикою. Нелатинські або «описові» теги дають warning з готовим override-ом імені групи.
-   * Стратегії `group_by`: `tag` (за замовчуванням), `path` (перший сегмент шляху), `single` (один клас).
-   * Override-и: перейменування тегу (`tags: {pet-controller: Pets}`) і перенесення операції в іншу групу (`operations.<id>.group`).
-   * Вкладені групи (OAS 3.2 `tag.parent`, теги через крапку) — пізніше.
-* R5.4 [MUST] Іменування inline-схем і inline-enum: з контексту (`<Parent><Property>`), з дедуплікацією однакових наборів значень, з override.
+* R5.1 [MUST] Operation names come from `operationId` or from path+method. Transformations: regex prefix, case, version suffix.
+   * The method name follows the scheme: `operationId` in lowerCamelCase. The tool does not shorten anything or add anything by heuristics. Any transformation is only explicit, in the config or in a preset (e.g. the `nestjs` preset strips `XController_`: `UserController_get` → `get`; without the preset — `userControllerGet`).
+   * Schema names are as in the spec: suffixes such as `Dto` are not removed automatically.
+* R5.2 [MUST] Deterministic resolution of collisions with diagnostics: reserved words and names from `dart:core`; identical names in path and query; duplicate schema names; names that coincide after normalization.
+* R5.3 [MUST] Grouping operations into classes by tag (configurable), with normalization of "dirty" tags.
+   * A class per tag with the suffix `Api` (`UsersApi`); the name template is configurable (`naming.group: '{Tag}Api'`). The root client class has the groups as fields: `zeely.users.getUser()`.
+   * An operation with several tags goes into the group of the first tag (without duplicating methods); the other tags get an info diagnostic.
+   * Operations without a tag go into `DefaultApi` (the name is configurable) plus a diagnostic.
+   * Tag normalization: case, spaces, `-`, `_`. Tags that coincide after normalization are merged with a diagnostic. Non-Latin or "descriptive" tags give a warning with a ready-made override of the group name.
+   * `group_by` strategies: `tag` (default), `path` (the first path segment), `single` (one class).
+   * Overrides: renaming a tag (`tags: {pet-controller: Pets}`) and moving an operation to another group (`operations.<id>.group`).
+   * Nested groups (OAS 3.2 `tag.parent`, tags with a dot) — later.
+* R5.4 [MUST] Naming of inline schemas and inline enums: from context (`<Parent><Property>`), with deduplication of identical value sets, and with overrides.
 
-## 6. Модель даних
+## 6. Data model
 
-* R6.1 [MUST] Явна матриця `required` × `nullable`, окремо для запитів і відповідей, з окремим режимом для часткових оновлень (R7).
-* R6.2 [MUST] Відповідність типів: примітиви, `format` (`date-time`, `date`, `uuid`, `byte`, `binary`, `int64`); `additionalProperties`; вкладені масиви; довільні JSON-значення як окремий тип, а не `dynamic`. Відповідність примітивів налаштовується (`Decimal`, власний `Date`).
-   * Числа: `type: integer` → `int`; `type: number` з `format: float`/`double` → `double`; `type: number` без формату → `num` (за специфікацією це будь-яке число, ціле чи дробове). Декодування в `double` завжди через `(v as num).toDouble()`, бо `jsonDecode('1')` дає `int`. Глобальний мапінг (`types: {number: double}`) і override на поле (`type: integer`) — для бекендів, що пишуть `number` і для цілих (NestJS).
-* R6.3 [MUST] `allOf`: кілька частин зливаються в плоску модель, один `$ref` (зокрема nullable) стає посиланням на тип.
-* R6.4 [MUST] Конверти і дженерики (`{data: T}`, пагінація) як дженерик-типи; розпізнавання через `x-` або шаблон у конфігу.
-   * За замовчуванням конверт `{data: T}` (єдина обов'язкова властивість `data`) **розгортається**: метод повертає `T`. Альтернатива в конфігу — дженерик `ApiData<T>`. Схеми з `data` і іншими полями (`{data, grantedCredits}`) лишаються звичайними моделями.
-* R6.5 [MUST] Зайві поля у відповіді ігноруються. Відсутнє обов'язкове поле — зрозуміла помилка декодування (схема, поле, шлях у JSON).
-* R6.6 [SHOULD] Опційно: `==`/`hashCode`, `copyWith`, `toString`.
-* R6.7 [SHOULD] Обмеження (`minLength`, `pattern`, `minimum`) як метадані або опційна валідація (за замовчуванням вимкнена).
+* R6.1 [MUST] An explicit `required` × `nullable` matrix, separately for requests and responses, with a separate mode for partial updates (R7).
+* R6.2 [MUST] Type mapping: primitives, `format` (`date-time`, `date`, `uuid`, `byte`, `binary`, `int64`); `additionalProperties`; nested arrays; arbitrary JSON values as a separate type rather than `dynamic`. The mapping of primitives is configurable (`Decimal`, a custom `Date`).
+   * Numbers: `type: integer` → `int`; `type: number` with `format: float`/`double` → `double`; `type: number` without a format → `num` (per the spec this is any number, whole or fractional). Decoding into `double` always goes through `(v as num).toDouble()`, because `jsonDecode('1')` gives `int`. The global mapping (`types: {number: double}`) and a field override (`type: integer`) are for backends that write `number` for whole values too (NestJS).
+* R6.3 [MUST] `allOf`: several parts are merged into a flat model, and a single `$ref` (including a nullable one) becomes a reference to the type.
+* R6.4 [MUST] Envelopes and generics (`{data: T}`, pagination) as generic types; recognition via `x-` or a pattern in the config.
+   * By default the envelope `{data: T}` (the only required property `data`) is **unwrapped**: the method returns `T`. The alternative in the config is the generic `ApiData<T>`. Schemas with `data` and other fields (`{data, grantedCredits}`) remain ordinary models.
+* R6.5 [MUST] Extra fields in a response are ignored. A missing required field is a clear decoding error (schema, field, path in the JSON).
+* R6.6 [SHOULD] Optional: `==`/`hashCode`, `copyWith`, `toString`.
+* R6.7 [SHOULD] Constraints (`minLength`, `pattern`, `minimum`) as metadata or optional validation (disabled by default).
 
-* R6.8 [MUST] Власні типи і конвертери. Тип можна замінити своїм для `format` (`types.formats`), для схеми (`types.schemas`: модель не генерується, усі `$ref` ведуть на цей тип) і для поля чи параметра (override, R3.1). Запис: `{type, import, converter?}`.
-   * Без `converter` тип дотримується контракту json_serializable: `fromJson(S)` (конструктор або статичний метод) і `S toJson()`. Підходять і extension types.
-   * З `converter` — будь-який клас із `const`-конструктором і методами `T fromJson(S)` / `S toJson(T)`. Реалізовувати `JsonConverter` не потрібно, але класи, що його реалізують, підходять.
-   * `S` — тип у JSON: береться зі схеми (`string` → `String`, `integer` → `int`, `object` → `Map<String, Object?>`) або задається явно.
-   * Параметри path, query, header кодуються через результат `toJson` і кодек стилю (R10.3).
-   * Генератор не додає залежностей: ні `json_annotation`, ні інтерфейсу конвертера в runtime. Сигнатури перевіряє `dart analyze` на згенерованому коді; неповний запис (без `type` або `import`) — діагностика `check`.
+* R6.8 [MUST] Custom types and converters. A type can be replaced with your own for a `format` (`types.formats`), for a schema (`types.schemas`: no model is generated, all `$ref`s point to this type) and for a field or parameter (override, R3.1). Entry: `{type, import, converter?}`.
+   * Without `converter`, the type follows the json_serializable contract: `fromJson(S)` (a constructor or a static method) and `S toJson()`. Extension types also fit.
+   * With `converter` — any class with a `const` constructor and methods `T fromJson(S)` / `S toJson(T)`. Implementing `JsonConverter` is not required, but classes that implement it also fit.
+   * `S` is the JSON type: taken from the schema (`string` → `String`, `integer` → `int`, `object` → `Map<String, Object?>`) or given explicitly.
+   * Path, query and header parameters are encoded through the result of `toJson` and the style codec (R10.3).
+   * The generator adds no dependencies: neither `json_annotation`, nor a converter interface in the runtime. Signatures are checked by `dart analyze` on the generated code; an incomplete entry (without `type` or `import`) is a `check` diagnostic.
 
-## 7. Часткові оновлення (PATCH)
+## 7. Partial updates (PATCH)
 
-* R7.1 [MUST] Три стани поля в тілі запиту: відсутнє, явний `null`, значення — розрізнення на рівні типів.
-* R7.2 [MUST] Правило тристановості налаштовується. За замовчуванням: optional + nullable у тілі PATCH. Альтернативи: будь-яке optional, `x-`-розширення, override.
-* R7.3 [MUST] Поле з одним станом ніколи не надсилає null, якщо його не задано (захист від затирання, як у tonik і swagger_to_dart).
+* R7.1 [MUST] Three states of a field in the request body: absent, explicit `null`, value — distinguished at the type level.
+* R7.2 [MUST] The tri-state rule is configurable. Default: optional + nullable in the PATCH body. Alternatives: any optional, an `x-` extension, override.
+* R7.3 [MUST] A field with one state never sends null unless it is set (protection against overwriting, as in tonik and swagger_to_dart).
 
 ## 8. Enum
 
-* R8.1 [MUST] Невідоме значення не ламає декодування; сире значення доступне (а не губиться, як у swagger_parser і tonik).
-* R8.2 [MUST] Невідоме значення не можна надіслати в запиті.
-* R8.3 [MUST] Рядкові, числові та булеві enum; детерміновані імена для невалідних ідентифікаторів.
+* R8.1 [MUST] An unknown value does not break decoding; the raw value is available (rather than being lost, as in swagger_parser and tonik).
+* R8.2 [MUST] An unknown value cannot be sent in a request.
+* R8.3 [MUST] String, numeric and boolean enums; deterministic names for invalid identifiers.
 * R8.4 [SHOULD] `x-enum-varnames`, `x-enum-descriptions`.
 
-## 9. Поліморфізм
+## 9. Polymorphism
 
-* R9.1 [MUST] `oneOf`/`anyOf` з `discriminator` (з `mapping` і без) → закрита ієрархія з варіантом для невідомого типу, що зберігає сирий JSON.
-* R9.2 [MUST] `oneOf` без discriminator — діагностика з налаштованою поведінкою: error, вибір за структурою (opt-in), або сире значення.
-* R9.3 [SHOULD] Змішані примітиви (`string | number`, `string | Ref`) — тип-обгортка.
+* R9.1 [MUST] `oneOf`/`anyOf` with `discriminator` (with and without `mapping`) → a closed hierarchy with a variant for an unknown type that keeps the raw JSON.
+* R9.2 [MUST] `oneOf` without a discriminator — a diagnostic with configured behaviour: error, choice by structure (opt-in), or the raw value.
+* R9.3 [SHOULD] Mixed primitives (`string | number`, `string | Ref`) — a wrapper type.
 
-## 10. Операції і транспорт
+## 10. Operations and transport
 
-* R10.1 [MUST] Користувач передає свій HTTP-клієнт з інтерсепторами. Генератор не перезаписує налаштування (`baseUrl`) і нічого не додає.
-* R10.2 [MUST] Помилки HTTP-рівня проходять звичайним шляхом клієнта (для Dio — `onError`). Через `validateStatus: (_) => true` в tonik цього не відбувається.
-* R10.3 [MUST] Параметри path, query, header, cookie; стилі `form`, `explode`, `deepObject`, `pipeDelimited`.
-* R10.4 [MUST] Тіла: JSON, `multipart/form-data` (типізовані частини, файли, content-type частин), `x-www-form-urlencoded`, бінарне.
-* R10.5 [MUST] Для кожного виклику: скасування, прогрес, додаткові заголовки, метадані для інтерсепторів. Кожен запит позначений своїм `operationId`.
-* R10.6 [MUST] Кілька 2xx, 204 без тіла, доступ до заголовків/статусу; не-JSON тіла.
-* R10.7 [MUST] Згенерований API мокається будь-якою бібліотекою моків без кодогенерації. Це звичайний клас без модифікаторів `final`/`base`/`interface`: неявного інтерфейсу Dart достатньо для `implements` (mocktail, fakes). Окремі абстрактні інтерфейси не генеруються.
-* R10.8 [SHOULD] `securitySchemes`/`security` як метадані операції для інтерсепторів.
-* R10.9 [SHOULD] Кілька `servers` і серверні змінні.
+* R10.1 [MUST] The user passes their own HTTP client with interceptors. The generator does not overwrite settings (`baseUrl`) and adds nothing.
+* R10.2 [MUST] HTTP-level errors pass through the client's normal path (for Dio — `onError`). With `validateStatus: (_) => true` in tonik this does not happen.
+* R10.3 [MUST] Path, query, header and cookie parameters; styles `form`, `explode`, `deepObject`, `pipeDelimited`.
+* R10.4 [MUST] Bodies: JSON, `multipart/form-data` (typed parts, files, content type of parts), `x-www-form-urlencoded`, binary.
+* R10.5 [MUST] For each call: cancellation, progress, extra headers, metadata for interceptors. Each request is marked with its own `operationId`.
+* R10.6 [MUST] Several 2xx, 204 without a body, access to headers/status; non-JSON bodies.
+* R10.7 [MUST] The generated API can be mocked by any mock library without code generation. It is an ordinary class without the `final`/`base`/`interface` modifiers: Dart's implicit interface is enough for `implements` (mocktail, fakes). Separate abstract interfaces are not generated.
+* R10.8 [SHOULD] `securitySchemes`/`security` as operation metadata for interceptors.
+* R10.9 [SHOULD] Several `servers` and server variables.
 
-## 11. Помилки
+## 11. Errors
 
-* R11.1 [MUST] Помилки типізовані за 4xx/5xx/`default`.
-* R11.2 [MUST] Модель доставки налаштовується: виняток, `Result<T, E>` або обидва; сумісно з R10.2.
-* R11.3 [MUST] Незадокументований статус — окремий варіант зі статусом і сирим тілом.
-* R11.4 [MUST] Спільна схема помилки генерується один раз.
-   * Якщо всі задокументовані помилки операції мають одну схему, тип помилки операції — сама ця схема (`ApiResult<T, BaseErrorResponseDto>`). Sealed-тип за статусами генерується лише тоді, коли статуси мають різні схеми.
-   * Відповіді 4xx/5xx без тіла декодуються за `errors.default_schema` з конфігу.
-* R11.5 [SHOULD] Коди помилок як контракт (enum з unknown + перелік кодів на операцію).
-* R11.6 [SHOULD] Поліморфні деталі помилки за R9.
-* R11.7 [MUST] Транспортні збої відокремлені від HTTP-помилок у типах.
+* R11.1 [MUST] Errors are typed by 4xx/5xx/`default`.
+* R11.2 [MUST] The delivery model is configurable: exception, `Result<T, E>` or both; compatible with R10.2.
+* R11.3 [MUST] An undocumented status is a separate variant with the status and the raw body.
+* R11.4 [MUST] A shared error schema is generated once.
+   * If all documented errors of an operation have one schema, the operation's error type is that schema itself (`ApiResult<T, BaseErrorResponseDto>`). A sealed type by status is generated only when the statuses have different schemas.
+   * 4xx/5xx responses without a body are decoded by `errors.default_schema` from the config.
+* R11.5 [SHOULD] Error codes as a contract (an enum with unknown + a list of codes per operation).
+* R11.6 [SHOULD] Polymorphic error details per R9.
+* R11.7 [MUST] Transport failures are separated from HTTP errors in the types.
 
-## 12. Стріми (SSE)
+## 12. Streams (SSE)
 
-* R12.1 [MUST] `text/event-stream` → метод, що повертає `Stream` типізованих подій. GET і POST.
-* R12.2 [MUST] Схеми подій з OAS 3.2 `itemSchema`, `x-`-розширення або override; невідома подія — окремий варіант.
-* R12.3 [MUST] Протокол SSE за WHATWG: `event`, багаторядковий `data`, `id`, `retry`, коментарі.
-* R12.4 [MUST] Транспорт стріму через той самий клієнт користувача.
-* R12.5 [SHOULD] Перепідключення з політикою і `Last-Event-ID`, вимикається.
+* R12.1 [MUST] `text/event-stream` → a method that returns a `Stream` of typed events. GET and POST.
+* R12.2 [MUST] Event schemas from OAS 3.2 `itemSchema`, `x-` extensions or override; an unknown event is a separate variant.
+* R12.3 [MUST] The SSE protocol per WHATWG: `event`, multi-line `data`, `id`, `retry`, comments.
+* R12.4 [MUST] Stream transport through the same user client.
+* R12.5 [SHOULD] Reconnection with a policy and `Last-Event-ID`, can be turned off.
 * R12.6 [LATER] NDJSON / JSONL.
 
-## 13. Вихідний код
+## 13. Output code
 
-* R13.1 [MUST] Детермінований вихід, байт-у-байт.
-* R13.2 [MUST] Чистий під `package:lints/recommended` і `flutter_lints`, `dart format`, ширина рядка налаштовується.
-* R13.3 [MUST] Мінімальні runtime-залежності; runtime-пакет маленький, стабільний, окремо версіонується.
-* R13.4 [SHOULD] `summary`/`description`/`deprecated` → doc-коментарі та `@Deprecated`.
-* R13.5 [SHOULD] Розмір виходу пропорційний вибраним операціям; без заглушок тестів/доків за замовчуванням (як у dart-dio).
+* R13.1 [MUST] Deterministic output, byte for byte.
+* R13.2 [MUST] Clean under `package:lints/recommended` and `flutter_lints`, `dart format`, line width configurable.
+* R13.3 [MUST] Minimal runtime dependencies; the runtime package is small, stable, and versioned separately.
+* R13.4 [SHOULD] `summary`/`description`/`deprecated` → doc comments and `@Deprecated`.
+* R13.5 [SHOULD] The output size is proportional to the selected operations; no test/doc stubs by default (as in dart-dio).
 
-## 14. Еволюція специфікації
+## 14. Spec evolution
 
-* R14.1 [MUST] Звіт про зміни між регенераціями; окремо — breaking changes Dart API.
-* R14.2 [SHOULD] Нове значення enum / варіант union / optional поле не ламає скомпільований код споживача.
+* R14.1 [MUST] A report of changes between regenerations; separately — breaking changes of the Dart API.
+* R14.2 [SHOULD] A new enum value / union variant / optional field does not break the consumer's compiled code.
 
-## 15. Продукт
+## 15. Product
 
-* R15.1 [MUST] CLI і програмний API; `build_runner` — відкрите питання.
-* R15.2 [MUST] Конфіг з JSON Schema, зрозумілі помилки валідації.
-* R15.3 [MUST] Golden-тести; публічні специфікації (Petstore, Stripe, GitHub, OpenAI, Kubernetes) компілюються і проходять аналізатор; runtime-тести декодування.
-* R15.4 [MUST] Semver; зміна виходу для того самого входу = breaking change.
-* R15.5 [MUST] Документація: матриця підтримки OpenAPI, реєстр `x-`, каталог кодів діагностики, рецепти для NestJS/FastAPI/Spring.
-* R15.6 [SHOULD] Рекомендаційний `lint` для бекенду.
+* R15.1 [MUST] CLI and programmatic API; `build_runner` — an open question.
+* R15.2 [MUST] Config with a JSON Schema, clear validation errors.
+* R15.3 [MUST] Golden tests; public specs (Petstore, Stripe, GitHub, OpenAI, Kubernetes) compile and pass the analyzer; runtime decoding tests.
+* R15.4 [MUST] Semver; a change of output for the same input = breaking change.
+* R15.5 [MUST] Documentation: OpenAPI support matrix, `x-` registry, catalog of diagnostic codes, recipes for NestJS/FastAPI/Spring.
+* R15.6 [SHOULD] An advisory `lint` for the backend.
 
-## Відкриті рішення
+## Open decisions
 
-> **Усі вісім рішень ухвалено 2026-10-11** (сьоме — попередньо). Підсумок — у [research/README.md](research/README.md#ухвалені-рішення-2026-10-11). Рішення 8 (вичерпність `switch`) додано за результатами ресерчу.
+> **All eight decisions were made on 2026-10-11** (the seventh — provisionally). The summary is in [research/README.md](research/README.md#decisions-made-2026-10-11). Decision 8 (`switch` exhaustiveness) was added following the research.
 
-1. Тип виходу: анотований код + `build_runner` (retrofit, json_serializable) чи готовий код без `build_runner`.
-2. Серіалізація: власна чи json_serializable / dart_mappable / freezed.
-3. HTTP-шар: лише Dio чи абстракція з адаптерами (Dio, `package:http`).
-4. Модель помилок за замовчуванням: виняток чи `Result`.
-5. Парсер: власний чи наявний (`tonik_parse`/`tonik_core` або інший); ізоляція моделі специфікації від генерації.
-6. Розширюваність: шаблони, плагіни-генератори чи лише конфіг і override-и.
-7. Представлення трьох станів (R7) і сирого значення enum (R8.1) в публічному API.
+1. Output type: annotated code + `build_runner` (retrofit, json_serializable) or ready code without `build_runner`.
+2. Serialization: own, or json_serializable / dart_mappable / freezed.
+3. HTTP layer: only Dio, or an abstraction with adapters (Dio, `package:http`).
+4. Default error model: exception or `Result`.
+5. Parser: own or existing (`tonik_parse`/`tonik_core` or another); isolation of the spec model from generation.
+6. Extensibility: templates, generator plugins, or only config and overrides.
+7. Representation of the three states (R7) and of the raw enum value (R8.1) in the public API.
