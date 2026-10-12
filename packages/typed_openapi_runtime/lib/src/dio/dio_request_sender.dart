@@ -12,6 +12,7 @@ import '../sse/sse_item.dart';
 import '../sse/sse_item_decoder.dart';
 import '../sse/sse_message.dart';
 import 'call_options.dart';
+import 'dio_body.dart';
 
 /// Sends an [OperationRequest] through the user's [Dio] and turns every
 /// outcome into a [Result].
@@ -179,7 +180,6 @@ final class DioRequestSender {
     bool events = false,
     CancelToken? cancelToken,
   }) {
-    final path = _guardQuery(request.resolvePath());
     final options = Options(
       method: request.operation.method,
       headers: {
@@ -187,9 +187,10 @@ final class DioRequestSender {
         ...request.resolveHeaders(),
         for (final MapEntry(:key, :value) in call?.headers.entries ?? const [])
           key: ?value,
+        ...const DioBody().headers(request.body),
       },
       extra: {...?call?.extra, OperationInfo.extraKey: request.operation},
-      contentType: request.contentType,
+      contentType: const DioBody().contentType(request),
       responseType: events
           ? .stream
           : switch (request.responseKind) {
@@ -201,8 +202,8 @@ final class DioRequestSender {
     // The type argument picks how Dio reads the body: Dio forces JSON for
     // any type but String, List<int> with bytes or ResponseBody with stream.
     Future<Response<R>> send<R>() => dio.request<R>(
-      path,
-      data: request.body,
+      _guardQuery(request.resolvePath()),
+      data: const DioBody().data(request.body),
       options: options,
       cancelToken: cancelToken ?? call?.cancelToken,
       onSendProgress: call?.onSendProgress,
@@ -220,10 +221,9 @@ final class DioRequestSender {
   /// `//` of the whole string, query included (`RequestOptions.uri`), which
   /// would change an `allowReserved` value such as `next=/a//b`. When the
   /// query holds `//`, the base URL is joined here, collapsing `//` in the
-  /// path part only, and the result is passed as an absolute URL, which Dio
-  /// leaves alone. Interceptors still see the finished URI. Otherwise the
+  /// path part only, and Dio leaves the absolute URL alone. Otherwise the
   /// relative path goes to Dio, so interceptors that change `baseUrl` keep
-  /// working.
+  /// working; interceptors see the finished URI either way.
   String _guardQuery(String path) {
     final queryStart = path.indexOf('?');
     final base = dio.options.baseUrl;

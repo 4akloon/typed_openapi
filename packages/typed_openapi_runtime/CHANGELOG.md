@@ -15,3 +15,15 @@
 - For generated models: `DeepEquality` (deep `==` and `hashCode` of lists,
   maps and patches), `JsonReader.constant`, `JsonReader.additional`,
   `JsonReader.asBytes`, and `immutable` re-exported from `package:meta`.
+- For generated operations: `FileUpload` (bytes or a stream, with a file
+  name and a media type), `FormBody` and `FormEncoding`
+  (`application/x-www-form-urlencoded` with the spec's `encoding`),
+  `MultipartBody` and `MultipartPart`; `DioRequestSender` turns them into
+  what Dio sends, so generated signatures have no Dio types.
+- Security metadata for interceptors: `OperationInfo.security` with
+  `SecurityUse`, `SecurityScheme`, `SecuritySchemeType` and
+  `SecurityLocation`.
+- `RawResponse.parsedJson` (a JSON error body of a text or binary
+  operation), `RawResponse.text` of a body read as bytes, a depth check in
+  `RawResponse.parse`, and `OperationRequest.pathVariable`, the one pattern
+  of a path variable (`{}` is a variable with an empty name).

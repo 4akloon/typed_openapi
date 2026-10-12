@@ -532,10 +532,16 @@ that the API composes, including an `implements` fake of a tag class.
   percent-encoding; a path expansion that is empty, `.` or `..` throws
   `ArgumentError`, as does a `.`/`..` value); internal `ParameterValue`,
   `PercentEncoder`.
-- `request/` - `OperationInfo` (put into `RequestOptions.extra`),
-  `OperationRequest` (resolves the path and the query itself;
-  `streamStatuses` for event streams), `RawResponse` (what a generated
-  decoder switches on).
+- `request/` - `OperationInfo` (put into `RequestOptions.extra`; its
+  `security` lists alternatives of `SecurityUse`s of `SecurityScheme`s,
+  metadata only), `OperationRequest` (resolves the path and the query
+  itself; `pathVariable` is the one pattern of a path variable, which the
+  generator copies; `streamStatuses` for event streams), `RawResponse` (what
+  a generated decoder switches on; `parsedJson` parses a JSON body that Dio
+  read as text or bytes), and the bodies `FileUpload` (bytes or a stream),
+  `FormBody`/`FormEncoding` and `MultipartBody`/`MultipartPart`, which
+  `DioRequestSender` turns into form text, `FormData` and bytes or a
+  stream.
 - `dio/` - `DioRequestSender(dio, {isWeb})` (`send`, `openEvents`; requests
   only through `dio.request`, never mutates the user's Dio, never retries;
   decoding catches only `DioException`, `JsonDecodeException` and, from the
