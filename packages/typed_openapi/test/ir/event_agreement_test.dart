@@ -59,6 +59,72 @@ void main() {
       );
     });
 
+    test('as arrays whose items differ in an annotation', () {
+      _expectAgree(
+        '{schema: {type: array, items: {type: string}}}',
+        '{schema: {type: array, items: {type: string, description: x}}}',
+      );
+    });
+
+    test('as objects whose nested property differs in an annotation', () {
+      _expectAgree(
+        '{schema: {type: object, properties: {a: {type: object, '
+            'properties: {b: {type: integer}}}}}}',
+        '{schema: {type: object, properties: {a: {type: object, '
+            'properties: {b: {type: integer, title: B}}, description: A}}}}',
+      );
+    });
+
+    test('as an itemSchema whose data has a description', () {
+      final fixture = IrFixture(
+        '''
+openapi: 3.2.0
+info: {title: t, version: "1"}
+paths:
+  /multi:
+    get:
+      operationId: multi
+      responses:
+        "200":
+          description: ok
+          content:
+            text/event-stream:
+              itemSchema: {properties: {data: {type: string}}}
+        "201":
+          description: ok
+          content:
+            text/event-stream; charset=utf-8:
+              itemSchema: {properties: {data: {type: string, description: x}}}
+''',
+      );
+      expect([
+        for (final g in fixture.build().groups) ...g.operations,
+      ], hasLength(1));
+      expect(
+        fixture.reportedOf(DiagnosticCode.eventStreamNotGenerated),
+        isEmpty,
+      );
+    });
+
+    test('as a string and as a type list with null', () {
+      _expectAgree(
+        '{schema: {type: string}}',
+        "{schema: {type: [string, 'null']}}",
+      );
+    });
+
+    test('as a nullable list of an object and the object', () {
+      _expectAgree(
+        '{schema: {type: object, properties: {a: {type: integer}}}}',
+        '{schema: {type: [object, "null"], '
+            'properties: {a: {type: [integer, "null"]}}}}',
+      );
+    });
+
+    test('as text and as a nullable string', () {
+      _expectAgree('{}', "{schema: {type: [string, 'null']}}");
+    });
+
     test('as a string schema and as no schema at all', () {
       _expectAgree('{schema: {type: string}}', '{}');
     });
@@ -107,6 +173,30 @@ void main() {
         fixture.reportedOf(DiagnosticCode.eventStreamNotGenerated),
         hasLength(1),
       );
+    });
+
+    test('arrays whose items have other types are TOA654', () {
+      final (methods, _) = _build(
+        '{schema: {type: array, items: {type: string}}}',
+        '{schema: {type: array, items: {type: integer, description: x}}}',
+      );
+      expect(methods, isEmpty);
+    });
+
+    test('a property that is named like an annotation still counts', () {
+      final (methods, _) = _build(
+        '{schema: {type: object, properties: {description: {type: string}}}}',
+        '{schema: {type: object, properties: {description: {type: integer}}}}',
+      );
+      expect(methods, isEmpty);
+    });
+
+    test('a property that one has and the other lacks is TOA654', () {
+      final (methods, _) = _build(
+        '{schema: {type: object, properties: {a: {type: string}}}}',
+        '{schema: {type: object, properties: {a: {type: string}, b: {type: string}}}}',
+      );
+      expect(methods, isEmpty);
     });
 
     test('text and a number are TOA654', () {

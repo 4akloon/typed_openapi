@@ -3,6 +3,7 @@ import '../model/schema.dart';
 import 'ir_context.dart';
 import 'json_equality.dart';
 import 'ref_follower.dart';
+import 'schema_essence.dart';
 import 'schema_shapes.dart';
 
 /// Decides from the spec, before any type is mapped, whether the event
@@ -11,11 +12,12 @@ import 'schema_shapes.dart';
 /// inline schema twice would declare it twice, so the answer cannot come
 /// from the mapped types.
 ///
-/// Two descriptions are the same when they are one schema or written alike,
-/// when they stand for one schema once the wrappers that add nothing (an
-/// annotation-only `allOf`, a nullable `anyOf`) are taken off, or, for a
-/// `schema`, when they give the same text or scalar type: annotations
-/// (`description`, `title`, `example`) never make two types different.
+/// Two descriptions are the same when they are one schema or written alike
+/// (`SchemaEssence`: annotations at any depth, and the spelling of
+/// nullable, never make two types different), when they stand for one
+/// schema once the wrappers that add nothing (an annotation-only `allOf`, a
+/// nullable `anyOf`) are taken off, or, for a `schema`, when they give the
+/// same text or scalar type.
 final class EventAgreement {
   /// Creates the check; it reads schemas through [_context].
   const EventAgreement(this._context);
@@ -64,7 +66,13 @@ final class EventAgreement {
     final documents = _context.documents;
     final x = documents[a.location.document]?.valueAt(a.location.pointer);
     final y = documents[b.location.document]?.valueAt(b.location.pointer);
-    return x != null && y != null && JsonEquality.equals(x.$1, y.$1);
+    return x != null &&
+        y != null &&
+        (JsonEquality.equals(x.$1, y.$1) ||
+            JsonEquality.equals(
+              SchemaEssence.of(x.$1),
+              SchemaEssence.of(y.$1),
+            ));
   }
 
   /// [schema] without the wrappers that add nothing to the one schema they
@@ -95,7 +103,10 @@ final class EventAgreement {
   String? _scalarOf(Schema? schema) {
     if (schema == null) return 'text';
     if (schema is! SchemaObject || !_isScalar(schema)) return null;
-    final types = [for (final type in schema.types) type.name]..sort();
+    final types = [
+      for (final type in schema.types)
+        if (type != SchemaType.nullType) type.name,
+    ]..sort();
     final format = schema.format;
     if (format == null && types.length == 1 && types.single == 'string') {
       return 'text';
