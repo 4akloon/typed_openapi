@@ -8,15 +8,9 @@ import 'package:test/test.dart';
 import 'package:typed_openapi/src/config/generation_config.dart';
 import 'package:typed_openapi/src/overrides/override_set.dart';
 
+import '../helpers/dart_process.dart';
 import '../helpers/emit_fixture.dart';
 import '../helpers/temp_dir.dart';
-
-/// Runs `dart` with [arguments] in [directory].
-ProcessResult dart(List<String> arguments, String directory) => Process.runSync(
-  Platform.resolvedExecutable,
-  arguments,
-  workingDirectory: directory,
-);
 
 void main() {
   group('a package of generated clients', () {
@@ -114,41 +108,44 @@ linter:
           temp.write(p.join('lib', 'chat_override_${mode.name}', key), value);
         }
       }
-      final get = dart(['pub', 'get', '--offline'], package);
+      final get = DartProcess.run(['pub', 'get', '--offline'], package);
       expect(get.exitCode, 0, reason: '${get.stdout}${get.stderr}');
     });
 
     test('passes dart analyze with the recommended lints (R13.2)', () {
-      final result = dart(['analyze', '--fatal-infos'], package);
+      final result = DartProcess.run(['analyze', '--fatal-infos'], package);
       expect(result.exitCode, 0, reason: '${result.stdout}');
     });
 
     test('sends requests and decodes every outcome (R10, R11)', () {
-      final result = dart(['run', 'bin/calls.dart'], package);
+      final result = DartProcess.run(['run', 'bin/calls.dart'], package);
       expect(result.stderr, '');
       expect(result.stdout, _calls);
     });
 
     test('streams events, reconnects and cancels (R12)', () {
-      final result = dart(['run', 'bin/stream_calls.dart'], package);
+      final result = DartProcess.run(['run', 'bin/stream_calls.dart'], package);
       expect(result.stderr, '');
       expect(result.stdout, _streams);
     });
 
     test('dispatches hostile event names by their exact name (R12.2)', () {
-      final result = dart(['run', 'bin/hostile_events.dart'], package);
+      final result = DartProcess.run([
+        'run',
+        'bin/hostile_events.dart',
+      ], package);
       expect(result.stderr, '');
       expect(result.stdout, _hostileEvents);
     });
 
     test('decodes a discriminated union of scalars and optional constants', () {
-      final result = dart(['run', 'bin/union_calls.dart'], package);
+      final result = DartProcess.run(['run', 'bin/union_calls.dart'], package);
       expect(result.stderr, '');
       expect(result.stdout, _unions);
     });
 
     test('puts every value on the wire as the spec says (R10)', () {
-      final result = dart(['run', 'bin/wire_calls.dart'], package);
+      final result = DartProcess.run(['run', 'bin/wire_calls.dart'], package);
       expect(result.stderr, '');
       expect(result.stdout, _wire);
     });

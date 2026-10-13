@@ -8,15 +8,9 @@ import 'package:test/test.dart';
 import 'package:typed_openapi/src/config/generation_config.dart';
 import 'package:typed_openapi/src/overrides/override_set.dart';
 
+import '../helpers/dart_process.dart';
 import '../helpers/emit_fixture.dart';
 import '../helpers/temp_dir.dart';
-
-/// Runs `dart` with [arguments] in [directory].
-ProcessResult dart(List<String> arguments, String directory) => Process.runSync(
-  Platform.resolvedExecutable,
-  arguments,
-  workingDirectory: directory,
-);
 
 void main() {
   test('strings from the spec cannot leave their literal or comment', () {
@@ -142,35 +136,41 @@ linter:
           }
         }
       }
-      final get = dart(['pub', 'get', '--offline'], package);
+      final get = DartProcess.run(['pub', 'get', '--offline'], package);
       expect(get.exitCode, 0, reason: '${get.stdout}${get.stderr}');
     });
 
     test('passes dart analyze with the recommended lints (R13.2)', () {
-      final result = dart(['analyze', '--fatal-infos'], package);
+      final result = DartProcess.run(['analyze', '--fatal-infos'], package);
       expect(result.exitCode, 0, reason: '${result.stdout}');
     });
 
     test('decodes and encodes JSON (R15.3)', () {
-      final result = dart(['run', 'bin/decode.dart'], package);
+      final result = DartProcess.run(['run', 'bin/decode.dart'], package);
       expect(result.stderr, '');
       expect(result.stdout, _decoded);
     });
 
     test('a nested base writes the discriminator of every level', () {
-      final result = dart(['run', 'bin/hierarchy.dart'], package);
+      final result = DartProcess.run(['run', 'bin/hierarchy.dart'], package);
       expect(result.stderr, '');
       expect(result.stdout, 'ok\n');
     });
 
     for (final mode in ['raw', 'structural']) {
       test('a secret is never printed ($mode)', () {
-        final result = dart(['run', 'bin/secrets_$mode.dart'], package);
+        final result = DartProcess.run([
+          'run',
+          'bin/secrets_$mode.dart',
+        ], package);
         expect(result.stderr, '');
         expect(result.stdout, 'ok\n');
       });
       test('a secret in raw JSON is never printed ($mode)', () {
-        final result = dart(['run', 'bin/raw_secrets_$mode.dart'], package);
+        final result = DartProcess.run([
+          'run',
+          'bin/raw_secrets_$mode.dart',
+        ], package);
         expect(result.stderr, '');
         expect(result.stdout, 'ok\n');
       });
