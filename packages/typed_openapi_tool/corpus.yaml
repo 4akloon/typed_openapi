@@ -1,0 +1,134 @@
+# The public specs of the corpus (M11, R15.3). The repository keeps only this
+# list: `dart run bin/corpus.dart fetch` downloads each spec into the cache
+# and checks its SHA-256 (of the file, or of the tree of an archive's
+# `root`). Every URL is fixed to a commit, a tag or a release. `expect` is
+# `generate` (the client is generated and passes the analyzer) or
+# `{check-errors: [...]}` (the client is skipped for exactly these errors of
+# the spec). Sources and licenses: docs/research/08-test-corpus.md.
+# `schemas` are single files that offline tests read from the same cache
+# (fetched and pinned by hash, never kept in the repository).
+specs:
+  # The five R15.3 names.
+  petstore:
+    url: https://raw.githubusercontent.com/swagger-api/swagger-petstore/62253dc6d6620572a006757ec7e66606ec36bfb9/src/main/resources/openapi.yaml
+    sha256: 5f5facd6c634e42977203e6242a98a5e6e9c26aecb484767f888412faf4b27f9
+    license: Apache-2.0
+    expect: generate
+  stripe:
+    url: https://raw.githubusercontent.com/stripe/openapi/7a1f5c21117298a85995746eeeedb6207969dc4e/openapi/spec3.json
+    sha256: 7cff4cc46d0654101a36a3302f7544640f5f73e4f3cad6f264f0e23c19fa1776
+    license: MIT
+    expect: generate
+  github:
+    url: https://raw.githubusercontent.com/github/rest-api-description/58b1e0c00b39b9e46c24dc4a0ba6a2669c90e9c1/descriptions/api.github.com/api.github.com.2022-11-28.json
+    sha256: b7ded4ae746e70e0c196927534cbfd77a4ecf125bb33f0298a9d218a20e3fc57
+    license: MIT
+    expect: generate
+  openai:
+    url: https://raw.githubusercontent.com/openai/openai-openapi/e95c0fe615f45a19e8878af923a729948445a6bd/openapi.yaml
+    sha256: 8f037f570565278e84c57ef1f1777c1c8ede954da7b428d70ec93dc294781ba7
+    license: MIT
+    expect: generate
+  # The core group (v1) of Kubernetes v1.37.1, OpenAPI 3.0.
+  kubernetes:
+    url: https://raw.githubusercontent.com/kubernetes/kubernetes/f78e722310e50bcaca9276be22276d9e91d91308/api/openapi-spec/v3/api__v1_openapi.json
+    sha256: d09ab224a98fb9c0e7fd128b6f395f66b23d43b6635272109dcaaafc4a3dd9c9
+    license: Apache-2.0
+    expect: generate
+  # The specs of M8-M10.
+  airflow:
+    url: https://raw.githubusercontent.com/apache/airflow/4ca1f6693bb380ae1f148a6187001adbcadbfa22/airflow-core/src/airflow/api_fastapi/core_api/openapi/v2-rest-api-generated.yaml
+    sha256: 4ac04303fa3e5f089418b4a7eec96fcecf5c3e56f36b476136f45924373641a4
+    license: Apache-2.0
+    expect: generate
+  # `example: !!timestamp ...` is TOA009, an error of the spec.
+  artemis:
+    url: https://raw.githubusercontent.com/ls1intum/Artemis/e92f350e7892b514b976b05c4f83cfcec12ec54c/config/openapi/openapi.yaml
+    sha256: 2894ffdbbb3d8f35615ea9cae971934fa72543be82571446d126d5b0163ffb20
+    license: MIT
+    expect: {check-errors: [TOA009]}
+  digitalocean:
+    archive: https://codeload.github.com/digitalocean/openapi/tar.gz/6fda13183a6046c669b591e057b9d7b3a6344829
+    root: specification
+    entry: DigitalOcean-public.v2.yaml
+    sha256: 7fc8c48086ddec1fc76192ba6629d095ecc61e205eea2b886024edcd5657dba2
+    license: Apache-2.0
+    expect: generate
+  discord:
+    url: https://raw.githubusercontent.com/discord/discord-api-spec/1ff2dee3677fabef7b49f942bbae93d06c0c9f2c/specs/openapi.json
+    sha256: 7fd37d558c01b7a1a16287bd31cb2b65abfaa372c18e912dc67fbeead5e23653
+    license: MIT
+    expect: generate
+  ditto:
+    url: https://raw.githubusercontent.com/eclipse-ditto/ditto/952e3c270e7845666ee40e1ae945872fba520430/documentation/src/main/resources/openapi/ditto-api-2.yml
+    sha256: 14d0c552a89bb8c782f8da5b67f2d619b24cc105c640d23add9080c5c011f46b
+    license: EPL-2.0
+    expect: generate
+  efgs:
+    url: https://raw.githubusercontent.com/eu-federation-gateway-service/efgs-federation-gateway/cba7be6756b089a7775e2354b367b9830d979105/docs/openapi.json
+    sha256: 172696266496de449e60d782b9248dfb04cf71961be54b73d1d78d6c40acd777
+    license: Apache-2.0
+    expect: generate
+  googlemaps:
+    url: https://github.com/googlemaps/openapi-specification/releases/download/v1.22.3/google-maps-platform-openapi3.json
+    sha256: 98167d8487d600d530e145cbd468d6f0488b55eb463eee68c66454188d4e3347
+    license: Apache-2.0
+    expect: generate
+  grace:
+    archive: https://codeload.github.com/ScottArbeit/Grace/tar.gz/f746b688e0d20fdfdc46eedb42bd8d301be61a34
+    root: src/OpenAPI
+    entry: Main.OpenAPI.yaml
+    sha256: ca7229dbd654d83d5d4907d1f3e41d510c6795118b65d901cc21c587700bb539
+    license: MIT
+    expect: generate
+  grace_bundle:
+    url: https://raw.githubusercontent.com/ScottArbeit/Grace/f746b688e0d20fdfdc46eedb42bd8d301be61a34/src/OpenAPI/Grace.OpenAPI.yaml
+    sha256: 8768515f2dc229c4257f6663c03c913dcc1937bbe0c0a2cdf801227609448cc2
+    license: MIT
+    expect: generate
+  # A versioned file of the Jellyfin repository server; the license of the
+  # file is not stated (the server is GPL-2.0), so it is only downloaded.
+  jellyfin:
+    url: https://repo.jellyfin.org/files/openapi/stable/jellyfin-openapi-12.2.json
+    sha256: bd31bb194443d1c57616fa0a8521e099b17d096b92794e471c0e0725c50949c8
+    license: not stated (server GPL-2.0)
+    expect: generate
+  medusa:
+    archive: https://codeload.github.com/medusajs/medusa/tar.gz/146c46b0ad1146b40595c8ef586c4d5890982603
+    root: www/apps/api-reference/specs/store
+    entry: openapi.yaml
+    sha256: bc0a2da33d132db5e09a132f446f7100d663755f6c3907f7a837cdb709f0be14
+    license: MIT
+    expect: generate
+  tambo:
+    url: https://raw.githubusercontent.com/tambo-ai/tambo/6e2c1bff3b68a00c094b6d876788cc8f33f7bb02/stainless/openapi.json
+    sha256: 312691b28f1c4b7da988a6c45d4c75ecf5c9f11720902acfaaeba351c383a9e0
+    license: MIT
+    expect: generate
+  # Code-first specs of open projects (besides airflow: FastAPI, artemis and
+  # efgs: springdoc, jellyfin: Swashbuckle, tambo: NestJS).
+  # NestJS (@nestjs/swagger).
+  immich:
+    url: https://raw.githubusercontent.com/immich-app/immich/2685234ed390746413203a2cf0b18bc36dba53d1/open-api/immich-openapi-specs.json
+    sha256: 2cce36a0afe3207316135ff6d8fd3f931d22247332175793c8c5ca4179f1b485
+    license: AGPL-3.0
+    expect: generate
+  # springdoc with Spring Data REST (HAL), from springdoc's own tests.
+  springdoc:
+    url: https://raw.githubusercontent.com/springdoc/springdoc-openapi/1cc87a7ca2a0003004fb6149ee3a1afe919530b2/springdoc-openapi-tests/springdoc-openapi-data-rest-tests/src/test/resources/results/3.1.0/app17.json
+    sha256: c21e71131bd23c94510422bf3478959dab7cdc19f1777bd2616faed21c84f24e
+    license: Apache-2.0
+    expect: generate
+  # Swashbuckle (ASP.NET Core, .NET 10), from Swashbuckle's own test sites.
+  swashbuckle:
+    url: https://raw.githubusercontent.com/domaindrivendev/Swashbuckle.AspNetCore/8505e3382689240473ae263d50832318a061cc7d/test/WebSites/NswagClientExample/swagger_net10.0.json
+    sha256: ea9018f5522148e3f635680556883b4e843a561550359581f360f4e5c4beb552
+    license: MIT
+    expect: generate
+schemas:
+  # SARIF 2.1.0 (OASIS Standard), checked against the SARIF reporter's output.
+  # The OASIS IPR Policy governs the file, so the repository only pins it.
+  sarif_schema:
+    url: https://raw.githubusercontent.com/oasis-tcs/sarif-spec/25eb7663ad3ac54338b4f6a00a7004995e32e6da/sarif-2.1/schema/sarif-schema-2.1.0.json
+    sha256: c3b4bb2d6093897483348925aaa73af03b3e3f4bd4ca38cef26dcb4212a2682e
+    license: OASIS IPR Policy (RF on RAND)

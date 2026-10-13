@@ -18,8 +18,7 @@ import '../helpers/size_limits.dart';
 const Map<String, int> _fileAllowlist = {
   // M9: naming.client is read with the other naming keys.
   'lib/src/config/config_loader.dart': 782,
-  'lib/src/emit/model_emitter.dart': 379,
-  'lib/src/emit/union_emitter.dart': 416,
+  'lib/src/emit/union_emitter.dart': 333,
   // The declarations, enums, the client and its groups; the operation's
   // parameter, body and response nodes have files of their own.
   'lib/src/ir/ir.dart': 496,
@@ -51,9 +50,7 @@ const Map<String, int> _methodAllowlist = {
       41,
   'lib/src/emit/enum_emitter.dart#EnumEmitter.write': 94,
   'lib/src/emit/imports.dart#Imports.write': 48,
-  'lib/src/emit/model_emitter.dart#ModelEmitter._fromJson': 46,
-  'lib/src/emit/model_emitter.dart#ModelEmitter.write': 57,
-  'lib/src/emit/union_emitter.dart#UnionEmitter._byDiscriminator': 61,
+  'lib/src/emit/model_emitter.dart#ModelEmitter.write': 46,
   'lib/src/emit/union_emitter.dart#UnionEmitter._byStructure': 41,
   'lib/src/emit/union_emitter.dart#UnionEmitter._variant': 78,
   'lib/src/ir/ir_builder.dart#IrBuilder._group': 112,

@@ -1,0 +1,64 @@
+import 'dart:io';
+
+import 'package:args/command_runner.dart';
+
+import '../semver/semver_command.dart';
+import 'corpus_exception.dart';
+import 'fetch_command.dart';
+import 'http_download.dart';
+import 'lock_command.dart';
+import 'spec_cache.dart';
+
+/// The `corpus` command line of the repository (M11): `fetch`, `update`,
+/// `check` and `semver`.
+final class CorpusCli {
+  /// Creates the command line; lines go to [out], failures and usage errors
+  /// to [err]; [download] fetches a spec (the network by default); [fetchesPackages]
+  /// false keeps `pub get` offline (tests).
+  CorpusCli({
+    StringSink? out,
+    StringSink? err,
+    Download? download,
+    bool fetchesPackages = true,
+  }) : _err = err ?? stderr,
+       _runner = CommandRunner<int>(
+         'corpus',
+         'The public-spec corpus of typed_openapi.',
+       ) {
+    final sink = out ?? stdout;
+    final fetch = download ?? const HttpDownload().call;
+    _runner
+      ..addCommand(FetchCommand(sink, _err, fetch))
+      ..addCommand(
+        LockCommand.update(sink, _err, fetch, fetchesPackages: fetchesPackages),
+      )
+      ..addCommand(
+        LockCommand.check(sink, _err, fetch, fetchesPackages: fetchesPackages),
+      )
+      ..addCommand(SemverCommand(sink, _err));
+  }
+
+  final CommandRunner<int> _runner;
+  final StringSink _err;
+
+  /// Runs the command line with [args]; returns the exit code: `0` ok, `1` a
+  /// failure the tool reports (a bad corpus file, a download, a hash, a file
+  /// system error), `64` a usage error.
+  Future<int> run(List<String> args) async {
+    try {
+      return await _runner.run(args) ?? 0;
+    } on UsageException catch (e) {
+      _err
+        ..writeln(e.message)
+        ..writeln()
+        ..writeln(e.usage);
+      return 64;
+    } on CorpusException catch (e) {
+      _err.writeln(e.message);
+      return 1;
+    } on FileSystemException catch (e) {
+      _err.writeln('${e.message}: ${e.path}');
+      return 1;
+    }
+  }
+}

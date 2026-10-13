@@ -9,8 +9,8 @@ import 'union_notices.dart';
 import 'union_state.dart';
 
 /// Finds the discriminator values that select the variants of a union: the
-/// ones its `mapping` gives, the `const` of an inline variant's property,
-/// and the component key of a `$ref` variant (R9.1).
+/// ones its `mapping` gives, the `const` of a variant's property, and the
+/// component key of a `$ref` variant that fixes no value (R9.1, TOA457).
 final class DiscriminatorReader {
   /// A reader for the spec of [_tools].
   DiscriminatorReader(this._tools) : _notices = _tools.unionNotices;
@@ -61,7 +61,7 @@ final class DiscriminatorReader {
   }
 
   /// Adds the value of each variant the `mapping` does not name: the
-  /// `const` of an inline variant's property, or the key of a component.
+  /// `const` of its property, or else the key of a component.
   void _fromVariants(
     String property,
     List<VariantDraft> variants,
@@ -80,8 +80,18 @@ final class DiscriminatorReader {
         }
         continue;
       }
+      if (values.containsKey(target)) continue;
       final key = DeclarationNames.componentKey(target);
-      if (key != null && !values.containsKey(target)) values[target] = [key];
+      // A variant that fixes the property can only carry that value, so the
+      // implied component name would select nothing (TOA457).
+      if (_constantProperty(variant.branch, property, {}) case final String v) {
+        values[target] = [v];
+        if (key != null && key != v) {
+          _notices.valueDerived(v, key, variant.branch);
+        }
+      } else if (key != null) {
+        values[target] = [key];
+      }
     }
   }
 

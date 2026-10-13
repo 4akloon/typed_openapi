@@ -1,6 +1,9 @@
 ## 0.0.1 - Unreleased
 
 ### Added
+- `JsonReader.constant` returns whether the constant was there, so a
+  generated model can leave out of `toJson` an optional constant the JSON
+  did not have (M11).
 - `Patch<T>` for three-state request fields.
 - `JsonReader`, `JsonDecodeException` and `JsonValue`: strict JSON decoding
   that reports the JSON pointer of the first mismatch.

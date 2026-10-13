@@ -6,11 +6,83 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+# The platform and SDK matrix of M11 (spec decision 4), every PR:
+# - ubuntu with the minimum SDK (3.10.0) and stable runs every suite; macOS
+#   and Windows run them with stable;
+# - the runtime also runs in Chrome, compiled to JavaScript and to Wasm;
+# - the corpus job generates the public specs with both SDKs and compares
+#   the output with corpus.lock;
+# - the quick fuzz runs 200 seeds; the semver job checks that a change of
+#   output carries a CHANGELOG entry and a raised version (no raise is
+#   needed while the base version is unreleased; the entry still is).
 jobs:
   analyze-test:
-    name: Analyze & test
-    runs-on: ubuntu-latest
+    name: Test (${{ matrix.os }}, ${{ matrix.sdk }})
+    timeout-minutes: 45
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        sdk: ['3.10.0', stable]
+        include:
+          - os: macos-latest
+            sdk: stable
+          - os: windows-latest
+            sdk: stable
+    steps:
+      - uses: actions/checkout@v5
 
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: ${{ matrix.sdk }}
+
+      - name: Install dependencies (workspace)
+        run: dart pub get
+
+      # The formatter and the lints are those of stable; the minimum SDK
+      # only has to compile and pass the tests.
+      - name: Verify formatting
+        if: matrix.sdk == 'stable' && matrix.os == 'ubuntu-latest'
+        run: >-
+          dart format --output=none --set-exit-if-changed
+          packages/typed_openapi
+          packages/typed_openapi_runtime
+          packages/typed_openapi_tool
+
+      - name: Analyze
+        if: matrix.sdk == 'stable' && matrix.os == 'ubuntu-latest'
+        run: dart analyze packages
+
+      - name: Test typed_openapi
+        run: dart test
+        working-directory: packages/typed_openapi
+
+      - name: Test typed_openapi_runtime
+        run: dart test
+        working-directory: packages/typed_openapi_runtime
+
+      # The SARIF tests read the schema from the corpus cache and fail in CI
+      # when it is missing.
+      - name: Fetch the SARIF schema
+        run: dart run bin/corpus.dart fetch sarif_schema
+        working-directory: packages/typed_openapi_tool
+
+      - name: Test typed_openapi_tool
+        run: dart test
+        working-directory: packages/typed_openapi_tool
+
+  web:
+    name: Runtime on the web (${{ matrix.compiler }})
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [dart2js, dart2wasm]
     steps:
       - uses: actions/checkout@v5
 
@@ -21,30 +93,92 @@ jobs:
       - name: Install dependencies (workspace)
         run: dart pub get
 
-      - name: Verify formatting
-        run: >-
-          dart format --output=none --set-exit-if-changed
-          packages/typed_openapi
-          packages/typed_openapi_runtime
-
-      - name: Analyze
-        run: >-
-          dart analyze
-          packages/typed_openapi
-          packages/typed_openapi_runtime
-
-      # Skipped while a package has no tests yet (`dart test` fails on an
-      # empty test/ directory).
-      - name: Test typed_openapi
-        run: if [ -d test ]; then dart test; fi
-        working-directory: packages/typed_openapi
-
-      - name: Test typed_openapi_runtime
-        run: if [ -d test ]; then dart test; fi
+      - name: Test in Chrome
+        run: dart test -p chrome --compiler ${{ matrix.compiler }}
         working-directory: packages/typed_openapi_runtime
+
+  corpus:
+    name: Corpus (${{ matrix.sdk }})
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sdk: ['3.10.0', stable]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: ${{ matrix.sdk }}
+
+      - name: Install dependencies (workspace)
+        run: dart pub get
+
+      - name: Cache the corpus specs
+        uses: actions/cache@v4
+        with:
+          path: packages/typed_openapi_tool/.dart_tool/corpus/specs
+          key: corpus-specs-${{ hashFiles('packages/typed_openapi_tool/corpus.yaml') }}
+
+      # Fetches what the cache lacks (hashes verified), generates every spec
+      # in both union modes, generates again (nothing may be written), runs
+      # `dart analyze --fatal-infos` and `dart format --set-exit-if-changed`
+      # on the output, round-trips the values, and compares with the lock.
+      - name: Check the corpus against corpus.lock
+        run: dart run bin/corpus.dart check
+        working-directory: packages/typed_openapi_tool
+
+      # The SARIF reporter's output against the SARIF 2.1.0 schema, which
+      # `corpus fetch` keeps in the cache (pinned by hash, not vendored).
+      - name: Check the SARIF output against its schema
+        run: |
+          dart run bin/corpus.dart fetch sarif_schema
+          dart test test/sarif/sarif_validity_test.dart
+        working-directory: packages/typed_openapi_tool
+
+  fuzz:
+    name: Escaping fuzz (200 seeds)
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Install dependencies (workspace)
+        run: dart pub get
+
+      - name: Fuzz
+        run: dart run bin/fuzz.dart --seeds 200
+        working-directory: packages/typed_openapi_tool
+
+  semver:
+    name: Output changes are versioned
+    timeout-minutes: 10
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Install dependencies (workspace)
+        run: dart pub get
+
+      - name: Check the CHANGELOG and the version
+        run: dart run bin/corpus.dart semver --base "origin/${GITHUB_BASE_REF}"
+        working-directory: packages/typed_openapi_tool
 
   publish-dry-run:
     name: Publish dry-run
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

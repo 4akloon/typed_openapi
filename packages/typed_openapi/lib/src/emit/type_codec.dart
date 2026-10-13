@@ -169,6 +169,18 @@ final class TypeCodec {
     return '$value == null ? null : $code';
   }
 
+  /// The JSON of the field [field] of [type], which may be `null` when the
+  /// type is nullable. A field is not promoted by `field == null ? ...`, so
+  /// a pattern binds it where the encoder needs a non-null value.
+  String encodeField(DartType type, String field) {
+    final nullable = encodeNullable(type, field);
+    if (!type.nullable || isIdentity(type) || nullable.startsWith('$field?.')) {
+      return nullable;
+    }
+    return 'switch ($field) {final v? => '
+        '${encode(type.withNullable(false), 'v')}, null => null}';
+  }
+
   /// Whether `==` of [type] compares by identity or shallowly, so a field
   /// of it needs `DeepEquality`: lists, maps, bytes, `JsonValue`, patches.
   bool needsDeep(DartType type) => switch (type) {
@@ -179,6 +191,10 @@ final class TypeCodec {
     ListType() || MapType() || PatchType() => true,
     NamedType() || CustomType() => false,
   };
+
+  /// The pattern of a JSON object, which a variant that has properties
+  /// matches.
+  static const objectPattern = 'Map<String, Object?>';
 
   /// The pattern a `switch` on a JSON value uses for a variant of [type],
   /// such as `String`; null for a type that takes any JSON.
@@ -191,11 +207,11 @@ final class TypeCodec {
       .json => null,
     },
     ListType() => 'List<Object?>',
-    MapType() => 'Map<String, Object?>',
+    MapType() => objectPattern,
     CustomType(:final json) => jsonPattern(json),
     PatchType(:final value) => jsonPattern(value),
     NamedType(:final id) => switch (declaration(id)) {
-      ModelDecl() => 'Map<String, Object?>',
+      ModelDecl() => objectPattern,
       EnumDecl(:final kind) => switch (kind) {
         .string => 'String',
         .integer => 'int',
@@ -206,7 +222,7 @@ final class TypeCodec {
       // discriminator decodes an object. The variants are not looked at:
       // unions may refer to each other.
       UnionDecl(:final dispatch) =>
-        dispatch == .discriminator ? 'Map<String, Object?>' : null,
+        dispatch == .discriminator ? objectPattern : null,
     },
   };
 

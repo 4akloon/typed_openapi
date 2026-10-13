@@ -1,6 +1,50 @@
 ## 0.0.1 - Unreleased
 
+### Output changes
+- A model with an optional constant (a `const` or one-value `enum` the
+  schema does not require) remembers which of them the decoded JSON did
+  not have, in a private `_absent` list, and `toJson` leaves those out, so
+  a decoded value is written back as it came (Medusa's `union: structural`
+  `oneOf` of search facets no longer decodes its own JSON as unknown). A
+  model made in code still writes every constant. These models gain a
+  private constructor `_`, and `==`/`hashCode` compare `_absent`, so a
+  decoded model is not equal to a model made in code with the same getters
+  when an optional constant was absent from the JSON. The generated
+  `fromJson` calls `JsonReader.constant`, which now returns whether the
+  constant was present, so generated code needs the matching
+  `typed_openapi_runtime`: release the two packages together. No golden
+  file changes; in the corpus the models with optional constants of
+  `stripe`, `openai`, `github`, `discord` and `medusa` change (M11).
+- In a union with a discriminator, a variant that is not an object and has
+  the JSON type of an earlier variant (a string enum after a string) is
+  reported as TOA458 (info): a value of that type is decoded as the earlier
+  variant, since it has no property to read. The variants that pick a number
+  are now matched `int` before `num` whatever their order, so an integer is
+  no longer taken by an earlier `num` variant (M11).
+- A union with a discriminator picks a variant whose JSON is not an object
+  (an array, a string, a number, a boolean) by its JSON type before it
+  reads the discriminator, so GitHub's `repos/get-content` decodes a
+  directory listing; in the corpus the `github` client's
+  `repos_get_content_response.dart` changes (M11).
+- A discriminator variant that the `mapping` does not name and that fixes
+  the discriminator property to one value is selected by that value, not
+  by its component name (TOA457, info). OpenAI's unions now decode real
+  payloads (`{"type": "function"}` is a `FunctionTool`); in the corpus the
+  `openai` client's union files change (M11).
+
+### Fixed
+- A union variant whose type is a nullable list (GitHub's
+  `pull-request-stacks` 422 error, every branch nullable) binds its value
+  in `toJson` before it encodes it, so the code compiles (M11).
+- SARIF reports have what GitHub code scanning requires (M11): every rule a
+  short and a full description and help, every result a partial
+  fingerprint (`typedOpenapi/v1`) and a region (line 1 for a file without a
+  position); `check --format sarif` locates a result without a file (a
+  missing config) at the config file. `SarifReporter` takes `defaultFile`.
+
 ### Added
+- `ApiLibrary` is exported: the files of a whole client from its IR, as
+  `generate` writes them (M11).
 - Event streams (M10): an operation whose success is `text/event-stream` is
   generated. A stream method returns `Future<Result<Stream<SseItem<T>>, E>>`
   and uses `DioRequestSender.openEvents`; its `streamStatuses` are the 2xx

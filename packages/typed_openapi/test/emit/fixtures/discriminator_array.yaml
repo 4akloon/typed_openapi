@@ -1,0 +1,50 @@
+openapi: 3.0.3
+info: {title: Discriminator with an array, version: "1"}
+paths:
+  /contents/{path}:
+    get:
+      operationId: getContent
+      parameters:
+        - {name: path, in: path, required: true, schema: {type: string}}
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Content'}
+components:
+  schemas:
+    # GitHub's repos/get-content: a directory is a JSON array, a file or a
+    # symbolic link an object with `type`.
+    Content:
+      oneOf:
+        - $ref: '#/components/schemas/Directory'
+        - $ref: '#/components/schemas/File'
+        - $ref: '#/components/schemas/Symlink'
+      discriminator:
+        propertyName: type
+        mapping:
+          array: '#/components/schemas/Directory'
+          file: '#/components/schemas/File'
+          symlink: '#/components/schemas/Symlink'
+    Directory:
+      type: array
+      items: {$ref: '#/components/schemas/Item'}
+    Item:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+        type: {type: string}
+    File:
+      type: object
+      required: [type, path]
+      properties:
+        type: {type: string}
+        path: {type: string}
+    Symlink:
+      type: object
+      required: [type, target]
+      properties:
+        type: {type: string}
+        target: {type: string}

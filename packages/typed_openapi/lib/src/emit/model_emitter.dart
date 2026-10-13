@@ -2,15 +2,12 @@ import '../ir/dart_type.dart';
 import '../ir/ir.dart';
 import 'dart_code.dart';
 import 'dart_writer.dart';
+import 'model_constructors.dart';
 import 'type_codec.dart';
 
 /// Writes the class of a [ModelDecl] (decisions 3, 4, 8, 10–13 of M8): a
-/// `class` with a `const` constructor, `fromJson`, `toJson`, deep
-/// `==` and `hashCode`, and `toString`.
-///
-/// A field of a model sent in requests that holds an enum takes only the
-/// known values in the constructor (R8.2); `fromJson`, which may meet
-/// unknown ones, then uses a private constructor `_`.
+/// `class` with a `const` constructor and `fromJson` ([ModelConstructors]),
+/// `toJson`, deep `==` and `hashCode`, and `toString`.
 final class ModelEmitter {
   /// Creates an emitter that writes with [_codec].
   const ModelEmitter(this._codec);
@@ -34,24 +31,13 @@ final class ModelEmitter {
         if (field.constValue != null) field,
     ];
     final extra = model.additionalProperties;
-    final known =
-        model.direction != .response &&
-        (fields.any((f) => _codec.hasEnum(f.type)) ||
-            (extra != null && _codec.hasEnum(extra)));
     _codec.imports.fromRuntime('immutable');
     out.doc(model.description);
     if (model.deprecated) out.line(deprecation);
     out
       ..line('@immutable')
       ..block('class $name', () {
-        out.prose('Creates a [$name].');
-        _constructor(out, 'const $name', model, fields, typed: known);
-        if (known) {
-          out.line();
-          _constructor(out, 'const $name._', model, fields, typed: false);
-        }
-        out.line();
-        _fromJson(out, model, fields, constants, private: known);
+        ModelConstructors(_codec).write(out, model, fields, constants);
         for (final field in constants) {
           out.line();
           _constant(out, field);
@@ -79,113 +65,6 @@ final class ModelEmitter {
         out.line();
         _toString(out, model, fields);
       });
-  }
-
-  void _constructor(
-    DartWriter out,
-    String head,
-    ModelDecl model,
-    List<FieldIr> fields, {
-    required bool typed,
-  }) {
-    final params = [
-      for (final field in fields) _parameter(field, typed: typed),
-      if (model.additionalProperties case final extra?)
-        '${typed && _codec.hasEnum(extra) ? '${_codec.known(MapType(extra))} ' : ''}'
-            'this.${model.additionalPropertiesName} = const {}',
-    ];
-    if (params.isEmpty) {
-      out.line('$head();');
-    } else {
-      out.list('$head({', params, '});');
-    }
-  }
-
-  String _parameter(FieldIr field, {required bool typed}) {
-    final type = field.type;
-    final declared = typed && _codec.hasEnum(type)
-        ? '${_codec.known(type)} '
-        : '';
-    if (field.required) return 'required ${declared}this.${field.name}';
-    if (_isJson(type)) {
-      _codec.imports.fromRuntime('JsonValue');
-      return '${declared}this.${field.name} = const JsonValue(null)';
-    }
-    return '${declared}this.${field.name}';
-  }
-
-  void _fromJson(
-    DartWriter out,
-    ModelDecl model,
-    List<FieldIr> fields,
-    List<FieldIr> constants, {
-    required bool private,
-  }) {
-    final name = model.name;
-    final create = private ? '$name._' : name;
-    out.prose(
-      'Decodes a [$name] from [json]; throws a `JsonDecodeException` '
-      'when it does not match the schema.',
-    );
-    final head = 'factory $name.fromJson(Map<String, Object?> json)';
-    final extra = model.additionalProperties;
-    if (fields.isEmpty && constants.isEmpty && extra == null) {
-      out.line('$head => const $create();');
-      return;
-    }
-    _codec.imports.fromRuntime('JsonReader');
-    out.block(head, () {
-      out.line(
-        'final r = JsonReader(json, schema: ${_code.string(name)});',
-      );
-      for (final field in constants) {
-        final value = _code.literal(field.constValue);
-        out.line(
-          field.required
-              ? 'r.constant(${_code.string(field.jsonKey)}, $value);'
-              : 'r.constant(${_code.string(field.jsonKey)}, $value, '
-                    'required: false);',
-        );
-      }
-      final arguments = [
-        for (final field in fields) '${field.name}: ${_read(field)}',
-        if (extra != null)
-          '${model.additionalPropertiesName}: r.additional(${_known(model)}, '
-              '${_item(extra)})',
-      ];
-      if (arguments.isEmpty) {
-        out.line('return const $create();');
-      } else {
-        out.list('return $create(', arguments, ');');
-      }
-    });
-  }
-
-  /// The set of the JSON keys of [model]'s properties, as a constant.
-  String _known(ModelDecl model) {
-    final keys = [for (final f in model.fields) _code.string(f.jsonKey)];
-    return 'const {${keys.join(', ')}}';
-  }
-
-  String _item(DartType type) => type.nullable && !_isJson(type)
-      ? 'JsonReader.nullable(${_codec.decoder(type)})'
-      : _codec.decoder(type);
-
-  String _read(FieldIr field) {
-    final key = _code.string(field.jsonKey);
-    final value = field.valueType;
-    if (field.triState) {
-      if (_isJson(value)) return 'r.patchValue($key)';
-      return 'r.patch($key, ${_codec.decoder(value.withNullable(false))})';
-    }
-    if (_isJson(value)) {
-      return field.required ? 'r.requiredValue($key)' : 'r.optionalValue($key)';
-    }
-    final decoder = _codec.decoder(value.withNullable(false));
-    if (!field.required) return 'r.optional($key, $decoder)';
-    return value.nullable
-        ? 'r.requiredNullable($key, $decoder)'
-        : 'r.required($key, $decoder)';
   }
 
   void _constant(DartWriter out, FieldIr field) {
@@ -269,7 +148,11 @@ final class ModelEmitter {
     for (final field in model.fields) {
       final key = _code.string(field.jsonKey);
       if (field.constValue != null) {
-        entries.add('$key: ${_code.literal(field.constValue)}');
+        const absent = ModelConstructors.absent;
+        entries.add(
+          '${field.required ? '' : 'if (!$absent.contains($key)) '}'
+          '$key: ${_code.literal(field.constValue)}',
+        );
         continue;
       }
       entries.add(_entry(field, key));
@@ -297,18 +180,8 @@ final class ModelEmitter {
       return 'if ($name case final v?) $key: '
           '${_codec.encode(type.withNullable(false), 'v')}';
     }
-    if (field.required) {
-      final nullable = _codec.encodeNullable(type, name);
-      if (!type.nullable ||
-          _codec.isIdentity(type) ||
-          nullable.startsWith('$name?.')) {
-        return '$key: $nullable';
-      }
-      // A field is not promoted by `name == null ? ...`; a pattern binds it.
-      return '$key: switch ($name) {final v? => '
-          '${_codec.encode(type.withNullable(false), 'v')}, null => null}';
-    }
-    if (_isJson(type)) return '$key: ?$name.raw';
+    if (field.required) return '$key: ${_codec.encodeField(type, name)}';
+    if (ModelConstructors.isJson(type)) return '$key: ?$name.raw';
     final inner = type.withNullable(false);
     if (_codec.isIdentity(inner)) return '$key: ?$name';
     final nullable = _codec.encodeNullable(type, name);
@@ -322,6 +195,8 @@ final class ModelEmitter {
       for (final field in fields) (field.name, field.type),
       if (model.additionalProperties case final extra?)
         (model.additionalPropertiesName, MapType(extra)),
+      if (model.fields.any((f) => f.constValue != null && !f.required))
+        (ModelConstructors.absent, const ListType(CoreType(.string))),
     ];
     out.line('@override');
     out.chain('bool operator ==(Object other) =>', [
@@ -373,7 +248,4 @@ final class ModelEmitter {
         "(${shown.join(', ')})';",
       );
   }
-
-  static bool _isJson(DartType type) =>
-      type is CoreType && type.kind == CoreKind.json;
 }

@@ -16,7 +16,7 @@ Date: 2026-10-11. Each stage is a separate plan in `superpowers/plans/`, and eac
 | M8 | Model emitter | Classes (not `final`) with `fromJson`/`toJson`, deep `==`/`hashCode`, `toString` without secrets; open enum, union with unknown (discriminator, JSON type, `union: structural`), polymorphism via `allOf`, tri-state, constraints and values as doc comments, own code layout without `dart_style` (`// dart format off`), determinism, the `generate` command for models: atomic swap of the output directory and a file manifest. No `copyWith` | R6.5–R6.8, R7, R8, R9, R13 | M6, M7 |
 | M9 | Operation emitter and `generate` | Groups by tag, root client, parameters and bodies (JSON, multipart, form, binary), responses, typed errors, security metadata, servers; `generate` (which already writes models from M8) adds the operations. Plan: [2026-10-13-m9-operations.md](superpowers/plans/2026-10-13-m9-operations.md) | R5.3, R10.4, R10.6–R10.9, R11.1, R11.4–R11.6 | M8 |
 | M10 | SSE | Methods returning a `Stream` of events, schemas with `itemSchema`, `x-` or override, reconnection with `Last-Event-ID`. Plan: [2026-10-13-m10-sse.md](superpowers/plans/2026-10-13-m10-sse.md) | R12.1, R12.2, R12.4, R12.5 (R12.6 later) | M9, M7 |
-| M11 | Corpus and golden tests | Public specifications (Petstore, Stripe, GitHub, OpenAI, Kubernetes) compile and pass the analyzer; runtime decoding tests; matrix of SDK and formatter versions; fuzz of string escaping | R15.3, R15.4, R2.6 | M9 |
+| M11 | Corpus and golden tests | Public specifications (Petstore, Stripe, GitHub, OpenAI, Kubernetes) compile and pass the analyzer; runtime decoding tests; matrix of SDK and formatter versions; fuzz of string escaping. Plan: [2026-10-13-m11-corpus.md](superpowers/plans/2026-10-13-m11-corpus.md) | R15.3, R15.4, R2.6 | M9 |
 | M12 | Evolution | `diff` between regenerations with change categories (including source-breaking for an exhaustive `switch`), lock file | R14 | M9 |
 | M13 | Documentation and product | Support matrix, `x-` registry, code catalog, recipes for NestJS / FastAPI / Spring / ASP.NET, JSON Schema of the config, `lint` mode for the backend, optional `build_runner` | R15.2, R15.5, R15.6, R15.1 (partial) | all |
 
@@ -112,8 +112,8 @@ M5 review findings that were deliberately deferred:
 
 | What | Where |
 |---|---|
-| Windows: paths with a drive letter (`_fileName`, a dead `PathException` branch), `int` semantics on the web (dart2js) | M11 (platform matrix) |
-| SARIF: results with a file but without a position (`region`), and without a file — check `upload-sarif` in GitHub code scanning | M11 |
+| Windows: paths with a drive letter (`_fileName`, a dead `PathException` branch), `int` semantics on the web (dart2js) | M11: the Windows job runs every suite; `display_paths_windows_test.dart` pins drive letters (the `PathException` branch of `Fingerprints` can be reached with the baseline on another drive); `int` on the web is pinned by the runtime's `platform_semantics_test.dart` |
+| SARIF: results with a file but without a position (`region`), and without a file — check `upload-sarif` in GitHub code scanning | M11: validated offline against the SARIF 2.1.0 schema (fetched and pinned by hash, not vendored; the test skips locally without the cache and fails in CI) and GitHub code scanning's required properties; the reporter now writes rule descriptions and help, partial fingerprints, a region on line 1 for a file without a position, and the config file for a result without one |
 | Path display: a file reached through `$ref` is absolute when the specification itself is outside the working directory; a symlinked directory (macOS `/tmp`) shows files as absolute | when needed (baseline matching is not affected) |
 | Anchor: the first alias / the first shared Path Item wins; a parameter's anchor through `$ref` is by index | when needed |
 | Attribution of an override's problem compares against the model before the normalizer's fixes; dedup keeps `related` of the first client | when needed (informational) |
@@ -185,14 +185,14 @@ M8 findings and decisions that were deliberately deferred (plan: [2026-10-12-m8-
 | Override `name` and `exhaustive` on fallback `JsonValue` have no effect (as in M6) | when needed |
 | `declarations()` of the namespace is called once (only `IrBuilder` calls it) | when a second call appears |
 | Constants with `null` are not distinguished from absent ones (no loss); constraints lost in `allOf`/`$ref` chains are only documented | when needed |
-| `JsonReader.constant` does not match a non-scalar constant (the emitter calls it only with scalars); NaN in `DeepEquality` on dart2js differs from the VM (JSON has no NaN); `Set` is compared by identity | M11 (platform matrix) |
+| `JsonReader.constant` does not match a non-scalar constant (the emitter calls it only with scalars); NaN in `DeepEquality` on dart2js differs from the VM (JSON has no NaN); `Set` is compared by identity | M11: NaN is pinned on the VM, dart2js and dart2wasm (`platform_semantics_test.dart`, documented: JSON has no NaN); a non-scalar constant and `Set` stay "when needed" |
 | "Known values" are not documented for a union that is an array element or a component alias (there is no field with a description there); long "Known values" lines wrap unevenly | when needed |
 | Long `toJson` lines in generated code are not wrapped (safe under `// dart format off`) | when needed |
 | A subtype of a polymorphic base that is only in a file nothing refers to is not found (the file is not read) | behavior by design; documented |
 | `generate`: `--dry-run`, a generator version constant (guarded by a test) | when needed |
 | Model file names (`ModelLibrary.fileNames`) are allocated in one scope in the order of `ir.declarations`, sorted by name. If M9 adds operation types to the same list or directory, a new type that sorts earlier and yields the same snake name will move an existing model to `x2.dart`: its file's `import` breaks, and the output changes | done in M9 (task 4: group files in `api/`, named in their own scope) |
 | Swapping the output directory does not carry over the owner, ACLs and extended attributes of the old directory (the access mode is carried over) | when needed |
-| Case and hard-link tests have been checked only on macOS (APFS); Linux and Windows — in the M11 matrix | M11 |
+| Case and hard-link tests have been checked only on macOS (APFS); Linux and Windows — in the M11 matrix | M11: the matrix runs the suites on Linux, macOS and Windows; the tests that need `ln`, `kill` or POSIX modes skip on Windows |
 
 ## Moved from M7
 
@@ -202,10 +202,10 @@ M7 review findings that were deliberately deferred:
 |---|---|
 | `openEvents`: an error body with invalid UTF-8 is decoded leniently (`allowMalformed`), while `send` gives `DecodeError`; a response from a stream status without `ResponseBody` — `UndocumentedStatus` with an empty body; the size of the error body is not limited (as in `send`) | when needed (M10: the lenient text is only the `rawBody` of a `DecodeError` already raised for the JSON; a missing `ResponseBody` needs a faulty interceptor; a size limit is the same open question as for `send`) |
 | An operation with a binary/text success response and JSON errors has no direct decoding means; `RawResponse.parse` bypasses the depth check | done in M9 (task 1: `RawResponse.parsedJson` with the depth check, also in `RawResponse.parse`) |
-| A `double` `1.0` in a parameter: `x=1.0` on VM and Wasm, `x=1` on dart2js | M11 (platform matrix) |
+| A `double` `1.0` in a parameter: `x=1.0` on VM and Wasm, `x=1` on dart2js | M11: pinned on every platform (`platform_semantics_test.dart`); a documented limitation of dart2js, which has one number type |
 | The `whenCancel` chain leaves a closure on a long-lived user token for each `openEvents` call (of the same order as Dio itself) | when needed |
 | The README does not describe the `//` guard in the query for a relative `baseUrl` | done in M9 (task 6: README, "Operations") |
-| The browser does not send the `Cookie` header (cookie parameters do not work on the web) — a claim from the documentation, not verified in a browser | M11 |
+| The browser does not send the `Cookie` header (cookie parameters do not work on the web) — a claim from the documentation, not verified in a browser | M11: checked in Chrome (dart2js and dart2wasm) against a loopback server (`cookie_browser_test.dart`): the header never reaches the server; documented in the runtime README |
 
 ## Moved from M9
 
@@ -219,7 +219,7 @@ Findings and decisions of M9 that were deliberately deferred (plan:
 | `in: querystring` parameters are not generated (TOA565) | when needed |
 | The headers of a multipart part's `encoding` are not sent (TOA656) | when needed |
 | A form property nested deeper than its style allows (an object in an object for `form`) makes `FormBody.encode` throw `ArgumentError` at run time; the generator does not warn | when needed (a diagnostic, or the deepObject convention of Rails and Stripe) |
-| `style: cookie` (OpenAPI 3.2) is sent percent-encoded, like `form` | M11 (with the platform matrix) |
+| `style: cookie` (OpenAPI 3.2) is sent percent-encoded, like `form` | Moved from M11: sending cookie-octets unencoded (RFC 6265) is a design decision, not a platform difference |
 | A documented 1xx or 3xx response is `UndocumentedStatus` (or the `default` response's type when there is one); `default` never catches a 2xx | when needed |
 | `callbacks`, `links` and `webhooks` are not generated (TOA567 reports callbacks and webhooks) | when needed |
 | `generate --format` and the per-client lines next to a machine report | after a user decision |
@@ -240,6 +240,24 @@ Findings and decisions of M10 that were deliberately deferred (plan:
 | `sse.method: none` on an operation that is only an event stream leaves it out, and the TOA563 message counts it among the event streams the client cannot express | when needed |
 | A per-call `reconnect: true` on a POST is ignored at run time; the method's doc comment says so, and TOA665 when the config asks to reconnect | by design (spec decision 3) |
 | Event streams on the web need a fetch-based Dio adapter the user plugs in | by design (M7, spec decision 8) |
+
+## Moved from M11
+
+Findings and decisions of M11 that were deliberately deferred (plan:
+[2026-10-13-m11-corpus.md](superpowers/plans/2026-10-13-m11-corpus.md),
+"Deferred"). The round-trip counts are in `corpus.lock`
+(`values`; `failures` is 0 for every client), and `corpus check` compares
+them with the lock, so a new failure or any other changed count fails it. A
+skipped client has no counts.
+
+| What | Where |
+|---|---|
+| `style: cookie` (OpenAPI 3.2) is sent percent-encoded, like `form` | a user decision |
+| The Windows and macOS jobs, and the 3.10.0 SDK, are verified only in CI | first CI run of M11 |
+
+After M11: no Parked row is about the corpus or the platform matrix; the one
+escaping row (U+200E, U+200F, U+061C in the JSON and SARIF reports) stays
+parked because the fuzz covers the text report only.
 
 ## Parked from the M10 reviews
 

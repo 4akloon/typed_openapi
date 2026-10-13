@@ -139,7 +139,10 @@ that carries an id fails with a `TransportError`.
 
 Browsers do not let a page set the `Cookie` request header, so cookie
 parameters do not work on the web (the browser keeps its own cookies and
-sends them itself, subject to its credentials settings).
+sends them itself, subject to its credentials settings). A test checks it
+in Chrome, compiled to JavaScript and to Wasm: a `Cookie` header set
+through Dio, by a cookie parameter or directly, never reaches the server,
+while the other headers of the same request do.
 
 ## Development
 

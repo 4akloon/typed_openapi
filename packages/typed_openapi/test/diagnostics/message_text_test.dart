@@ -44,6 +44,13 @@ void main() {
       );
     });
 
+    test('writes a lone surrogate as a code point, a pair stays', () {
+      expect(
+        MessageText.quote('a\uD800b\uDC00 \u{1F389}'),
+        r'"a\u{d800}b\u{dc00} 🎉"',
+      );
+    });
+
     test('leaves text beyond ASCII alone', () {
       expect(MessageText.quote('подія 🎉'), '"подія 🎉"');
     });

@@ -6,12 +6,14 @@ Guidance for working in this repository.
 
 `typed_openapi` generates Dart clients from OpenAPI 3.x specs, aimed at
 imperfect, code-first specs (NestJS, FastAPI, Spring, ASP.NET). It is a Dart
-pub workspace with two pure-Dart packages (no Flutter):
+pub workspace with three pure-Dart packages (no Flutter):
 
 - `packages/typed_openapi` - the generator: CLI and programmatic API. Never a
   runtime dependency of user apps.
 - `packages/typed_openapi_runtime` - the only package generated clients depend
   on (typed errors, `Result`, `Patch`, JSON decoding with paths, encoders, SSE).
+- `packages/typed_openapi_tool` - repository tools (M11): the public-spec
+  corpus and the escaping fuzz. `publish_to: none`; nothing depends on it.
 
 Minimum SDK: Dart 3.10 (`>=3.10.0 <4.0.0`), also for generated code.
 
@@ -26,6 +28,12 @@ cd packages/typed_openapi_runtime && dart test -p chrome --compiler dart2wasm   
 cd packages/typed_openapi && dart format lib test bin   # a second run must change 0 files
 cd packages/typed_openapi_runtime && dart format lib test # the same
 cd packages/<package> && dart pub publish --dry-run # before publishing
+cd packages/typed_openapi_tool && dart test
+cd packages/typed_openapi_tool && dart format lib test bin # the same
+cd packages/typed_openapi_tool && dart run bin/corpus.dart check  # network on first fetch
+cd packages/typed_openapi_tool && dart run bin/corpus.dart update # rewrites corpus.lock
+cd packages/typed_openapi_tool && dart run bin/fuzz.dart --seeds 200
+cd packages/typed_openapi_tool && dart run bin/corpus.dart semver --base main
 ```
 
 Git commands run from the repo root. Commit messages are Conventional Commits
@@ -44,7 +52,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `severity` config), `JsonPointer`, `DiagnosticBag` (baselined diagnostics kept
   apart), `DisplayPaths` (files relative to the working directory, absolute
   outside it), `MessageText` (spec text in a message: `quote` writes
-  `"`, `\`, controls and bidirectional marks as escapes, as the event
+  `"`, `\`, controls, bidirectional marks and lone surrogates as escapes
+  (a lone surrogate as its code point, `\u{d800}`), as the event
   names of TOA551/TOA559/TOA667/TOA668 are; `neutralise` is what the text
   and GitHub reporters apply to every message, fix and related message, and
   to every pointer and file location they print, so an ESC byte or a
@@ -52,7 +61,14 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   such; the GitHub reporter also escapes `%`, CR and LF as the
   runner expects, and JSON and SARIF keep the text as it is), and the
   reporters (`DiagnosticReporter`, `TextReporter`, `JsonReporter`,
-  `SarifReporter`, `GitHubActionsReporter`, `ReportFormat`).
+  `SarifReporter` (valid against the SARIF 2.1.0 schema, fetched and
+  pinned by hash with `corpus fetch` and not vendored, and against GitHub
+  code scanning's required properties, both checked by the tool package:
+  rule descriptions and help (the help says whether the level can be
+  lowered), a partial fingerprint per result, a region for every physical
+  location, line 1 for a file without a position, and `defaultFile`, the
+  config `check` passes, for a result without a file),
+  `GitHubActionsReporter`, `ReportFormat`).
 - `load/` - `SpecLoader` reads JSON/YAML into a `SpecDocument` (plain tree,
   absolute file URI, source spans by JSON pointer, `valueAt(pointer)`,
   `withRoot`) through `YamlComposer`, which `ConfigLoader` uses too.
@@ -480,7 +496,7 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   is missing from the dump; the
   hidden `typed_openapi ir` command prints it. Naming and mapping codes use
   the second half of each area's hundred: TOA250-TOA256, TOA350-TOA351,
-  TOA450-TOA456, TOA550-TOA565, and media types, errors and event streams
+  TOA450-TOA458, TOA550-TOA565, and media types, errors and event streams
   TOA650-TOA671 (TOA654 and TOA663-TOA671 are event streams; TOA561 became
   TOA650 and TOA651, TOA562 TOA652, the querystring half of
   TOA564 TOA565); `generate` has TOA830 (output not owned),
@@ -503,8 +519,14 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   text has no line break), `Imports` (`dart:`, `package:` with sorted `show`
   lists wrapped at the width, relative files), `TypeCodec` (type names,
   known-enum types for request constructors, decoders, encoders,
-  `DeepEquality` need, JSON patterns of union variants), `ModelEmitter`,
-  `EnumEmitter`, `UnionEmitter` and `ModelLibrary` (`models/<snake>.dart`
+  `DeepEquality` need, JSON patterns of union variants), `ModelEmitter`
+  (with `ModelConstructors`: the constructors and `fromJson`; a model with
+  an optional constant keeps the keys of those the decoded JSON lacked in
+  a private `_absent` list, which `toJson` leaves out and `==` compares, so
+  a decoded value is written back as it came, while a model made in code
+  writes every constant, so the two are not equal when a constant was
+  absent; the generated `fromJson` needs a runtime whose
+  `JsonReader.constant` returns a bool), `EnumEmitter`, `UnionEmitter` and `ModelLibrary` (`models/<snake>.dart`
   per declaration, names that clash get `2`, `3`...; the barrel
   `models.dart`; the header is `// GENERATED CODE - DO NOT MODIFY BY HAND.`
   and, on the second line, `// dart format off`). Generated classes are
@@ -516,14 +538,26 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   of the additional properties field and the helper types
   (`EnumDecl.knownName`/`unknownName`, `UnionVariantIr.name`,
   `UnionDecl.unknownName`, named after the groups) come from `SchemaMapper`.
-  `UnionDispatch` is `discriminator`, `jsonType` (by JSON type, `int`
+  `UnionDispatch` is `discriminator` (`DiscriminatorDecoder`; a variant
+  whose JSON is not an object, such as GitHub's directory listing array,
+  is picked by its JSON type before the property is read; `UnionVariants`
+  holds what the union writers share), `jsonType` (by JSON type, `int`
   before `num`; the variants of a JSON type several share are one variant
   of `JsonValue`, `UnionVariantIr.jsonKinds`, with TOA453) or `structural`
   (`union: structural`, tries the variants); a union where every variant
   shares its type is `JsonValue` (TOA453), also when a variant takes any
   JSON, which makes the union structural with TOA453; duplicate variant
   types are dropped (TOA454); two variants selected by one discriminator
-  value are TOA456 (the earlier one decodes it). A nested union without a
+  value are TOA456 (the earlier one decodes it). A variant the `mapping`
+  does not name is selected by the value its discriminator property is
+  fixed to (a `const` or a one-value `enum`, also through a `$ref` or an
+  `allOf` part), else by its component name; TOA457 (info) reports a fixed
+  value that differs from the name (OpenAI), and a `mapping` entry always
+  wins. In a union with a discriminator a variant that is not an object is
+  picked by its JSON type before the property is read, `int` before `num`
+  whatever the order of the variants; a later variant of the same JSON type
+  (a string enum after a string) is never produced, TOA458 (info,
+  `UnionMapper._reportShadowed`). A nested union without a
   discriminator counts as holding several JSON types, also when the user
   made it `structural`. In a union without a discriminator an inline enum
   or `const` of a primitive type next to a branch of that type that has all
@@ -731,7 +765,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `SpecChecker`, `ClientCheck`, `TypedOpenApiCli`, `ConfigLoader`,
   `ClientConfig`, `Preset`, `ProjectConfig`, `GenerationConfig`, `GroupBy`,
   `TriStateRule`, `OperationFilter`, `FilterPattern`, `ModelLibrary`,
-  `OutputWriter`, `OutputChanges`, the IR (`IrBuilder`,
+  `ApiLibrary` (M11: the fuzz of `packages/typed_openapi_tool` emits whole
+  clients in-process), `OutputWriter`, `OutputChanges`, the IR (`IrBuilder`,
   `IrJson`, `ClientIr` and its node classes, among them the M9 ones
   (`RootIr`, `ServerIr`, `ServerVariableIr`, `StatusTypeIr`, `StatusCaseIr`,
   `PartIr`, `EncodingIr`, `SecurityUseIr`, `SecuritySchemeIr`,
@@ -754,10 +789,11 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   exported: `CheckCommand`,
   `BaselineCommand`, `GenerateCommand`, `RealPaths`, the emitters
   (`DartCode`, `DartWriter`, `Imports`, `TypeCodec`, `ModelEmitter`,
-  `EnumEmitter`, `UnionEmitter`, and the API emitters `ApiLibrary`,
+  `ModelConstructors`, `EnumEmitter`, `UnionEmitter`, `DiscriminatorDecoder`,
+  `UnionVariants`, and the API emitters (`ApiLibrary` aside),
   `OperationEmitter`, `RequestWriter`, `DecoderWriter`, `PartsEmitter`,
-  `StatusTypeEmitter`: `generate` runs them, there is no public entry
-  point yet), the
+  `StatusTypeEmitter`: `generate` runs them through `ApiLibrary`, the one
+  public entry point), the
   internals of `parse/` (`OpenApiParser`, `OperationParser`, `SchemaParser`,
   `ObjectReader`, `ParseContext`, `SpecIndex`, `DialectChecker`), `resolve/`
   (`RefTarget`, `RefResolver`), `normalize/` (`TreeEditor`, the rule
@@ -787,13 +823,119 @@ Rules of the pipeline:
   `78` the config file could not be loaded (TOA904 and per-client TOA902 exit
   `1`). Diagnostics a baseline accepts do not count.
 
+## Tools (`packages/typed_openapi_tool/`)
+
+The corpus, golden tests and fuzz of M11 (R15.3, R15.4); the tool uses the
+generator's public API only. Its network use is the `SpecCache` download
+(`corpus fetch`, and `update`/`check` for what the cache lacks) and the
+`dart pub get` of `PackageGate`; no test touches the network.
+
+- `corpus.yaml` pins each public spec (a URL fixed to a commit, a tag or a
+  release; `url` for one file, `archive` + `root` + `entry` for a GitHub
+  tarball of several), its SHA-256 (of the file, or `TreeHash` of the kept
+  tree), license and expectation (`generate` or `{check-errors: [...]}`).
+  Its `schemas:` section pins single files that offline tests read from the
+  same cache (the SARIF 2.1.0 schema, `sarif_schema`): they are never kept
+  in the repository, so there is no vendored schema or `NOTICE.md`.
+  `corpus.lock` is JSON with sorted keys (`version`, `clients`): per
+  `<union mode>/<client>` the SHA-256 of every generated file (the manifest
+  left out), the hash of the whole output, the diagnostics by code, and the
+  round-trip counts (`values`: `examples`, `examples_skipped`, `synthetic`,
+  `synthetic_skipped`, `spec_defects`, `failures`). A text that is not JSON,
+  or not a lock of version 1 with the right shapes, is a clean error (exit
+  `1`), also in `check`, which reads the lock before the long run.
+- `lib/src/corpus/` - `CorpusListReader` (`corpus.yaml`), `SpecCache`
+  (downloads, verifies, `ArchiveExtractor` with the system `tar`;
+  `fetchSchema` for `schemas:`),
+  `CorpusRun` (per mode a `CorpusPackage`: `GenerateRun` runs `generate`
+  twice through `TypedOpenApiCli` and `SpecChecker` once; the second run
+  must write nothing; `PackageGate` runs `dart analyze --fatal-infos` and
+  `dart format --set-exit-if-changed`; then a `RoundTrip` per client),
+  `CorpusLock`/`ClientLock`, and the commands `fetch` (a name that is
+  neither a spec nor a schema is a usage error, exit 64), `update` and
+  `check`, which `CorpusCli` runs with `semver`. `update` and `check` give
+  an unknown name the same usage error; `update` takes no names (a partial
+  update would drop the other clients from the lock), and `check` with
+  names compares only the clients of those specs (`CorpusLock.only`).
+  `tar` runs through `TarRunner` under a 2-minute timeout.
+  `update` writes no `corpus.lock` when a gate failed (an expectation that
+  does not hold, a client not generated or written by a second run, `pub
+  get`, `dart analyze`, `dart format`, a round trip that did not run) and
+  says so; `update` and `check` print the first 50 spec defects (examples
+  that do not match their schema), then "and N more". `PackageGate` and the
+  round-trip program run under a 10-minute timeout; one that does not
+  finish is killed, and a round trip that did not run (a crash or the
+  timeout) is a gate failure, not a count. `CorpusCli`, `CorpusRun` and
+  `FuzzRun` take `fetchesPackages` (default true; no CLI flag): false keeps
+  `pub get` offline, as every test sets it.
+  A round-trip failure is counted, not fatal by itself: the counts are in
+  the lock (`failures` is 0 for every client) and `check` compares them
+  like files and diagnostics, so a count that differs from the lock is a
+  difference and `check` exits 1, naming the client and the count. A client
+  that is skipped (artemis) has no counts, and gaining or losing them is a
+  difference too.
+- `lib/src/roundtrip/` - `ExampleReader` (the `example`/`examples` of each
+  declaration's schema and of JSON responses, at the locations the IR
+  names; what it cannot read, such as a `null`, a `$ref` to another file, an
+  entry without `value` or an `examples` of the wrong type, is counted as
+  skipped; an example `jsonEncode` rejects is a spec defect), `SyntheticValues` (from the IR: required fields, all fields,
+  first and last enum value, every union variant with its discriminator
+  value), `RoundTripProgram` (a Dart program in the corpus package:
+  `fromJson`, `toJson`, JSON text, `fromJson`, `==`), `RoundTrip`.
+- `lib/src/fuzz/` - `FuzzSpec` (a spec and an overrides file per seed, with
+  `FuzzSchemas`, `FuzzOperations`, `FuzzSecurity` (an API key, an OAuth 2
+  and an HTTP scheme, each with hostile names, URLs and scopes) and the
+  `Hostile` strings), `FuzzBuild` (six clients of one spec, in-process with
+  `ApiLibrary`), `SeedBuilds` (runs the two builds of a seed and names the
+  build when the generator crashes), `SeedChecks` (the two builds are
+  equal, `LeakCheck` finds nothing), `LeakCheck` (no raw control, bidi
+  character or lone surrogate in code or in the text report; no
+  `injected` call, which the hostile texts write, anywhere in the code of
+  a line outside comments and literals: `DartLiterals.masked` blanks them
+  out, line breaks kept), `LiteralCheck` (`DartLiterals` finds the literals
+  of a sampled output, the VM evaluates them, and every `SpecStrings`
+  string of the IR must be among them), `FuzzRun`; `FuzzCli` prints a
+  `CorpusException` or file-system error as one line and exits `1`. A work
+  directory (`--work`) that is not empty and has no `.typed_openapi_work`
+  marker (`CorpusPackage.marker`, written with the package) is refused, so
+  a real package is never cleaned.
+- `lib/src/semver/` - `SemverRule` and `corpus semver`: when `corpus.lock`
+  (once the base has one) or a golden file changed since the base, the
+  generator's CHANGELOG needs an entry under `### Output changes` in its
+  top section and the version a minor (before 1.0) or major raise, unless
+  the CHANGELOG's top section at the base commit is titled `Unreleased` for
+  the version in the base pubspec (never published): then the entry is
+  enough. Files are read at HEAD and at the base; a dirty working tree does
+  not count.
+- `test/sarif/` - the SARIF output of `SarifReporter` against the SARIF
+  2.1.0 JSON schema (`JsonSchema`, a test helper for the draft-04 subset the
+  schema uses) and against GitHub code scanning's required properties
+  (`CodeScanningRules`). The schema is not in the repository: `CachedSchema`
+  reads it from the corpus cache (`corpus fetch sarif_schema`), checks its
+  SHA-256 against the pin, skips the test when the cache lacks it locally
+  and fails it in CI (`CI=true`), so a missing or altered schema never
+  passes CI. The rule help differs by code: a fixed code can be raised but
+  not lowered, a config code (TOA901-TOA904) cannot be changed.
+- CI (`.github/workflows/ci.yml`, every PR, top-level `permissions:
+  contents: read`): tests on ubuntu with 3.10.0 and stable, on macOS and
+  Windows with stable (format and analyze on ubuntu/stable only); the
+  runtime in Chrome with dart2js and dart2wasm; the corpus job (both SDKs:
+  `corpus check`, then `corpus fetch sarif_schema` and the SARIF test); 200
+  fuzz seeds; semver (pull requests only, full history). Long jobs have
+  `timeout-minutes`. `nightly.yml`: the beta SDK (steps with `if: always()`,
+  a warning only), the corpus on Windows, 6000 seeds.
+  `test/ci/workflows_test.dart` pins these layers.
+
 ## Runtime (`packages/typed_openapi_runtime/lib/src/`)
 
 The only package generated clients depend on (dependencies: `dio`, `meta`, floor `^1.15.0` so Flutter's pinned `meta` resolves).
 Pure Dart, works on the web (compiled to JS and to Wasm); SSE needs a
 streaming adapter there (Dio's default browser adapter delivers the body
 only when the connection closes), and cookie parameters do not work (browsers
-drop the `Cookie` header).
+drop the `Cookie` header: `test/dio/cookie_browser_test.dart` checks it in
+Chrome against a loopback server, `cookie_server.dart`, started by
+`spawnHybridUri`; its `hybridMain` is the one top-level function a test
+helper has, as `package:test` requires).
 Generated code is expected to look like `test/helpers/pets_api.dart`
 (illustrative, not a contract); `test/generated_client_test.dart` checks
 that the API composes, including an `implements` fake of a tag class.
@@ -810,7 +952,8 @@ that the API composes, including an `implements` fake of a tag class.
   `Date` (`format: date`, no time or zone), `DeepEquality` (deep `==` and
   `hashCode` of lists, maps and patches for generated models). The barrel
   re-exports `immutable` from `package:meta`, so generated code imports only
-  the runtime. `JsonReader` also has `constant`, `additional` (the keys a
+  the runtime. `JsonReader` also has `constant` (which says whether an
+  optional constant was there), `additional` (the keys a
   model does not list, as an unmodifiable map), `patchValue`, `asBytes` and
   `attempt` for generated code.
 - `result/` - sealed `Result<T, E>`: `Success`, `Failure` (`HttpError`,

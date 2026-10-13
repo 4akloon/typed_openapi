@@ -1,0 +1,30 @@
+openapi: 3.0.3
+info: {title: Nullable variants, version: "1"}
+paths:
+  /values:
+    get:
+      operationId: getValue
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Value'}
+components:
+  schemas:
+    # GitHub's pull-request-stacks 422 error: every branch is nullable, so
+    # each variant's type is nullable, a list among them.
+    Value:
+      oneOf:
+        - {type: string, nullable: true}
+        - {type: integer, nullable: true}
+        - type: array
+          nullable: true
+          items: {$ref: '#/components/schemas/Item'}
+        - type: object
+          nullable: true
+          additionalProperties: {$ref: '#/components/schemas/Item'}
+    Item:
+      type: object
+      properties:
+        id: {type: string}

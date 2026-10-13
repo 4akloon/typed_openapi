@@ -45,10 +45,24 @@ dart format packages
 
 cd packages/typed_openapi && dart test
 cd packages/typed_openapi_runtime && dart test
+cd packages/typed_openapi_tool && dart test
 
 # Before publishing a package:
 cd packages/<package> && dart pub publish --dry-run
+
+# The public-spec corpus and the escaping fuzz (packages/typed_openapi_tool):
+cd packages/typed_openapi_tool && dart run bin/corpus.dart check
+cd packages/typed_openapi_tool && dart run bin/corpus.dart update   # after an intended output change
+cd packages/typed_openapi_tool && dart run bin/fuzz.dart --seeds 200
 ```
+
+A change that changes generated output (`corpus.lock` or a golden file)
+goes with a `corpus update` in the same commit, an entry under
+`### Output changes` in `packages/typed_openapi/CHANGELOG.md` and a raised
+version (minor before 1.0, major after; no raise is needed while the base's
+top CHANGELOG section is the `Unreleased` one of the current version); CI
+checks it with
+`dart run bin/corpus.dart semver`.
 
 ## Design rules
 
