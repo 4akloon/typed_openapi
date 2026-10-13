@@ -537,7 +537,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `JsonReader.constant` returns a bool), `EnumEmitter`, `UnionEmitter` and `ModelLibrary` (`models/<snake>.dart`
   per declaration, names that clash get `2`, `3`...; the barrel
   `models.dart`; the header is `// GENERATED CODE - DO NOT MODIFY BY HAND.`
-  and, on the second line, `// dart format off`). Generated classes are
+  then `// dart format off` and
+  `// ignore_for_file: deprecated_member_use_from_same_package`). Generated classes are
   `class`, not `final class` (users may extend them); union bases are
   `sealed` (`abstract interface` when not exhaustive) and every class is
   `@immutable`. Every spec string is escaped at every site it reaches: a
@@ -1182,7 +1183,11 @@ are not, so follow them by hand:
   `rethrow` keeps the stack trace.
 - Never silence a lint: no `// ignore:` or `// ignore_for_file:` without a
   comment on why, and no rule removed from `analysis_options.yaml` to make a
-  change pass. To enable a new lint: stable, available in the minimum SDK,
+  change pass. Generated files are the exception: each carries
+  `// ignore_for_file: deprecated_member_use_from_same_package` in its header,
+  because a model whose spec deprecates a field uses it in its own
+  `fromJson`/`==`/`toString` and the analyzer of Dart 3.10 reports that
+  (stable does not). To enable a new lint: stable, available in the minimum SDK,
   zero findings (or fix them in the same change), no conflict with an enabled
   rule (`incompatible` in the lint catalog).
 

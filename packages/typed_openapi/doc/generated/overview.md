@@ -27,14 +27,15 @@ lib/api/petstore/
 - Request and response models of a schema split by direction live next to each other (`user.dart`, `user_input.dart`, see [Models](models.md)).
 - Types a method needs only for itself (the sealed status types, the parts class of a multipart body, an event union) are written in the group file after the class, not in `models/`.
 
-Every Dart file starts with the same two lines:
+Every Dart file starts with the same three lines:
 
 ```dart
 // GENERATED CODE - DO NOT MODIFY BY HAND.
 // dart format off
+// ignore_for_file: deprecated_member_use_from_same_package
 ```
 
-`dart format off` keeps `dart format` from rewriting the files, so a formatter run in your project never makes a generated file differ from what the generator writes. Do not edit the files: the next `generate` run refuses to replace a file whose hash no longer matches the manifest (`TOA830`, see [Generate output](../generate_output.md)).
+`dart format off` keeps `dart format` from rewriting the files, so a formatter run in your project never makes a generated file differ from what the generator writes. The ignore is there because a model whose spec deprecates a field uses that field in its own `fromJson`, `==` and `toString`, which the analyzer of Dart 3.10 reports. Do not edit the files: the next `generate` run refuses to replace a file whose hash no longer matches the manifest (`TOA830`, see [Generate output](../generate_output.md)).
 
 ## The root class
 

@@ -25,8 +25,14 @@ final class ModelLibrary {
   final int width;
 
   /// The first lines of every generated file.
+  ///
+  /// `deprecated_member_use_from_same_package` is ignored because a model
+  /// whose spec deprecates a field uses that field in its own `fromJson`,
+  /// `==` and `toString`; the analyzer of Dart 3.10 reports those uses.
   static const header =
-      '// GENERATED CODE - DO NOT MODIFY BY HAND.\n// dart format off\n';
+      '// GENERATED CODE - DO NOT MODIFY BY HAND.\n'
+      '// dart format off\n'
+      '// ignore_for_file: deprecated_member_use_from_same_package\n';
 
   /// The directory of the model files, relative to the output directory.
   static const directory = 'models';

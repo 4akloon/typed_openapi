@@ -58,8 +58,10 @@ dart run typed_openapi generate --break-lock  # забрати замок нев
 ```
 
 Кожен Dart-файл має заголовок `// GENERATED CODE - DO NOT MODIFY BY HAND.` і
-`// dart format off` у другому рядку. Код чистий під `package:lints/recommended` і правилами `flutter_lints`
-без `ignore_for_file`, а та сама специфікація з тим самим конфігом дає ті самі
+`// dart format off` та
+`// ignore_for_file: deprecated_member_use_from_same_package` у наступних рядках
+(модель із застарілим полем використовує його у власних `fromJson` і `==`).
+Код чистий під `package:lints/recommended` і правилами `flutter_lints`, а та сама специфікація з тим самим конфігом дає ті самі
 байти. Класи — звичайні `class` (не `final`, тож їх можна розширювати); база
 union — `sealed`.
 

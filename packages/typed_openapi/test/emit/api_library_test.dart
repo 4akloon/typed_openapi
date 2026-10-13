@@ -58,7 +58,9 @@ void main() {
       expect(
         value,
         startsWith(
-          '// GENERATED CODE - DO NOT MODIFY BY HAND.\n// dart format off\n',
+          '// GENERATED CODE - DO NOT MODIFY BY HAND.\n'
+          '// dart format off\n'
+          '// ignore_for_file: deprecated_member_use_from_same_package\n',
         ),
         reason: key,
       );

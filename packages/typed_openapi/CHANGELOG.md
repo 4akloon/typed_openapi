@@ -1,6 +1,12 @@
 ## 0.0.1 - Unreleased
 
 ### Output changes
+- Every generated file has a third header line,
+  `// ignore_for_file: deprecated_member_use_from_same_package`: a model
+  whose spec deprecates a field, enum value or type uses it in its own code,
+  and the analyzer of Dart 3.10 reports that under `--fatal-infos` (stable
+  does not). Every file of every client changes, so the output hashes of
+  unreleased 0.0.1 change; the code is otherwise as before (M11).
 - A model with an optional constant (a `const` or one-value `enum` the
   schema does not require) remembers which of them the decoded JSON did
   not have, in a private `_absent` list, and `toJson` leaves those out, so
@@ -87,7 +93,7 @@
   `models/` and the barrel `models.dart`. Every file starts with
   `// GENERATED CODE - DO NOT MODIFY BY HAND.` and has `// dart format off`
   on the second line, and the code is clean under `package:lints/recommended`
-  and `flutter_lints` with no `ignore_for_file`. Classes are `class` (not
+  and `flutter_lints` (the header's one `ignore_for_file` aside). Classes are `class` (not
   `final`, so they can be extended) and `@immutable`, with `fromJson`,
   `toJson`, deep `==`/`hashCode` and `toString`; a `const` property is a
   constant getter, `additionalProperties` a map field, constraints, defaults

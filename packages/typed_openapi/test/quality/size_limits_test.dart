@@ -25,7 +25,7 @@ const Map<String, int> _fileAllowlist = {
   // M9: event streams in the empty-client report; webhooks checked.
   'lib/src/ir/ir_builder.dart': 537,
   'test/cli/generate_command_test.dart': 771,
-  'test/emit/model_library_test.dart': 891,
+  'test/emit/model_library_test.dart': 887,
   'test/ir/emitter_contract_test.dart': 576,
   'test/ir/ir_builder_test.dart': 970,
   'test/ir/operation_builder_test.dart': 832,
