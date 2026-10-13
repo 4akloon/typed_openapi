@@ -110,7 +110,7 @@ From 3.1 a schema whose `anyOf` or `oneOf` has a null branch and others is alrea
 
 ## Event streams
 
-`sse` on an operation steers a `text/event-stream` response. See [Event streams](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi/doc/generated/event_streams.md) for the generated code.
+`sse` on an operation steers a `text/event-stream` response. See [Event streams](generated/event_streams.md) for the generated code.
 
 | Key | Values | Effect |
 | --- | --- | --- |
