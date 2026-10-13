@@ -262,7 +262,7 @@ final class JsonReader {
   /// The fix for a server that sends `date-time` in another format.
   static const String dateTimeHint =
       'If the server sends this format on purpose, map it to your own type '
-      'with a converter (types.formats in the config, R6.8) or override the '
+      'with a converter (types.formats in the config) or override the '
       "property's format";
 
   /// An RFC 3339 `full-date` string (`format: date`), such as `2024-02-03`.
@@ -287,7 +287,7 @@ final class JsonReader {
   /// The fix for a server that sends `date` in another format.
   static const String dateHint =
       'If the server sends this format on purpose, map it to your own type '
-      'with a converter (types.formats in the config, R6.8) or override '
+      'with a converter (types.formats in the config) or override '
       "the property's format";
 
   /// Any JSON value.

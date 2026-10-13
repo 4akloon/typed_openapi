@@ -47,6 +47,23 @@ final class OverrideNotices {
     }
   }
 
+  /// Reports the `name` of the override of [schema], the schema of a
+  /// multipart body: the class of its parts is named after the operation.
+  void nameOnMultipartBody(SchemaObject schema) {
+    final entry = _context.overrides.schemaAt(schema.location);
+    if (entry == null || entry.name == null) return;
+    _context.reportAtOverride(
+      .overrideUnchanged,
+      'The name of this override has no effect on the multipart body that '
+          'uses the schema: its class of parts is named after the operation.',
+      entry,
+      'name',
+      fix:
+          'Remove it, or name the operation: its name starts the name of '
+          'the class.',
+    );
+  }
+
   /// Reports the `exhaustive` of the override of [schema], a model: only an
   /// enum or a union can be exhaustive.
   void exhaustiveOnModel(SchemaObject schema) {

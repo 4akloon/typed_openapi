@@ -77,13 +77,18 @@ final class Diagnostic implements Comparable<Diagnostic> {
 
   /// What to change in the source to fix the finding, followed by the
   /// [hints]: a single hint as it is, several each after its preset's name
-  /// (`nestjs: ...`).
+  /// (`nestjs: ...`). A fix that ends with a snippet on several lines is
+  /// followed by the hints on lines of their own.
   String? get fix {
     if (hints.isEmpty) return _fix;
     final texts = hints.length == 1
         ? [hints.single.$2]
         : [for (final (preset, text) in hints) '$preset: $text'];
-    return [?_fix, ...texts].join(' ');
+    final fix = _fix;
+    if (fix != null && fix.contains('\n')) {
+      return [fix.trimRight(), ...texts].join('\n');
+    }
+    return [?fix, ...texts].join(' ');
   }
 
   /// How to fix the finding in the code of a framework: the preset's name

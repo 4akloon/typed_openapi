@@ -35,7 +35,7 @@ The sample is a small FastAPI-style 3.1 document (`items` and `files` routes, `I
 error TOA504 duplicate-operation-id: operationId "read_item" is also the id of the operation at #/paths/~1items~1{item_id}/get; method names would clash.
   --> openapi.json:43:24
   at #/paths/~1v2~1items~1{item_id}/get/operationId
-  fix: Give each operation its own operationId at the source, or override the method name of this operation. In FastAPI, pass `generate_unique_id_function` to FastAPI(...).
+  fix: Give each operation its own operationId at the source. To generate anyway, lower TOA504 in the client's severity and pin the second method's name with an override. In FastAPI, pass `generate_unique_id_function` to FastAPI(...).
 info TOA401 discriminator-not-required: Discriminator property "pet_type" is not required in Cat, Dog; a payload without it cannot be told apart.
   --> openapi.json:74:123
   at #/components/schemas/Item-Input/properties/pet/discriminator

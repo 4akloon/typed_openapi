@@ -390,7 +390,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   variantOf`; the plural only when the operation's own inline response
   body has the name (`ResponseBodyNames`), any other taker of the name gives
   the suffix, TOA551) and the class of
-  multipart parts (`RequestBodyIr.parts`, TOA655 when the schema is not an
+  multipart parts (`RequestBodyIr.parts`, named after the operation, so a schema `name`
+  override is TOA807; TOA655 when the schema is not an
   object; `PartMediaType` makes each part's `encoding.contentType` one
   concrete type, TOA661 (a type is concrete when it is an RFC 9110 media
   type whose quoted strings hold no control character, a tab included:
