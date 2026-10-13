@@ -67,6 +67,23 @@ final class UnionNotices {
     );
   }
 
+  /// Reports the [branch] of a union with a discriminator, which is not an
+  /// object and has the same JSON [kind] as an earlier variant: a value of
+  /// that type is decoded as the earlier one.
+  void jsonTypeShadowed(Schema branch, UnionKind kind, JsonKind jsonKind) {
+    _context.report(
+      .unionJsonTypeShadowed,
+      'This variant is a ${jsonKind.name}, as an earlier variant of the '
+      '${kind.name} is; a value that is not an object has no discriminator '
+      'property, so such a value is decoded as the earlier variant and this '
+      'one is never produced.',
+      branch.location,
+      fix:
+          'Remove the variant at the source, or give the earlier variant a '
+          'type that does not take every ${jsonKind.name}.',
+    );
+  }
+
   /// Reports the branches of [schema] that add no value to another branch
   /// (TOA455), unless a custom type replaces [schema]. [collapsed] says the
   /// union is left with one branch, which is then its type.

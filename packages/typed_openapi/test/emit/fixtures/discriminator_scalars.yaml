@@ -1,0 +1,77 @@
+openapi: 3.1.0
+info: {title: Discriminator with scalar variants, version: "1"}
+paths:
+  /values:
+    get:
+      operationId: getValue
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Value'}
+  /defaults:
+    get:
+      operationId: getDefaulted
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Defaulted'}
+  /bare:
+    get:
+      operationId: getBare
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Bare'}
+components:
+  schemas:
+    Color: {type: string, enum: [red, green]}
+    Cat:
+      type: object
+      required: [kind]
+      properties:
+        kind: {const: cat}
+        lives: {type: integer}
+    # The number variant comes first: an integer must still meet `int`.
+    Value:
+      oneOf:
+        - {type: number}
+        - {type: integer}
+        - {type: string}
+        - $ref: '#/components/schemas/Color'
+        - $ref: '#/components/schemas/Cat'
+      discriminator:
+        propertyName: kind
+        mapping: {cat: '#/components/schemas/Cat'}
+    Dog:
+      type: object
+      required: [kind]
+      properties:
+        kind: {type: string}
+        barks: {type: integer}
+    # A value with another `kind` is a Dog by the default mapping.
+    Defaulted:
+      oneOf:
+        - {type: string}
+        - $ref: '#/components/schemas/Dog'
+      discriminator:
+        propertyName: kind
+        mapping: {dog: '#/components/schemas/Dog'}
+        defaultMapping: '#/components/schemas/Dog'
+    # A model without the property: the wrapper remembers the value.
+    Plain:
+      type: object
+      properties: {size: {type: integer}}
+    Bare:
+      oneOf:
+        - {type: boolean}
+        - $ref: '#/components/schemas/Plain'
+      discriminator:
+        propertyName: kind
+        mapping: {plain: '#/components/schemas/Plain'}
+        defaultMapping: '#/components/schemas/Plain'

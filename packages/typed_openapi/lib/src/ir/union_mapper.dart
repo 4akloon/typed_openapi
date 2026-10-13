@@ -86,6 +86,7 @@ final class UnionMapper {
     final choice = _chooseDispatch(schema, site.branches);
     final set = _collector.collect(site, choice);
     _reportOutcome(site, choice, set);
+    if (choice.dispatch == .discriminator) _reportShadowed(site, set.variants);
     final draft = UnionDraft(
       site,
       choice.dispatch,
@@ -143,6 +144,17 @@ final class UnionMapper {
                   'is left'
             : 'the variants of the union have JSON types of their own',
       );
+    }
+  }
+
+  /// Reports the variants that are not objects and share their JSON type
+  /// with an earlier one: the discriminator cannot pick them (TOA458).
+  void _reportShadowed(UnionSite site, List<VariantDraft> variants) {
+    final seen = <JsonKind>{};
+    for (final variant in variants) {
+      final kind = _kinds.ofType(variant.type);
+      if (kind == null || kind == .object || seen.add(kind)) continue;
+      _notices.jsonTypeShadowed(variant.branch, site.kind, kind);
     }
   }
 

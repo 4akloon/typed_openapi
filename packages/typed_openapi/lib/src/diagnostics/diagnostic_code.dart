@@ -299,6 +299,13 @@ enum DiagnosticCode {
     .info,
   ),
 
+  /// A non-object variant of a union with a discriminator has the JSON type
+  /// of an earlier variant (a string enum next to a plain string): a value
+  /// of that type is decoded as the earlier variant, since a value that is
+  /// not an object has no discriminator property to tell them apart, so this
+  /// variant is never produced when decoding.
+  unionJsonTypeShadowed('TOA458', 'union-json-type-shadowed', .info),
+
   /// A variable of the path template has no path parameter; one is added.
   missingPathParameter('TOA501', 'missing-path-parameter', .warning),
 

@@ -10,6 +10,12 @@
   private constructor `_`, and `==`/`hashCode` compare `_absent`. No golden
   file changes; in the corpus the models with optional constants of
   `stripe`, `openai`, `github`, `discord` and `medusa` change (M11).
+- In a union with a discriminator, a variant that is not an object and has
+  the JSON type of an earlier variant (a string enum after a string) is
+  reported as TOA458 (info): a value of that type is decoded as the earlier
+  variant, since it has no property to read. The variants that pick a number
+  are now matched `int` before `num` whatever their order, so an integer is
+  no longer taken by an earlier `num` variant (M11).
 - A union with a discriminator picks a variant whose JSON is not an object
   (an array, a string, a number, a boolean) by its JSON type before it
   reads the discriminator, so GitHub's `repos/get-content` decodes a
