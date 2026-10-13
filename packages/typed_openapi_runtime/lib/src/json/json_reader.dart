@@ -113,14 +113,14 @@ final class JsonReader {
   /// `JsonValue?` could not tell absent from `null` anyway.
   JsonValue optionalValue(String key) => JsonValue(json[key]);
 
-  /// A property that can hold one value only, a `const` or a one-value
-  /// enum: anything but [value] is an error. Absent is an error when
-  /// [required]; an optional property may also be `null`, which reads as
-  /// absent.
-  void constant(String key, Object value, {bool required = true}) {
+  /// Whether the property [key], which holds one value only (a `const` or
+  /// a one-value enum), is there: anything but [value] is an error. Absent
+  /// is an error when [required]; an optional property may be absent or
+  /// `null`, which reads as absent (false).
+  bool constant(String key, Object value, {bool required = true}) {
     if (required) _checkPresent(key);
     final actual = json[key];
-    if (actual == value || (!required && actual == null)) return;
+    if (actual == value || (!required && actual == null)) return actual != null;
     throw JsonDecodeException(
       expected: 'the constant ${jsonEncode(value)}',
       actual:

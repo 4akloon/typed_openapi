@@ -148,7 +148,11 @@ final class ModelEmitter {
     for (final field in model.fields) {
       final key = _code.string(field.jsonKey);
       if (field.constValue != null) {
-        entries.add('$key: ${_code.literal(field.constValue)}');
+        const absent = ModelConstructors.absent;
+        entries.add(
+          '${field.required ? '' : 'if (!$absent.contains($key)) '}'
+          '$key: ${_code.literal(field.constValue)}',
+        );
         continue;
       }
       entries.add(_entry(field, key));
@@ -201,6 +205,8 @@ final class ModelEmitter {
       for (final field in fields) (field.name, field.type),
       if (model.additionalProperties case final extra?)
         (model.additionalPropertiesName, MapType(extra)),
+      if (model.fields.any((f) => f.constValue != null && !f.required))
+        (ModelConstructors.absent, const ListType(CoreType(.string))),
     ];
     out.line('@override');
     out.chain('bool operator ==(Object other) =>', [

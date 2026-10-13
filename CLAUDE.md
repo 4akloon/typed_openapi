@@ -503,7 +503,12 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   text has no line break), `Imports` (`dart:`, `package:` with sorted `show`
   lists wrapped at the width, relative files), `TypeCodec` (type names,
   known-enum types for request constructors, decoders, encoders,
-  `DeepEquality` need, JSON patterns of union variants), `ModelEmitter`,
+  `DeepEquality` need, JSON patterns of union variants), `ModelEmitter`
+  (with `ModelConstructors`: the constructors and `fromJson`; a model with
+  an optional constant keeps the keys of those the decoded JSON lacked in
+  a private `_absent` list, which `toJson` leaves out and `==` compares, so
+  a decoded value is written back as it came, while a model made in code
+  writes every constant),
   `EnumEmitter`, `UnionEmitter` and `ModelLibrary` (`models/<snake>.dart`
   per declaration, names that clash get `2`, `3`...; the barrel
   `models.dart`; the header is `// GENERATED CODE - DO NOT MODIFY BY HAND.`
@@ -762,7 +767,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   exported: `CheckCommand`,
   `BaselineCommand`, `GenerateCommand`, `RealPaths`, the emitters
   (`DartCode`, `DartWriter`, `Imports`, `TypeCodec`, `ModelEmitter`,
-  `EnumEmitter`, `UnionEmitter`, and the API emitters `ApiLibrary`,
+  `ModelConstructors`, `EnumEmitter`, `UnionEmitter`, `DiscriminatorDecoder`,
+  `UnionVariants`, and the API emitters `ApiLibrary`,
   `OperationEmitter`, `RequestWriter`, `DecoderWriter`, `PartsEmitter`,
   `StatusTypeEmitter`: `generate` runs them, there is no public entry
   point yet), the
@@ -818,7 +824,8 @@ that the API composes, including an `implements` fake of a tag class.
   `Date` (`format: date`, no time or zone), `DeepEquality` (deep `==` and
   `hashCode` of lists, maps and patches for generated models). The barrel
   re-exports `immutable` from `package:meta`, so generated code imports only
-  the runtime. `JsonReader` also has `constant`, `additional` (the keys a
+  the runtime. `JsonReader` also has `constant` (which says whether an
+  optional constant was there), `additional` (the keys a
   model does not list, as an unmodifiable map), `patchValue`, `asBytes` and
   `attempt` for generated code.
 - `result/` - sealed `Result<T, E>`: `Success`, `Failure` (`HttpError`,

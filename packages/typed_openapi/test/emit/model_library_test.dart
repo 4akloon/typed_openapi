@@ -300,7 +300,7 @@ void main() {
 ''')['models/root.dart']!;
       for (final line in [
         "final r = JsonReader(json, schema: 'Root');",
-        "r.constant('kind', 'root', required: false);",
+        "[if (!r.constant('kind', 'root', required: false)) 'kind',],",
         "id: r.required('id', JsonReader.asInt),",
         "req: r.requiredNullable('req', JsonReader.asString),",
         "json: r.requiredValue('json'),",
@@ -318,7 +318,7 @@ void main() {
         "if (list case final v?) 'list': "
             '[for (final e0 in v) e0?.toUtc().toIso8601String()],',
         "'map': ?map?.map((k0, v0) => MapEntry(k0, v0.toJson())),",
-        "'kind': 'root',",
+        "if (!_absent.contains('kind')) 'kind': 'root',",
         "'dates': switch (dates) {final v? => "
             '[for (final e0 in v) e0.toJson()], null => null},',
         "String get kind => 'root';",

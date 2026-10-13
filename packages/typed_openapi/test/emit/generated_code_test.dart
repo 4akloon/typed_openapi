@@ -130,6 +130,7 @@ linter:
         'hierarchy',
         'nullable_variants',
         'discriminator_array',
+        'optional_constant',
       ]) {
         for (final mode in UnionMode.values) {
           final files = emitFixture(

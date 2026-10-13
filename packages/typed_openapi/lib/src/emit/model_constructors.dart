@@ -9,7 +9,12 @@ import 'type_codec.dart';
 ///
 /// A field of a model sent in requests that holds an enum takes only the
 /// known values in the constructor (R8.2); `fromJson`, which may meet
-/// unknown ones, then uses a private constructor `_`.
+/// unknown ones, then uses a private constructor `_`. So does a model with
+/// an optional constant: `fromJson` passes the keys of the optional
+/// constants the JSON did not have ([absent]), which `toJson` leaves out,
+/// so a decoded value is written back as it came (a `structural` `oneOf`
+/// of overlapping branches keeps its variant); a model made in code writes
+/// every constant (decision 8).
 final class ModelConstructors {
   /// Creates the writer that writes with [_codec].
   const ModelConstructors(this._codec);
@@ -17,6 +22,10 @@ final class ModelConstructors {
   final TypeCodec _codec;
 
   static const _code = DartCode();
+
+  /// The private field of the keys of the optional constants that the
+  /// decoded JSON did not have.
+  static const absent = '_absent';
 
   /// Writes the constructors and `fromJson` of [model], whose fields are
   /// [fields] and whose constant fields are [constants], to [out].
@@ -32,27 +41,53 @@ final class ModelConstructors {
         model.direction != .response &&
         (fields.any((f) => _codec.hasEnum(f.type)) ||
             (extra != null && _codec.hasEnum(extra)));
+    final tracks = constants.any((f) => !f.required);
     out.prose('Creates a [$name].');
-    _constructor(out, 'const $name', model, fields, typed: known);
-    if (known) {
+    _constructor(
+      out,
+      ('const $name', tracks ? ' : $absent = const []' : ''),
+      (model, fields),
+      typed: known,
+    );
+    if (known || tracks) {
       out.line();
-      _constructor(out, 'const $name._', model, fields, typed: false);
+      _constructor(
+        out,
+        ('const $name._(${tracks ? 'this.$absent, ' : ''}', ''),
+        (model, fields),
+        typed: false,
+      );
     }
     out.line();
-    _fromJson(out, model, (fields, constants), private: known);
+    _fromJson(out, model, (fields, constants), private: known || tracks);
+    if (tracks) _absentField(out);
   }
+
+  /// Writes the field [absent].
+  void _absentField(DartWriter out) => out
+    ..line()
+    ..prose(
+      'The keys of the optional constants the decoded JSON did not have, '
+      'which `toJson` leaves out.',
+    )
+    ..line('final List<String> $absent;');
 
   /// Whether [type] is `JsonValue`, which is never null.
   static bool isJson(DartType type) =>
       type is CoreType && type.kind == CoreKind.json;
 
+  /// Writes a constructor; [shape] is its head up to the named parameters
+  /// (`const Pet(` or `const Pet._(this._absent, `) and its initializer
+  /// list, [of] the model and its fields.
   void _constructor(
     DartWriter out,
-    String head,
-    ModelDecl model,
-    List<FieldIr> fields, {
+    (String, String) shape,
+    (ModelDecl, List<FieldIr>) of, {
     required bool typed,
   }) {
+    final (opening, initializer) = shape;
+    final (model, fields) = of;
+    final head = opening.contains('(') ? opening : '$opening(';
     final params = [
       for (final field in fields) _parameter(field, typed: typed),
       if (model.additionalProperties case final extra?)
@@ -60,9 +95,9 @@ final class ModelConstructors {
             'this.${model.additionalPropertiesName} = const {}',
     ];
     if (params.isEmpty) {
-      out.line('$head();');
+      out.line('${head.replaceFirst(RegExp(r', $'), '')})$initializer;');
     } else {
-      out.list('$head({', params, '});');
+      out.list('$head{', params, '})$initializer;');
     }
   }
 
@@ -103,8 +138,15 @@ final class ModelConstructors {
     _codec.imports.fromRuntime('JsonReader');
     out.block(head, () {
       out.line('final r = JsonReader(json, schema: ${_code.string(name)});');
-      constants.map(_check).forEach(out.line);
-      final arguments = _arguments(model, fields);
+      constants.where((f) => f.required).map(_check).forEach(out.line);
+      final optional = [
+        for (final field in constants)
+          if (!field.required) _check(field),
+      ];
+      final arguments = [
+        if (optional.isNotEmpty) '[${optional.join(' ')}]',
+        ..._arguments(model, fields),
+      ];
       if (arguments.isEmpty) {
         out.line('return const $create();');
       } else {
@@ -113,13 +155,14 @@ final class ModelConstructors {
     });
   }
 
-  /// The statement of `fromJson` that checks the constant [field].
+  /// The check of the constant [field] in `fromJson`: a statement, or for
+  /// an optional one the element of [absent] it adds when the JSON lacks it.
   String _check(FieldIr field) {
     final value = _code.literal(field.constValue);
+    final key = _code.string(field.jsonKey);
     return field.required
-        ? 'r.constant(${_code.string(field.jsonKey)}, $value);'
-        : 'r.constant(${_code.string(field.jsonKey)}, $value, '
-              'required: false);';
+        ? 'r.constant($key, $value);'
+        : 'if (!r.constant($key, $value, required: false)) $key,';
   }
 
   /// The named arguments of the constructor `fromJson` calls.

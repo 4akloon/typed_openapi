@@ -1,6 +1,15 @@
 ## 0.0.1 - Unreleased
 
 ### Output changes
+- A model with an optional constant (a `const` or one-value `enum` the
+  schema does not require) remembers which of them the decoded JSON did
+  not have, in a private `_absent` list, and `toJson` leaves those out, so
+  a decoded value is written back as it came (Medusa's `union: structural`
+  `oneOf` of search facets no longer decodes its own JSON as unknown). A
+  model made in code still writes every constant. These models gain a
+  private constructor `_`, and `==`/`hashCode` compare `_absent`. No golden
+  file changes; in the corpus the models with optional constants of
+  `stripe`, `openai`, `github`, `discord` and `medusa` change (M11).
 - A union with a discriminator picks a variant whose JSON is not an object
   (an array, a string, a number, a boolean) by its JSON type before it
   reads the discriminator, so GitHub's `repos/get-content` decodes a

@@ -1,0 +1,38 @@
+openapi: 3.1.0
+info: {title: Optional constants, version: "1"}
+paths:
+  /facets:
+    get:
+      operationId: getFacet
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Facet'}
+components:
+  schemas:
+    # Medusa's search facets: a `oneOf` whose first branch has an optional
+    # constant `type`, and whose others take any string `type`.
+    Facet:
+      oneOf:
+        - $ref: '#/components/schemas/ValueFacet'
+        - $ref: '#/components/schemas/RangeFacet'
+    ValueFacet:
+      type: object
+      required: [field]
+      properties:
+        field: {type: string}
+        type: {const: value}
+        version: {const: 2}
+    RangeFacet:
+      type: object
+      required: [field, type]
+      properties:
+        field: {type: string}
+        type: {type: string}
+        marker: {$ref: '#/components/schemas/Marker'}
+    Marker:
+      type: object
+      properties:
+        kind: {const: marker}
