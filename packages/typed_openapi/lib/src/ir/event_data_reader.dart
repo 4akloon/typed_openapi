@@ -4,6 +4,7 @@ import '../model/spec_node.dart';
 import 'dart_type.dart';
 import 'ir_context.dart';
 import 'schema_mapper.dart';
+import 'schema_shapes.dart';
 import 'schema_unwrapper.dart';
 
 /// Reads what the data of one event is (decision 1 of M10): JSON in a
@@ -77,10 +78,29 @@ final class EventDataReader {
         'contentSchema at the source.',
   );
 
-  /// The type of JSON data of [schema]; null when it is a plain string,
-  /// which an event carries as text, not as a JSON string.
-  DartType? json(Schema schema, NameHint hint) {
-    final type = _mapper.typeOf(schema, hint, direction: .response);
-    return type == const CoreType(.string) ? null : type;
+  /// The type of the JSON data that [schema] describes.
+  DartType json(Schema schema, NameHint hint) =>
+      _mapper.typeOf(schema, hint, direction: .response);
+
+  /// The type of the data of an event whose whole `schema` is [schema], the
+  /// code-first way; null when it is a string of any shape (nullable, an
+  /// enum, with a format that stays a string), which an event carries as
+  /// text, not as a JSON string.
+  DartType? ofSchema(Schema schema, NameHint hint) {
+    if (_isStringEnum(schema)) return null;
+    final type = json(schema, hint);
+    return type is CoreType && type.kind == .string ? null : type;
+  }
+
+  /// Whether [schema] allows only the strings of an `enum` (and `null`).
+  /// Decided from the spec, so no enum is declared for text.
+  bool _isStringEnum(Schema schema) {
+    final resolved = _unwrapper.unwrap(_context.model.resolveSchema(schema));
+    if (resolved is! SchemaObject) return false;
+    final values = SchemaShapes.enumValues(resolved);
+    return values != null &&
+        values.isNotEmpty &&
+        values.every((value) => value is String) &&
+        resolved.types.every((type) => type == .string || type == .nullType);
   }
 }

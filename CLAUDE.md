@@ -434,12 +434,14 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `EventData` chooses between the override, `itemSchema` and `schema`;
   `EventDataReader` reads one event's data: a string, also with a
   `contentMediaType` that is not JSON, is text; `contentMediaType` JSON
-  with a `contentSchema` is JSON; wrappers that add nothing (annotation-only
+  with a `contentSchema` is JSON, also when that is a string (the quotes are
+  read off); wrappers that add nothing (annotation-only
   `allOf`, nullable `anyOf`, `SchemaUnwrapper`) are taken off; `data` may
   sit in an `allOf` part of the `itemSchema`; anything else is text with
   TOA666, which is not reported on top of the TOA101 of a reference that
   does not resolve. `schema` is the data's JSON, an array its items
-  (TOA664), a plain string text.
+  (TOA664), a string of any shape (nullable, a string enum, a `format`
+  that stays a string) text, so no enum is declared for it.
   An `itemSchema` whose `oneOf` (or `anyOf`) branches each fix `event` to a
   string `const` (or a one-value `enum`) is an `EventUnionIr` (R12.2),
   read by `EventUnionReader`: a variant (`EventVariantIr`, with the

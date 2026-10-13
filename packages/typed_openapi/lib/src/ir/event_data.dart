@@ -57,9 +57,9 @@ final class EventData {
     if (schema == null) return (data: null, union: null);
     final hint = NameHint(prefix, 'Event');
     final resolved = _context.model.resolveSchema(schema);
-    if (resolved is SchemaObject &&
-        resolved.types.contains(SchemaType.array) &&
-        resolved.items != null) {
+    if (resolved case SchemaObject(
+      :final items?,
+    ) when resolved.types.contains(SchemaType.array)) {
       _context.report(
         .eventDataArrayItems,
         'The event stream\'s schema is an array; the data of each event is '
@@ -67,9 +67,9 @@ final class EventData {
         location.child('schema'),
         fix: 'Describe one event at the source (itemSchema in OpenAPI 3.2).',
       );
-      return (data: _data.json(resolved.items!, hint), union: null);
+      return (data: _data.ofSchema(items, hint), union: null);
     }
-    return (data: _data.json(schema, hint), union: null);
+    return (data: _data.ofSchema(schema, hint), union: null);
   }
 
   /// The events an `itemSchema` gives: a union by event name, JSON in a
