@@ -9,26 +9,13 @@ import 'direction_index.dart';
 import 'ir.dart';
 import 'ir_context.dart';
 import 'mapping_scope.dart';
+import 'mapping_state.dart';
 import 'names.dart';
+import 'pending_declaration.dart';
 import 'ref_follower.dart';
 import 'schema_shapes.dart';
 
-/// How an inline schema's declaration is named (R5.4): after its parent
-/// declaration or a fixed prefix (an operation), followed by [suffix].
-final class NameHint {
-  /// A name made of [prefix] and [suffix], such as `CreatePet` + `Request`.
-  const NameHint(String this.prefix, this.suffix) : _parent = null;
-
-  const NameHint._under(_Pending this._parent, this.suffix) : prefix = null;
-
-  /// The fixed start of the name, when there is no parent declaration.
-  final String? prefix;
-
-  /// The end of the name, such as a property name in UpperCamelCase.
-  final String suffix;
-
-  final _Pending? _parent;
-}
+export 'pending_declaration.dart' show NameHint;
 
 /// Maps schemas to Dart types and collects the declarations they need
 /// (R6.1–R6.3, R6.8).
@@ -62,9 +49,20 @@ final class SchemaMapper {
 
   final IrContext _context;
   final DirectionIndex _directions;
-  final Map<DeclId, _Pending> _pending = {};
-  final Map<String, _Pending> _inlineEnums = {};
 
+  // The four fields below are shared mutable state: every call during one
+  // mapping reads and writes the same collections, so they cannot be passed
+  // down as a scope.
+
+  /// Every declaration created so far, by identity: reaching one again gives
+  /// it back.
+  final Map<DeclId, PendingDeclaration> _pending = {};
+
+  /// The inline enums created so far, by their values, so an equal one is
+  /// the same declaration.
+  final Map<String, PendingDeclaration> _inlineEnums = {};
+
+  /// The subtypes found of each polymorphic base, by its location.
   final Map<SpecLocation, List<SchemaObject>> _subtypesOf = {};
 
   /// The structural aliases being mapped, innermost last, since the last
@@ -157,14 +155,14 @@ final class SchemaMapper {
     ];
   }
 
-  List<_Pending> get _ordered => _pending.values.toList()
-    ..sort((a, b) {
-      final byRank = a.rank.compareTo(b.rank);
-      if (byRank != 0) return byRank;
-      final byDepth = a.depth.compareTo(b.depth);
-      if (byDepth != 0) return byDepth;
-      return a.id.compareTo(b.id);
-    });
+  List<PendingDeclaration> get _ordered =>
+      _pending.values.toList()..sort((a, b) {
+        final byRank = a.rank.compareTo(b.rank);
+        if (byRank != 0) return byRank;
+        final byDepth = a.depth.compareTo(b.depth);
+        if (byDepth != 0) return byDepth;
+        return a.id.compareTo(b.id);
+      });
 
   /// Claims [candidate] in the library [scope] for a type the emitters add
   /// to the declaration [owner] ([what] says which); a name that differs
@@ -172,7 +170,7 @@ final class SchemaMapper {
   String _helperName(
     NameScope scope,
     String candidate,
-    _Pending owner,
+    PendingDeclaration owner,
     String what,
   ) {
     final (name, change) = scope.claim(candidate);
@@ -193,7 +191,7 @@ final class SchemaMapper {
 
   /// Claims the name of [pending] once; an inline declaration's parent is
   /// named first, whatever the order.
-  String _claim(NameScope scope, _Pending pending) {
+  String _claim(NameScope scope, PendingDeclaration pending) {
     final named = pending.name;
     if (named != null) return named;
     final overridden = pending.overrideName;
@@ -212,7 +210,7 @@ final class SchemaMapper {
       };
     } else {
       final hint = pending.hint;
-      final parent = hint?._parent;
+      final parent = hint?.parent;
       // The name of a parent model has its variant suffix already.
       candidate = parent != null
           ? '${_claim(scope, parent)}${hint!.suffix}'
@@ -265,7 +263,7 @@ final class SchemaMapper {
   /// override `name` of a property names its field, an inline type has no
   /// address, and the PATCH and request models take their names from the
   /// schema's.
-  String? _typeOverride(_Pending pending, String name) =>
+  String? _typeOverride(PendingDeclaration pending, String name) =>
       pending.id.variant == .base && _componentKey(pending.id.location) != null
       ? _context.schemaOverride(pending.id.location, {'name': name})
       : null;
@@ -566,7 +564,7 @@ final class SchemaMapper {
       final known = _inlineEnums[enumKey];
       if (known != null) return NamedType(known.id, nullable: nullable);
     }
-    final pending = _Pending(id)
+    final pending = PendingDeclaration(id)
       ..hint = hint
       ..componentKey = componentKey
       ..overrideName = overrideName
@@ -581,7 +579,7 @@ final class SchemaMapper {
               ? .object
               : null,
       };
-    pending.depth = (hint?._parent?.depth ?? -1) + 1;
+    pending.depth = (hint?.parent?.depth ?? -1) + 1;
     _pending[id] = pending;
     if (enumKey != null) _inlineEnums[enumKey] = pending;
     // A cycle that goes through this declaration ends at it, so what is
@@ -765,8 +763,12 @@ final class SchemaMapper {
     );
   }
 
-  void _model(SchemaObject schema, _Pending pending, MappingScope scope) {
-    final fields = <_Field>[];
+  void _model(
+    SchemaObject schema,
+    PendingDeclaration pending,
+    MappingScope scope,
+  ) {
+    final fields = <FieldDraft>[];
     final (properties, required, additionalSchema) = _merged(schema);
     _reportBranchesBesideModel(schema);
     _reportUnionOverride(schema, 'the schema is a model, not a union');
@@ -781,11 +783,7 @@ final class SchemaMapper {
         fix: 'Remove it.',
       );
     }
-    final direction = pending.id.variant != .base
-        ? ModelDirection.request
-        : _directions.splits(schema)
-        ? ModelDirection.response
-        : _directions.onlyDirection(schema) ?? ModelDirection.both;
+    final direction = _modelDirection(schema, pending);
     for (final MapEntry(key: json, value: property) in properties.entries) {
       final override = _context.overrides.propertyAt(property.location);
       if (override?.exclude ?? false) continue;
@@ -808,7 +806,7 @@ final class SchemaMapper {
       if (direction == .response && writeOnly) continue;
       final suffix = _names.pascal(json) ?? 'Field';
       final custom = override?.dartType;
-      final hint = NameHint._under(pending, suffix);
+      final hint = NameHint.under(pending, suffix);
       final constant = custom == null ? _constantOf(property, scope) : null;
       final mapped = constant != null
           ? constant.$2
@@ -816,7 +814,7 @@ final class SchemaMapper {
           ? _map(property, hint, scope)
           : _replaced(property, hint, scope);
       fields.add(
-        _Field(
+        FieldDraft(
           json: json,
           override: override,
           location: property.location,
@@ -847,7 +845,7 @@ final class SchemaMapper {
     final additional =
         additionalSchema == null || additionalSchema is BooleanSchema
         ? null
-        : _map(additionalSchema, NameHint._under(pending, 'Value'), scope);
+        : _map(additionalSchema, NameHint.under(pending, 'Value'), scope);
     pending.build = (name, types) {
       // A field named like a type of the library (its own class, or one a
       // field has) would hide the type inside the class (`other is $2Fa`):
@@ -917,6 +915,17 @@ final class SchemaMapper {
     };
   }
 
+  /// Where the model of [schema] is used, which leaves out the `readOnly` or
+  /// `writeOnly` properties.
+  ModelDirection _modelDirection(
+    SchemaObject schema,
+    PendingDeclaration pending,
+  ) => pending.id.variant != .base
+      ? .request
+      : _directions.splits(schema)
+      ? .response
+      : _directions.onlyDirection(schema) ?? .both;
+
   /// Whether a value of [type], mapped from [schema], is raw JSON that could
   /// hold a secret: nothing prints the properties of raw JSON, so a secret
   /// anywhere in [schema] (its properties, the parts of its `allOf`, the
@@ -977,8 +986,8 @@ final class SchemaMapper {
   /// own keywords before the target's (a written `deprecated: false` cannot
   /// be told from a missing one, so it does not override a deprecated
   /// target).
-  _FieldNotes _notesOf(Schema property) {
-    if (property is! SchemaObject) return const _FieldNotes();
+  FieldNotes _notesOf(Schema property) {
+    if (property is! SchemaObject) return const FieldNotes();
     final parts = property.ref == null
         ? SchemaShapes.annotationParts(property)
         : const <SchemaObject>[];
@@ -1009,7 +1018,7 @@ final class SchemaMapper {
         }
       }
     }
-    return _FieldNotes(
+    return FieldNotes(
       knownValues: known,
       constraints: _constraintsOf(written),
       description: written
@@ -1061,7 +1070,7 @@ final class SchemaMapper {
 
   /// Whether [field] tells "absent" from `null` by the config's rule (R7.2).
   /// A field of any JSON value (`JsonValue`) allows `null` too.
-  bool _isTriState(_Field field, _Pending pending) =>
+  bool _isTriState(FieldDraft field, PendingDeclaration pending) =>
       switch (_context.config.triState) {
         .patch =>
           pending.patchBody &&
@@ -1211,7 +1220,7 @@ final class SchemaMapper {
   /// that extend it with `allOf` (their flat models).
   void _union(
     SchemaObject schema,
-    _Pending pending,
+    PendingDeclaration pending,
     UnionKind kind,
     List<Schema> branches,
     MappingScope scope, {
@@ -1261,12 +1270,12 @@ final class SchemaMapper {
     final Map<int, JsonKind?> conflicts = dispatch == .jsonType
         ? allConflicts
         : const {};
-    final variants = <_Variant>[];
+    final variants = <VariantDraft>[];
     var droppedDuplicate = false;
-    _Variant? shared;
+    VariantDraft? shared;
     void share(JsonKind kind, Schema branch, [int? at]) {
       if (shared == null) {
-        shared = _Variant(const CoreType(.json), null, branch);
+        shared = VariantDraft(const CoreType(.json), null, branch);
         variants.insert(at ?? variants.length, shared!);
       }
       if (!shared!.also.contains(branch)) shared!.also.add(branch);
@@ -1297,7 +1306,7 @@ final class SchemaMapper {
       }
       final type = subtypes
           ? _component(branch as SchemaObject, scope)
-          : _map(branch, NameHint._under(pending, 'Variant${i + 1}'), scope);
+          : _map(branch, NameHint.under(pending, 'Variant${i + 1}'), scope);
       if (variants.any((v) => v.kinds.isEmpty && v.type == type)) {
         _context.report(
           .unionVariantDuplicate,
@@ -1311,7 +1320,7 @@ final class SchemaMapper {
         continue;
       }
       variants.add(
-        _Variant(
+        VariantDraft(
           type,
           subtypes || (branch is SchemaObject && branch.ref != null)
               ? _resolved(branch)?.location
@@ -1423,7 +1432,7 @@ final class SchemaMapper {
         if (values.containsKey(target)) continue;
         if (_componentKey(target) case final key?) values[target] = [key];
       }
-      final owners = <String, _Variant>{};
+      final owners = <String, VariantDraft>{};
       for (final variant in variants) {
         final key = variant.target ?? variant.branch.location;
         for (final value in values[key] ?? const <String>[]) {
@@ -1772,7 +1781,7 @@ final class SchemaMapper {
 
   void _enum(
     SchemaObject schema,
-    _Pending pending,
+    PendingDeclaration pending,
     List<Object?> values,
     EnumKind kind,
     List<String>? names,
@@ -1983,8 +1992,8 @@ final class SchemaMapper {
   }
 
   static NameHint _suffixed(NameHint hint, String suffix) =>
-      switch (hint._parent) {
-        final parent? => NameHint._under(parent, '${hint.suffix}$suffix'),
+      switch (hint.parent) {
+        final parent? => NameHint.under(parent, '${hint.suffix}$suffix'),
         null => NameHint(hint.prefix!, '${hint.suffix}$suffix'),
       };
 
@@ -2086,109 +2095,4 @@ final class SchemaMapper {
             SchemaShapes.isAnnotationOnly(part) &&
             SchemaShapes.allowsNull(part),
       );
-}
-
-/// A variant of a union being built: its type, the schema a `$ref` branch
-/// (or a subtype) is, the branch, and, for the variant of any JSON value,
-/// the JSON types it takes.
-final class _Variant {
-  _Variant(this.type, this.target, this.branch);
-
-  final DartType type;
-  final SpecLocation? target;
-  final Schema branch;
-  final List<JsonKind> kinds = [];
-
-  /// The other branches that make up a variant of any JSON value, besides
-  /// [branch].
-  final List<Schema> also = [];
-}
-
-/// A declaration whose name is not given yet.
-final class _Pending {
-  _Pending(this.id);
-
-  final DeclId id;
-  String? componentKey;
-  String? overrideName;
-  NameHint? hint;
-  int depth = 0;
-  bool patchBody = false;
-  String? name;
-  late Declaration Function(String name, NameScope scope) build;
-
-  /// The JSON type of every value of the declaration: an object for a
-  /// model and a union with a discriminator, the type of an enum's values;
-  /// null for a union that may hold values of several types.
-  JsonKind? jsonKind;
-
-  /// Overridden names are claimed first, then component keys, then inline
-  /// names.
-  int get rank => overrideName != null
-      ? 0
-      : componentKey != null
-      ? 1
-      : 2;
-}
-
-/// What a property's schema says about its field (`SchemaMapper._notesOf`).
-final class _FieldNotes {
-  const _FieldNotes({
-    this.knownValues = const [],
-    this.constraints = const ConstraintsIr(),
-    this.description,
-    this.defaultValue,
-    this.deprecated = false,
-    this.readOnly = false,
-    this.writeOnly = false,
-    this.secret = false,
-  });
-
-  final List<Object?> knownValues;
-  final ConstraintsIr constraints;
-  final String? description;
-  final (Object?,)? defaultValue;
-  final bool deprecated;
-  final bool readOnly;
-  final bool writeOnly;
-  final bool secret;
-}
-
-/// A property of a model, before field names are given.
-final class _Field {
-  _Field({
-    required this.json,
-    required this.override,
-    required this.location,
-    required this.valueType,
-    required this.required,
-    required this.readOnly,
-    required this.writeOnly,
-    required this.marked,
-    required this.defaultValue,
-    required this.description,
-    required this.deprecated,
-    required this.constValue,
-    required this.constraints,
-    required this.knownValues,
-    required this.sensitive,
-  });
-
-  final String json;
-  final PropertyOverride? override;
-  final SpecLocation location;
-  final DartType valueType;
-  final bool required;
-  final bool readOnly;
-  final bool writeOnly;
-
-  /// Whether the property has `x-typed-tri-state: true`.
-  final bool marked;
-  final (Object?,)? defaultValue;
-  final String? description;
-  final bool deprecated;
-  final Object? constValue;
-  final ConstraintsIr constraints;
-  final List<Object?> knownValues;
-  final bool sensitive;
 }
