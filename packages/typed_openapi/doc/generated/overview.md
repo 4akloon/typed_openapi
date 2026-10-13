@@ -22,7 +22,7 @@ lib/api/petstore/
 ```
 
 - Import `petstore.dart` and you have everything: the barrels are re-exported from it.
-- A client named `api` or `models` gets `api_client.dart` instead of `<client>.dart`, so the root file never collides with a barrel.
+- A client named `api` or `models` gets `api_client.dart` or `models_client.dart` instead of `<client>.dart`, so the root file never collides with a barrel.
 - Declarations whose snake_case file names collide get a numeric suffix (`2`, `3`...); class names are made unique first.
 - Request and response models of a schema split by direction live next to each other (`user.dart`, `user_input.dart`, see [Models](models.md)).
 - Types a method needs only for itself (the sealed status types, the parts class of a multipart body, an event union) are written in the group file after the class, not in `models/`.
@@ -81,7 +81,7 @@ The client never changes your `Dio`: interceptors, adapters, timeouts and the ba
 
 ## Naming rules
 
-Names come from the spec and are made valid Dart. Nothing is renamed silently: a change is an info (`TOA550`, `TOA551`) or a warning (`TOA552`, `TOA559`) with the override that pins the name.
+Names come from the spec and are made valid Dart. Nothing is renamed silently: a change is an info (`TOA550`, `TOA551`) or a warning (`TOA552`; `TOA559` is an info) with the override that pins the name.
 
 | Source | Becomes | Example |
 | --- | --- | --- |

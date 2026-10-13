@@ -6,7 +6,7 @@ Every problem `typed_openapi` finds in a spec, an overrides file, a baseline or 
 warning TOA501 missing-path-parameter: The path /products/{id} has {id}, but this operation declares no path parameter "id"; it is added as a required string path parameter.
   --> specs/shop.yaml:30:7
   at #/paths/~1products~1{id}/get
-  fix: Declare each at the source as {name: id, in: path, required: true, schema: {type: string}}.
+  fix: Declare each at the source as {name: <name>, in: path, required: true, schema: {type: string}}.
 ```
 
 A code never changes meaning once released. The slug (`missing-path-parameter`) is its readable name; both work wherever a code is accepted.
@@ -149,14 +149,14 @@ Operation ids, parameters, groups and Dart names.
 | TOA504 | `duplicate-operation-id` | error | Two operations share an `operationId`. | Give each operation its own operationId at the source, or override the method name of this operation. |
 | TOA550 | `name-reserved` | info | A name from the spec is a Dart reserved word or a name Dart already has (`class`, `List`); the generated name gets a suffix. | See the message of the diagnostic. |
 | TOA551 | `name-collision` | info | Two generated declarations, members or arguments would have the same name; the later one (by spec location) gets a suffix. | Rename the other type, or rename this one. |
-| TOA552 | `name-unrepresentable` | warning | A name from the spec has no ASCII letter or digit, so no Dart name can be made from it; a generic name is used. | Rename the schema at the source, or name its type. |
+| TOA552 | `name-unrepresentable` | warning (info for an enum value) | A name from the spec has no ASCII letter or digit, so no Dart name can be made from it; a generic name is used. | Rename the schema at the source, or name its type. |
 | TOA553 | `operation-multiple-tags` | info | An operation has several tags; it is generated once, in the group of its first tag. | Keep one tag at the source, or name the group. |
 | TOA554 | `operation-untagged` | info | An operation has no tag; it is generated in the default group. | Tag the operations at the source, or set group_by to path or single in the config. |
 | TOA555 | `tags-merged` | info | Two tags differ only in case or separators, so they give one group. | Write the tag the same way everywhere at the source. |
 | TOA556 | `path-variable-unbound` | error | A variable of the path template has no path parameter with its exact name (`{ID}` with a parameter `id`); the operation is not generated. | Declare a path parameter named "$variable" at the source. |
 | TOA557 | `filter-matches-nothing` | warning | A tag, `operationId` or path pattern of the config's `include` or `exclude` matches no operation of the spec. | Fix the pattern, or remove it from the config. |
 | TOA558 | `filter-conflict` | info | The config lists the same tag, `operationId` or path pattern in both `include` and `exclude`; `exclude` wins. | Remove it from one of the filters. |
-| TOA559 | `name-lossy` | info | A name from the spec lost characters when it became a Dart name (`Größe` became `grE`: letters outside ASCII are dropped). Changes of case and separators (`my_thing`, `X-Request-ID`) are not reported. | Set naming.client in the config. |
+| TOA559 | `name-lossy` | info | A name from the spec lost characters when it became a Dart name (`Größe` became `GrE` and `Länge` became `lNge`: letters outside ASCII are dropped). Changes of case and separators (`my_thing`, `X-Request-ID`) are not reported. | Name it explicitly to keep the meaning: the text of the diagnostic ends with an `Override:` snippet. For a client name, set naming.client in the config. |
 | TOA560 | `override-name-invalid` | warning | An override `name` (of a schema, property, operation, parameter) or `group` is not a valid Dart name for what it names (`my thing`, `1x`, `_private`), or loses characters when it is made one; the name made from it is used, or the override is ignored when nothing is left. A `group` that differs from UpperCamelCase only by case or separators (`pet-store`) is not reported: it is used as `PetStore`. | See the message of the diagnostic. |
 | TOA563 | `client-empty` | warning | No operation of a client is generated: all are filtered out, all are written as a `$ref` (TOA107), or all have an unbound path variable (TOA556). The message says why. | See the message of the diagnostic. |
 | TOA564 | `parameter-style-invalid` | warning | A parameter's `style` is not allowed for its `in` (path takes `simple`, `label` or `matrix`; query `form`, `spaceDelimited`, `pipeDelimited` or `deepObject`; header `simple`; cookie `form` or `cookie`), or the `style` of the `encoding` of a form property is not one a query takes, so the default style is used. | Use one of these styles at the source. |
@@ -206,7 +206,7 @@ Applying fixes and overrides, baselines, and writing the output.
 | TOA802 | `invalid-override` | error (fixed) | The overrides file cannot be read, or an override has a value of the wrong type; the value is ignored. | Point "overrides" of this client at the overrides file itself. |
 | TOA803 | `unknown-override-key` | error (fixed) | An override has a key this tool does not know, such as a misspelled field; it is ignored. | Names the closest known key (`Did you mean "name"?`) when one is within edit distance 2, then lists the allowed keys. |
 | TOA804 | `override-target-not-found` | warning | An override names an operation, a schema, a property, a parameter or a response the spec does not have; it is not applied. | Remove the override, or fix its address. |
-| TOA805 | `override-target-ambiguous` | error | An override's address names more than one node, such as an `operationId` two operations share; it is not applied. | Add "contentType" to the override. |
+| TOA805 | `override-target-ambiguous` | error | An override's address names more than one node: an `operationId` two operations share, or parameters of one operation with the same name in different places; it is not applied. A `schema` override of a response or body with several media types and no (or an unmatched) `contentType` is also TOA805. | For an `operationId` two operations share, address the operation as `METHOD /path`; for parameters with one name, write the key as `in:name`; for a response with several media types, add "contentType" to the override. |
 | TOA806 | `override-conflict` | error | Two overrides change the same node; neither is applied. | Keep one of them. |
 | TOA807 | `override-unchanged` | info | An override sets a value the spec already has; it can be removed. | Remove it. |
 | TOA808 | `override-shared-target` | info | An override addressed through an operation changes a node other operations may share: a path-level parameter, a `$ref`'d component or a node in another file. | See the message of the diagnostic. |

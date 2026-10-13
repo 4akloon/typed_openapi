@@ -12,6 +12,11 @@ clients:
 
 ```text
 $ typed_openapi baseline create
+info TOA554 operation-untagged: No operation of the spec has a tag, so all operations are in DefaultApi.
+  --> specs/shop.yaml:4:3
+  at #/paths
+  fix: Tag the operations at the source, or set group_by to path or single in the config.
+errors: 0, warnings: 0, infos: 1
 Wrote specs/shop.baseline.yaml: 3 entries accept 3 diagnostics.
 $ typed_openapi check
 info TOA554 operation-untagged: No operation of the spec has a tag, so all operations are in DefaultApi.
@@ -154,6 +159,7 @@ The file is written to a temporary file next to it and renamed, so an interrupte
 
 ```text
 $ typed_openapi baseline prune
+errors: 0, warnings: 0, infos: 0
 Pruned specs/shop.baseline.yaml: removed 1 entries, 2 left.
 ```
 

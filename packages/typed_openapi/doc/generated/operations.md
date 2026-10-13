@@ -12,7 +12,7 @@ final result = await client.pets.listPets(limit: 10, xTrace: 'abc');
 | Setting | Effect |
 | --- | --- |
 | `group_by: tag` (default) | a class per tag; an operation goes to its **first** tag (`TOA553` info when it has more) |
-| `group_by: path` | a class per first path segment: `/pets/{id}` goes to `PetsService` |
+| `group_by: path` | a class per first path segment: `/pets/{id}` goes to `PetsApi` (`PetsService` with `naming.group: '{Tag}Service'`) |
 | `group_by: single` | one class for everything |
 | `naming.group` | the class name, `{Tag}Api` by default (`'{Tag}Service'`) |
 | `naming.default_group` | the class of untagged operations, `DefaultApi` (`TOA554`) |

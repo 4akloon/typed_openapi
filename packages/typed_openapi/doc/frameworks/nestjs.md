@@ -1,6 +1,6 @@
 # NestJS
 
-Specs from `@nestjs/swagger` are the best case for code-first generation and still need a few repairs: controller-prefixed `operationId`s, lists declared twice, duplicated enum values, `required: true` on properties and nullable enums that read as unions. Use `preset: nestjs` and a small overrides file. This guide lists what to expect, shows a config that generates a client from a NestJS-style spec, and says what to fix in the backend instead.
+Specs from `@nestjs/swagger` are usually close to what the generator expects and still need a few repairs: controller-prefixed `operationId`s, lists declared twice, duplicated enum values, `required: true` on properties and nullable enums that read as unions. Use `preset: nestjs` and a small overrides file. This guide lists what to expect, shows a config that generates a client from a NestJS-style spec, and says what to fix in the backend instead.
 
 ## Config
 

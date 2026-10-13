@@ -80,6 +80,8 @@ Then `check` reports a warning, `generate` runs (`Generated shop in lib/shop: 4 
 
 ### A name lost letters (`TOA559`)
 
+The spec also has a non-ASCII component key, so `check` prints `TOA106` (a warning: `The component name "Größe" has characters OpenAPI does not allow in component keys`) next to the info below.
+
 ```text
 info TOA559 name-lossy: Schema "Größe" lost characters when it became the Dart name "GrE": letters outside ASCII are dropped.
   --> specs/names.yaml:17:7
@@ -165,6 +167,7 @@ error TOA820 baseline-not-found: Baseline file specs/big.baseline.yaml does not 
 ...
 errors: 1, warnings: 40, infos: 0
 $ typed_openapi baseline create
+errors: 0, warnings: 0, infos: 0
 Wrote specs/big.baseline.yaml: 40 entries accept 40 diagnostics.
 $ typed_openapi check
 errors: 0, warnings: 0, infos: 0, baselined: 40
