@@ -12,7 +12,8 @@ import '../sse/sse_item.dart';
 import '../sse/sse_item_decoder.dart';
 import '../sse/sse_message.dart';
 import 'call_options.dart';
-import 'dio_body.dart';
+import 'dio_call.dart';
+import 'dio_results.dart';
 
 /// Sends an [OperationRequest] through the user's [Dio] and turns every
 /// outcome into a [Result].
@@ -56,6 +57,10 @@ final class DioRequestSender {
   /// Whether the program runs in a browser.
   final bool isWeb;
 
+  DioResults get _results => DioResults(isWeb: isWeb);
+
+  DioCall get _call => DioCall(dio);
+
   /// Sends [request] and decodes the response of any status with [decode].
   Future<Result<T, E>> send<T, E>(
     OperationRequest request,
@@ -64,15 +69,18 @@ final class DioRequestSender {
   }) async {
     final Response<Object?> response;
     try {
-      response = await _request(request, call);
+      response = await _call.send(request, call);
     } on DioException catch (e, stackTrace) {
       final failed = e.response;
       if (e.type == .badResponse && failed != null) {
-        return _decode(_raw(failed, failed.data), decode);
+        return DioResults.decode(DioResults.raw(failed, failed.data), decode);
       }
-      return _failure(e, stackTrace);
+      return _results.failure(e, stackTrace);
     }
-    return _decode(_raw(response, response.data), decode);
+    return DioResults.decode(
+      DioResults.raw(response, response.data),
+      decode,
+    );
   }
 
   /// Opens a `text/event-stream` operation. A status in
@@ -132,7 +140,7 @@ final class DioRequestSender {
     }
     final Response<Object?> response;
     try {
-      response = await _request(
+      response = await _call.send(
         request,
         call,
         events: true,
@@ -143,7 +151,7 @@ final class DioRequestSender {
       if (e.type == .badResponse && failed != null) {
         return _openFailed(failed, decodeError);
       }
-      return _failure(e, stackTrace);
+      return _results.failure(e, stackTrace);
     }
     final status = response.statusCode ?? 0;
     final body = response.data;
@@ -174,106 +182,6 @@ final class DioRequestSender {
   bool get _hasDefaultAdapter =>
       dio.httpClientAdapter.runtimeType == HttpClientAdapter().runtimeType;
 
-  Future<Response<Object?>> _request(
-    OperationRequest request,
-    CallOptions? call, {
-    bool events = false,
-    CancelToken? cancelToken,
-  }) {
-    final options = Options(
-      method: request.operation.method,
-      headers: {
-        if (events) 'Accept': 'text/event-stream',
-        ...request.resolveHeaders(),
-        for (final MapEntry(:key, :value) in call?.headers.entries ?? const [])
-          key: ?value,
-        ...const DioBody().headers(request.body),
-      },
-      extra: {...?call?.extra, OperationInfo.extraKey: request.operation},
-      contentType: const DioBody().contentType(request),
-      responseType: events
-          ? .stream
-          : switch (request.responseKind) {
-              .json => .json,
-              .text => .plain,
-              .bytes => .bytes,
-            },
-    );
-    // The type argument picks how Dio reads the body: Dio forces JSON for
-    // any type but String, List<int> with bytes or ResponseBody with stream.
-    Future<Response<R>> send<R>() => dio.request<R>(
-      _guardQuery(request.resolvePath()),
-      data: const DioBody().data(request),
-      options: options,
-      cancelToken: cancelToken ?? call?.cancelToken,
-      onSendProgress: call?.onSendProgress,
-      onReceiveProgress: call?.onReceiveProgress,
-    );
-    if (events) return send<ResponseBody>();
-    return switch (request.responseKind) {
-      .json => send<Object?>(),
-      .text => send<String>(),
-      .bytes => send<List<int>>(),
-    };
-  }
-
-  /// Dio joins the base URL and a relative path and then collapses every
-  /// `//` of the whole string, query included (`RequestOptions.uri`), which
-  /// would change an `allowReserved` value such as `next=/a//b`. When the
-  /// query holds `//`, the base URL is joined here, collapsing `//` in the
-  /// path part only, and Dio leaves the absolute URL alone. Otherwise the
-  /// relative path goes to Dio, so interceptors that change `baseUrl` keep
-  /// working; interceptors see the finished URI either way.
-  String _guardQuery(String path) {
-    final queryStart = path.indexOf('?');
-    final base = dio.options.baseUrl;
-    if (queryStart < 0 ||
-        !path.substring(queryStart).contains('//') ||
-        !_absolute.hasMatch(base)) {
-      return path;
-    }
-    final joined = (base + path.substring(0, queryStart)).split(':/');
-    final target = joined.length == 2
-        ? '${joined[0]}:/${joined[1].replaceAll('//', '/')}'
-        : joined.join(':/');
-    return target + path.substring(queryStart);
-  }
-
-  static final RegExp _absolute = RegExp('^https?:');
-
-  /// A response without a status (only a faulty interceptor builds one)
-  /// gets status 0, which no operation documents.
-  static RawResponse _raw(Response<Object?> response, Object? body) =>
-      RawResponse(
-        statusCode: response.statusCode ?? 0,
-        body: body,
-        headers: response.headers.map,
-      );
-
-  static Result<T, E> _decode<T, E>(
-    RawResponse raw,
-    Result<T, E> Function(RawResponse response) decode,
-  ) {
-    try {
-      return decode(raw);
-    } on JsonDecodeException catch (e) {
-      return _decodeError(e, raw);
-    } on FormatException catch (e) {
-      // A user converter (R6.8) or `Date.parse` rejecting server data.
-      return _decodeError(JsonDecodeException.fromFormatException(e), raw);
-    }
-  }
-
-  static DecodeError<T, E> _decodeError<T, E>(
-    JsonDecodeException error,
-    RawResponse raw,
-  ) => DecodeError(
-    error,
-    statusCode: raw.statusCode,
-    rawBody: raw.body,
-    headers: raw.headers,
-  );
-
   /// Reads the whole body of an event-stream response that did not open,
   /// parses it (JSON by content type) and decodes it with [decodeError].
   Future<Result<Stream<SseItem<T>>, E>> _openFailed<T, E>(
@@ -288,7 +196,7 @@ final class DioRequestSender {
         _ => Uint8List(0),
       };
     } on DioException catch (e, stackTrace) {
-      return _failure(e, stackTrace);
+      return _results.failure(e, stackTrace);
     } on Exception catch (e, stackTrace) {
       // The adapter's own exception while reading the body (a reset
       // connection): a transport failure. An Error still reaches the caller.
@@ -314,65 +222,12 @@ final class DioRequestSender {
         headers: headers,
       );
     }
-    return _decode(_raw(response, body), decodeError);
+    return DioResults.decode(DioResults.raw(response, body), decodeError);
   }
 
   static Future<Uint8List> _readAll(Stream<List<int>> stream) async {
     final bytes = BytesBuilder(copy: false);
     await stream.forEach(bytes.add);
     return bytes.takeBytes();
-  }
-
-  /// A failure without a response.
-  ///
-  /// - Cancellation is [Cancelled].
-  /// - An `unknown` failure whose cause is an [Error] (a `TypeError` or
-  ///   `StateError` thrown in a user interceptor or adapter, which Dio
-  ///   wraps) is a bug, not a transport problem: it is rethrown with its
-  ///   original stack trace.
-  /// - Dio drops the response when its JSON parser fails (`unknown` with a
-  ///   [FormatException]), so the result has no status. That is a decode
-  ///   error when the request reads JSON and the exception reports the bytes
-  ///   of the body (what Dio's default transformer does on the VM and
-  ///   dart2wasm): the raw body is that text (for a body Dio read in chunks,
-  ///   only the chunk that failed). On the web ([isWeb]) every such
-  ///   [FormatException] counts: dart2js reports the browser's `SyntaxError`
-  ///   text and no source, so the raw body is the source when it is text and
-  ///   `null` otherwise; a [FormatException] from an interceptor of a JSON
-  ///   request is a decode error there too, because the failures cannot be
-  ///   told apart. On the VM a [FormatException] from anywhere else
-  ///   (`Uri.parse` in an interceptor, a custom transformer that reports
-  ///   text) stays a [TransportError]; a request that does not read JSON
-  ///   never gets a decode error here.
-  Failure<T, E> _failure<T, E>(
-    DioException e,
-    StackTrace stackTrace,
-  ) {
-    switch (e) {
-      case DioException(type: .cancel):
-        return Cancelled(e, stackTrace);
-      case DioException(type: .unknown, error: final Error cause):
-        Error.throwWithStackTrace(cause, e.stackTrace);
-      case DioException(
-            type: .unknown,
-            response: null,
-            requestOptions: RequestOptions(responseType: .json),
-            error: FormatException(:final source),
-          )
-          when source is List<int> || isWeb:
-        return DecodeError(
-          JsonDecodeException(
-            expected: 'a JSON body',
-            actual: 'text that is not JSON',
-          ),
-          rawBody: switch (source) {
-            final List<int> bytes => utf8.decode(bytes, allowMalformed: true),
-            final String text => text,
-            _ => null,
-          },
-        );
-      default:
-        return TransportError(e, stackTrace);
-    }
   }
 }

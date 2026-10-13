@@ -19,7 +19,6 @@ import '../helpers/size_limits.dart';
 /// Files over their limit, with the number of lines (`wc -l`) they had when
 /// they were listed. Keep the entries sorted.
 const Map<String, int> _fileAllowlist = {
-  'lib/src/dio/dio_request_sender.dart': 378,
   'lib/src/json/json_reader.dart': 422,
   'test/dio/dio_request_sender_test.dart': 537,
   'test/json/json_reader_test.dart': 531,
@@ -31,7 +30,6 @@ const Set<String> _permanent = {};
 /// Methods over 40 lines (`path#Type.name`), with the lines they had when
 /// they were listed. Keep the entries sorted.
 const Map<String, int> _methodAllowlist = {
-  'lib/src/dio/dio_request_sender.dart#DioRequestSender._request': 42,
   'lib/src/dio/dio_request_sender.dart#DioRequestSender.openEvents': 67,
   'lib/src/json/json_reader.dart#JsonReader.listOf': 48,
   'lib/src/sse/sse_item_decoder.dart#SseItemDecoder.bind': 52,
