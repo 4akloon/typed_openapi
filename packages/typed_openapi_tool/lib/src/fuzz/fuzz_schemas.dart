@@ -163,35 +163,39 @@ final class FuzzSchemas {
     },
   ])();
 
+  Map<String, Object?> _objectComponent() => {
+    'type': 'object',
+    'description': pick(Hostile.texts),
+    'required': [pick(Hostile.names)],
+    'properties': {
+      for (var i = 0; i < 1 + _random.nextInt(4); i++)
+        pick(['q$i', 'kind', ...Hostile.names]): primitive(),
+    },
+    if (coin())
+      'additionalProperties': pick([
+        {'type': 'integer'},
+        ref(),
+      ]),
+  };
+
+  Map<String, Object?> _discriminatedUnion() => {
+    'anyOf': [for (var i = 0; i < 2 + _random.nextInt(3); i++) variant()],
+    if (coin())
+      'discriminator': {
+        'propertyName': pick(Hostile.names),
+        'mapping': {
+          pick(Hostile.names): '#/components/schemas/${pick(names)}',
+        },
+      },
+  };
+
   /// A component schema.
   Map<String, Object?> component() => pick<Map<String, Object?> Function()>([
-    () => {
-      'type': 'object',
-      'description': pick(Hostile.texts),
-      'required': [pick(Hostile.names)],
-      'properties': {
-        for (var i = 0; i < 1 + _random.nextInt(4); i++)
-          pick(['q$i', 'kind', ...Hostile.names]): primitive(),
-      },
-      if (coin())
-        'additionalProperties': pick([
-          {'type': 'integer'},
-          ref(),
-        ]),
-    },
+    _objectComponent,
     () => {
       'oneOf': [for (var i = 0; i < 2 + _random.nextInt(3); i++) variant()],
     },
-    () => {
-      'anyOf': [for (var i = 0; i < 2 + _random.nextInt(3); i++) variant()],
-      if (coin())
-        'discriminator': {
-          'propertyName': pick(Hostile.names),
-          'mapping': {
-            pick(Hostile.names): '#/components/schemas/${pick(names)}',
-          },
-        },
-    },
+    _discriminatedUnion,
     () => {
       'type': 'string',
       'enum': [
