@@ -6,31 +6,6 @@ import 'ir.dart';
 import 'mapping_scope.dart';
 import 'pending_declaration.dart';
 
-/// A variant of a union being built: its type, the schema a `$ref` branch
-/// (or a subtype) is, the branch, and, for the variant of any JSON value,
-/// the JSON types it takes.
-final class VariantDraft {
-  /// A variant of [type] made from [branch]; [target] is the schema a `$ref`
-  /// branch or a subtype names.
-  VariantDraft(this.type, this.target, this.branch);
-
-  /// The Dart type of the variant.
-  final DartType type;
-
-  /// The schema the branch refers to, when it is a `$ref` or a subtype.
-  final SpecLocation? target;
-
-  /// The branch as written.
-  final Schema branch;
-
-  /// The JSON types the variant of any JSON value takes.
-  final List<JsonKind> kinds = [];
-
-  /// The other branches that make up a variant of any JSON value, besides
-  /// [branch].
-  final List<Schema> also = [];
-}
-
 /// What a property's schema says about its field (`SchemaMapper._notesOf`).
 final class FieldNotes {
   /// Notes of a property; the defaults are those of a schema that says

@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import '../diagnostics/json_pointer.dart';
 import '../model/schema.dart';
 import '../model/spec_node.dart';
 import '../overrides/override_set.dart';
@@ -8,12 +7,12 @@ import 'custom_types.dart';
 import 'dart_type.dart';
 import 'declaration_names.dart';
 import 'direction_index.dart';
+import 'discriminator_reader.dart';
 import 'enum_mapper.dart';
 import 'ir.dart';
 import 'ir_context.dart';
 import 'json_kinds.dart';
 import 'mapping_scope.dart';
-import 'mapping_state.dart';
 import 'mapping_tools.dart';
 import 'model_mapper.dart';
 import 'names.dart';
@@ -24,6 +23,9 @@ import 'schema_queries.dart';
 import 'schema_shapes.dart';
 import 'subtype_finder.dart';
 import 'type_recursion.dart';
+import 'union_notices.dart';
+import 'union_state.dart';
+import 'variant_collector.dart';
 import 'variant_names.dart';
 
 export 'pending_declaration.dart' show NameHint;
@@ -70,10 +72,23 @@ final class SchemaMapper {
   late final JsonKinds _kinds = JsonKinds(_tools);
   late final SubtypeFinder _subtypeFinder = SubtypeFinder(_tools);
   late final VariantNames _variantNames = VariantNames(_tools.state);
-  late final ModelMapper _models = ModelMapper(
+  late final UnionNotices _unionNotices = UnionNotices(_context, _queries);
+  late final VariantCollector _variantCollector = VariantCollector(
     _tools,
-    TypeRecursion(map: _map, component: _component, replaced: _replaced),
+    _types,
+    _kinds,
+    _unionNotices,
   );
+  late final DiscriminatorReader _discriminators = DiscriminatorReader(
+    _tools,
+    _unionNotices,
+  );
+  late final TypeRecursion _types = TypeRecursion(
+    map: _map,
+    component: _component,
+    replaced: _replaced,
+  );
+  late final ModelMapper _models = ModelMapper(_tools, _types);
 
   Map<DeclId, PendingDeclaration> get _pending => _tools.state.pending;
   Map<String, PendingDeclaration> get _inlineEnums => _tools.state.inlineEnums;
@@ -430,24 +445,14 @@ final class SchemaMapper {
       if (values != null && kind != null) {
         _enums.declare(schema, pending, values, kind, labels);
       } else if (_branches(schema) case (final kind, final branches)) {
-        _union(schema, pending, kind, branches, scope);
+        _union(UnionSite(schema, pending, kind, branches, scope));
       } else if (_subtypeFinder.subtypes(schema) case final subtypes
           when subtypes.isNotEmpty) {
-        _union(schema, pending, .oneOf, subtypes, scope, subtypes: true);
+        _union(
+          UnionSite(schema, pending, .oneOf, subtypes, scope, isSubtypes: true),
+        );
       } else {
-        if (schema.discriminator case final discriminator?
-            when discriminator.propertyName != null) {
-          _context.report(
-            .discriminatorWithoutSubtypes,
-            'This discriminator is on a schema that is not a oneOf or anyOf '
-            'union and that no schema extends with allOf, so it picks '
-            'nothing; the schema is generated as a model.',
-            discriminator.location,
-            fix:
-                'Extend the schema with allOf in its subtypes, or list them '
-                'in a oneOf.',
-          );
-        }
+        _unionNotices.discriminatorWithoutSubtypes(schema);
         _models.declare(schema, pending, scope);
       }
     } finally {
@@ -498,48 +503,37 @@ final class SchemaMapper {
         _context.config.union;
   }
 
-  /// The union [schema] of [branches]: a `oneOf`/`anyOf`, or, with
-  /// [subtypes], a base with a discriminator whose branches are the schemas
-  /// that extend it with `allOf` (their flat models).
-  void _union(
-    SchemaObject schema,
-    PendingDeclaration pending,
-    UnionKind kind,
-    List<Schema> branches,
-    MappingScope scope, {
-    bool subtypes = false,
-  }) {
-    if (!subtypes && schema.allOf.isNotEmpty) {
-      _context.report(
-        .compositionPartsIgnored,
-        'The allOf parts of this schema are ignored: it is generated as the '
-        'union of its ${kind.name} branches.',
-        schema.location.child('allOf'),
-        fix: 'Put the shared parts into every branch at the source.',
-      );
+  /// The union at [site]: a `oneOf`/`anyOf`, or, for a polymorphic base, the
+  /// schemas that extend it with `allOf` (their flat models).
+  void _union(UnionSite site) {
+    final schema = site.schema;
+    _unionNotices.partsIgnored(site);
+    if (!site.isSubtypes) {
+      _reportSubsumed(schema, site.scope, collapsed: false);
     }
-    // The discriminator property is what the union reads from every branch;
-    // the properties of a base are in the models of its subtypes.
-    final hasOthers = schema.properties.keys.any(
-      (name) => name != schema.discriminator?.propertyName,
+    final choice = _chooseDispatch(schema, site.branches);
+    final set = _variantCollector.collect(site, choice);
+    _reportOutcome(site, choice, set);
+    final draft = UnionDraft(
+      site,
+      choice.dispatch,
+      set,
+      _discriminators.read(site, set.variants),
     );
-    if (!subtypes && hasOthers) {
-      _context.report(
-        .compositionPartsIgnored,
-        'The properties of this schema are ignored: it is generated as the '
-        'union of its ${kind.name} branches.',
-        schema.location.child('properties'),
-        fix: 'Put the shared properties into every branch at the source.',
-      );
-    }
-    if (!subtypes) _reportSubsumed(schema, scope, collapsed: false);
-    final discriminator = schema.discriminator;
-    final property = discriminator?.propertyName;
-    final (allConflicts, _) = property != null
-        ? (const <int, JsonKind?>{}, 0)
-        : _kinds.conflicts(branches);
+    site.pending.build = (name, types) => _buildUnion(draft, name, types);
+  }
+
+  /// How the union [schema] of [branches] tells its variants apart: by its
+  /// discriminator, else by the JSON type of a value, else, when its
+  /// `union` is `structural` and the JSON type does not tell them apart, by
+  /// trying them.
+  DispatchChoice _chooseDispatch(SchemaObject schema, List<Schema> branches) {
+    final hasDiscriminator = schema.discriminator?.propertyName != null;
+    final allConflicts = hasDiscriminator
+        ? const <int, JsonKind?>{}
+        : _kinds.conflicts(branches).$1;
     final UnionDispatch dispatch;
-    if (property != null) {
+    if (hasDiscriminator) {
       dispatch = .discriminator;
     } else if (allConflicts.isEmpty) {
       dispatch = .jsonType;
@@ -550,308 +544,104 @@ final class SchemaMapper {
     }
     // Branches of a JSON type others share are one variant of any JSON
     // value, unless the union tries them all.
-    final Map<int, JsonKind?> conflicts = dispatch == .jsonType
-        ? allConflicts
-        : const {};
-    final variants = <VariantDraft>[];
-    var droppedDuplicate = false;
-    VariantDraft? shared;
-    void share(JsonKind kind, Schema branch, [int? at]) {
-      if (shared == null) {
-        shared = VariantDraft(const CoreType(.json), null, branch);
-        variants.insert(at ?? variants.length, shared!);
-      }
-      if (!shared!.also.contains(branch)) shared!.also.add(branch);
-      if (!shared!.kinds.contains(kind)) shared!.kinds.add(kind);
-    }
+    return DispatchChoice(
+      dispatch,
+      allConflicts,
+      dispatch == .jsonType ? allConflicts : const {},
+    );
+  }
 
-    // A branch that is the same schema as a conflicting one is a duplicate
-    // of it, not a variant of its own.
-    final conflicting = {
-      for (final i in conflicts.keys) ?_resolved(branches[i])?.location,
-    };
-    for (final (i, branch) in branches.indexed) {
-      if (conflicts.containsKey(i)) {
-        share(conflicts[i]!, branch);
-        continue;
-      }
-      if (conflicting.contains(_resolved(branch)?.location)) {
-        _context.report(
-          .unionVariantDuplicate,
-          'This variant is the same schema as an earlier variant of the '
-          '${kind.name}; it is dropped, since a value could not be told '
-          'apart between them.',
-          branch.location,
-          fix: 'Remove the duplicate variant at the source.',
-        );
-        droppedDuplicate = true;
-        continue;
-      }
-      final type = subtypes
-          ? _component(branch as SchemaObject, scope)
-          : _map(branch, NameHint.under(pending, 'Variant${i + 1}'), scope);
-      if (variants.any((v) => v.kinds.isEmpty && v.type == type)) {
-        _context.report(
-          .unionVariantDuplicate,
-          'This variant has the same Dart type as an earlier variant of the '
-          '${kind.name}; it is dropped, since a value could not be told '
-          'apart between them.',
-          branch.location,
-          fix: 'Remove the duplicate variant at the source.',
-        );
-        droppedDuplicate = true;
-        continue;
-      }
-      variants.add(
-        VariantDraft(
-          type,
-          subtypes || (branch is SchemaObject && branch.ref != null)
-              ? _resolved(branch)?.location
-              : null,
-          branch,
-        ),
+  /// Reports the branches that share a JSON type, and the override `union`
+  /// that changes nothing for the union at [site].
+  void _reportOutcome(UnionSite site, DispatchChoice choice, VariantSet set) {
+    if (choice.conflicts.isNotEmpty) {
+      _unionNotices.sharedJsonType(
+        site,
+        choice.conflicts.keys.toSet(),
+        set.sharedKinds,
       );
     }
-    if (dispatch == .jsonType) {
-      // A variant that came out as a type of any JSON value (a schema
-      // excluded or replaced, a recursive alias) is picked by its JSON type
-      // no more: its values join the variant of any JSON value.
-      for (final variant in [...variants]) {
-        if (variant.kinds.isNotEmpty || _kinds.ofType(variant.type) != null) {
-          continue;
-        }
-        final at = variants.indexOf(variant);
-        variants.remove(variant);
-        if (_kinds.ofSchema(variant.branch, {}) case final kind?) {
-          share(kind, variant.branch, at);
-        }
-      }
-    }
-    if (conflicts.isNotEmpty) {
-      final names = [
-        for (final (i, branch) in branches.indexed)
-          if (conflicts.containsKey(i)) _branchName(branch, i),
-      ];
-      final shareds =
-          (shared!.kinds.toList()..sort((a, b) => a.index - b.index))
-              .map((k) => k.name)
-              .join(', ');
-      _context.report(
-        .unionUndiscriminated,
-        'Variants ${names.join(', ')} of this ${kind.name} share the JSON '
-        'type $shareds, so a value of it cannot be told apart; such a value '
-        'is kept as JsonValue in one variant.',
-        schema.location,
-        fix:
-            'Add a discriminator at the source, or generate a union that '
-            'tries the variants with union: structural (an override of the '
-            'schema, or the config key for every such union).',
-        override: _context.schemaOverride(schema.location, {
-          'union': 'structural',
-        }),
-      );
-    }
-    if (dispatch == .discriminator || allConflicts.isEmpty) {
+    if (choice.dispatch == .discriminator || choice.allConflicts.isEmpty) {
       _notices.unionHasNoEffect(
-        schema,
-        dispatch == .discriminator
+        site.schema,
+        choice.dispatch == .discriminator
             ? 'the union has a discriminator'
-            : droppedDuplicate && variants.length < 2
+            : set.droppedDuplicate && set.variants.length < 2
             ? 'the duplicate variants were dropped (TOA454), and one variant '
                   'is left'
             : 'the variants of the union have JSON types of their own',
       );
     }
-    final values = <SpecLocation, List<String>>{};
-    DartType? fallback;
-    if (discriminator != null && property != null) {
-      final targets = {for (final v in variants) ?v.target};
-      for (final MapEntry(key: value, value: ref)
-          in discriminator.mapping.entries) {
-        final target = _mappingTarget(ref, schema.location.document);
-        if (target == null) continue;
-        if (subtypes && target == schema.location) {
-          _context.report(
-            .discriminatorMappingNotVariant,
-            'Discriminator value "$value" maps to the base schema itself, '
-            'which is generated as the union of its subtypes; a value with '
-            'it is decoded as unknown, with its JSON kept.',
-            discriminator.location.child('mapping').child(value),
-            fix: 'Map the value to a schema that extends the base.',
-          );
-          continue;
-        }
-        if (!targets.contains(target)) {
-          _context.report(
-            .discriminatorMappingNotVariant,
-            'Discriminator value "$value" maps to a schema that is not a '
-            'variant of this union; it is ignored.',
-            discriminator.location.child('mapping').child(value),
-            fix: "Map the value to one of the union's variants.",
-          );
-          continue;
-        }
-        (values[target] ??= []).add(value);
-      }
-      for (final variant in variants) {
-        final target = variant.target;
-        if (target == null) {
-          // The value an inline variant's own discriminator property holds
-          // selects it: the schema allows no other.
-          if (_constantProperty(variant.branch, property, {})
-              case final String v) {
-            values[variant.branch.location] = [v];
-            continue;
-          }
-          _context.report(
-            .discriminatorValueMissing,
-            'This variant is written inline, so no discriminator value '
-            'selects it.',
-            variant.branch.location,
-            fix: r'Make the variant a component schema and $ref it.',
-          );
-          continue;
-        }
-        final key = DeclarationNames.componentKey(target);
-        if (key != null && !values.containsKey(target)) values[target] = [key];
-      }
-      final owners = <String, VariantDraft>{};
-      for (final variant in variants) {
-        final key = variant.target ?? variant.branch.location;
-        for (final value in values[key] ?? const <String>[]) {
-          if (owners.putIfAbsent(value, () => variant) == variant) continue;
-          _context.report(
-            .discriminatorValueDuplicate,
-            'Discriminator value "$value" also selects an earlier variant; '
-            'the earlier one decodes it, so this variant is never picked by '
-            'that value.',
-            variant.branch.location,
-            fix:
-                'Give each variant its own discriminator value, in the '
-                'mapping or in the const of the property.',
-          );
-        }
-      }
-      if (discriminator.defaultMapping case final ref?) {
-        final target = _mappingTarget(ref, schema.location.document);
-        for (final variant in variants) {
-          if (variant.target != null && variant.target == target) {
-            fallback = variant.type;
-          }
-        }
-        if (fallback == null) {
-          _context.report(
-            .discriminatorMappingNotVariant,
-            'The default mapping "$ref" is not a variant of this union; it '
-            'is ignored.',
-            discriminator.location.child('defaultMapping'),
-            fix: "Map the default to one of the union's variants.",
-          );
-        }
-      }
-    }
-    final exhaustive =
-        _context.overrides.schemaAt(schema.location)?.exhaustive ?? true;
-    pending.build = (name, types) {
-      final classes = _variantNames.classes(name, [
-        for (final variant in variants) variant.type,
-      ]);
-      return UnionDecl(
-        id: pending.id,
-        name: name,
-        kind: kind,
-        dispatch: dispatch,
-        discriminator: property,
-        defaultVariant: fallback,
-        exhaustive: exhaustive,
-        unknownSensitive: branches.any(
-          (branch) => SchemaShapes.carriesSecret(
-            branch,
-            refs: _refs,
-            intoProperties: true,
-          ),
-        ),
-        description: schema.description,
-        deprecated: schema.deprecated,
-        variants: [
-          for (final (i, variant) in variants.indexed)
-            UnionVariantIr(
-              variant.type,
-              discriminatorValues: [
-                ...?values[variant.target ?? variant.branch.location],
-              ]..sort(),
-              name: _declNames.helperName(
-                types,
-                classes[i],
-                pending,
-                'a variant class of $name',
-              ),
-              jsonKinds: [...variant.kinds]..sort((a, b) => a.index - b.index),
-              sensitive:
-                  SchemaShapes.carriesSecret(variant.branch, refs: _refs) ||
-                  variant.type.holdsRawJson &&
-                      [variant.branch, ...variant.also].any(
-                        (branch) => _rawSecret(branch, variant.type),
-                      ),
-            ),
-        ],
-        unknownName: _declNames.helperName(
-          types,
-          '${name}Unknown',
-          pending,
-          'the unknown variant class of $name',
-        ),
-      );
-    };
   }
 
-  /// How a diagnostic names the branch [index] of a union: the schema it
-  /// refers to, or its position.
-  String _branchName(Schema branch, int index) =>
-      branch is SchemaObject && branch.ref != null
-      ? switch (_resolved(branch)) {
-          final target? => DeclarationNames.referenceName(target.location),
-          null => '#$index',
-        }
-      : '#$index';
+  /// The declaration of the union [draft], with its variant classes named in
+  /// [types].
+  UnionDecl _buildUnion(UnionDraft draft, String name, NameScope types) {
+    final site = draft.site;
+    final schema = site.schema;
+    final variants = draft.set.variants;
+    final classes = _variantNames.classes(name, [
+      for (final variant in variants) variant.type,
+    ]);
+    return UnionDecl(
+      id: site.pending.id,
+      name: name,
+      kind: site.kind,
+      dispatch: draft.dispatch,
+      discriminator: schema.discriminator?.propertyName,
+      defaultVariant: draft.values.fallback,
+      exhaustive:
+          _context.overrides.schemaAt(schema.location)?.exhaustive ?? true,
+      unknownSensitive: site.branches.any(
+        (branch) => SchemaShapes.carriesSecret(
+          branch,
+          refs: _refs,
+          intoProperties: true,
+        ),
+      ),
+      description: schema.description,
+      deprecated: schema.deprecated,
+      variants: [
+        for (final (i, variant) in variants.indexed)
+          _variantIr(draft, variant, (classes[i], name), types),
+      ],
+      unknownName: _declNames.helperName(
+        types,
+        '${name}Unknown',
+        site.pending,
+        'the unknown variant class of $name',
+      ),
+    );
+  }
 
-  /// The one value the property [name] of [schema] can hold, when it is a
-  /// `const` or a one-value enum, in the schema or one of its `allOf` parts;
-  /// [seen] stops a cycle.
-  Object? _constantProperty(
-    Schema schema,
-    String name,
-    Set<SpecLocation> seen,
+  /// The variant [variant] of the union [draft], wrapped in the class named
+  /// by [named] (the class and the union) in [types].
+  UnionVariantIr _variantIr(
+    UnionDraft draft,
+    VariantDraft variant,
+    (String, String) named,
+    NameScope types,
   ) {
-    final object = _resolved(schema);
-    if (object == null || !seen.add(object.location)) return null;
-    if (object.properties[name] case final property?) {
-      final resolved = _resolved(property);
-      final values = resolved == null
-          ? null
-          : SchemaShapes.enumValues(resolved);
-      return values != null && values.length == 1 ? values.single : null;
-    }
-    for (final part in object.allOf) {
-      if (_constantProperty(part, name, seen) case final value?) return value;
-    }
-    return null;
-  }
-
-  /// The schema a discriminator `mapping` value names: a
-  /// `components.schemas` key or a `$ref` in the document of the union.
-  SpecLocation? _mappingTarget(String ref, Uri document) {
-    final model = _context.model;
-    final Schema? written;
-    if (ref.startsWith('#/')) {
-      final node = model.nodeAt(SpecLocation(document, JsonPointer.parse(ref)));
-      written = node is Schema ? node : null;
-    } else if (!ref.contains('#') && !ref.contains('/')) {
-      written = model.document.components?.schemas[ref];
-    } else {
-      written = null;
-    }
-    return written == null ? null : model.resolveSchema(written)?.location;
+    final (className, union) = named;
+    return UnionVariantIr(
+      variant.type,
+      discriminatorValues: [
+        ...?draft.values.byTarget[variant.target ?? variant.branch.location],
+      ]..sort(),
+      name: _declNames.helperName(
+        types,
+        className,
+        draft.site.pending,
+        'a variant class of $union',
+      ),
+      jsonKinds: [...variant.kinds]..sort((a, b) => a.index - b.index),
+      sensitive:
+          SchemaShapes.carriesSecret(variant.branch, refs: _refs) ||
+          variant.type.holdsRawJson &&
+              [variant.branch, ...variant.also].any(
+                (branch) => _rawSecret(branch, variant.type),
+              ),
+    );
   }
 
   /// The type of a schema without a declaration: a scalar, a list or a
@@ -959,8 +749,6 @@ final class SchemaMapper {
 
   // Forwards to [SchemaQueries], until the code that asks moves out too.
   RefFollower get _refs => _queries.refs;
-
-  SchemaObject? _resolved(Schema schema) => _queries.resolved(schema);
 
   static bool _isNullable(SchemaObject schema) =>
       SchemaQueries.isNullable(schema);
