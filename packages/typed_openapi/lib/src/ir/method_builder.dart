@@ -48,7 +48,7 @@ final class MethodBuilder {
         parameters,
         _responses.pick(entry.operation, hasStreamMethod: shape == .both),
       ),
-      .only || .mixed => null,
+      .only || .mixed || .excluded => null,
     };
     final stream = switch (shape) {
       .only => _streamOperation(entry, name, parameters),
@@ -57,7 +57,7 @@ final class MethodBuilder {
         _streams.methodName(entry, name, methods),
         parameters,
       ),
-      .none || .mixed => null,
+      .none || .mixed || .excluded => null,
     };
     return [?main, ?stream];
   }

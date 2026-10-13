@@ -4,6 +4,7 @@ import '../diagnostics/json_pointer.dart';
 import '../ir/names.dart';
 import '../load/spec_document.dart';
 import '../model/operation.dart';
+import 'sse_override.dart';
 
 /// A Dart type that a schema, a property or a parameter uses instead of the
 /// generated one (R6.8).
@@ -101,6 +102,7 @@ final class OperationOverride extends OverrideEntry {
     this.parameters = const [],
     this.requestBody,
     this.responses = const [],
+    this.sse,
   });
 
   /// The `operationId` the key names, when it is not `METHOD /path`.
@@ -129,6 +131,9 @@ final class OperationOverride extends OverrideEntry {
 
   /// Overrides of responses, by status code.
   final List<ResponseOverride> responses;
+
+  /// The `sse` field: the events of its stream and its methods (M10).
+  final SseOverride? sse;
 }
 
 /// An override of a parameter, addressed by name, or by `in:name` when

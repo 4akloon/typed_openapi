@@ -24,6 +24,10 @@ enum StreamShape {
   /// Some successes are event streams and others have a body that is not
   /// (TOA654): not generated.
   mixed,
+
+  /// Every success is only an event stream and the override says
+  /// `sse.method: none`: not generated.
+  excluded,
 }
 
 /// Decides how an operation's event streams are generated (decisions 1, 3
@@ -60,7 +64,14 @@ final class EventStreams {
     }
     if (streams == 0) return .none;
     if (others == 0 && (alone == streams || alone == 0)) {
-      return alone == streams ? .only : .both;
+      final method = _context.overrides.operationAt(operation.location)?.sse;
+      return switch ((alone == streams, method?.method)) {
+        (true, .none) => .excluded,
+        (true, _) => .only,
+        (false, .only) => .only,
+        (false, .none) => .none,
+        (false, _) => .both,
+      };
     }
     _context.report(
       .eventStreamNotGenerated,
@@ -108,6 +119,7 @@ final class EventStreams {
     List<PickedResponse> picked,
     String prefix,
   ) {
+    final sse = _context.overrides.operationAt(entry.operation.location)?.sse;
     // Event streams agree when they have one data type or one union.
     final shapes = <Object?, EventShape>{};
     for (final (status, response, (contentType, media)) in picked) {
@@ -116,6 +128,7 @@ final class EventStreams {
         media,
         response.location.child('content').child(contentType),
         prefix,
+        sse: sse,
       );
       shapes[shape.union?.location ?? shape.data] = shape;
     }
@@ -131,18 +144,23 @@ final class EventStreams {
       return null;
     }
     final shape = shapes.values.firstOrNull;
+    final keep = sse?.keepUnknown;
     return EventStreamIr(
       data: shape?.data,
-      union: shape?.union,
-      reconnection: _reconnection(entry),
+      union: keep == null
+          ? shape?.union
+          : shape?.union?.keeping(keepUnknown: keep),
+      reconnection: _reconnection(entry, sse?.reconnect),
     );
   }
 
   /// How the stream of [entry] reconnects: a GET when the call asks, or
   /// unless it says no with `sse.reconnect` in the config; any other method
   /// never, reported (TOA665) only when the config asks for reconnection,
-  /// since it does not apply there.
-  StreamReconnection _reconnection(SpecOperation entry) {
+  /// since it does not apply there. The `sse.reconnect` override of the
+  /// operation ([override]) wins over both.
+  StreamReconnection _reconnection(SpecOperation entry, bool? override) {
+    if (override != null) return override ? .on : .off;
     final config = _context.config.streamReconnect;
     if (entry.method == 'get') return config ? .on : .onRequest;
     if (config) {

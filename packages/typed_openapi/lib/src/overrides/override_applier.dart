@@ -9,6 +9,7 @@ import 'override_edit_context.dart';
 import 'override_resolver.dart';
 import 'override_set.dart';
 import 'schema_override_applier.dart';
+import 'sse_override_applier.dart';
 
 export 'override_edit.dart' show OverrideEdit;
 
@@ -37,10 +38,12 @@ final class OverrideApplier {
   OverrideApplier._(OverrideEditContext context)
     : _operations = OperationOverrideApplier(context),
       _schemas = SchemaOverrideApplier(context),
+      _sse = SseOverrideApplier(context),
       _conflicts = OverrideConflicts(context);
 
   final OperationOverrideApplier _operations;
   final SchemaOverrideApplier _schemas;
+  final SseOverrideApplier _sse;
   final OverrideConflicts _conflicts;
 
   /// The edits of [targets], in their order.
@@ -50,7 +53,7 @@ final class OverrideApplier {
     for (final target in targets) {
       switch (target) {
         case OperationTarget():
-          break;
+          edits.addAll(_sse.edits(target));
         case ParameterTarget():
           edits.addAll(_operations.parameter(target));
         case ContentTarget():

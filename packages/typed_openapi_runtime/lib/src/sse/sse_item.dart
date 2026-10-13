@@ -93,13 +93,27 @@ final class SseReconnecting<T> extends SseItem<T> {
 /// item.
 final class SseDisconnected<T> extends SseItem<T> {
   /// Creates the last item.
-  const SseDisconnected({this.cause, this.stackTrace});
+  const SseDisconnected({
+    this.cause,
+    this.stackTrace,
+    this.lastEventId,
+    this.retry,
+  });
 
   /// Why the stream ended, or `null` when the server closed it.
   final Object? cause;
 
   /// Where [cause] was raised.
   final StackTrace? stackTrace;
+
+  /// The last event id of the connection when it ended, also from an
+  /// event the decoder dropped (`SseEventIgnored`), as WHATWG keeps it for
+  /// any dispatched event; null when not known. A reconnection sends it as
+  /// `Last-Event-ID`.
+  final String? lastEventId;
+
+  /// The last reconnection time of the connection when it ended, or null.
+  final Duration? retry;
 
   @override
   String toString() => 'SseDisconnected(${cause ?? 'closed by server'})';

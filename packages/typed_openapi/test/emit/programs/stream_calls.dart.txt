@@ -8,6 +8,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:fixture/chat_override_raw/api_client.dart' as overridden;
 import 'package:fixture/chat_raw/api_client.dart';
 import 'package:typed_openapi_runtime/typed_openapi_runtime.dart';
 
@@ -230,6 +231,51 @@ Future<void> main() async {
         _ => describe(item),
       };
       print('  $shown');
+    }
+  }
+
+  // The overrides: an unknown event dropped, events by name, a reconnect
+  // by default, only the stream method.
+  print('overridden');
+  overridden.ApiClient other(Adapter adapter) => overridden.ApiClient(
+    Dio(BaseOptions(baseUrl: 'https://chat.example.com'))
+      ..httpClientAdapter = adapter,
+  );
+  adapter = Adapter([
+    (_) => events('event: ping\ndata: {}\n\nevent: done\ndata: \n\n'),
+  ]);
+  final ignored = await other(adapter).chat.followChat(chatId: 'c');
+  if (ignored case Success(:final data)) {
+    await for (final item in data) {
+      print('  ${item is SseEvent<overridden.FollowChatEvent> ? item.data : describe(item)}');
+    }
+  }
+  adapter = Adapter([
+    (_) => events(
+      'event: line\ndata: one\n\n'
+      'event: stats\ndata: {"tokens": 2}\n\n'
+      'event: eof\ndata: \n\n',
+    ),
+    (_) => events('', 204),
+  ]);
+  final log = await other(adapter).threads.tailLog(
+    call: CallOptions(sse: SseOptions(wait: (_) async {})),
+  );
+  if (log case Success(:final data)) {
+    await for (final item in data) {
+      print('  ${item is SseEvent<overridden.TailLogEvent> ? item.data : describe(item)}');
+    }
+  }
+  print('  requests ${adapter.requests.length}');
+  adapter = Adapter([(_) => events('')]);
+  final only = await other(adapter).chat.chat(
+    body: const overridden.Prompt(text: 'x'),
+  );
+  final sentOnly = adapter.requests.single;
+  print('${sentOnly.method} ${sentOnly.uri.path} accept ${sentOnly.headers['Accept']}');
+  if (only case Success(:final data)) {
+    await for (final item in data) {
+      print('  ${describe(item)}');
     }
   }
 

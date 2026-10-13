@@ -161,6 +161,22 @@ switch (await client.pets.getPet(petId: 1)) {
   `SseReconnecting`; затримка — `retry` сервера, інакше 1 с, подвоюється до
   30 с, 5 спроб. POST не перепідключається. У вебі підключи до свого Dio
   адаптер на fetch: стандартний не вміє потоків.
+- Події, типізовані поодинці (`itemSchema` OpenAPI 3.2, чиї гілки `oneOf`
+  фіксують `event` константою), — sealed-union за назвою події:
+  `ChatEvent` з `ChatEventDelta(data)`, `ChatEventDone()` і
+  `ChatEventUnknown(event, data)`, тож `switch` називає кожну подію.
+  Override `sse` операції задає те, чого не каже специфікація:
+
+  ```yaml
+  operations:
+    createChat:
+      sse:
+        data: ChatChunk          # один тип для всіх подій, або:
+        events: {delta: ChatDelta, done: null}   # тип на назву події
+        unknown: ignore          # відкидати невідомі події (типово: keep)
+        reconnect: true          # перепідключатися типово, також для POST
+        method: only             # лише метод потоку (stream | only | none)
+  ```
 - Клієнт не змінює твій Dio: base URL задаєш ти, з констант серверів
   кореневого класу (`PetstoreClient.server`, або метод на кшталт
   `PetstoreClient.server1(region: 'eu')` для URL зі змінними). Коли query

@@ -96,6 +96,9 @@ final class _Reconnection<T> {
       case SseDisconnected(cause: DioException(type: .cancel)):
         _end(item);
       case SseDisconnected(:final cause, :final stackTrace):
+        // A dropped event (SseEventIgnored) still moves the id.
+        if (item.lastEventId case final id?) _lastEventId = id;
+        if (item.retry case final retry?) _retry = retry;
         _current = null;
         unawaited(_reconnect(cause, stackTrace));
     }

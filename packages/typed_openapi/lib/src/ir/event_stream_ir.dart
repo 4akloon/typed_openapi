@@ -75,6 +75,14 @@ final class EventUnionIr {
   /// `toString` does not print it: some event's data carries one.
   final bool unknownSensitive;
 
+  /// This union, keeping unknown events when [keepUnknown].
+  EventUnionIr keeping({required bool keepUnknown}) => EventUnionIr(
+    variants,
+    location: location,
+    keepUnknown: keepUnknown,
+    unknownSensitive: unknownSensitive,
+  );
+
   /// This union with its names and [variants] named.
   EventUnionIr named(
     String name,

@@ -94,6 +94,16 @@ linter:
           }
         }
       }
+      for (final mode in UnionMode.values) {
+        final files = emitClient(
+          'chat.yaml',
+          generation: GenerationConfig(union: mode),
+          overrides: 'chat.overrides.yaml',
+        );
+        for (final MapEntry(:key, :value) in files.entries) {
+          temp.write(p.join('lib', 'chat_override_${mode.name}', key), value);
+        }
+      }
       final get = dart(['pub', 'get', '--offline'], package);
       expect(get.exitCode, 0, reason: '${get.stdout}${get.stderr}');
     });
@@ -164,6 +174,17 @@ requests 1
   FollowChatEventUnknown(ping, <redacted>)
   decode error /tokens
   done
+  end closed
+overridden
+  FollowChatEventDone()
+  end closed
+  TailLogEventLine(one)
+  TailLogEventStats(Usage(tokens: 2))
+  TailLogEventEof()
+  reconnecting 1 after 1000ms
+  end UndocumentedStatus(204)
+  requests 2
+POST /chat accept text/event-stream
   end closed
 success 200
   event message # line 1

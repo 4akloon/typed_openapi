@@ -162,6 +162,22 @@ switch (await client.pets.getPet(petId: 1)) {
   delay is the server's `retry`, else 1 s, doubling to 30 s, 5 attempts. A
   POST never reconnects. On the web, plug a fetch-based adapter into your
   Dio: the default one cannot stream.
+- Events typed one by one (an OpenAPI 3.2 `itemSchema` whose `oneOf`
+  branches fix `event` to a constant) are a sealed union by event name,
+  `ChatEvent` with `ChatEventDelta(data)`, `ChatEventDone()` and
+  `ChatEventUnknown(event, data)`, so a `switch` names every event. The
+  `sse` override of an operation sets what the spec does not say:
+
+  ```yaml
+  operations:
+    createChat:
+      sse:
+        data: ChatChunk          # one type for every event, or:
+        events: {delta: ChatDelta, done: null}   # a type per event name
+        unknown: ignore          # drop unknown events (default: keep)
+        reconnect: true          # reconnect by default, also for a POST
+        method: only             # only the stream method (stream | only | none)
+  ```
 - The client never changes your Dio: set the base URL there, from the root
   class's server constants (`PetstoreClient.server`, or a method such as
   `PetstoreClient.server1(region: 'eu')` for a URL with variables). When the

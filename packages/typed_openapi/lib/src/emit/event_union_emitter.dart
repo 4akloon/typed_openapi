@@ -47,6 +47,7 @@ final class EventUnionEmitter {
           }
         });
     }
+    if (!union.keepUnknown) return;
     out.line();
     _unknown(out, union, method);
   }
@@ -73,7 +74,14 @@ final class EventUnionEmitter {
           for (final variant in union.variants) {
             out.line('${_code.string(variant.event)} => ${_value(variant)},');
           }
-          out.line('_ => ${union.unknownName}(message.event, message.data),');
+          if (union.keepUnknown) {
+            out.line(
+              '_ => ${union.unknownName}(message.event, message.data),',
+            );
+          } else {
+            _codec.imports.fromRuntime('SseEventIgnored');
+            out.line('_ => throw const SseEventIgnored(),');
+          }
         });
         out.line('};');
       });

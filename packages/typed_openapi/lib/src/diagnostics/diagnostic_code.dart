@@ -495,6 +495,10 @@ enum DiagnosticCode {
   /// variant is named by its place (`ChatEventEvent2`).
   eventNameUnrepresentable('TOA668', 'event-name-unrepresentable', .info),
 
+  /// The `sse` override of an operation finds no `text/event-stream` 2xx
+  /// response written in the operation, so it changes nothing.
+  sseOverrideNotApplied('TOA669', 'sse-override-not-applied', .warning),
+
   /// A normalizer fix or an override was not applied: its file cannot be
   /// read, its target is gone, the spec kept changing after the last pass, or
   /// the change would have no effect in the spec's dialect.

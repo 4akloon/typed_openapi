@@ -2,6 +2,7 @@ import '../model/media_type.dart';
 import '../model/media_type_name.dart';
 import '../model/schema.dart';
 import '../model/spec_node.dart';
+import '../overrides/sse_override.dart';
 import 'dart_type.dart';
 import 'ir.dart';
 import 'ir_context.dart';
@@ -29,9 +30,20 @@ final class EventData {
   final ResponseSecrets _secrets;
 
   /// The events of [media] at [location]; inline schemas are named after
-  /// [prefix].
-  EventShape of(MediaType? media, SpecLocation location, String prefix) {
+  /// [prefix]. The `events` of an [sse] override, written into the media
+  /// type's `schema` as an object of the events, are its union.
+  EventShape of(
+    MediaType? media,
+    SpecLocation location,
+    String prefix, {
+    SseOverride? sse,
+  }) {
     if (media == null) return (data: null, union: null);
+    if (sse?.events case final events?) {
+      if (_fromOverride(events, media, location, prefix) case final union?) {
+        return (data: null, union: union);
+      }
+    }
     if (media.itemSchema case final item?) {
       return _fromItem(item, location.child('itemSchema'), prefix);
     }
@@ -143,6 +155,47 @@ final class EventData {
       named.add((event, resolved));
     }
     return named;
+  }
+
+  /// The union of the override's [events] from the properties of the
+  /// media type's `schema`; null when the override was not written there
+  /// (its response is shared).
+  EventUnionIr? _fromOverride(
+    Map<String, Map<String, Object?>?> events,
+    MediaType media,
+    SpecLocation location,
+    String prefix,
+  ) {
+    final schema = media.schema;
+    final resolved = schema == null
+        ? null
+        : _context.model.resolveSchema(schema);
+    if (resolved is! SchemaObject) return null;
+    final properties = resolved.properties;
+    final variants = <EventVariantIr>[];
+    for (final (index, MapEntry(key: event, :value))
+        in events.entries.indexed) {
+      final data = properties[event];
+      if (value == null) {
+        variants.add(EventVariantIr(event, hasData: false));
+        continue;
+      }
+      if (data == null) return null;
+      final words = _names.pascal(event) ?? 'Event${index + 1}';
+      final type = _json(data, NameHint(prefix, 'Event${words}Data'));
+      variants.add(
+        EventVariantIr(
+          event,
+          data: type,
+          sensitive: _secrets.isSecret(data, type ?? const CoreType(.string)),
+        ),
+      );
+    }
+    return EventUnionIr(
+      variants,
+      location: location.child('schema'),
+      unknownSensitive: properties.values.any(_secrets.carriesSecret),
+    );
   }
 
   /// The event name a branch fixes: `event: {const: x}` or a one-value

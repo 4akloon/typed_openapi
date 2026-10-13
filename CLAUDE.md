@@ -136,8 +136,20 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   into spec fields (`spec`, a map where `null` removes the field) and typed
   generation fields (`name`, `exclude`, `group`, `exhaustive`, `dartType`,
   `triState`, and `union`, `raw` or `structural`, on a schema or a property)
-  that the IR builder reads (M6, M8; `sse` is not accepted until M10 settles
-  its shape). A missing file is TOA801, a directory or a
+  that the IR builder reads (M6, M8), and on an operation `sse` (M10,
+  `SseOverrideReader` into `SseOverride`: `data` or `events` (a
+  `components.schemas` key, which becomes a `$ref`, an inline schema, or
+  for an event `null`; both together are TOA802), `unknown` (`keep` |
+  `ignore`), `reconnect`, `method` (`stream` | `only` | `none`);
+  `SseOverrideApplier` writes `data`, or an object whose properties are
+  the events with data, as the `schema` of every `text/event-stream`
+  media type of the 2xx responses written in the operation and removes
+  their `itemSchema`; a `$ref`'d response is not changed, and an `sse`
+  that changes nothing is TOA669; `EventData` reads the events' union from
+  that object in the override's order; `unknown: ignore` makes the
+  generated `fromEvent` throw `SseEventIgnored`, which `SseItemDecoder`
+  drops; its id still reaches `SseDisconnected.lastEventId` and so the
+  `Last-Event-ID` of a reconnection, as WHATWG keeps it). A missing file is TOA801, a directory or a
   bad value TOA802 (the value is ignored), an unknown key the error TOA803
   with "did you mean" for a known key within Levenshtein distance 2.
   `OverrideResolver` maps entries to model nodes (`OverrideTarget`; a
