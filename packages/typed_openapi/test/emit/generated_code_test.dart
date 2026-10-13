@@ -128,6 +128,7 @@ linter:
         'secrets',
         'secrets_raw',
         'hierarchy',
+        'nullable_variants',
       ]) {
         for (final mode in UnionMode.values) {
           final files = emitFixture(

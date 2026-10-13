@@ -169,6 +169,18 @@ final class TypeCodec {
     return '$value == null ? null : $code';
   }
 
+  /// The JSON of the field [field] of [type], which may be `null` when the
+  /// type is nullable. A field is not promoted by `field == null ? ...`, so
+  /// a pattern binds it where the encoder needs a non-null value.
+  String encodeField(DartType type, String field) {
+    final nullable = encodeNullable(type, field);
+    if (!type.nullable || isIdentity(type) || nullable.startsWith('$field?.')) {
+      return nullable;
+    }
+    return 'switch ($field) {final v? => '
+        '${encode(type.withNullable(false), 'v')}, null => null}';
+  }
+
   /// Whether `==` of [type] compares by identity or shallowly, so a field
   /// of it needs `DeepEquality`: lists, maps, bytes, `JsonValue`, patches.
   bool needsDeep(DartType type) => switch (type) {
