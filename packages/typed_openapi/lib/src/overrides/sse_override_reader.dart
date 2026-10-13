@@ -86,13 +86,14 @@ final class SseOverrideReader {
     return events;
   }
 
-  bool? _unknown(Map<String, Object?> sse, JsonPointer at) =>
-      switch (sse['unknown']) {
-        null when !sse.containsKey('unknown') => null,
-        'keep' => true,
-        'ignore' => false,
-        _ => _invalid('"unknown" must be keep or ignore.', at.child('unknown')),
-      };
+  bool? _unknown(Map<String, Object?> sse, JsonPointer at) {
+    if (!sse.containsKey('unknown')) return null;
+    return switch (sse['unknown']) {
+      'keep' => true,
+      'ignore' => false,
+      _ => _invalid('"unknown" must be keep or ignore.', at.child('unknown')),
+    };
+  }
 
   SseMethod? _method(Map<String, Object?> sse, JsonPointer at) {
     if (!sse.containsKey('method')) return null;
@@ -105,7 +106,8 @@ final class SseOverrideReader {
     );
   }
 
-  Null _invalid(String message, JsonPointer at) {
+  /// Reports [message] at [at] and returns no value.
+  T? _invalid<T>(String message, JsonPointer at) {
     _fields.invalid(message, at);
     return null;
   }

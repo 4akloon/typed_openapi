@@ -1,7 +1,15 @@
 import '../model/spec_node.dart';
-import 'ir.dart';
+import 'api_ir.dart';
+import 'errors_ir.dart';
+import 'event_stream_ir.dart';
+import 'parameter_ir.dart';
+import 'request_body_ir.dart';
+import 'response_ir.dart';
 
 export 'event_stream_ir.dart';
+export 'event_union_ir.dart';
+export 'event_variant_ir.dart';
+export 'stream_reconnection.dart';
 
 /// An operation: one method of a group.
 final class OperationIr {

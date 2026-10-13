@@ -22,11 +22,12 @@ import 'type_codec.dart';
 /// Every argument is named and the last one is `CallOptions? call`; a
 /// method returns `Future<Result<T, E>>` and never throws for a response.
 final class OperationEmitter {
-  /// Creates an emitter that writes with [_codec].
-  OperationEmitter(this._codec)
+  /// Creates an emitter that writes with [codec].
+  OperationEmitter(TypeCodec codec) : this._(codec, DecoderWriter(codec));
+
+  OperationEmitter._(this._codec, this._decoder)
     : _request = RequestWriter(_codec),
-      _decoder = DecoderWriter(_codec),
-      _events = EventStreamWriter(DecoderWriter(_codec));
+      _events = EventStreamWriter(_decoder);
 
   final TypeCodec _codec;
   final RequestWriter _request;

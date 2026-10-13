@@ -2,9 +2,8 @@ import '../model/media_type.dart';
 import '../model/schema.dart';
 import 'ir_context.dart';
 import 'json_equality.dart';
-import 'ref_follower.dart';
 import 'schema_essence.dart';
-import 'schema_shapes.dart';
+import 'schema_unwrapper.dart';
 
 /// Decides from the spec, before any type is mapped, whether the event
 /// streams of an operation's successes describe their events the same way:
@@ -20,13 +19,10 @@ import 'schema_shapes.dart';
 /// same text or scalar type.
 final class EventAgreement {
   /// Creates the check; it reads schemas through [_context].
-  const EventAgreement(this._context);
-
-  /// The most wrappers [_unwrapped] takes off a schema: a `$ref` cycle of
-  /// wrappers ends there.
-  static const _maxWrappers = 16;
+  EventAgreement(this._context) : _unwrapper = SchemaUnwrapper(_context.model);
 
   final IrContext _context;
+  final SchemaUnwrapper _unwrapper;
 
   /// Whether every media type of [medias] (null for none) describes its
   /// events as the first does.
@@ -37,22 +33,28 @@ final class EventAgreement {
 
   /// The way [media] describes its events: where the description is
   /// (`itemSchema` or `schema`) and the schema at the end of its `$ref`s.
-  (bool, Schema?)? _keyOf(MediaType? media) {
+  _Description? _keyOf(MediaType? media) {
     if (media?.itemSchema case final item?) {
-      return (true, _context.model.resolveSchema(item));
+      return _Description(
+        isItemSchema: true,
+        schema: _context.model.resolveSchema(item),
+      );
     }
     if (media?.schema case final schema?) {
-      return (false, _context.model.resolveSchema(schema));
+      return _Description(
+        isItemSchema: false,
+        schema: _context.model.resolveSchema(schema),
+      );
     }
     return null;
   }
 
-  bool _same((bool, Schema?)? a, (bool, Schema?)? b) {
-    final isItemSchema = a?.$1 ?? false;
-    if (isItemSchema != (b?.$1 ?? false)) return false;
-    final (x, y) = (a?.$2, b?.$2);
+  bool _same(_Description? a, _Description? b) {
+    final isItemSchema = a?.isItemSchema ?? false;
+    if (isItemSchema != (b?.isItemSchema ?? false)) return false;
+    final (x, y) = (a?.schema, b?.schema);
     if (_sameSchema(x, y)) return true;
-    final (plainX, plainY) = (_unwrapped(x), _unwrapped(y));
+    final (plainX, plainY) = (_unwrapper.unwrap(x), _unwrapper.unwrap(y));
     return _sameSchema(plainX, plainY) ||
         (!isItemSchema && _sameScalar(plainX, plainY));
   }
@@ -73,20 +75,6 @@ final class EventAgreement {
               SchemaEssence.of(x.$1),
               SchemaEssence.of(y.$1),
             ));
-  }
-
-  /// [schema] without the wrappers that add nothing to the one schema they
-  /// stand for, followed through `$ref`s.
-  Schema? _unwrapped(Schema? schema) {
-    final refs = RefFollower.of(_context.model);
-    var current = schema;
-    for (var i = 0; i < _maxWrappers; i++) {
-      if (current is! SchemaObject) return current;
-      final single = SchemaShapes.singleOf(current, refs: refs);
-      if (single == null) return current;
-      current = _context.model.resolveSchema(single);
-    }
-    return current;
   }
 
   /// Whether [a] and [b] give the same text or scalar: no schema and a
@@ -131,4 +119,13 @@ final class EventAgreement {
       schema.oneOf.isEmpty &&
       schema.anyOf.isEmpty &&
       schema.not == null;
+}
+
+/// How a media type describes its events: by `itemSchema` or by `schema`,
+/// and the schema at the end of its `$ref`s.
+final class _Description {
+  const _Description({required this.isItemSchema, required this.schema});
+
+  final bool isItemSchema;
+  final Schema? schema;
 }

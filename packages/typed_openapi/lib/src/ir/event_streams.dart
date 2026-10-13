@@ -6,9 +6,9 @@ import 'ir.dart';
 import 'ir_context.dart';
 import 'media_type_picker.dart';
 import 'names.dart';
-import 'operation_builder.dart';
 import 'response_statuses.dart';
 import 'schema_mapper.dart';
+import 'spec_operation.dart';
 import 'sse_override_checks.dart';
 import 'written_streams.dart';
 
@@ -260,9 +260,9 @@ final class EventStreams {
   /// unless it says no with `sse.reconnect` in the config; any other method
   /// never, reported (TOA665) only when the config asks for reconnection,
   /// since it does not apply there. The `sse.reconnect` override of the
-  /// operation ([override]) wins over both.
-  StreamReconnection _reconnection(SpecOperation entry, bool? override) {
-    if (override != null) return override ? .on : .off;
+  /// operation ([enabled], when it has one) wins over both.
+  StreamReconnection _reconnection(SpecOperation entry, bool? enabled) {
+    if (enabled != null) return enabled ? .on : .off;
     final config = _context.config.streamReconnect;
     if (entry.method == 'get') return config ? .on : .onRequest;
     if (config) {

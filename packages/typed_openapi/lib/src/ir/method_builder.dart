@@ -51,9 +51,7 @@ final class MethodBuilder {
     final main = switch (shape) {
       .none => _operation(
         entry,
-        name,
-        parameters,
-        _responses.pick(entry.operation),
+        _Method(name, parameters, _responses.pick(entry.operation)),
       ),
       .both => _bodyOperation(entry, name, parameters, hasStream: hasStream),
       .only || .mixed || .excluded => null,
@@ -82,10 +80,12 @@ final class MethodBuilder {
     final picked = _responses.pick(entry.operation, hasStreamMethod: true);
     return _operation(
       entry,
-      name,
-      parameters,
-      picked,
-      accept: hasStream ? _accept(picked) : null,
+      _Method(
+        name,
+        parameters,
+        picked,
+        accept: hasStream ? _accept(picked) : null,
+      ),
     );
   }
 
@@ -118,17 +118,14 @@ final class MethodBuilder {
       picked,
       _names.pascal(named) ?? named,
     );
-    return _operation(entry, named, parameters, picked, events: events);
+    return _operation(
+      entry,
+      _Method(named, parameters, picked, events: events),
+    );
   }
 
-  OperationIr _operation(
-    SpecOperation entry,
-    String name,
-    List<ParameterIr> parameters,
-    List<PickedResponse> picked, {
-    EventStreamIr? events,
-    String? accept,
-  }) {
+  OperationIr _operation(SpecOperation entry, _Method method) {
+    final _Method(:name, :parameters, :picked, :events, :accept) = method;
     final operation = entry.operation;
     final prefix = _names.pascal(name) ?? name;
     final responses = _responses.of(picked, prefix);
@@ -154,4 +151,23 @@ final class MethodBuilder {
       accept: accept,
     );
   }
+}
+
+/// What sets one method of an operation apart from the operation's other
+/// method: its [name], the [parameters] and the [picked] responses it uses,
+/// the [events] it returns and the `Accept` it sends.
+final class _Method {
+  const _Method(
+    this.name,
+    this.parameters,
+    this.picked, {
+    this.events,
+    this.accept,
+  });
+
+  final String name;
+  final List<ParameterIr> parameters;
+  final List<PickedResponse> picked;
+  final EventStreamIr? events;
+  final String? accept;
 }

@@ -3,29 +3,28 @@ import '../model/schema.dart';
 import '../model/spec_node.dart';
 import 'dart_type.dart';
 import 'ir_context.dart';
-import 'ref_follower.dart';
 import 'schema_mapper.dart';
-import 'schema_shapes.dart';
+import 'schema_unwrapper.dart';
 
 /// Reads what the data of one event is (decision 1 of M10): JSON in a
 /// `contentSchema`, a string as text, or neither (TOA666).
 final class EventDataReader {
   /// Creates the reader; it maps types with [_mapper].
-  const EventDataReader(this._context, this._mapper);
-
-  /// The most wrappers [_plain] takes off a schema: a `$ref` cycle of
-  /// wrappers ends there.
-  static const _maxWrappers = 16;
+  EventDataReader(this._context, this._mapper)
+    : _unwrapper = SchemaUnwrapper(_context.model);
 
   final IrContext _context;
   final SchemaMapper _mapper;
+  final SchemaUnwrapper _unwrapper;
 
   /// The type of the event data [data] describes, as a one-element record:
   /// JSON in a `contentSchema` with a JSON `contentMediaType`, or null for
   /// text (a string, also one with a `contentMediaType` that is not JSON);
   /// null itself when [data] says neither.
   (DartType?,)? read(Schema? data, NameHint hint) {
-    final schema = data == null ? null : _plain(data);
+    final schema = data == null
+        ? null
+        : _unwrapper.unwrap(_context.model.resolveSchema(data));
     if (schema is! SchemaObject) return null;
     final contentSchema = schema.contentSchema;
     final mediaType = schema.contentMediaType;
@@ -64,19 +63,6 @@ final class EventDataReader {
   /// about the schema.
   bool isBroken(Schema? schema) =>
       schema != null && _context.model.resolveSchema(schema) == null;
-
-  /// [schema] at the end of its `$ref`s, without the wrappers that add
-  /// nothing: an annotation-only `allOf`, a nullable `anyOf`.
-  Schema? _plain(Schema schema) {
-    final refs = RefFollower.of(_context.model);
-    var current = _context.model.resolveSchema(schema);
-    for (var i = 0; i < _maxWrappers && current is SchemaObject; i++) {
-      final single = SchemaShapes.singleOf(current, refs: refs);
-      if (single == null) break;
-      current = _context.model.resolveSchema(single);
-    }
-    return current;
-  }
 
   /// Reports that the data at [location] is neither text nor JSON with a
   /// `contentSchema` (TOA666): it is read as text.

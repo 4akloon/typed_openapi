@@ -17,12 +17,12 @@ import '../helpers/size_limits.dart';
 /// they were listed. Keep the entries sorted.
 const Map<String, int> _fileAllowlist = {
   // M9: naming.client is read with the other naming keys.
-  'lib/src/config/config_loader.dart': 794,
+  'lib/src/config/config_loader.dart': 782,
   'lib/src/emit/model_emitter.dart': 379,
   'lib/src/emit/union_emitter.dart': 416,
-  // M9: the fields the API emitter reads on the operation IR classes, and
-  // whether a response body is a secret.
-  'lib/src/ir/ir.dart': 709,
+  // The declarations, enums, the client and its groups; the operation's
+  // parameter, body and response nodes have files of their own.
+  'lib/src/ir/ir.dart': 496,
   // M9: event streams in the empty-client report; webhooks checked.
   'lib/src/ir/ir_builder.dart': 537,
   'test/cli/generate_command_test.dart': 771,

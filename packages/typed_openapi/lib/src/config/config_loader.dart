@@ -14,6 +14,7 @@ import '../ir/names.dart';
 import '../load/yaml_composer.dart';
 import '../normalize/normalizer.dart';
 import '../overrides/override_set.dart';
+import 'config_sources.dart';
 import 'generation_config.dart';
 import 'operation_settings_reader.dart';
 import 'project_config.dart';
@@ -493,7 +494,10 @@ class _ConfigReader {
 /// `errors` key by key, and `types.formats` and `types.schemas` entry by
 /// entry.
 final class _GenerationReader {
-  _GenerationReader(this._reader, this._sources);
+  _GenerationReader(
+    this._reader,
+    List<(Map<String, Object?>, JsonPointer)> sources,
+  ) : _sources = ConfigSources(sources);
 
   static const _namingKeys = {
     'client',
@@ -512,7 +516,7 @@ final class _GenerationReader {
   final _ConfigReader _reader;
 
   /// The maps to read, `defaults` first.
-  final List<(Map<String, Object?>, JsonPointer)> _sources;
+  final ConfigSources _sources;
 
   GenerationConfig read() {
     _checkSectionKeys();
@@ -563,24 +567,8 @@ final class _GenerationReader {
     }
   }
 
-  /// The value of [key] (or of [key] in [section]) from the last source
-  /// that has it, with its pointer.
-  (Object?, JsonPointer)? _pick(String key, [String? section]) {
-    for (final (map, at) in _sources.reversed) {
-      if (section == null) {
-        if (map.containsKey(key)) return (map[key], at.child(key));
-        continue;
-      }
-      final inner = map[section];
-      if (inner is Map<String, Object?> && inner.containsKey(key)) {
-        return (inner[key], at.child(section).child(key));
-      }
-    }
-    return null;
-  }
-
   (String, JsonPointer)? _string(String section, String key) {
-    final picked = _pick(key, section);
+    final picked = _sources.pick(key, section);
     if (picked == null) return null;
     final (value, at) = picked;
     if (value is String && value.isNotEmpty) return (value, at);
@@ -601,7 +589,7 @@ final class _GenerationReader {
   }
 
   String? _identifierAt(String key) {
-    final picked = _pick(key, 'naming');
+    final picked = _sources.pick(key, 'naming');
     if (picked == null) return null;
     final (value, at) = picked;
     if (value is String && _identifier.hasMatch(value)) return value;
@@ -620,7 +608,7 @@ final class _GenerationReader {
     return _invalid(
       '"default_group" is the name of a class and "$name" is a reserved word '
       'in Dart.',
-      _pick('default_group', 'naming')!.$2,
+      _sources.pick('default_group', 'naming')!.$2,
     );
   }
 
@@ -636,7 +624,7 @@ final class _GenerationReader {
     return _invalid(
       '"client" is the name of a class: an identifier that starts with an '
       'uppercase letter and is not a reserved word in Dart.',
-      _pick('client', 'naming')!.$2,
+      _sources.pick('client', 'naming')!.$2,
     );
   }
 
@@ -650,8 +638,8 @@ final class _GenerationReader {
     final patchSuffix = patch ?? GenerationConfig.defaultPatchSuffix;
     if (inputSuffix != patchSuffix) return (inputSuffix, patchSuffix);
     final at = patch != null
-        ? _pick('patch_suffix', 'naming')!.$2
-        : _pick('input_suffix', 'naming')!.$2;
+        ? _sources.pick('patch_suffix', 'naming')!.$2
+        : _sources.pick('input_suffix', 'naming')!.$2;
     _invalid(
       '"input_suffix" and "patch_suffix" must be different, both are '
       '"$inputSuffix"; the defaults ${GenerationConfig.defaultInputSuffix} '
@@ -676,7 +664,7 @@ final class _GenerationReader {
   }
 
   T? _choice<T extends Enum>(String key, List<T> values) {
-    final picked = _pick(key);
+    final picked = _sources.pick(key);
     if (picked == null) return null;
     final (value, at) = picked;
     for (final choice in values) {
@@ -689,7 +677,7 @@ final class _GenerationReader {
   }
 
   OperationFilter _filter(String key) {
-    final picked = _pick(key);
+    final picked = _sources.pick(key);
     if (picked == null) return const OperationFilter();
     final (value, at) = picked;
     if (value is! Map<String, Object?>) {
