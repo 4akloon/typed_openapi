@@ -887,7 +887,11 @@ generator's public API only. Its network use is the `SpecCache` download
 - `lib/src/semver/` - `SemverRule` and `corpus semver`: when `corpus.lock`
   (once the base has one) or a golden file changed since the base, the
   generator's CHANGELOG needs an entry under `### Output changes` in its
-  top section and the version a minor (before 1.0) or major raise.
+  top section and the version a minor (before 1.0) or major raise, unless
+  the CHANGELOG's top section at the base commit is titled `Unreleased` for
+  the version in the base pubspec (never published): then the entry is
+  enough. Files are read at HEAD and at the base; a dirty working tree does
+  not count.
 - `test/sarif/` - the SARIF output of `SarifReporter` against the SARIF
   2.1.0 JSON schema (`JsonSchema`, a test helper for the draft-04 subset the
   schema uses) and against GitHub code scanning's required properties

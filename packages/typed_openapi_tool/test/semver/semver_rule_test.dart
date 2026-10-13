@@ -1,7 +1,8 @@
 import 'package:test/test.dart';
 import 'package:typed_openapi_tool/src/semver/semver_rule.dart';
 
-const _base = '## 0.1.0 - Unreleased\n\n### Added\n- Things.\n';
+const _base = '## 0.1.0\n\n### Added\n- Things.\n';
+const _unreleased = '## 0.1.0 - Unreleased\n\n### Added\n- Things.\n';
 const _entry =
     '## 0.2.0 - Unreleased\n\n### Output changes\n'
     '- stripe: models/a.dart.\n\n## 0.1.0\n';
@@ -14,11 +15,12 @@ void main() {
     String version = '0.2.0',
     String changelog = _entry,
     String baseVersion = '0.1.0',
+    String baseChangelog = _base,
   }) => rule.problems(
     outputChanged: changed,
     basePubspec: 'name: typed_openapi\nversion: $baseVersion\n',
     pubspec: 'name: typed_openapi\nversion: $version\n',
-    baseChangelog: _base,
+    baseChangelog: baseChangelog,
     changelog: changelog,
   );
 
@@ -47,6 +49,36 @@ void main() {
       contains('from 1.2.0 to 2.0.0 or later (major after 1.0)'),
     ]);
     expect(problems(baseVersion: '1.2.0', version: '2.0.0'), isEmpty);
+  });
+
+  test('an unreleased base needs the entry but not a raised version', () {
+    const entry =
+        '## 0.1.0 - Unreleased\n\n### Output changes\n- a.\n\n### Added\n';
+    expect(
+      problems(version: '0.1.0', baseChangelog: _unreleased, changelog: entry),
+      isEmpty,
+    );
+    expect(
+      problems(
+        version: '0.1.0',
+        baseChangelog: _unreleased,
+        changelog: _unreleased,
+      ),
+      [contains('add an entry')],
+    );
+  });
+
+  test('a released base still needs a raised version', () {
+    expect(problems(version: '0.1.0', baseChangelog: _base), [
+      contains('raise the version'),
+    ]);
+  });
+
+  test('an unreleased section of another version is not the base one', () {
+    const other = '## 0.2.0 - Unreleased\n\n### Added\n- x.\n';
+    expect(problems(version: '0.1.0', baseChangelog: other), [
+      contains('raise the version'),
+    ]);
   });
 
   test('an unreadable version is a problem of its own', () {

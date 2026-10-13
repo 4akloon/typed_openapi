@@ -1,6 +1,10 @@
 /// The rule of R15.4 (spec decision 7): a change of generated output for the
 /// same input is a breaking change of the generator, so a change that
 /// changes output must say so in the CHANGELOG and raise the version.
+///
+/// While the base's CHANGELOG top section is titled `Unreleased` for the
+/// version in the base pubspec, that version has never been published, so the
+/// output change needs the CHANGELOG entry but no raise of the version.
 final class SemverRule {
   /// Creates the rule.
   const SemverRule();
@@ -42,7 +46,7 @@ final class SemverRule {
             'files affected.',
       if (base == null || next == null)
         'The version of packages/typed_openapi/pubspec.yaml cannot be read.'
-      else if (!_raised(base, next))
+      else if (!_isUnreleased(baseChangelog, base) && !_raised(base, next))
         'The generated output changed: raise the version of '
             'packages/typed_openapi/pubspec.yaml from ${base.join('.')} to '
             '${_required(base)} or later (${base.first == 0 ? 'minor before '
@@ -56,6 +60,16 @@ final class SemverRule {
     final m? => [for (var i = 1; i <= 3; i++) int.parse(m[i] ?? '0')],
     null => null,
   };
+
+  /// Whether the top section of [changelog] is the `Unreleased` one of
+  /// [version].
+  static bool _isUnreleased(String changelog, List<int> version) {
+    final heading = _topSection(changelog).split('\n').first.trim();
+    return RegExp(
+      '^## ${RegExp.escape(version.join('.'))}\\s+-\\s+Unreleased\\s*\$',
+      caseSensitive: false,
+    ).hasMatch(heading);
+  }
 
   static bool _raised(List<int> base, List<int> next) => base.first == 0
       ? next.first > 0 || next[1] > base[1]
