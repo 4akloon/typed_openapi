@@ -16,7 +16,8 @@ permissions:
 # - the corpus job generates the public specs with both SDKs and compares
 #   the output with corpus.lock;
 # - the quick fuzz runs 200 seeds; the semver job checks that a change of
-#   output carries a CHANGELOG entry and a raised version.
+#   output carries a CHANGELOG entry and a raised version (no raise is
+#   needed while the base version is unreleased; the entry still is).
 jobs:
   analyze-test:
     name: Test (${{ matrix.os }}, ${{ matrix.sdk }})
