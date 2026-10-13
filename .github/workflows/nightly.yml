@@ -5,11 +5,15 @@ on:
     - cron: '0 3 * * *'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 # The nightly layer of the M11 matrix (spec decision 4): the beta SDK, where
 # a failure is a warning only; the corpus on Windows; the long fuzz.
 jobs:
   beta:
     name: Test (beta, warning only)
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -23,18 +27,22 @@ jobs:
         run: dart pub get
 
       - name: Test typed_openapi
+        if: always()
         run: dart test
         working-directory: packages/typed_openapi
 
       - name: Test typed_openapi_runtime
+        if: always()
         run: dart test
         working-directory: packages/typed_openapi_runtime
 
       - name: Test the runtime in Chrome
+        if: always()
         run: dart test -p chrome
         working-directory: packages/typed_openapi_runtime
 
       - name: Check the corpus
+        if: always()
         run: dart run bin/corpus.dart check
         working-directory: packages/typed_openapi_tool
 
@@ -44,6 +52,7 @@ jobs:
 
   corpus-windows:
     name: Corpus (Windows)
+    timeout-minutes: 90
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
@@ -67,6 +76,7 @@ jobs:
 
   fuzz:
     name: Escaping fuzz (6000 seeds)
+    timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

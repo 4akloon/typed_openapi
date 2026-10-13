@@ -63,4 +63,30 @@ void main() {
     );
     expect(runsOf('nightly.yml', 'fuzz'), contains(contains('--seeds 6000')));
   });
+
+  test('workflows can only read the repository', () {
+    for (final name in ['ci.yml', 'nightly.yml']) {
+      expect(at(name, ['permissions']), {'contents': 'read'}, reason: name);
+    }
+  });
+
+  test('semver sees the full history and runs on pull requests only', () {
+    expect(at('ci.yml', ['jobs', 'semver', 'if']), contains('pull_request'));
+    expect(
+      at('ci.yml', ['jobs', 'semver', 'steps', 0, 'with', 'fetch-depth']),
+      0,
+    );
+  });
+
+  test('only the nightly beta job may fail without failing the run', () {
+    for (final name in ['ci.yml', 'nightly.yml']) {
+      final jobs = at(name, ['jobs']) as Map<Object?, Object?>;
+      final lenient = [
+        for (final MapEntry(:key, :value) in jobs.entries)
+          if ((value as Map<Object?, Object?>).containsKey('continue-on-error'))
+            key,
+      ];
+      expect(lenient, name == 'nightly.yml' ? ['beta'] : isEmpty);
+    }
+  });
 }
