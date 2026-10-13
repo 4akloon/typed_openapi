@@ -108,16 +108,18 @@ final class EventStreams {
     List<PickedResponse> picked,
     String prefix,
   ) {
-    final types = {
-      for (final (status, response, (contentType, media)) in picked)
-        if (status.startsWith('2') && contentType != null)
-          _data.of(
-            media,
-            response.location.child('content').child(contentType),
-            NameHint(prefix, 'Event'),
-          ),
-    };
-    if (types.length > 1) {
+    // Event streams agree when they have one data type or one union.
+    final shapes = <Object?, EventShape>{};
+    for (final (status, response, (contentType, media)) in picked) {
+      if (!status.startsWith('2') || contentType == null) continue;
+      final shape = _data.of(
+        media,
+        response.location.child('content').child(contentType),
+        prefix,
+      );
+      shapes[shape.union?.location ?? shape.data] = shape;
+    }
+    if (shapes.length > 1) {
       _context.report(
         .eventStreamNotGenerated,
         'The event-stream successes of this operation have different event '
@@ -128,8 +130,10 @@ final class EventStreams {
       );
       return null;
     }
+    final shape = shapes.values.firstOrNull;
     return EventStreamIr(
-      data: types.firstOrNull,
+      data: shape?.data,
+      union: shape?.union,
       reconnection: _reconnection(entry),
     );
   }

@@ -32,6 +32,11 @@ final class ResponseSecrets {
                 intoProperties: true,
               )));
 
+  /// Whether a secret is anywhere in [schema], properties included: the
+  /// data of an event no variant names may be any of the events'.
+  bool carriesSecret(Schema schema) =>
+      SchemaShapes.carriesSecret(schema, refs: _refs, intoProperties: true);
+
   /// Whether the body of type [type] of the `errors.default_schema` is a
   /// secret.
   bool isDefaultErrorSecret(DartType? type) {

@@ -43,7 +43,12 @@ final class DecoderWriter {
     if (operation.events case final events?) {
       _codec.imports.fromRuntime('SseItem');
       final data = events.data;
-      return 'Stream<SseItem<${data == null ? 'String' : _codec.type(data)}>>';
+      final item = switch (events.union) {
+        final union? => union.name,
+        null when data != null => _codec.type(data),
+        null => 'String',
+      };
+      return 'Stream<SseItem<$item>>';
     }
     final successes = operation.successes;
     if (successes.isEmpty) {

@@ -33,6 +33,7 @@ final class OperationIr {
     StatusTypeIr? successType,
     StatusTypeIr? errorType,
     String? partsName,
+    EventStreamIr? events,
   }) => OperationIr(
     location: location,
     name: name,
@@ -51,7 +52,7 @@ final class OperationIr {
     successType: successType,
     errorType: errorType,
     partsName: partsName,
-    events: events,
+    events: events ?? this.events,
   );
 
   /// Where the Operation Object is.

@@ -82,6 +82,7 @@ linter:
         'hierarchy',
         'wire',
         'chat',
+        'events_hostile',
       ]) {
         for (final mode in UnionMode.values) {
           final files = emitClient(
@@ -157,6 +158,13 @@ waits [1000, 1500, 1500]
 requests 1
   event message # Thread(id: t1, replies: null)
   end cancel
+  delta Hi
+  usage 3
+  note plain text
+  FollowChatEventUnknown(ping, <redacted>)
+  decode error /tokens
+  done
+  end closed
 success 200
   event message # line 1
 line 2

@@ -66,6 +66,41 @@ void main() {
     expect(threads, isNot(contains('reconnection:')));
   });
 
+  test('events typed by name are a sealed union with an unknown variant', () {
+    expect(
+      chat,
+      contains(
+        'Future<Result<Stream<SseItem<FollowChatEvent>>, Never>> followChat({',
+      ),
+    );
+    expect(chat, contains('    FollowChatEvent.fromEvent,'));
+    expect(chat, contains('sealed class FollowChatEvent {'));
+    expect(chat, contains("    'done' => const FollowChatEventDone(),"));
+    expect(
+      chat,
+      contains('    _ => FollowChatEventUnknown(message.event, message.data),'),
+    );
+  });
+
+  test('hostile event names are escaped literals and safe names', () {
+    final feed = emitClient('events_hostile.yaml')['api/default_api.dart']!;
+    for (final pattern in [
+      "    '' => const FeedEventEvent1(),",
+      "    '*/' => FeedEventEvent2(message.data),",
+      r"    '\$cost' => FeedEventCost(message.data),",
+      r"    'a\nb' => FeedEventAB(message.data),",
+      r"    '\u{202e}evil' => FeedEventEvil(message.data),",
+      "    'unknown' => FeedEventUnknown2(message.data),",
+      "    'delta' => FeedEventDelta2(message.data),",
+      '/// The event with an empty name of [DefaultApi.feed], which has no data.',
+      "  String toString() => 'FeedEventSecret(<redacted>)';",
+      r"  String toString() => 'FeedEventUnknown($event, <redacted>)';",
+    ]) {
+      expect(feed, contains(pattern));
+    }
+    expect(feed, isNot(contains('\u202E')));
+  });
+
   test('text events are the data as it is', () {
     expect(threads, contains('Stream<SseItem<String>>'));
     expect(threads, contains('(m) => m.data,'));

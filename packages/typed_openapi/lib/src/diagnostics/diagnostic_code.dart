@@ -487,6 +487,14 @@ enum DiagnosticCode {
   /// with a `contentSchema`): the data is read as text.
   eventItemSchemaUnread('TOA666', 'event-item-schema-unread', .warning),
 
+  /// Two branches of an `itemSchema` union fix the same event name: the
+  /// later one is left out.
+  eventNameDuplicate('TOA667', 'event-name-duplicate', .warning),
+
+  /// An event name has no ASCII letter or digit (`""`, `*/`), so its
+  /// variant is named by its place (`ChatEventEvent2`).
+  eventNameUnrepresentable('TOA668', 'event-name-unrepresentable', .info),
+
   /// A normalizer fix or an override was not applied: its file cannot be
   /// read, its target is gone, the spec kept changing after the last pass, or
   /// the change would have no effect in the spec's dialect.

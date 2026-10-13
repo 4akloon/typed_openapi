@@ -1,6 +1,7 @@
 import '../diagnostics/json_pointer.dart';
 import '../model/spec_node.dart';
 import 'dart_type.dart';
+import 'event_union_names.dart';
 import 'ir.dart';
 import 'ir_context.dart';
 import 'names.dart';
@@ -24,7 +25,8 @@ final class ApiNames {
     : this._(context, TypeClaims(context, types));
 
   ApiNames._(this._context, this._claims)
-    : _root = RootNames(_context, _claims);
+    : _root = RootNames(_context, _claims),
+      _events = EventUnionNames(_context, _claims);
 
   static const _names = DartNames();
 
@@ -67,6 +69,7 @@ final class ApiNames {
   final IrContext _context;
   final TypeClaims _claims;
   final RootNames _root;
+  final EventUnionNames _events;
 
   /// The variant name of [status]: the reason phrase of a code, the name of
   /// a range (`4XX` is `ClientError`), `Other` for `default`, and `Status`
@@ -160,6 +163,7 @@ final class ApiNames {
       successType: successType,
       errorType: errorType,
       partsName: partsName,
+      events: _events.name(operation, prefix),
     );
   }
 

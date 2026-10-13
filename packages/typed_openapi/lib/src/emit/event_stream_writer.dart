@@ -30,9 +30,10 @@ final class EventStreamWriter {
   }
 
   /// The function that decodes the data of one event of [events].
-  String decoder(EventStreamIr events) => switch (events.data) {
-    null => '(m) => m.data',
-    final data => '(m) => ${_decoder.decode(data, 'm.json')}',
+  String decoder(EventStreamIr events) => switch ((events.union, events.data)) {
+    (final union?, _) => '${union.name}.fromEvent',
+    (null, null) => '(m) => m.data',
+    (null, final data?) => '(m) => ${_decoder.decode(data, 'm.json')}',
   };
 
   /// Writes the named arguments after `call` of `openEvents`.

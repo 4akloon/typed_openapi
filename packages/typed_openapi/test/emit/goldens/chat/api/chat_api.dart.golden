@@ -9,14 +9,18 @@ import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'
         JsonReader,
         OperationInfo,
         OperationRequest,
+        PathParameter,
         RawResponse,
         Result,
-        SseItem;
+        SseItem,
+        SseMessage,
+        immutable;
 
 import '../models/delta.dart';
 import '../models/problem.dart';
 import '../models/prompt.dart';
 import '../models/reply.dart';
+import '../models/usage.dart';
 
 /// The operations of the `ChatApi` group.
 class ChatApi {
@@ -43,6 +47,13 @@ class ChatApi {
     operationId: 'chat',
     method: 'POST',
     pathTemplate: '/chat',
+    tags: ['chat'],
+  );
+
+  static const _followChat = OperationInfo(
+    operationId: 'followChat',
+    method: 'GET',
+    pathTemplate: '/chat/{chatId}/follow',
     tags: ['chat'],
   );
 
@@ -114,4 +125,147 @@ class ChatApi {
         400 => r.error(Problem.fromJson(JsonReader.asObject(r.json))),
         _ => r.undocumented(),
       };
+
+  /// The events of a chat, typed one by one.
+  ///
+  /// Returns the events of `text/event-stream` as they arrive; the stream ends
+  /// with `SseDisconnected`. It reconnects with `Last-Event-ID` when `call.sse`
+  /// asks for it.
+  ///
+  /// `GET /chat/{chatId}/follow` (`followChat`).
+  Future<Result<Stream<SseItem<FollowChatEvent>>, Never>> followChat({
+    required String chatId,
+    CallOptions? call,
+  }) => _sender.openEvents(
+    OperationRequest(
+      _followChat,
+      path: [PathParameter('chatId', chatId)],
+      streamStatuses: {200},
+    ),
+    FollowChatEvent.fromEvent,
+    _decodeFollowChat,
+    call: call,
+  );
+
+  static Result<Stream<SseItem<FollowChatEvent>>, Never> _decodeFollowChat(RawResponse r) =>
+      switch (r.statusCode) {
+        _ => r.undocumented(),
+      };
+}
+
+/// The events of [ChatApi.followChat], by their event name: a `switch` names
+/// every one.
+@immutable
+sealed class FollowChatEvent {
+  /// Creates the value.
+  const FollowChatEvent();
+
+  /// Decodes [message] by its event name.
+  static FollowChatEvent fromEvent(SseMessage message) => switch (message.event) {
+    'delta' => FollowChatEventDelta(Delta.fromJson(JsonReader.asObject(message.json))),
+    'usage' => FollowChatEventUsage(Usage.fromJson(JsonReader.asObject(message.json))),
+    'note' => FollowChatEventNote(message.data),
+    'done' => const FollowChatEventDone(),
+    _ => FollowChatEventUnknown(message.event, message.data),
+  };
+}
+
+/// The `delta` event of [ChatApi.followChat].
+class FollowChatEventDelta extends FollowChatEvent {
+  /// Wraps [data].
+  const FollowChatEventDelta(this.data);
+
+  /// The data of the event.
+  final Delta data;
+
+  @override
+  bool operator ==(Object other) =>
+      other is FollowChatEventDelta &&
+      other.data == data;
+
+  @override
+  int get hashCode => data.hashCode;
+
+  @override
+  String toString() => 'FollowChatEventDelta($data)';
+}
+
+/// The `usage` event of [ChatApi.followChat].
+class FollowChatEventUsage extends FollowChatEvent {
+  /// Wraps [data].
+  const FollowChatEventUsage(this.data);
+
+  /// The data of the event.
+  final Usage data;
+
+  @override
+  bool operator ==(Object other) =>
+      other is FollowChatEventUsage &&
+      other.data == data;
+
+  @override
+  int get hashCode => data.hashCode;
+
+  @override
+  String toString() => 'FollowChatEventUsage($data)';
+}
+
+/// The `note` event of [ChatApi.followChat].
+class FollowChatEventNote extends FollowChatEvent {
+  /// Wraps [data].
+  const FollowChatEventNote(this.data);
+
+  /// The data of the event.
+  final String data;
+
+  @override
+  bool operator ==(Object other) =>
+      other is FollowChatEventNote &&
+      other.data == data;
+
+  @override
+  int get hashCode => data.hashCode;
+
+  @override
+  String toString() => 'FollowChatEventNote($data)';
+}
+
+/// The `done` event of [ChatApi.followChat], which has no data.
+class FollowChatEventDone extends FollowChatEvent {
+  /// Creates the value.
+  const FollowChatEventDone();
+
+  @override
+  bool operator ==(Object other) => other is FollowChatEventDone;
+
+  @override
+  int get hashCode => (FollowChatEventDone).hashCode;
+
+  @override
+  String toString() => 'FollowChatEventDone()';
+}
+
+/// An event of [ChatApi.followChat] whose name no other variant has, with its
+/// data as text.
+class FollowChatEventUnknown extends FollowChatEvent {
+  /// Wraps an event named [event] with [data].
+  const FollowChatEventUnknown(this.event, this.data);
+
+  /// The event name.
+  final String event;
+
+  /// The data as received.
+  final String data;
+
+  @override
+  bool operator ==(Object other) =>
+      other is FollowChatEventUnknown &&
+      other.event == event &&
+      other.data == data;
+
+  @override
+  int get hashCode => Object.hash(event, data);
+
+  @override
+  String toString() => 'FollowChatEventUnknown($event, <redacted>)';
 }

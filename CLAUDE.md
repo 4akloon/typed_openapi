@@ -362,7 +362,16 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `itemSchema.properties.data` with a JSON `contentMediaType` and a
   `contentSchema`, a string `data` is text, anything else text with TOA666;
   `schema` is the data's JSON, an array its items (TOA664), a plain string
-  text. TOA654 is now only an operation whose event-stream successes
+  text. An `itemSchema` whose `oneOf` (or `anyOf`) branches each fix
+  `event` to a string `const` (or a one-value `enum`) is an
+  `EventUnionIr` (R12.2): a variant per event name (`data` by the same
+  rules, none without `data` or with a `null` one; a repeated name keeps
+  the first branch, TOA667), `unknownSensitive` when any event's data
+  carries a secret; `EventUnionNames` (from `ApiNames`, after the status
+  types) names it `<Method>Event`, then `<Union>Unknown`, then
+  `<Union><Event>` (`<Union>Event<n>` without letters or digits, TOA668;
+  `2` on a collision, TOA551). No `SchemaMapper` change: the variants'
+  types come from `typeOf`. TOA654 is now only an operation whose event-stream successes
   disagree on the data type or sit next to successes with another body.
   `IrJson` dumps an IR, the operations through `IrOperationJson`: every
   field of the operation IR (encoding, parts, security, servers, status
@@ -482,7 +491,11 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   through `EventStreamWriter`: `streamStatuses` are its 2xx statuses, the
   event decoder `(m) => ...` reads `m.json` or `m.data` for text, a
   `reconnection:` argument unless `onRequest`, and its decoder has error
-  arms only); the
+  arms only; an event union is written after the status types by
+  `EventUnionEmitter`: an `@immutable sealed` class whose static
+  `fromEvent(SseMessage)` switches on the event name (escaped literals),
+  plain variant classes equal by value with `<redacted>` for secrets, and
+  the unknown variant `(event, data)`); the
   decoder switches on the status: codes, then ranges, then `default`
   (every status but 2xx), `_` is `undocumented()`; Dio reads JSON unless
   every success with a body is text (`text`) or something else is

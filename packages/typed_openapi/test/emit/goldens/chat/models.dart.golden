@@ -6,3 +6,4 @@ export 'models/problem.dart';
 export 'models/prompt.dart';
 export 'models/reply.dart';
 export 'models/thread.dart';
+export 'models/usage.dart';

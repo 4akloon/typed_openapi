@@ -206,6 +206,33 @@ Future<void> main() async {
   }
   await body.close();
 
+  // Events typed one by one by their name, an unknown one kept, a bad one.
+  adapter = Adapter([
+    (_) => events(
+      'event: delta\ndata: {"part": "Hi", "sessionToken": "s2"}\n\n'
+      'event: usage\ndata: {"tokens": 3}\n\n'
+      'event: note\ndata: plain text\n\n'
+      'event: ping\ndata: {}\n\n'
+      'event: usage\ndata: {"tokens": "many"}\n\n'
+      'event: done\ndata: \n\n',
+    ),
+  ]);
+  final follow = await client(adapter).chat.followChat(chatId: 'c1');
+  if (follow case Success(:final data)) {
+    await for (final item in data) {
+      final shown = switch (item) {
+        SseEvent(data: FollowChatEventDelta(:final data)) => 'delta ${data.part}',
+        SseEvent(data: FollowChatEventUsage(:final data)) =>
+          'usage ${data.tokens}',
+        SseEvent(data: FollowChatEventNote(:final data)) => 'note $data',
+        SseEvent(data: FollowChatEventDone()) => 'done',
+        SseEvent(data: final FollowChatEventUnknown unknown) => '$unknown',
+        _ => describe(item),
+      };
+      print('  $shown');
+    }
+  }
+
   // Text events and an undocumented status.
   adapter = Adapter([(_) => events('data: line 1\ndata: line 2\n\n')]);
   await printAll(await client(adapter).threads.tailLog());

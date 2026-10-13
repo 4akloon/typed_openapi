@@ -51,6 +51,36 @@ paths:
           description: No such thread.
           content:
             application/json: {schema: {$ref: '#/components/schemas/Problem'}}
+  /chat/{chatId}/follow:
+    get:
+      operationId: followChat
+      tags: [chat]
+      summary: The events of a chat, typed one by one.
+      parameters:
+        - {name: chatId, in: path, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: One event per change.
+          content:
+            text/event-stream:
+              itemSchema:
+                oneOf:
+                  - type: object
+                    required: [event, data]
+                    properties:
+                      event: {const: delta}
+                      data: {type: string, contentMediaType: application/json, contentSchema: {$ref: '#/components/schemas/Delta'}}
+                  - type: object
+                    properties:
+                      event: {enum: [usage]}
+                      data: {type: string, contentMediaType: application/json, contentSchema: {$ref: '#/components/schemas/Usage'}}
+                  - type: object
+                    properties:
+                      event: {const: note}
+                      data: {type: string}
+                  - type: object
+                    properties:
+                      event: {const: done}
   /log:
     get:
       operationId: tailLog
@@ -84,6 +114,11 @@ components:
       properties:
         id: {type: string}
         replies: {type: array, items: {$ref: '#/components/schemas/Thread'}}
+    Usage:
+      type: object
+      required: [tokens]
+      properties:
+        tokens: {type: integer}
     Problem:
       type: object
       required: [code]

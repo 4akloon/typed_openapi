@@ -73,6 +73,19 @@ paths:
       tags: [files]
       responses:
         "200": {description: ok, content: {text/event-stream: {schema: {type: object, properties: {n: {type: integer}}}}}}
+  /chat:
+    get:
+      operationId: chat
+      tags: [files]
+      responses:
+        "200":
+          description: ok
+          content:
+            text/event-stream:
+              itemSchema:
+                oneOf:
+                  - {properties: {event: {const: token}, data: {type: string, format: password}}}
+                  - {properties: {event: {const: done}}}
 components:
   securitySchemes:
     key: {type: apiKey, name: X-Key, in: header}
@@ -116,6 +129,8 @@ final _classes = <Type>[
   GroupIr,
   OperationIr,
   EventStreamIr,
+  EventUnionIr,
+  EventVariantIr,
   ParameterIr,
   RequestBodyIr,
   ResponseIr,

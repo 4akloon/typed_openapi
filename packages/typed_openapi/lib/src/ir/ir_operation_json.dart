@@ -80,8 +80,27 @@ final class IrOperationJson {
     if (o.events case final events?)
       'events': {
         if (events.data case final data?) 'data': _type(data),
+        if (events.union case final union?) 'union': _union(union),
         'reconnection': events.reconnection.name,
       },
+  };
+
+  Map<String, Object?> _union(EventUnionIr union) => {
+    'name': union.name,
+    'at': _at(union.location),
+    if (union.keepUnknown) 'unknownName': union.unknownName,
+    'keepUnknown': union.keepUnknown,
+    if (union.unknownSensitive) 'unknownSensitive': true,
+    'variants': [
+      for (final v in union.variants)
+        {
+          'event': v.event,
+          'name': v.name,
+          'hasData': v.hasData,
+          if (v.data case final data?) 'data': _type(data),
+          if (v.sensitive) 'sensitive': true,
+        },
+    ],
   };
 
   Map<String, Object?> _parameter(ParameterIr p) => {

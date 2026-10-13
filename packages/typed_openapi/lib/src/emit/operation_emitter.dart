@@ -5,6 +5,7 @@ import 'dart_code.dart';
 import 'dart_writer.dart';
 import 'decoder_writer.dart';
 import 'event_stream_writer.dart';
+import 'event_union_emitter.dart';
 import 'parts_emitter.dart';
 import 'request_writer.dart';
 import 'status_type_emitter.dart';
@@ -81,6 +82,10 @@ final class OperationEmitter {
       if (operation.partsName case final parts?) {
         out.line();
         PartsEmitter(_codec).write(out, parts, operation, group);
+      }
+      if (operation.events?.union case final union?) {
+        out.line();
+        EventUnionEmitter(_codec).write(out, union, operation, group);
       }
     }
   }
