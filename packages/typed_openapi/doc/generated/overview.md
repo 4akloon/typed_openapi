@@ -99,7 +99,7 @@ Names come from the spec and are made valid Dart. Nothing is renamed silently: a
 
 The arguments of a method also avoid the names the generator uses itself: a parameter named `body` or `call` becomes `body_` or `call_` (`TOA550`), and `jsonEncode` and `base64Encode` get a trailing underscore too. The rest of the naming settings (`naming.client`, `naming.group`, `naming.default_group`, `naming.input_suffix`, `naming.patch_suffix`, `naming.stream_suffix`, `naming.operation_prefix`) are listed in [Configuration](../configuration.md); an override of one name is `name:` in the [overrides file](../overrides.md).
 
-> **Gotcha:** an `operationId` in the spec is the method name. If your backend regenerates its ids (`..._1` suffixes, a framework prefix), your method names change. Pin them with `name:` overrides or fix the ids at the source. See [Frameworks](frameworks/nestjs.md) for the usual cases.
+> **Gotcha:** an `operationId` in the spec is the method name. If your backend regenerates its ids (`..._1` suffixes, a framework prefix), your method names change. Pin them with `name:` overrides or fix the ids at the source. See [Frameworks](../frameworks/nestjs.md) for the usual cases.
 
 ## What is deterministic
 
