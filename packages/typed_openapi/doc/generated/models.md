@@ -185,7 +185,7 @@ Only PATCH bodies are affected, and only their optional nullable properties. A P
 
 ## Unknown properties
 
-- `additionalProperties: false`, `true` or absent: unknown JSON keys are ignored.
+- `additionalProperties: false`, `true` or absent: unknown JSON keys are ignored and the model has no field for them. This is how it is meant to work: a field exists only when the spec gives the extra values a schema. `true` and an empty schema `{}` mean the same in JSON Schema, but only `{}` is read as a schema (the extra values are `JsonValue`); to keep arbitrary extra keys, write `additionalProperties: {}`.
 - `additionalProperties` with a schema: they are collected into `additionalProperties` (`Map<String, T>`), decoded with the schema and written back by `toJson`.
 - An object that only has `additionalProperties` with a schema is a `Map<String, T>`, not a class.
 
