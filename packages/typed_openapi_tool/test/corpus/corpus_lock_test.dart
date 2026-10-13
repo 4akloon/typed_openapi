@@ -74,7 +74,7 @@ void main() {
       expect(differences(null, null), isEmpty);
       expect(
         const CorpusLock({'raw/z': skipped}).differencesFrom(
-          CorpusLock({'raw/z': skipped}),
+          const CorpusLock({'raw/z': skipped}),
         ),
         isEmpty,
       );
