@@ -52,14 +52,16 @@ final class SseOverrideApplier {
     final edits = [
       for (final (at, raw) in media) ..._edits(entry, at, raw, schema),
     ];
-    if (edits.isEmpty) {
+    // Only `data` has an unchanged form: the object `events` writes reads
+    // as a union, which the same schema without it does not.
+    if (edits.isEmpty && sse.data != null) {
       _context.report(
         .overrideUnchanged,
         entry,
         'sse',
-        'The spec already has this "$part"; the override changes nothing and '
+        'The spec already has this "data"; the override changes nothing and '
             'can be removed.',
-        fix: 'Remove "$part" from "sse".',
+        fix: 'Remove "data" from "sse".',
       );
     }
     return edits;

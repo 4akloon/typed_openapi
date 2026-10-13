@@ -37,7 +37,7 @@ final class GitHubActionsReporter implements DiagnosticReporter {
           d.span,
           [
             _text(d.message),
-            if (d.pointer case final pointer?) 'at ${pointer.value}',
+            if (d.pointer case final pointer?) 'at ${_text(pointer.value)}',
             if (d.fix case final fix?) 'fix: ${_text(fix)}',
           ],
         ),
@@ -52,7 +52,7 @@ final class GitHubActionsReporter implements DiagnosticReporter {
             [
               _text(related.message),
               if (related.pointer case final JsonPointer pointer)
-                'at ${pointer.value}',
+                'at ${_text(pointer.value)}',
             ],
           ),
         );
@@ -99,5 +99,5 @@ final class GitHubActionsReporter implements DiagnosticReporter {
       .replaceAll('\n', '%0A');
 
   static String _property(String value) =>
-      _data(value).replaceAll(':', '%3A').replaceAll(',', '%2C');
+      _data(_text(value)).replaceAll(':', '%3A').replaceAll(',', '%2C');
 }

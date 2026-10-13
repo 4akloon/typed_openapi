@@ -1,6 +1,8 @@
 import 'package:test/test.dart';
+import 'package:typed_openapi/src/diagnostics/diagnostic.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_bag.dart';
 import 'package:typed_openapi/src/diagnostics/github_actions_reporter.dart';
+import 'package:typed_openapi/src/diagnostics/json_pointer.dart';
 import 'package:typed_openapi/src/diagnostics/message_text.dart';
 import 'package:typed_openapi/src/diagnostics/reporters.dart';
 
@@ -78,6 +80,47 @@ void main() {
       expect(_hasControls(text, lineBreaks: true), isFalse);
       expect(lines.where((l) => l.startsWith('::')), hasLength(1));
       expect(text, contains(r'RED%0A::error::pwned\r%0A%250A'));
+    });
+  });
+
+  group('the reporters with a hostile pointer and file', () {
+    final pointer = JsonPointer.root
+        .child('components')
+        .child('schemas')
+        .child('\u001b[32mp\n::error::z%0A\u200f');
+    const file = 'a\n::error::f.yaml';
+    final bag = DiagnosticBag()
+      ..add(
+        Diagnostic(
+          code: .unknownKey,
+          severity: .warning,
+          message: 'm',
+          file: file,
+          pointer: pointer,
+          related: [
+            RelatedLocation(message: 'r', file: file, pointer: pointer),
+          ],
+        ),
+      );
+
+    test('the text report prints no control character or ::', () {
+      final text = const TextReporter().format(bag);
+      expect(_hasControls(text, lineBreaks: true), isFalse);
+      expect(text.contains('\u200f'), isFalse);
+      expect(text.split('\n').where((l) => l.startsWith('::')), isEmpty);
+      expect(text, contains(r'  at #/components/schemas/\u{1b}[32mp\n::error'));
+      expect(text, contains(r'  --> a\n::error::f.yaml'));
+      expect(
+        text,
+        contains(r'    at #/components/schemas/\u{1b}[32mp\n::error'),
+      );
+    });
+
+    test('the GitHub report prints no control character', () {
+      final text = const GitHubActionsReporter().format(bag);
+      expect(_hasControls(text, lineBreaks: true), isFalse);
+      expect(text.contains('\u200f'), isFalse);
+      expect(text.split('\n').where((l) => l.startsWith('::')), hasLength(2));
     });
   });
 }
