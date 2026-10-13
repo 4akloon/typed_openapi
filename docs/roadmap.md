@@ -254,6 +254,14 @@ skipped client has no counts.
 |---|---|
 | `style: cookie` (OpenAPI 3.2) is sent percent-encoded, like `form` | a user decision |
 | The Windows and macOS jobs, and the 3.10.0 SDK, are verified only in CI | first CI run of M11 |
+| `corpus check` compares diagnostics by count per code, and round-trip failures by count; a changed message, pointer or severity below error passes | by design (the files are compared byte for byte); add a hash of the sorted (code, pointer, message) per client when a regression slips through |
+| Other `ir/` messages still write a spec name raw (`model_notices.dart`, `part_media_type.dart`, `root_names.dart`, `media_type_picker.dart`, `security_builder.dart`); the text and GitHub reporters neutralise it, JSON and SARIF keep it as it is by design | when the fuzz covers those sinks |
+| The fuzz does not use hostile component names (a `$ref` pointer needs `~1` and percent escaping) and checks server URLs and defaults only with `LeakCheck` | when needed |
+| Test files carry top-level helpers (`http_download_test.dart`, `semver_command_test.dart`, `workflows_test.dart`), against "no top-level functions except `main`" | when a test file is touched |
+| A download has a time limit but no size cap; GitHub Actions are pinned by tag, not by commit SHA | before 1.0 (no secrets in CI, `permissions: contents: read`) |
+| The generated code needs `JsonReader.constant` to return a `bool`, but no gate ties the runtime version to the generator version ("release together" is CHANGELOG prose only) | M12 (API snapshot) or M13 |
+| The SARIF rule help does not link a diagnostics catalog | M13 (the catalog is the generated documentation) |
+| `size_limits.dart` (three copies) ends an expression-bodied member by a heuristic: a multi-line string at low indentation can end it early (a false negative only) | when needed |
 
 After M11: no Parked row is about the corpus or the platform matrix; the one
 escaping row (U+200E, U+200F, U+061C in the JSON and SARIF reports) stays

@@ -1,14 +1,13 @@
 # Handoff: where typed_openapi stands and how to continue
 
-Last updated: 2026-10-13. Read this first on a new device or in a new Claude session. Session memory and scratch directories do not travel; this file and the repository hold everything needed.
+Last updated: 2026-10-13 (M11 merged). Read this first on a new device or in a new Claude session. Session memory and scratch directories do not travel; this file and the repository hold everything needed.
 
 ## State
 
 | Milestone | Design | Plan | Code |
 |---|---|---|---|
-| M1–M10 | merged | merged | **merged** (M10: `bd1cdc3`) |
-| M11 corpus, golden tests, platform matrix, escaping fuzz | [spec](specs/2026-10-13-m11-corpus-design.md) | [plan](plans/2026-10-13-m11-corpus.md), merged, 16 tasks | **next: run SDD** |
-| M12 evolution: API snapshot, change report, name lock | [spec](specs/2026-10-13-m12-evolution-design.md) | brief ready: [briefs/m12-plan.md](briefs/m12-plan.md) | after M11 |
+| M1–M11 | merged | merged | **merged** (M10: `bd1cdc3`, M11: `3842bd7`) |
+| M12 evolution: API snapshot, change report, name lock | [spec](specs/2026-10-13-m12-evolution-design.md) | brief ready: [briefs/m12-plan.md](briefs/m12-plan.md) | next |
 | M13 documentation, lint, distribution, 0.1.0 readiness | [spec](specs/2026-10-13-m13-product-design.md) | brief ready: [briefs/m13-plan.md](briefs/m13-plan.md) | after M12 |
 
 **Other open work:**
@@ -17,9 +16,10 @@ Last updated: 2026-10-13. Read this first on a new device or in a new Claude ses
   - a `security` field that is not a list;
   - date and date-time default ranges.
 
-  It was reviewed and is clean. It branches from `1f6ee26`. Merge it after M11 merges, and resolve the roadmap rows if they conflict.
-- **M11 plan, Task 14.** It carries a controller amendment. The SARIF schema is fetched and pinned by hash, never vendored, because its OASIS license does not clearly allow redistribution.
-- **Required status checks.** The GitHub ruleset "Protect main" has none yet. After M11 merges, add its CI job names as required checks.
+  It was reviewed and is clean. It branches from `1f6ee26`. Merge it now that M11 is merged, and resolve the roadmap rows if they conflict.
+- **Branch `docs/full-guides`** (local, not pushed; worktree `../typed_openapi-docs`) holds the full user documentation: both package READMEs, the generator and runtime guides, the framework guides, the troubleshooting guide and the root README. It was checked against the code by two reviewers. Merging it is the user's decision; `README.ua.md` is not translated yet. Open points: `ApiLibrary` is not exported, so the programmatic API cannot write a whole client; `sse.md` and `event_streams.md` are over 300 lines; the real defects the writers found (TOA504 cannot be cleared by an override, the TOA203 hint is glued to the last line of a multi-line fix, `additionalProperties: true` makes no field, a `name` override on a multipart-only schema is ignored silently, internal id "R6.8" in the date-time decode hint, the `SseOptions.wait` doc comment says `Future.delayed`) are not fixed.
+- **M11 plan, Task 14.** The SARIF schema is fetched and pinned by hash, never vendored, because its OASIS license does not clearly allow redistribution.
+- **Required status checks.** The GitHub ruleset "Protect main" has none yet. M11 is merged: add its CI job names as required checks.
 
 ## How a milestone is done
 
