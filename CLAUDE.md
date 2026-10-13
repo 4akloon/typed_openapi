@@ -412,7 +412,12 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   disagree on the data type or sit next to successes with another body.
   `EventAgreement` decides "the same event types" from the spec before any
   type is mapped (same `itemSchema` or `schema`; the schema at the end of the
-  `$ref`s, one location or two written alike in one document), and
+  `$ref`s, one location or two written alike in one document by
+  `JsonEquality`, which never throws on `.nan` or `.inf`; else the same
+  schema once annotation-only `allOf` and nullable `anyOf` wrappers are
+  taken off (`SchemaShapes.singleOf`), and for a `schema` the same text or
+  scalar type and format: no schema and a plain string are both text, and
+  an annotation never makes two types different), and
   `MethodBuilder` asks it before it claims the stream method's name (TOA663,
   TOA551) or maps its events, so a stream that is not generated declares
   nothing, claims no name and reports only TOA654.
