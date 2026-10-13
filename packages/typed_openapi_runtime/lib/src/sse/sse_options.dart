@@ -38,8 +38,9 @@ final class SseOptions {
   /// the last event id and the delay, but are no message), does not.
   final int maxAttempts;
 
-  /// Waits [delay] before an attempt; `Future.delayed` when null. Tests
-  /// pass a function that does not sleep.
+  /// Waits [delay] before an attempt; a timer that a cancel stops
+  /// (`CancellableWait`) when null. Tests pass a function that does not
+  /// sleep.
   final Future<void> Function(Duration delay)? wait;
 
   /// The delay before [attempt] (1 for the first), given the server's last

@@ -119,7 +119,7 @@ Runtime для клієнтів, згенерованих
   `YYYY-MM-DD`; `date-time`, надісланий замість нього, теж `DecodeError`.
 - Цілі числа понад 2^53 на web втрачають точність, бо там `int` — це число
   JavaScript. Якщо в API є такі id, зістав властивість зі своїм типом через
-  конвертер (`types.formats` або override `dartType`, R6.8), наприклад
+  конвертер (`types.formats` або override `dartType`), наприклад
   `BigInt` або `String`: `JsonReader.asString` відхиляє JSON-число.
 
 ## Web
