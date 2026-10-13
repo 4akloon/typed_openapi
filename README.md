@@ -28,6 +28,8 @@ What sets it apart:
 
 - `packages/typed_openapi` – the generator: CLI and programmatic API.
 - `packages/typed_openapi_runtime` – small runtime used by generated clients.
+- `packages/typed_openapi_tool` – repository tools, never published: the
+  public-spec corpus (`corpus.yaml`, `corpus.lock`) and the escaping fuzz.
 
 Per-package docs:
 

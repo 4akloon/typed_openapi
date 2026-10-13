@@ -6,12 +6,14 @@ Guidance for working in this repository.
 
 `typed_openapi` generates Dart clients from OpenAPI 3.x specs, aimed at
 imperfect, code-first specs (NestJS, FastAPI, Spring, ASP.NET). It is a Dart
-pub workspace with two pure-Dart packages (no Flutter):
+pub workspace with three pure-Dart packages (no Flutter):
 
 - `packages/typed_openapi` - the generator: CLI and programmatic API. Never a
   runtime dependency of user apps.
 - `packages/typed_openapi_runtime` - the only package generated clients depend
   on (typed errors, `Result`, `Patch`, JSON decoding with paths, encoders, SSE).
+- `packages/typed_openapi_tool` - repository tools (M11): the public-spec
+  corpus and the escaping fuzz. `publish_to: none`; nothing depends on it.
 
 Minimum SDK: Dart 3.10 (`>=3.10.0 <4.0.0`), also for generated code.
 
@@ -26,6 +28,11 @@ cd packages/typed_openapi_runtime && dart test -p chrome --compiler dart2wasm   
 cd packages/typed_openapi && dart format lib test bin   # a second run must change 0 files
 cd packages/typed_openapi_runtime && dart format lib test # the same
 cd packages/<package> && dart pub publish --dry-run # before publishing
+cd packages/typed_openapi_tool && dart format lib test bin # the same
+cd packages/typed_openapi_tool && dart run bin/corpus.dart check  # network on first fetch
+cd packages/typed_openapi_tool && dart run bin/corpus.dart update # rewrites corpus.lock
+cd packages/typed_openapi_tool && dart run bin/fuzz.dart --seeds 200
+cd packages/typed_openapi_tool && dart run bin/corpus.dart semver --base main
 ```
 
 Git commands run from the repo root. Commit messages are Conventional Commits
@@ -807,6 +814,72 @@ Rules of the pipeline:
   stdout, usage errors to stderr. Codes: `0` ok, `1` errors found, `64` usage,
   `78` the config file could not be loaded (TOA904 and per-client TOA902 exit
   `1`). Diagnostics a baseline accepts do not count.
+
+## Tools (`packages/typed_openapi_tool/`)
+
+The corpus, golden tests and fuzz of M11 (R15.3, R15.4); the tool uses the
+generator's public API only and is the only package with network access
+(`fetch`, never a test).
+
+- `corpus.yaml` pins each public spec (a URL fixed to a commit, a tag or a
+  release; `url` for one file, `archive` + `root` + `entry` for a GitHub
+  tarball of several), its SHA-256 (of the file, or `TreeHash` of the kept
+  tree), license and expectation (`generate` or `{check-errors: [...]}`).
+  Its `schemas:` section pins single files that offline tests read from the
+  same cache (the SARIF 2.1.0 schema, `sarif_schema`): they are never kept
+  in the repository, so there is no vendored schema or `NOTICE.md`.
+  `corpus.lock` is JSON with sorted keys (`version`, `clients`): per
+  `<union mode>/<client>` the SHA-256 of every generated file (the manifest
+  left out), the hash of the whole output, the diagnostics by code, and the
+  round-trip counts (`values`: `examples`, `synthetic`, `spec_defects`,
+  `failures`).
+- `lib/src/corpus/` - `CorpusListReader` (`corpus.yaml`), `SpecCache`
+  (downloads, verifies, `ArchiveExtractor` with the system `tar`;
+  `fetchSchema` for `schemas:`),
+  `CorpusRun` (per mode a `CorpusPackage`: `GenerateRun` runs `generate`
+  twice through `TypedOpenApiCli` and `SpecChecker` once; the second run
+  must write nothing; `PackageGate` runs `dart analyze --fatal-infos` and
+  `dart format --set-exit-if-changed`; then a `RoundTrip` per client),
+  `CorpusLock`/`ClientLock`, and the commands `fetch` (a name that is
+  neither a spec nor a schema is a usage error, exit 64), `update` and
+  `check`, which `CorpusCli` runs with `semver`.
+  A round-trip failure does not fail `check` by itself: its count is in
+  the lock (0 for every client), so a new one is a difference.
+- `lib/src/roundtrip/` - `ExampleReader` (the `example`/`examples` of each
+  declaration's schema and of JSON responses, at the locations the IR
+  names), `SyntheticValues` (from the IR: required fields, all fields,
+  first and last enum value, every union variant with its discriminator
+  value), `RoundTripProgram` (a Dart program in the corpus package:
+  `fromJson`, `toJson`, JSON text, `fromJson`, `==`), `RoundTrip`.
+- `lib/src/fuzz/` - `FuzzSpec` (a spec and an overrides file per seed, with
+  `FuzzSchemas`, `FuzzOperations` and the `Hostile` strings), `FuzzBuild`
+  (six clients of one spec, in-process with `ApiLibrary`), `LeakCheck`
+  (no smuggled line, no raw control or bidi character in code or in the
+  text report), `LiteralCheck` (`DartLiterals` finds the literals of a
+  sampled output, the VM evaluates them, and every `SpecStrings` string of
+  the IR must be among them), `FuzzRun`.
+- `lib/src/semver/` - `SemverRule` and `corpus semver`: when `corpus.lock`
+  (once the base has one) or a golden file changed since the base, the
+  generator's CHANGELOG needs an entry under `### Output changes` in its
+  top section and the version a minor (before 1.0) or major raise.
+- `test/sarif/` - the SARIF output of `SarifReporter` against the SARIF
+  2.1.0 JSON schema (`JsonSchema`, a test helper for the draft-04 subset the
+  schema uses) and against GitHub code scanning's required properties
+  (`CodeScanningRules`). The schema is not in the repository: `CachedSchema`
+  reads it from the corpus cache (`corpus fetch sarif_schema`), checks its
+  SHA-256 against the pin, skips the test when the cache lacks it locally
+  and fails it in CI (`CI=true`), so a missing or altered schema never
+  passes CI. The rule help differs by code: a fixed code can be raised but
+  not lowered, a config code (TOA901-TOA904) cannot be changed.
+- CI (`.github/workflows/ci.yml`, every PR, top-level `permissions:
+  contents: read`): tests on ubuntu with 3.10.0 and stable, on macOS and
+  Windows with stable (format and analyze on ubuntu/stable only); the
+  runtime in Chrome with dart2js and dart2wasm; the corpus job (both SDKs:
+  `corpus check`, then `corpus fetch sarif_schema` and the SARIF test); 200
+  fuzz seeds; semver (pull requests only, full history). Long jobs have
+  `timeout-minutes`. `nightly.yml`: the beta SDK (steps with `if: always()`,
+  a warning only), the corpus on Windows, 6000 seeds.
+  `test/ci/workflows_test.dart` pins these layers.
 
 ## Runtime (`packages/typed_openapi_runtime/lib/src/`)
 

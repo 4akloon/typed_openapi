@@ -22,6 +22,9 @@
   `openai` client's union files change (M11).
 
 ### Fixed
+- A union variant whose type is a nullable list (GitHub's
+  `pull-request-stacks` 422 error, every branch nullable) binds its value
+  in `toJson` before it encodes it, so the code compiles (M11).
 - SARIF reports have what GitHub code scanning requires (M11): every rule a
   short and a full description and help, every result a partial
   fingerprint (`typedOpenapi/v1`) and a region (line 1 for a file without a
@@ -29,6 +32,8 @@
   missing config) at the config file. `SarifReporter` takes `defaultFile`.
 
 ### Added
+- `ApiLibrary` is exported: the files of a whole client from its IR, as
+  `generate` writes them (M11).
 - Event streams (M10): an operation whose success is `text/event-stream` is
   generated. A stream method returns `Future<Result<Stream<SseItem<T>>, E>>`
   and uses `DioRequestSender.openEvents`; its `streamStatuses` are the 2xx
