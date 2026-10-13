@@ -28,7 +28,8 @@ final class ResponseBuilder {
   /// each, before any type is mapped: for the method that returns the
   /// [events], the event stream of each success that has one. When the
   /// operation [hasStreamMethod], the event streams of its successes are not
-  /// dropped (TOA651).
+  /// dropped (TOA651). The method that returns the body never uses a
+  /// success's event stream as its body.
   List<PickedResponse> pick(
     Operation operation, {
     bool events = false,
@@ -45,6 +46,7 @@ final class ResponseBuilder {
                 response.location,
                 'response',
                 hasStreamMethod: hasStreamMethod && status.startsWith('2'),
+                chooseEvents: events || !status.startsWith('2'),
               ),
         ),
   ];

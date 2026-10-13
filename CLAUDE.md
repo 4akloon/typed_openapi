@@ -367,7 +367,11 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   which gives one method, or two when a success offers JSON (or another
   body) and `text/event-stream` (`chat` and `chatStream`, the suffix from
   `naming.stream_suffix`, claimed after every other method of the group,
-  TOA663, TOA551 on a collision). A method that returns events has
+  TOA663, TOA551 on a collision); the method that returns the body picks
+  its media type as without the event stream (bytes for `application/octet-stream`
+  or `application/xml`, text, JSON: `MediaTypePicker` `chooseEvents: false`
+  never chooses a success's event stream for it, with `sse.method: none`
+  too). A method that returns events has
   `OperationIr.events` (`EventStreamIr`: the data type, null for text, and
   `StreamReconnection` `off` for a non-GET (TOA665 when the config asks to
   reconnect), `onRequest`, `on`

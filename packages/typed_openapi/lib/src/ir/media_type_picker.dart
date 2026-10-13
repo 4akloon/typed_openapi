@@ -22,12 +22,15 @@ final class MediaTypePicker {
   /// object that has [content] and [what] says what it is. The media types
   /// that are dropped are reported (TOA651), and so is a chosen one that
   /// becomes bytes and takes its schema with it (TOA650). An event stream
-  /// is not dropped when [hasStreamMethod]: another method returns it.
+  /// is not dropped when [hasStreamMethod]: another method returns it. It is
+  /// not chosen either when [chooseEvents] is false, whatever else is
+  /// offered: a stream is not the body of a method that returns the body.
   (String?, MediaType?) pick(
     Map<String, RefOr<MediaType>> content,
     SpecLocation location,
     String what, {
     bool hasStreamMethod = false,
+    bool chooseEvents = true,
   }) {
     if (content.isEmpty) return (null, null);
     const preference = [
@@ -39,6 +42,7 @@ final class MediaTypePicker {
       BodyKind.bytes,
     ];
     for (final kind in preference) {
+      if (kind == .eventStream && !chooseEvents) continue;
       for (final type in content.keys) {
         if (kindOf(type) != kind) continue;
         final media = _context.model.resolve(content[type]!);

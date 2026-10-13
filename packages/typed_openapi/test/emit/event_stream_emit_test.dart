@@ -105,4 +105,21 @@ void main() {
     expect(threads, contains('Stream<SseItem<String>>'));
     expect(threads, contains('(m) => m.data,'));
   });
+
+  test(
+    'a body that is not JSON next to events stays the body (bytes, text)',
+    () {
+      final bodies = emitClient('event_bodies.yaml')['api/bodies_api.dart']!;
+      for (final signature in [
+        'Future<Result<Uint8List, Never>> download({',
+        'Future<Result<Stream<SseItem<String>>, Never>> downloadStream({',
+        'Future<Result<Uint8List, Never>> report({CallOptions? call}) =>',
+        'Future<Result<Stream<SseItem<Tick>>, Never>> reportStream({',
+        'Future<Result<String, Never>> note({CallOptions? call}) =>',
+        'Future<Result<Tick, Never>> status({CallOptions? call}) =>',
+      ]) {
+        expect(bodies, contains(signature));
+      }
+    },
+  );
 }

@@ -83,6 +83,7 @@ linter:
         'wire',
         'chat',
         'events_hostile',
+        'event_bodies',
       ]) {
         for (final mode in UnionMode.values) {
           final files = emitClient(

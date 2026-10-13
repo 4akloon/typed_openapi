@@ -1,0 +1,50 @@
+openapi: 3.1.0
+info: {title: Event bodies, version: "1"}
+paths:
+  /bytes:
+    get:
+      operationId: download
+      tags: [bodies]
+      responses:
+        "200":
+          description: The file, or its progress as events.
+          content:
+            application/octet-stream: {schema: {type: string, format: binary}}
+            text/event-stream: {schema: {type: string}}
+  /xml:
+    get:
+      operationId: report
+      tags: [bodies]
+      responses:
+        "200":
+          description: The report as XML, or as events.
+          content:
+            application/xml: {schema: {type: string}}
+            text/event-stream: {schema: {$ref: '#/components/schemas/Tick'}}
+  /text:
+    get:
+      operationId: note
+      tags: [bodies]
+      responses:
+        "200":
+          description: The note as text, or as events.
+          content:
+            text/plain: {schema: {type: string}}
+            text/event-stream: {schema: {type: string}}
+  /json:
+    get:
+      operationId: status
+      tags: [bodies]
+      responses:
+        "200":
+          description: The status as JSON, or as events.
+          content:
+            application/json: {schema: {$ref: '#/components/schemas/Tick'}}
+            text/event-stream: {schema: {$ref: '#/components/schemas/Tick'}}
+components:
+  schemas:
+    Tick:
+      type: object
+      required: [n]
+      properties:
+        n: {type: integer}
