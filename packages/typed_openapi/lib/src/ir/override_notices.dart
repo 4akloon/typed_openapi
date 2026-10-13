@@ -1,4 +1,5 @@
 import '../model/schema.dart';
+import '../overrides/override_set.dart';
 import 'ir_context.dart';
 
 /// Reports the fields of an override that change nothing for the schema
@@ -44,5 +45,33 @@ final class OverrideNotices {
         fix: 'Remove it, or override the schema this one refers to.',
       );
     }
+  }
+
+  /// Reports the `exhaustive` of the override of [schema], a model: only an
+  /// enum or a union can be exhaustive.
+  void exhaustiveOnModel(SchemaObject schema) {
+    final entry = _context.overrides.schemaAt(schema.location);
+    if (entry == null || entry.exhaustive == null) return;
+    _context.reportAtOverride(
+      .overrideUnchanged,
+      'The exhaustive of this override has no effect: only an enum or a '
+          'union can be exhaustive, and this schema is a model.',
+      entry,
+      'exhaustive',
+      fix: 'Remove it.',
+    );
+  }
+
+  /// Reports the `triState` of the property override [entry], whose model is
+  /// used in responses only: only a request model has tri-state fields.
+  void triStateOnResponseModel(PropertyOverride entry) {
+    _context.reportAtOverride(
+      .overrideUnchanged,
+      'The triState of this override has no effect: the model is used in '
+          'responses only, and only a request model has tri-state fields.',
+      entry,
+      'triState',
+      fix: 'Remove it.',
+    );
   }
 }

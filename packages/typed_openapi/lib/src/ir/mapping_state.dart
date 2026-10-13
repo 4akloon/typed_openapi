@@ -3,6 +3,8 @@ import '../model/spec_node.dart';
 import '../overrides/override_set.dart';
 import 'dart_type.dart';
 import 'ir.dart';
+import 'mapping_scope.dart';
+import 'pending_declaration.dart';
 
 /// A variant of a union being built: its type, the schema a `$ref` branch
 /// (or a subtype) is, the branch, and, for the variant of any JSON value,
@@ -78,14 +80,9 @@ final class FieldDraft {
     required this.location,
     required this.valueType,
     required this.required,
-    required this.readOnly,
-    required this.writeOnly,
     required this.marked,
-    required this.defaultValue,
-    required this.description,
-    required this.deprecated,
     required this.constValue,
-    required this.constraints,
+    required this.notes,
     required this.knownValues,
     required this.sensitive,
   });
@@ -105,35 +102,78 @@ final class FieldDraft {
   /// Whether the property is in `required`.
   final bool required;
 
-  /// Whether the property is `readOnly`.
-  final bool readOnly;
-
-  /// Whether the property is `writeOnly`.
-  final bool writeOnly;
-
   /// Whether the property has `x-typed-tri-state: true`.
   final bool marked;
-
-  /// The default, boxed so that `null` can be one.
-  final (Object?,)? defaultValue;
-
-  /// The description.
-  final String? description;
-
-  /// Whether the property is deprecated.
-  final bool deprecated;
 
   /// The value of a constant field.
   final Object? constValue;
 
-  /// The constraints of the property.
-  final ConstraintsIr constraints;
+  /// What the schema of the property says about its field.
+  final FieldNotes notes;
 
   /// The values of dropped enum branches.
   final List<Object?> knownValues;
 
   /// Whether the value is a secret that must not be printed.
   final bool sensitive;
+}
+
+/// The properties, required names and `additionalProperties` of a model,
+/// with its `allOf` parts merged in.
+final class ModelParts {
+  /// The merged parts of a model.
+  const ModelParts(this.properties, this.required, this.additional);
+
+  /// The properties by JSON key, later parts winning.
+  final Map<String, Schema> properties;
+
+  /// The names every part requires.
+  final Set<String> required;
+
+  /// The `additionalProperties` schema of the last part that has one.
+  final Schema? additional;
+}
+
+/// What is known about a model while its fields are mapped.
+final class ModelSite {
+  /// A model of [schema], declared as [pending], used in [direction].
+  const ModelSite(this.schema, this.pending, this.direction, this.scope);
+
+  /// The schema the model is made of.
+  final SchemaObject schema;
+
+  /// The declaration being filled in.
+  final PendingDeclaration pending;
+
+  /// Where the model is used.
+  final ModelDirection direction;
+
+  /// The scope its fields are mapped in.
+  final MappingScope scope;
+}
+
+/// A model before its fields are named.
+final class ModelDraft {
+  /// A model at [site] with [fields]; [additional] is the type of its
+  /// `additionalProperties` made from [additionalSchema].
+  const ModelDraft({
+    required this.site,
+    required this.fields,
+    required this.additionalSchema,
+    required this.additional,
+  });
+
+  /// The model.
+  final ModelSite site;
+
+  /// The fields, in the order of the properties.
+  final List<FieldDraft> fields;
+
+  /// The `additionalProperties` schema, if any.
+  final Schema? additionalSchema;
+
+  /// The type of the values of `additionalProperties`, if it is a schema.
+  final DartType? additional;
 }
 
 /// What an enum schema says: its values, their kind and the labels the spec
