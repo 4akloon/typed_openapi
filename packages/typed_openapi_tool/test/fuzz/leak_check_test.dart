@@ -19,6 +19,36 @@ void main() {
     ]);
   });
 
+  test('smuggled code in the middle of a line is a leak', () {
+    expect(check.code('c', {'a.dart': "const a = 'x'; injected();\n"}), [
+      "c/a.dart: spec text left its sink: const a = 'x'; injected();",
+    ]);
+  });
+
+  test('the text injected inside a comment or a literal is not a leak', () {
+    const source =
+        "/// a */ injected();\n// injected();\nconst a = '*/ injected();';\n"
+        "const b = '''\ninjected();\n''';\n";
+    expect(check.code('c', {'a.dart': source}), isEmpty);
+  });
+
+  test('a raw lone surrogate in code or in the report is a leak', () {
+    expect(check.code('c', {'a.dart': "const a = '\uD800';\n"}), [
+      'c/a.dart: a raw U+D800 in the code.',
+    ]);
+    expect(check.code('c', {'a.dart': "const a = 'x\uDC00';\n"}), [
+      'c/a.dart: a raw U+DC00 in the code.',
+    ]);
+    expect(check.report('error - a\uD800b'), [
+      'The report holds a raw U+D800.',
+    ]);
+  });
+
+  test('a surrogate pair is not a lone surrogate', () {
+    expect(check.code('c', {'a.dart': "const a = '\u{1F600}';\n"}), isEmpty);
+    expect(check.report('error - \u{1F600}'), isEmpty);
+  });
+
   test('a tab in a doc comment is allowed', () {
     expect(check.code('c', {'a.dart': '/// `tab\there`\n'}), isEmpty);
   });

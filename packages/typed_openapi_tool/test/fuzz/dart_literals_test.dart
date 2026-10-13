@@ -33,4 +33,16 @@ final c = '\$cost';
   test('an unterminated block comment runs to the end of the input', () {
     expect(DartLiterals("const a = 'x'; /* never closed 'y'").scan(), ["'x'"]);
   });
+
+  test('the masked source hides comments and literals, keeps the layout', () {
+    const source = "a('x'); // note\nb(r'y\n'); /* c */ d;\n";
+    final masked = DartLiterals(source).masked();
+    expect(masked.length, source.length);
+    expect(masked.split('\n').length, source.split('\n').length);
+    expect(masked, contains('a('));
+    expect(masked, contains('); '));
+    expect(masked, isNot(contains('x')));
+    expect(masked, isNot(contains('note')));
+    expect(masked, contains('d;'));
+  });
 }

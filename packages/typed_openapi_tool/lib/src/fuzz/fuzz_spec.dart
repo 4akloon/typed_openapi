@@ -40,12 +40,25 @@ final class FuzzSpec {
       for (var i = 0; i < 1 + random.nextInt(3); i++)
         '/p$i/{id}': _pathItem(i, random, operations, overrides),
     };
+    final scheme = schemas.pick(['key', ...Hostile.names]);
     return (
       spec: jsonEncode({
         'openapi': schemas.pick(['3.0.3', '3.1.0', '3.2.0']),
         'info': {'title': schemas.pick(Hostile.texts), 'version': '1'},
+        'servers': [_server(schemas)],
+        'security': [
+          {scheme: <String>[]},
+        ],
         'paths': paths,
         'components': {
+          'securitySchemes': {
+            scheme: {
+              'type': 'apiKey',
+              'in': 'header',
+              'name': schemas.pick(Hostile.names),
+              'description': schemas.pick(Hostile.texts),
+            },
+          },
           'schemas': {
             for (final name in schemas.names) name: schemas.component(),
           },
@@ -53,6 +66,23 @@ final class FuzzSpec {
       }),
       overrides: jsonEncode({'operations': overrides}),
     );
+  }
+
+  /// A server whose URL holds one variable with hostile name, default and
+  /// values.
+  static Map<String, Object?> _server(FuzzSchemas schemas) {
+    final name = schemas.pick(['host', ...Hostile.names]);
+    return {
+      'url': 'https://{$name}/v1',
+      'description': schemas.pick(Hostile.texts),
+      'variables': {
+        name: {
+          'default': schemas.pick(Hostile.names),
+          'enum': [schemas.pick(Hostile.names), schemas.pick(Hostile.names)],
+          'description': schemas.pick(Hostile.texts),
+        },
+      },
+    };
   }
 
   static List<String> _names(Random random) {
@@ -83,6 +113,7 @@ final class FuzzSpec {
       item[method] = {
         'operationId': id,
         'description': schemas.pick(Hostile.texts),
+        'summary': schemas.pick(Hostile.texts),
         if (schemas.coin())
           'tags': [
             schemas.pick(['t', 'Pet', ...Hostile.names]),

@@ -46,20 +46,46 @@ final class LiteralCheck {
     final values = jsonDecode('${result.stdout}') as Map<String, Object?>;
     return [
       for (final MapEntry(key: name, value: strings) in expected.entries)
-        for (final string in strings)
-          if (!(values[name] as List<Object?>).contains(string))
-            '$name: the spec string ${jsonEncode(string)} is in no literal.',
+        ..._missing(name, strings, (values[name] as List<Object?>).cast()),
     ];
   }
 
-  /// The literals of every Dart file under [folder], each once, sorted.
+  /// The failures of the client [name]: a string in fewer [literals] than
+  /// [expected] holds it. A common string such as `a` is among the literals
+  /// of any client, so its count, not its presence, is what must match.
+  static List<String> _missing(
+    String name,
+    List<String> expected,
+    List<String> literals,
+  ) {
+    final held = <String, int>{};
+    for (final literal in literals) {
+      held.update(literal, (n) => n + 1, ifAbsent: () => 1);
+    }
+    final wanted = <String, int>{};
+    for (final string in expected) {
+      wanted.update(string, (n) => n + 1, ifAbsent: () => 1);
+    }
+    return [
+      for (final MapEntry(key: string, value: count) in wanted.entries)
+        if ((held[string] ?? 0) < count)
+          if ((held[string] ?? 0) == 0 && count == 1)
+            '$name: the spec string ${jsonEncode(string)} is in no literal.'
+          else
+            '$name: the spec string ${jsonEncode(string)} is in '
+                '${held[string] ?? 0} literals, not $count.',
+    ];
+  }
+
+  /// The literals of every Dart file under [folder], each as often as it
+  /// occurs, sorted.
   static List<String> _literals(String folder) {
-    final literals = <String>{};
+    final literals = <String>[];
     for (final entity in Directory(folder).listSync(recursive: true)) {
       if (entity is File && entity.path.endsWith('.dart')) {
         literals.addAll(DartLiterals(entity.readAsStringSync()).scan());
       }
     }
-    return literals.toList()..sort();
+    return literals..sort();
   }
 }

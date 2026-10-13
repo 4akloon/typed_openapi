@@ -9,7 +9,8 @@ final class SpecStrings {
   /// Creates the collector.
   const SpecStrings();
 
-  /// The strings of [ir], sorted.
+  /// The strings of [ir], sorted; one entry for each place the IR holds a
+  /// string, so a string used twice is listed twice.
   List<String> of(ClientIr ir) {
     final byId = {for (final d in ir.declarations) d.id: d};
     bool isObject(DartType type) => switch (type) {
@@ -17,7 +18,7 @@ final class SpecStrings {
       NamedType(:final id) => byId[id] is ModelDecl || byId[id] is UnionDecl,
       _ => false,
     };
-    final strings = <String>{
+    final strings = <String>[
       for (final declaration in ir.declarations)
         ...switch (declaration) {
           ModelDecl(:final fields) => [for (final f in fields) f.jsonKey],
@@ -39,7 +40,7 @@ final class SpecStrings {
               in operation.events?.union?.variants ?? const <EventVariantIr>[])
             v.event,
         ],
-    };
-    return strings.toList()..sort();
+    ];
+    return strings..sort();
   }
 }

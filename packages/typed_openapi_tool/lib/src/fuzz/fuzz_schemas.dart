@@ -47,6 +47,12 @@ final class FuzzSchemas {
       'type': 'string',
       'enum': [pick(Hostile.names), pick(Hostile.names)],
     },
+    () => {
+      'type': 'string',
+      'enum': ['a', 'b'],
+      'default': pick(['a', 'b']),
+      'x-enum-varnames': [pick(Hostile.names), pick(Hostile.names)],
+    },
     () => {'const': pick(Hostile.names)},
     () => {
       'type': 'integer',
@@ -91,6 +97,7 @@ final class FuzzSchemas {
     () => {'type': 'string', 'format': 'byte'},
     () => {'type': 'integer', 'format': 'int64'},
     () => {'type': 'boolean', 'default': true},
+    () => {'type': 'string', 'default': pick(Hostile.names)},
     () => <String, Object?>{'description': pick(Hostile.texts)},
     () => {
       'type': 'object',
@@ -177,7 +184,13 @@ final class FuzzSchemas {
     },
     () => {
       'anyOf': [for (var i = 0; i < 2 + _random.nextInt(3); i++) variant()],
-      if (coin()) 'discriminator': {'propertyName': pick(Hostile.names)},
+      if (coin())
+        'discriminator': {
+          'propertyName': pick(Hostile.names),
+          'mapping': {
+            pick(Hostile.names): '#/components/schemas/${pick(names)}',
+          },
+        },
     },
     () => {
       'type': 'string',

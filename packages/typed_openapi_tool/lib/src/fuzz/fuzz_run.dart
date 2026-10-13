@@ -8,6 +8,7 @@ import 'fuzz_build.dart';
 import 'fuzz_spec.dart';
 import 'leak_check.dart';
 import 'literal_check.dart';
+import 'seed_builds.dart';
 import 'seed_checks.dart';
 import 'spec_strings.dart';
 
@@ -29,7 +30,7 @@ typedef FuzzReport = ({
 ///   string as a literal of the same value ([LiteralCheck]).
 ///
 /// A crash of the generator is not caught: it ends the run, and [log] names
-/// the seed.
+/// the seed and the build. A run that builds no client fails.
 final class FuzzRun {
   /// Creates the run that writes its sample package into [work] (absolute)
   /// with the runtime in [runtime].
@@ -84,6 +85,7 @@ final class FuzzRun {
         )
         ..addAll(await LiteralCheck(work).run(strings));
     }
+    if (builds == 0) failures.add('The fuzz built no client.');
     return (
       builds: builds,
       files: files,
@@ -101,13 +103,7 @@ final class FuzzRun {
   ) {
     Directory(directory).createSync(recursive: true);
     final build = FuzzBuild(directory, const FuzzSpec().of(seed));
-    FuzzOutput? first;
-    try {
-      first = build.build();
-    } finally {
-      if (first == null) log.writeln('The generator crashed on seed $seed.');
-    }
-    final second = build.build();
+    final (first, second) = SeedBuilds(log).twice(seed, build.build);
     return (
       builds: first.files.length,
       files: first.files.values.fold(0, (n, f) => n + f.length),
@@ -144,7 +140,8 @@ final class FuzzRun {
   static String sampledClient(int seed, int sampleEvery) {
     final index = seed ~/ sampleEvery;
     final config = FuzzBuild.configs[index % FuzzBuild.configs.length].$1;
-    final mode = FuzzBuild.modes[(index ~/ FuzzBuild.configs.length) % 2];
+    final mode = FuzzBuild
+        .modes[(index ~/ FuzzBuild.configs.length) % FuzzBuild.modes.length];
     return '${config}_$mode';
   }
 }
