@@ -112,6 +112,31 @@ void main() {
     expect(result.code, 1);
   }, timeout: const Timeout(Duration(minutes: 5)));
 
+  test(
+    'check of one name reports a lost or new client of that spec only',
+    () async {
+      final corpus = _corpus(TempDir());
+      expect((await _run(['update', ...corpus.options])).code, 0);
+      final lock = File(corpus.lock);
+      final clients =
+          (jsonDecode(lock.readAsStringSync())
+                  as Map<String, Object?>)['clients']!
+              as Map<String, Object?>;
+      clients
+        ..['other/pets'] = clients['raw/pets']
+        ..remove('structural/pets')
+        ..remove('raw/cats')
+        ..['other/cats'] = clients['raw/pets'];
+      lock.writeAsStringSync(jsonEncode({'version': 1, 'clients': clients}));
+      final result = await _run(['check', ...corpus.options, 'pets']);
+      expect(result.out, contains('other/pets: client is gone'));
+      expect(result.out, contains('structural/pets: new client'));
+      expect(result.out, isNot(contains('cats')));
+      expect(result.code, 1);
+    },
+    timeout: const Timeout(Duration(minutes: 5)),
+  );
+
   test('check without a lock file exits 1 and says to run update', () async {
     final corpus = _corpus(TempDir());
     final result = await _run(['check', ...corpus.options]);
