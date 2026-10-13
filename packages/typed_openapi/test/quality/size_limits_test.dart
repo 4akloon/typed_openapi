@@ -20,28 +20,17 @@ const Map<String, int> _fileAllowlist = {
   'lib/src/config/config_loader.dart': 798,
   'lib/src/emit/model_emitter.dart': 379,
   'lib/src/emit/union_emitter.dart': 416,
-  'lib/src/generate/output_writer.dart': 896,
   // M9: the fields the API emitter reads on the operation IR classes, and
   // whether a response body is a secret.
   'lib/src/ir/ir.dart': 824,
   // M9: event streams in the empty-client report; webhooks checked.
   'lib/src/ir/ir_builder.dart': 538,
   'lib/src/ir/operation_builder.dart': 509,
-  'lib/src/ir/schema_mapper.dart': 2194,
-  'lib/src/ir/schema_shapes.dart': 433,
-  'test/check/spec_checker_test.dart': 705,
-  'test/cli/cli_test.dart': 793,
   'test/cli/generate_command_test.dart': 771,
   'test/emit/model_library_test.dart': 891,
-  'test/generate/output_writer_test.dart': 734,
   'test/ir/emitter_contract_test.dart': 576,
   'test/ir/ir_builder_test.dart': 970,
   'test/ir/operation_builder_test.dart': 832,
-  'test/ir/schema_mapper_names_test.dart': 562,
-  'test/ir/schema_mapper_semantics_test.dart': 857,
-  'test/ir/schema_mapper_test.dart': 771,
-  'test/ir/union_subsumed_test.dart': 501,
-  'test/load/spec_loader_test.dart': 503,
 };
 
 /// Files that are exempt for good and are not to be split: a flat catalog
@@ -68,8 +57,6 @@ const Map<String, int> _methodAllowlist = {
   'lib/src/emit/union_emitter.dart#UnionEmitter._byDiscriminator': 61,
   'lib/src/emit/union_emitter.dart#UnionEmitter._byStructure': 41,
   'lib/src/emit/union_emitter.dart#UnionEmitter._variant': 78,
-  'lib/src/generate/output_writer.dart#OutputWriter._inspect': 132,
-  'lib/src/generate/output_writer.dart#OutputWriter.write': 111,
   'lib/src/ir/ir_builder.dart#IrBuilder._group': 112,
   'lib/src/ir/ir_builder.dart#IrBuilder._methodName': 50,
   // M9: event streams are a reason a client is empty.
@@ -80,18 +67,6 @@ const Map<String, int> _methodAllowlist = {
   'lib/src/ir/operation_builder.dart#OperationBuilder._parameters': 74,
   'lib/src/ir/operation_builder.dart#OperationBuilder._responses': 42,
   'lib/src/ir/operation_selector.dart#OperationSelector.select': 42,
-  'lib/src/ir/schema_mapper.dart#SchemaMapper._claim': 66,
-  'lib/src/ir/schema_mapper.dart#SchemaMapper._component': 76,
-  'lib/src/ir/schema_mapper.dart#SchemaMapper._declare': 93,
-  'lib/src/ir/schema_mapper.dart#SchemaMapper._enum': 46,
-  'lib/src/ir/schema_mapper.dart#SchemaMapper._jsonKind': 43,
-  'lib/src/ir/schema_mapper.dart#SchemaMapper._memberName': 54,
-  'lib/src/ir/schema_mapper.dart#SchemaMapper._merged': 77,
-  'lib/src/ir/schema_mapper.dart#SchemaMapper._model': 151,
-  'lib/src/ir/schema_mapper.dart#SchemaMapper._notesOf': 47,
-  'lib/src/ir/schema_mapper.dart#SchemaMapper._structural': 71,
-  'lib/src/ir/schema_mapper.dart#SchemaMapper._union': 303,
-  'lib/src/ir/schema_mapper.dart#SchemaMapper._valueName': 61,
   'lib/src/load/openapi_version.dart#OpenApiVersionDetector.detect': 47,
   'lib/src/normalize/normalizer.dart#Normalizer.normalize': 43,
   'lib/src/normalize/rules/bool_required_to_array.dart#BoolRequiredToArray._cannotTake':

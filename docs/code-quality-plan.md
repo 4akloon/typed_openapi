@@ -25,8 +25,24 @@ formatting sweeps.
 - **Files over the limit in `lib/`: 20 -> 11** (9 in the generator, 2 in the
   runtime; plus the permanent exemption `diagnostic_code.dart`). Methods over
   40 lines in the allowlists: 59 -> 48 in the generator.
-- **Waiting for M9** (phase 2 and the rest of phase 1): everything under
-  `ir/`, `emit/`, `config/`, `generate/` and the runtime `dio/`.
+- **M9 merged (a7f9e41). Phase 2, wave 1 is done** (2026-10-13), on the files
+  M10 does not touch: `ir/schema_mapper.dart` 2194 -> 280 (a facade over
+  `MappingScope`, `DeclarationNames`, `EnumMapper`, `ModelMapper`,
+  `UnionMapper`, `StructuralMapper`, `Declarer` and others, 25 new files),
+  `ir/schema_shapes.dart` 433 -> 88, `generate/output_writer.dart` 896 -> 240
+  (lock, recovery, inspector, installer and manifest collaborators), and 7 test
+  files split by behaviour plus `output_writer_test.dart`. Checked by an extra
+  comparison against the old main: the IR dumps, their diagnostics and the
+  generated trees of the 10 emitter fixtures in 3 configurations
+  (default, `union: structural`, `group_by: path`) are byte-identical.
+- **Files over the limit in `lib/` now:** 6 in the generator (`config_loader`,
+  `model_emitter`, `union_emitter`, `ir`, `ir_builder`, `operation_builder`)
+  and 2 in the runtime (`dio_request_sender`, `json_reader`); methods over 40
+  lines in the allowlists: 33 in the generator, 4 in the runtime.
+- **Waiting for M10** (wave 2 and phase 3): `config/config_loader.dart`,
+  `ir/{ir,ir_builder,operation_builder}.dart` with their collaborators,
+  `emit/*`, `overrides/*`, the runtime `dio/`, `sse/`, `json/`, the tests next
+  to them, and the staged lints (their findings are spread over those files).
 
 ## 1. Coordination with the M9 session
 
