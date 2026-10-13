@@ -1,10 +1,9 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
-import 'package:typed_openapi/src/cli/cli.dart';
 
+import '../helpers/cli_runner.dart';
 import '../helpers/temp_dir.dart';
 
 void main() {
@@ -26,28 +25,19 @@ clients:
 ''');
   });
 
-  Future<(int, String, String)> run(
-    List<String> args, {
-    String? workingDirectory,
-  }) async {
-    final out = StringBuffer();
-    final err = StringBuffer();
-    final code = await TypedOpenApiCli(
-      out: out,
-      err: err,
-      workingDirectory: workingDirectory,
-    ).run(args);
-    return (code, out.toString(), err.toString());
-  }
-
   test('exits 0 when the named client is clean', () async {
-    final (code, out, _) = await run(['check', '-c', configPath, 'ok']);
+    final (code, out, _) = await CliRunner.run([
+      'check',
+      '-c',
+      configPath,
+      'ok',
+    ]);
     expect(code, 0);
     expect(out.trim(), 'errors: 0, warnings: 0, infos: 0');
   });
 
   test('exits 1 and prints the location when a spec has errors', () async {
-    final (code, out, _) = await run([
+    final (code, out, _) = await CliRunner.run([
       'check',
       '--config',
       configPath,
@@ -58,7 +48,7 @@ clients:
   });
 
   test('prints JSON with --format json', () async {
-    final (_, out, _) = await run([
+    final (_, out, _) = await CliRunner.run([
       'check',
       '-c',
       configPath,
@@ -75,7 +65,7 @@ clients:
   });
 
   test('prints SARIF and GitHub Actions annotations', () async {
-    final (sarifCode, sarif, _) = await run([
+    final (sarifCode, sarif, _) = await CliRunner.run([
       'check',
       '-c',
       configPath,
@@ -84,7 +74,7 @@ clients:
     ], workingDirectory: workingDirectory);
     expect(sarifCode, 1);
     expect(sarif, contains('"uri": "specs/old.json"'));
-    final (code, out, _) = await run([
+    final (code, out, _) = await CliRunner.run([
       'check',
       '-c',
       configPath,
@@ -102,7 +92,7 @@ clients:
   });
 
   test('exits 78 when the config file is missing', () async {
-    final (code, out, _) = await run([
+    final (code, out, _) = await CliRunner.run([
       'check',
       '-c',
       '/nope/typed_openapi.yaml',
@@ -112,7 +102,7 @@ clients:
   });
 
   test('reads a relative config path from the working directory', () async {
-    final (code, out, _) = await run([
+    final (code, out, _) = await CliRunner.run([
       'check',
       '-c',
       'typed_openapi.yaml',
@@ -123,7 +113,7 @@ clients:
   });
 
   test('names the missing config relative to the working directory', () async {
-    final (code, out, _) = await run([
+    final (code, out, _) = await CliRunner.run([
       'check',
       '-c',
       'nope.yaml',
@@ -134,7 +124,12 @@ clients:
   });
 
   test('exits 64 on an unknown client', () async {
-    final (code, _, err) = await run(['check', '-c', configPath, 'nope']);
+    final (code, _, err) = await CliRunner.run([
+      'check',
+      '-c',
+      configPath,
+      'nope',
+    ]);
     expect(code, 64);
     expect(err, contains('Unknown client: nope.'));
   });
@@ -147,7 +142,12 @@ clients:
   broken: {output: lib/broken}
   ok: {input: ok.yaml, output: lib/ok}
 ''');
-    final (code, out, err) = await run(['check', '-c', path, 'broken']);
+    final (code, out, err) = await CliRunner.run([
+      'check',
+      '-c',
+      path,
+      'broken',
+    ]);
     expect(code, 1);
     expect(out, contains('TOA902'));
     expect(err, isEmpty);
@@ -184,7 +184,7 @@ schemas:
 clients:
   api: {input: api.yaml, output: lib/api, overrides: api.overrides.yaml}
 ''');
-    final (code, out, _) = await run([
+    final (code, out, _) = await CliRunner.run([
       'check',
       '-c',
       path,
@@ -232,7 +232,7 @@ components:
       'typed_openapi.yaml',
       'clients:\n  api: {input: api.yaml, output: lib/api}\n',
     );
-    final (code, out, _) = await run(['check', '-c', path]);
+    final (code, out, _) = await CliRunner.run(['check', '-c', path]);
     expect(code, 1);
     expect(out, contains('error TOA100 invalid-ref'));
     expect(
@@ -257,7 +257,7 @@ clients:
     output: lib/api
     severity: {duplicate-operation-id: warning}
 ''');
-    final (code, out, _) = await run([
+    final (code, out, _) = await CliRunner.run([
       'check',
       '-c',
       path,
@@ -265,294 +265,6 @@ clients:
     expect(code, 0);
     expect(out, contains('warning TOA504 duplicate-operation-id'));
     expect(out, endsWith('errors: 0, warnings: 1, infos: 0\n'));
-  });
-
-  group('baseline', () {
-    const spec = '''
-openapi: 3.0.3
-info: {title: api, version: "1"}
-paths:
-  /a: {get: {operationId: same, tags: [a], responses: {'200': {description: ok}}}}
-  /b: {get: {operationId: same, tags: [b], responses: {'200': {description: ok}}}}
-components:
-  schemas:
-    Tag:
-      type: object
-      properties:
-        name: {type: string, required: true}
-''';
-    late TempDir dir;
-    late String config;
-
-    setUp(() {
-      dir = TempDir();
-      dir.write('api.yaml', spec);
-      config = dir.write('typed_openapi.yaml', '''
-clients:
-  api: {input: api.yaml, output: lib/api, baseline: api.baseline.yaml}
-''');
-    });
-
-    Future<(int, String, String)> inDir(List<String> args) =>
-        run([...args, '-c', config], workingDirectory: dir.path);
-
-    test('create accepts the current diagnostics; check hides them', () async {
-      final (created, createOut, _) = await inDir(['baseline', 'create']);
-      expect(created, 0);
-      expect(
-        createOut,
-        'errors: 0, warnings: 0, infos: 0\n'
-        'Wrote api.baseline.yaml: 2 entries accept 2 diagnostics.\n',
-      );
-      expect(
-        File(p.join(dir.path, 'api.baseline.yaml')).readAsStringSync(),
-        contains('code: "TOA504"'),
-      );
-      final (code, out, _) = await inDir(['check']);
-      expect(code, 0);
-      expect(out, 'errors: 0, warnings: 0, infos: 0, baselined: 2\n');
-      final (_, shown, _) = await inDir(['check', '--show-baselined']);
-      expect(
-        shown,
-        contains('error TOA504 duplicate-operation-id [baselined]: '),
-      );
-    });
-
-    test('check fails on a new problem only', () async {
-      await inDir(['baseline', 'create']);
-      dir.write(
-        'api.yaml',
-        spec.replaceFirst(
-          '/b: {get: {operationId: same, tags: [b]',
-          '/b: {get: {operationId: same, tags: [b], parameters: '
-              '[{name: x, in: path}]',
-        ),
-      );
-      final (code, out, _) = await inDir(['check']);
-      expect(code, 1);
-      expect(out, contains('error TOA502 path-parameter-not-in-template'));
-      expect(out, isNot(contains('TOA504')));
-      expect(out, endsWith('baselined: 2\n'));
-    });
-
-    test('a fixed problem leaves a stale entry; prune removes it', () async {
-      await inDir(['baseline', 'create']);
-      dir.write('api.yaml', spec.replaceFirst('required: true', 'x: 1'));
-      final (code, out, _) = await inDir(['check']);
-      expect(code, 0);
-      expect(
-        out,
-        contains(
-          'warning TOA822 baseline-entry-stale: No diagnostic matches this '
-          'entry (TOA201 at @/schemas/Tag/properties/name#/required); the '
-          'problem is gone.\n'
-          '  --> api.baseline.yaml:',
-        ),
-      );
-      expect(out, contains('  fix: Run `typed_openapi baseline prune`'));
-      final (strict, _, _) = await inDir(['check', '--strict-baseline']);
-      expect(strict, 1);
-      final (pruned, pruneOut, _) = await inDir(['baseline', 'prune']);
-      expect(pruned, 0);
-      expect(
-        pruneOut,
-        contains('Pruned api.baseline.yaml: removed 1 entries, 1 left.'),
-      );
-      final (after, afterOut, _) = await inDir(['check']);
-      expect(after, 0);
-      expect(afterOut, contains('baselined: 1\n'));
-      expect(afterOut, isNot(contains('TOA822')));
-    });
-
-    test('a missing baseline file is an error and hides nothing', () async {
-      final (code, out, _) = await inDir(['check']);
-      expect(code, 1);
-      expect(out, contains('error TOA820 baseline-not-found'));
-      expect(out, contains('error TOA504 duplicate-operation-id'));
-    });
-
-    test('prune reports a missing baseline file', () async {
-      final (code, out, _) = await inDir(['baseline', 'prune']);
-      expect(code, 1);
-      expect(out, contains('error TOA820 baseline-not-found'));
-    });
-
-    test('write leaves no temporary file behind', () async {
-      await inDir(['baseline', 'create']);
-      await inDir(['baseline', 'prune']);
-      expect(
-        Directory(dir.path).listSync().where((e) => e.path.endsWith('.tmp')),
-        isEmpty,
-      );
-    });
-
-    for (final (label, breakSpec) in <(String, void Function(File))>[
-      ('a broken', (f) => f.writeAsStringSync('openapi: [3\n')),
-      ('a deleted', (f) => f.deleteSync()),
-    ]) {
-      group('$label spec', () {
-        late String before;
-
-        setUp(() async {
-          await inDir(['baseline', 'create']);
-          before = File(
-            p.join(dir.path, 'api.baseline.yaml'),
-          ).readAsStringSync();
-          breakSpec(File(p.join(dir.path, 'api.yaml')));
-        });
-
-        for (final command in ['create', 'prune']) {
-          test('keeps the baseline on baseline $command', () async {
-            final (code, out, _) = await inDir(['baseline', command]);
-            expect(code, 1);
-            expect(out, contains('error TOA'));
-            expect(out, isNot(contains('Wrote')));
-            expect(out, isNot(contains('Pruned')));
-            expect(
-              File(p.join(dir.path, 'api.baseline.yaml')).readAsStringSync(),
-              before,
-            );
-          });
-        }
-
-        test('check shows the read error, not stale entries', () async {
-          final (code, out, _) = await inDir(['check']);
-          expect(code, 1);
-          expect(out, contains('error TOA'));
-          expect(out, isNot(contains('TOA822')));
-        });
-      });
-    }
-
-    group('a file the spec references', () {
-      String baselineText() =>
-          File(p.join(dir.path, 'api.baseline.yaml')).readAsStringSync();
-
-      setUp(() {
-        dir.write('shared.yaml', '''
-Tag:
-  type: object
-  properties:
-    name: {type: string, required: true}
-''');
-        dir.write(
-          'api.yaml',
-          spec
-              .replaceFirst(
-                'components:',
-                'components:\n  schemas:\n    Ref: {\$ref: "shared.yaml#/Tag"}',
-              )
-              .replaceFirst('  schemas:\n    Tag:', '    Tag:'),
-        );
-      });
-
-      test('that is gone is a read error: the baseline is kept', () async {
-        final (created, _, _) = await inDir(['baseline', 'create']);
-        expect(created, 0);
-        final before = baselineText();
-        expect(before, contains('@/schemas/Ref/'));
-        File(p.join(dir.path, 'shared.yaml')).deleteSync();
-        for (final command in ['prune', 'create']) {
-          final (code, out, _) = await inDir(['baseline', command]);
-          expect(code, 1, reason: command);
-          expect(out, contains('error TOA004 input-not-found'));
-          expect(out, isNot(contains('Wrote')));
-          expect(out, isNot(contains('Pruned')));
-          expect(baselineText(), before, reason: command);
-        }
-        final (code, out, _) = await inDir(['check']);
-        expect(code, 1);
-        expect(out, contains('error TOA004 input-not-found'));
-        expect(out, isNot(contains('TOA822')));
-      });
-
-      test('with a missing target is an ordinary problem', () async {
-        dir.write(
-          'api.yaml',
-          File(
-            p.join(dir.path, 'api.yaml'),
-          ).readAsStringSync().replaceFirst('#/Tag', '#/Nope'),
-        );
-        final (created, _, _) = await inDir(['baseline', 'create']);
-        expect(created, 0);
-        expect(baselineText(), contains('code: "TOA101"'));
-        final (pruned, out, _) = await inDir(['baseline', 'prune']);
-        expect(pruned, 0);
-        expect(out, contains('Pruned api.baseline.yaml: removed 0 entries'));
-      });
-    });
-
-    test('prune keeps a baseline with a rejected entry', () async {
-      await inDir(['baseline', 'create']);
-      final file = File(p.join(dir.path, 'api.baseline.yaml'));
-      file.writeAsStringSync(
-        '${file.readAsStringSync()}'
-        '  - {fingerprint: "0123456789ab", count: "1"}\n',
-      );
-      final before = file.readAsStringSync();
-      final (code, out, _) = await inDir(['baseline', 'prune']);
-      expect(code, 1);
-      expect(out, contains('error TOA821 invalid-baseline'));
-      expect(out, isNot(contains('Pruned')));
-      expect(file.readAsStringSync(), before);
-    });
-
-    test('clients that share a baseline file write nothing', () async {
-      final shared = dir.write('shared.yaml', '''
-clients:
-  a: {input: api.yaml, output: lib/a, baseline: one.baseline.yaml}
-  b: {input: api.yaml, output: lib/b, baseline: ./one.baseline.yaml}
-''');
-      for (final command in ['create', 'prune']) {
-        final (code, out, _) = await run([
-          'baseline',
-          command,
-          '-c',
-          shared,
-        ], workingDirectory: dir.path);
-        expect(code, 1, reason: command);
-        expect(out, contains('error TOA902'));
-        expect(out, isNot(contains('Wrote')));
-        expect(
-          File(p.join(dir.path, 'one.baseline.yaml')).existsSync(),
-          isFalse,
-        );
-      }
-    });
-
-    test(
-      'an empty baseline path is explained before the usage error',
-      () async {
-        final path = dir.write(
-          'empty.yaml',
-          'clients:\n  api: {input: api.yaml, output: lib/api, baseline: ""}\n',
-        );
-        final (code, out, err) = await run([
-          'baseline',
-          'create',
-          '-c',
-          path,
-        ], workingDirectory: dir.path);
-        expect(code, 64);
-        expect(out, contains('error TOA902'));
-        expect(err, contains('No client has a "baseline" in the config.'));
-      },
-    );
-
-    test('a client without a baseline is a usage error', () async {
-      final path = dir.write(
-        'other.yaml',
-        'clients:\n  api: {input: api.yaml, output: lib/api}\n',
-      );
-      final (code, _, err) = await run([
-        'baseline',
-        'create',
-        '-c',
-        path,
-      ], workingDirectory: dir.path);
-      expect(code, 64);
-      expect(err, contains('No client has a "baseline" in the config.'));
-    });
   });
 
   test('a problem an override introduces names the override', () async {
@@ -570,7 +282,7 @@ components:
 clients:
   api: {input: api.yaml, output: lib/api, overrides: api.overrides.yaml}
 ''');
-    final (code, out, _) = await run([
+    final (code, out, _) = await CliRunner.run([
       'check',
       '-c',
       path,
@@ -590,204 +302,6 @@ clients:
         '    --> api.overrides.yaml:2:17\n'
         '    at #/schemas/Pet/format\n',
       ),
-    );
-  });
-
-  test('ir prints the IR of clients as JSON and is hidden', () async {
-    final dir = TempDir();
-    dir.write('api.yaml', '''
-openapi: 3.1.0
-info: {title: t, version: "1"}
-paths:
-  /pets:
-    get:
-      operationId: listPets
-      tags: [pets]
-      responses: {"204": {description: ok}}
-''');
-    final path = dir.write(
-      'typed_openapi.yaml',
-      'clients:\n  api: {input: api.yaml, output: lib/api}\n',
-    );
-    final ir = await run(['ir', '-c', path], workingDirectory: dir.path);
-    expect(ir.$1, 0);
-    expect(jsonDecode(ir.$2), {
-      'api': {
-        'declarations': <Object?>[],
-        'groups': [
-          {
-            'name': 'PetsApi',
-            'field': 'pets',
-            'operations': [
-              {
-                'name': 'listPets',
-                'method': 'GET',
-                'path': '/pets',
-                'at': 'api.yaml#/paths/~1pets/get',
-                'parameters': <Object?>[],
-                'responses': [
-                  {'status': '204', 'kind': 'none'},
-                ],
-                'errors': 'Never',
-                'operationId': 'listPets',
-                'tags': ['pets'],
-              },
-            ],
-          },
-        ],
-        'root': {'name': 'ApiClient', 'servers': <Object?>[]},
-      },
-    });
-    final (_, help, _) = await run(['help']);
-    expect(help, isNot(contains(' ir ')));
-  });
-
-  group('ir diagnostics', () {
-    const spec = '''
-openapi: 3.1.0
-info: {title: t, version: "1"}
-paths:
-  /a: {get: {operationId: same, tags: [a], responses: {"204": {description: ok}}}}
-  /b: {get: {operationId: same, tags: [b], responses: {"204": {description: ok}}}}
-''';
-
-    test('are printed to stderr and the JSON stays alone on stdout', () async {
-      final dir = TempDir();
-      dir.write('api.yaml', spec.replaceAll('tags: [b]', 'tags: [a]'));
-      final path = dir.write('typed_openapi.yaml', '''
-clients:
-  api: {input: api.yaml, output: lib/api, naming: {group: Api}}
-''');
-      final (code, out, err) = await run([
-        'ir',
-        '-c',
-        path,
-      ], workingDirectory: dir.path);
-      // The invalid config and the duplicate operationId are errors, as in
-      // `check`.
-      expect(code, 1);
-      expect(jsonDecode(out), contains('api'));
-      expect(err, contains('error TOA902 config-invalid'));
-      expect(err, contains('error TOA504 duplicate-operation-id'));
-      // The info is counted, not listed.
-      expect(err, isNot(contains('TOA551')));
-      expect(err, contains('errors: 2, warnings: 0, infos: 1'));
-      expect(
-        err,
-        endsWith('1 info diagnostic not shown; run `check` to see it.\n'),
-      );
-      final (checkCode, checkOut, _) = await run([
-        'check',
-        '-c',
-        path,
-      ], workingDirectory: dir.path);
-      expect(checkCode, code);
-      expect(checkOut, contains('info TOA551 name-collision'));
-      expect(checkOut, contains('error TOA504 duplicate-operation-id'));
-    });
-
-    test(
-      'give the exit code check gives, levels and baseline included',
-      () async {
-        final dir = TempDir();
-        dir.write('api.yaml', spec);
-        final path = dir.write('typed_openapi.yaml', '''
-clients:
-  api:
-    input: api.yaml
-    output: lib/api
-    severity: {duplicate-operation-id: warning}
-''');
-        final (code, out, err) = await run([
-          'ir',
-          '-c',
-          path,
-        ], workingDirectory: dir.path);
-        expect(code, 0);
-        expect(jsonDecode(out), contains('api'));
-        expect(err, contains('warning TOA504 duplicate-operation-id'));
-      },
-    );
-
-    test('a clean run prints nothing to stderr', () async {
-      final dir = TempDir();
-      dir.write(
-        'api.yaml',
-        spec.replaceAll('same', 'one').replaceFirst('one', 'two'),
-      );
-      final path = dir.write(
-        'typed_openapi.yaml',
-        'clients:\n  api: {input: api.yaml, output: lib/api}\n',
-      );
-      final (code, out, err) = await run([
-        'ir',
-        '-c',
-        path,
-      ], workingDirectory: dir.path);
-      expect(code, 0);
-      expect(jsonDecode(out), contains('api'));
-      expect(err, isEmpty);
-    });
-
-    test(
-      'infos alone are counted, not listed, and the exit code is 0',
-      () async {
-        final dir = TempDir();
-        dir.write('api.yaml', '''
-openapi: 3.1.0
-info: {title: t, version: "1"}
-paths:
-  /a: {get: {operationId: one, tags: [a, b], responses: {"204": {description: ok}}}}
-''');
-        final path = dir.write(
-          'typed_openapi.yaml',
-          'clients:\n  api: {input: api.yaml, output: lib/api}\n',
-        );
-        final (code, out, err) = await run([
-          'ir',
-          '-c',
-          path,
-        ], workingDirectory: dir.path);
-        expect(code, 0);
-        expect(jsonDecode(out), contains('api'));
-        expect(
-          err,
-          'errors: 0, warnings: 0, infos: 1\n'
-          '1 info diagnostic not shown; run `check` to see it.\n',
-        );
-      },
-    );
-
-    test('an unreadable spec says so on stderr', () async {
-      final dir = TempDir();
-      final path = dir.write(
-        'typed_openapi.yaml',
-        'clients:\n  broken: {input: missing.yaml, output: lib/b}\n',
-      );
-      final (code, out, err) = await run([
-        'ir',
-        '-c',
-        path,
-      ], workingDirectory: dir.path);
-      expect(code, 1);
-      expect(jsonDecode(out), {'broken': null});
-      expect(err, contains('error TOA004'));
-      expect(err, contains('Client broken has no IR'));
-    });
-
-    test(
-      'a config that cannot be loaded goes to stderr, stdout is empty',
-      () async {
-        final dir = TempDir();
-        final (code, out, err) = await run([
-          'ir',
-          '-c',
-          'missing.yaml',
-        ], workingDirectory: dir.path);
-        expect(code, 78);
-        expect(out, isEmpty);
-        expect(err, contains('TOA901'));
-      },
     );
   });
 }
