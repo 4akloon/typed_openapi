@@ -67,4 +67,42 @@ clients:
       ],
     );
   });
+
+  group('naming.stream_suffix', () {
+    String suffixOf(String value, DiagnosticBag bag) => load('''
+clients:
+  a:
+    input: a.json
+    output: lib/a
+    naming: {stream_suffix: "$value"}
+''', bag).single.generation.streamSuffix;
+
+    for (final bad in [
+      'live',
+      'Live_x',
+      'Live x',
+      r'Live$',
+      'Évé',
+      'Li-ve',
+      '',
+      '_',
+    ]) {
+      test('"$bad" is TOA902 and Stream is used', () {
+        final bag = DiagnosticBag();
+        expect(suffixOf(bad, bag), 'Stream');
+        expect(
+          [for (final d in bag.all) d.code],
+          [DiagnosticCode.configInvalid],
+        );
+      });
+    }
+
+    for (final good in ['1x', 'Live', 'LIVE2', '9']) {
+      test('"$good" is kept', () {
+        final bag = DiagnosticBag();
+        expect(suffixOf(good, bag), good);
+        expect(bag.all, isEmpty);
+      });
+    }
+  });
 }

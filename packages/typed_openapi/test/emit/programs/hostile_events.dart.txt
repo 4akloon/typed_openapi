@@ -1,0 +1,72 @@
+// A program that feeds the events of the client generated from
+// test/emit/fixtures/events_hostile.yaml, whose event names collide or are
+// hostile, through a Dio whose adapter answers from memory, and prints the
+// variant each one reached. The test reads what the program prints.
+// ignore_for_file: avoid_print
+import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:dio/dio.dart';
+import 'package:fixture/events_hostile_raw/api_client.dart';
+import 'package:typed_openapi_runtime/typed_openapi_runtime.dart';
+
+/// Answers every request with [text] as an event stream.
+final class Adapter implements HttpClientAdapter {
+  Adapter(this.text);
+
+  final String text;
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async => ResponseBody(
+    Stream.value(Uint8List.fromList(utf8.encode(text))),
+    200,
+    headers: {
+      Headers.contentTypeHeader: ['text/event-stream'],
+    },
+  );
+
+  @override
+  void close({bool force = false}) {}
+}
+
+Future<void> main() async {
+  const names = [
+    'Delta',
+    'delta',
+    '-',
+    '*/',
+    'a b',
+    'class',
+    'unknown',
+    'secret',
+    'nothing',
+    r'$cost',
+  ];
+  final text = StringBuffer();
+  for (final name in names) {
+    text.write('event: $name\ndata: d-$name\n\n');
+  }
+  // No event field and an empty one are both `message`.
+  text.write('data: plain\n\nevent:\ndata: empty\n\n');
+  final client = ApiClient(Dio()..httpClientAdapter = Adapter('$text'));
+  final result = await client.defaultApi.feed();
+  if (result case Success(:final data)) {
+    await for (final item in data) {
+      switch (item) {
+        case SseEvent(:final data, :final event):
+          print('${event.isEmpty ? 'message' : event} -> $data');
+        case SseDecodeError():
+          print('decode error');
+        case SseReconnecting():
+          print('reconnecting');
+        case SseDisconnected():
+          print('end');
+      }
+    }
+  }
+}

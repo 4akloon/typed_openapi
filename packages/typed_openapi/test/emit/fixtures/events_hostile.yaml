@@ -32,6 +32,15 @@ paths:
                   - properties:
                       event: {const: secret}
                       data: {type: string, format: password}
+  /class:
+    get:
+      operationId: class
+      responses:
+        "200":
+          description: A reserved word that returns JSON or events.
+          content:
+            application/json: {schema: {type: string}}
+            text/event-stream: {schema: {type: string}}
 components:
   schemas:
     FeedEvent:

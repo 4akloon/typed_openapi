@@ -103,6 +103,17 @@ void main() {
     expect(feed, isNot(contains('\u202E')));
   });
 
+  test('a reserved word has a stream method named after its stem', () {
+    final feed = emitClient('events_hostile.yaml')['api/default_api.dart']!;
+    expect(feed, contains('Future<Result<String, Never>> class_({'));
+    expect(
+      feed,
+      contains('Future<Result<Stream<SseItem<String>>, Never>> classStream({'),
+    );
+    expect(feed, contains('static const _classStream = OperationInfo('));
+    expect(feed, isNot(contains('new_Stream')));
+  });
+
   test('text events are the data as it is', () {
     expect(threads, contains('Stream<SseItem<String>>'));
     expect(threads, contains('(m) => m.data,'));

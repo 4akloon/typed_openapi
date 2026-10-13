@@ -64,6 +64,7 @@ void main() {
   }) async {
     final options = SseOptions(
       reconnect: sse?.reconnect,
+      delay: sse?.delay ?? const Duration(seconds: 1),
       maxAttempts: sse?.maxAttempts ?? 5,
       maxDelay: sse?.maxDelay ?? const Duration(seconds: 30),
       wait: (delay) async => waits?.add(delay),

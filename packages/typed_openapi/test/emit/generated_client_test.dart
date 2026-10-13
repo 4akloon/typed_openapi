@@ -63,7 +63,12 @@ linter:
             p.join('test', 'emit', 'programs', 'calls.dart.txt'),
           ).readAsStringSync(),
         );
-      for (final program in ['fake_dio', 'wire_calls', 'stream_calls']) {
+      for (final program in [
+        'fake_dio',
+        'wire_calls',
+        'stream_calls',
+        'hostile_events',
+      ]) {
         temp.write(
           'bin/$program.dart',
           File(
@@ -127,6 +132,12 @@ linter:
       expect(result.stdout, _streams);
     });
 
+    test('dispatches hostile event names by their exact name (R12.2)', () {
+      final result = dart(['run', 'bin/hostile_events.dart'], package);
+      expect(result.stderr, '');
+      expect(result.stdout, _hostileEvents);
+    });
+
     test('puts every value on the wire as the spec says (R10)', () {
       final result = dart(['run', 'bin/wire_calls.dart'], package);
       expect(result.stderr, '');
@@ -134,6 +145,23 @@ linter:
     });
   }, timeout: const Timeout(Duration(minutes: 3)));
 }
+
+/// What `bin/hostile_events.dart` prints.
+const _hostileEvents = r'''
+Delta -> FeedEventDelta(d-Delta)
+delta -> FeedEventDelta2(d-delta)
+- -> FeedEventEvent1()
+*/ -> FeedEventEvent2(d-*/)
+a b -> FeedEventAB(d-a b)
+class -> FeedEventClass(d-class)
+unknown -> FeedEventUnknown2(d-unknown)
+secret -> FeedEventSecret(<redacted>)
+nothing -> FeedEventUnknown(nothing, <redacted>)
+$cost -> FeedEventCost(d-$cost)
+message -> FeedEventUnknown(message, <redacted>)
+message -> FeedEventUnknown(message, <redacted>)
+end
+''';
 
 /// What `bin/stream_calls.dart` prints.
 const _streams = '''
