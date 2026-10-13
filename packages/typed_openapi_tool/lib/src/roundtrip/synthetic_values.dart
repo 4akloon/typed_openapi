@@ -28,6 +28,16 @@ final class SyntheticValues {
         Sample(d.name, value, isExample: false),
   ];
 
+  /// How many values [all] tries to build: the number it returns plus the
+  /// ones no value could be built for (a custom type, or nesting too deep).
+  int get attempted => _ir.declarations.fold(0, (n, d) => n + _attempts(d));
+
+  static int _attempts(Declaration d) => switch (d) {
+    ModelDecl() => 2,
+    EnumDecl(:final values) => values.length.clamp(0, 2),
+    UnionDecl(:final variants) => variants.length,
+  };
+
   List<(Object?,)> _valuesOf(Declaration d) => switch (d) {
     ModelDecl() => [?_model(d, 0, every: false), ?_model(d, 0, every: true)],
     EnumDecl(:final values) when values.isEmpty => const [],

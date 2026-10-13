@@ -13,11 +13,13 @@ import 'package_gate.dart';
 import 'tree_hash.dart';
 
 /// The lock a corpus run computed, the failures of its gates, and the
-/// values whose round trip failed (counted in the lock, see [ClientLock]).
+/// values whose round trip failed and the examples that are defects of their
+/// spec (both counted in the lock, see [ClientLock]).
 typedef CorpusResult = ({
   CorpusLock lock,
   List<String> failures,
   List<String> roundTrips,
+  List<String> defects,
 });
 
 /// One run of the corpus: for each `union` mode, generates every spec into a
@@ -60,17 +62,20 @@ final class CorpusRun {
     final clients = <String, ClientLock>{};
     final failures = <String>[];
     final roundTrips = <String>[];
+    final defects = <String>[];
     _cleanUnused();
     for (final mode in modes) {
       final result = await _mode(mode, specs, inputs);
       clients.addAll(result.lock.clients);
       failures.addAll(result.failures);
       roundTrips.addAll(result.roundTrips);
+      defects.addAll(result.defects);
     }
     return (
       lock: CorpusLock(clients),
       failures: failures,
       roundTrips: roundTrips,
+      defects: defects,
     );
   }
 
@@ -101,6 +106,7 @@ final class CorpusRun {
     final trips = await _roundTrips(package, checks);
     final clients = <String, ClientLock>{};
     final roundTrips = <String>[];
+    final defects = <String>[];
     for (final spec in specs) {
       final key = '$mode/${spec.name}';
       final check = checks[spec.name];
@@ -109,12 +115,14 @@ final class CorpusRun {
       roundTrips.addAll([
         for (final f in trip?.failures ?? const []) '$mode/$f',
       ]);
+      defects.addAll([for (final d in trip?.defects ?? const []) '$mode/$d']);
       clients[key] = _record(package, spec.name, check, first, trip);
     }
     return (
       lock: CorpusLock(clients),
       failures: failures,
       roundTrips: roundTrips,
+      defects: defects,
     );
   }
 
@@ -190,9 +198,11 @@ final class CorpusRun {
 
   static Map<String, int> _values(RoundTripResult trip) => {
     'examples': trip.examples,
+    'examples_skipped': trip.skippedExamples,
     'failures': trip.failures.length,
     'spec_defects': trip.defects.length,
     'synthetic': trip.synthetic,
+    'synthetic_skipped': trip.skippedSynthetic,
   };
 
   static List<String> _unexpected(

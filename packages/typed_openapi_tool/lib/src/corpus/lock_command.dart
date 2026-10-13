@@ -7,6 +7,7 @@ import 'corpus_lock.dart';
 import 'corpus_run.dart';
 import 'fetch_command.dart';
 import 'spec_cache.dart';
+import 'timed_process.dart';
 
 /// `corpus update` and `corpus check`: fetch the specs, run the corpus
 /// ([CorpusRun]) and write `corpus.lock` (`update`) or compare the run with
@@ -29,6 +30,9 @@ final class LockCommand extends Command<int> {
 
   @override
   final String name;
+
+  /// How many spec defects a run prints.
+  static const int maxDefectsPrinted = 50;
 
   final bool _writes;
   final StringSink _out;
@@ -83,6 +87,7 @@ final class LockCommand extends Command<int> {
     for (final failure in result.roundTrips) {
       _err.writeln('round trip: $failure');
     }
+    _printDefects(result.defects);
     if (_writes && result.failures.isEmpty) {
       lockFile.writeAsStringSync(result.lock.format());
     } else if (_writes) {
@@ -91,6 +96,19 @@ final class LockCommand extends Command<int> {
     differences.forEach(_out.writeln);
     _out.writeln(_summary(result.lock, differences));
     return result.failures.isEmpty && differences.isEmpty ? 0 : 1;
+  }
+
+  /// Lists the examples that do not match their own schema, the first
+  /// [maxDefectsPrinted]; the lock counts them all.
+  void _printDefects(List<String> defects) {
+    for (final defect in defects.take(maxDefectsPrinted)) {
+      _out.writeln('spec defect: ${TimedProcess.excerpt(defect)}');
+    }
+    if (defects.length > maxDefectsPrinted) {
+      _out.writeln(
+        '... and ${defects.length - maxDefectsPrinted} more spec defects.',
+      );
+    }
   }
 
   static String _summary(CorpusLock lock, List<String> differences) {

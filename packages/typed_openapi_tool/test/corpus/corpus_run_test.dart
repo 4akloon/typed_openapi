@@ -69,9 +69,11 @@ void main() {
     expect(pets.files.keys, isNot(contains(CorpusRun.manifest)));
     expect(pets.values, {
       'examples': 1,
+      'examples_skipped': 0,
       'failures': 0,
       'spec_defects': 1,
       'synthetic': 2,
+      'synthetic_skipped': 0,
     });
     expect(result.lock.clients['raw/broken']!.files, isEmpty);
     expect(result.lock.clients['raw/broken']!.values, isNull);

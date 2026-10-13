@@ -25,7 +25,7 @@ final class RoundTripProgram {
         EnumDecl() || UnionDecl() => 'm.${d.name}.fromJson',
       };
       codecs.writeln(
-        "  '${d.name}': (decode: $decode, "
+        "  '${_escaped(d.name)}': (decode: $decode, "
         'encode: (v) => (v as m.${d.name}).toJson()),',
       );
     }
@@ -47,6 +47,13 @@ $codecs};
 
 $_main''';
   }
+
+  /// [name] inside a single-quoted Dart string; a Dart identifier may hold
+  /// `$`, which would start an interpolation.
+  static String _escaped(String name) => name
+      .replaceAll(r'\', r'\\')
+      .replaceAll("'", r"\'")
+      .replaceAll(r'$', r'\$');
 
   static const _main = r'''
 void main(List<String> args) {
