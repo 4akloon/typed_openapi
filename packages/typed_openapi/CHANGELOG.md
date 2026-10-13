@@ -33,6 +33,13 @@
   `openai` client's union files change (M11).
 
 ### Fixed
+- The fix text of TOA504 no longer suggests a method-name override, which
+  does not clear the error; it names the cure (a unique `operationId` at the
+  source) and the way to generate anyway (lower TOA504 in `severity`).
+- A framework hint after a multi-line fix (an override snippet) is on a line
+  of its own instead of glued to the last line of the snippet.
+- A `name` override of a schema that only a multipart body uses is reported
+  (TOA807, info): the parts class is named after the operation.
 - A union variant whose type is a nullable list (GitHub's
   `pull-request-stacks` 422 error, every branch nullable) binds its value
   in `toJson` before it encodes it, so the code compiles (M11).
