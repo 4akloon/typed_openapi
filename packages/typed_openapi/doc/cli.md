@@ -8,7 +8,7 @@ dart run typed_openapi generate
 dart run typed_openapi baseline create
 ```
 
-If you installed it with `dart pub global activate typed_openapi`, replace `dart run typed_openapi` with `typed_openapi`.
+`typed_openapi` is not on pub.dev yet, so `dart pub global activate typed_openapi` does not work. From a checkout of the repository, `dart pub global activate --source path packages/typed_openapi` installs the `typed_openapi` executable; then replace `dart run typed_openapi` with `typed_openapi`.
 
 ```text
 $ typed_openapi --help
@@ -88,7 +88,7 @@ dart run typed_openapi check --format json | jq '.summary'
 
 ## generate
 
-`typed_openapi generate [options] [client...]` runs the same checks as `check`, then writes every client that has no errors. A client with errors is skipped with `Skipped shop: its check reports errors; fix them and run generate again.`, so one broken spec does not stop the others, and the exit code is `1`. When the check passes but the output cannot be written (TOA830, TOA831), the line is `Skipped shop: see the error above.`
+`typed_openapi generate [options] [client...]` runs the same checks as `check`, then writes every client that has no errors. A client with errors is skipped with `Skipped shop: its check reports errors; fix them and run generate again.`, so one broken spec does not stop the others, and the exit code is `1`. A config error does not skip a client. A bad config value (TOA902) is reported as an error and the default is used, so `generate` still writes the clients whose specs have no errors and exits `1`. This was run with `input_suffix` equal to `patch_suffix` and a non-string `group` under `defaults.naming`: the client was generated and the exit code was `1`. An invalid `severity` level on a client behaves the same, while a client in the same config whose spec file is missing is skipped. Check the exit code in CI, and run `check` first if you want nothing written on a bad config. When the check passes but the output cannot be written (TOA830, TOA831), the line is `Skipped shop: see the error above.`
 
 | Option | Default | Meaning |
 | --- | --- | --- |
@@ -116,8 +116,10 @@ A baseline is a file of accepted diagnostics for one client. Both subcommands ta
 
 ```text
 $ typed_openapi baseline create
+errors: 0, warnings: 0, infos: 0
 Wrote specs/shop.baseline.yaml: 3 entries accept 3 diagnostics.
 $ typed_openapi baseline prune
+errors: 0, warnings: 0, infos: 0
 Pruned specs/shop.baseline.yaml: removed 1 entries, 2 left.
 ```
 
@@ -144,11 +146,12 @@ $ echo $?
 78
 ```
 
-Diagnostics a baseline accepts do not count toward the exit code. The CLI never calls `exit()` from library code, so you can also run it through the programmatic `TypedOpenApiCli`.
+Diagnostics a baseline accepts do not count toward the exit code. The CLI never calls `exit()` from library code, so you can also run it from Dart code; see [Programmatic API](programmatic_api.md).
 
 ## See also
 
 - [Configuration](configuration.md): what goes in `typed_openapi.yaml`.
 - [Diagnostics](diagnostics.md): every code in the output.
 - [Baseline](baseline.md) and [Generated output](generate_output.md): the two write commands in depth.
+- [Programmatic API](programmatic_api.md): the same pipeline as a library.
 - [CI](ci.md): using the formats and exit codes in a pipeline.

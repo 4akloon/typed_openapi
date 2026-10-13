@@ -157,6 +157,17 @@ types:
 
 `number` decides the Dart type of `type: number` without `format: float` or `double`: `num` (default), `double` or `int`. `formats` maps a string `format` to a Dart type; `schemas` maps a `components.schemas` key to one. An entry needs `type` and `import`, may have `converter`, and an unknown key in it is TOA903. `import` must be a `package:` or `dart:` library; `type` and `converter` must be Dart names. A schema a custom type replaces generates no declaration.
 
+### The shape of a custom type
+
+The generated code calls the type or its converter on the JSON value of the schema it replaces (a `String` for a string `format`, a `num`, `double` or `int` for a number, and so on). Nothing checks that your class has these members; a wrong shape is a compile error in the generated file.
+
+| Entry | Decoding | Encoding |
+| --- | --- | --- |
+| `type: Money` (no `converter`) | `Money.fromJson(JsonReader.asString(value))`: a static or factory `fromJson` that takes the JSON value | `value.toJson()`: an instance method that returns the JSON value |
+| `type: UuidValue`, `converter: UuidConverter` | `const UuidConverter().fromJson(JsonReader.asString(value))` | `const UuidConverter().toJson(id)` |
+
+So a converter is a class with a `const` constructor and no required arguments, a `fromJson` that takes the JSON value and returns the type, and a `toJson` that takes the type and returns the JSON value. The generated file imports `type` and `converter` from `import` with a `show` list. The two rows are what the generator wrote for `format: uuid` with a converter and `format: money` without one.
+
 ## Tri-state
 
 `tri_state` decides which request-body properties tell "absent" from `null`, using `Patch<T>` from the runtime.
@@ -177,7 +188,7 @@ types:
 
 ## Event streams
 
-`sse.reconnect` is a boolean. It makes event streams reconnect: GET streams do by default, other methods only when this is `true` (TOA665 says when it was asked for but cannot apply). A single operation overrides it in the [overrides file](overrides.md#event-streams).
+`sse.reconnect` is a boolean that applies to GET event streams. Without it (or `false`) a GET stream reconnects only when the call passes `SseOptions(reconnect: true)`; with `true` it reconnects unless the call says no. Other methods never reconnect because of this key: TOA665 (info) says so, and an operation that can be repeated safely turns it on with `sse.reconnect: true` in the [overrides file](overrides.md#event-streams), which wins over the config for that operation. See [Event streams](generated/event_streams.md).
 
 ## Config errors
 

@@ -73,7 +73,7 @@ Fields are of two kinds. **Spec fields** rewrite the spec the generator reads. *
 | Schema | `$ref`, `type`, `nullable`, `format`, `required` (a list), `items`, `additionalProperties`, `enum`, `discriminator` | `name`, `exclude`, `exhaustive`, `union`, `dartType`, `properties` |
 | Property | the schema spec fields (`required` is a boolean) | `name`, `exclude`, `dartType`, `triState`, `union` |
 
-`name` of a type must be an UpperCamelCase Dart identifier, of a method, parameter or field lowerCamelCase; an invalid one is TOA560 and the sanitised name is used (`"my rate"` becomes `myRate`). `group` is UpperCamelCase. `exhaustive: false` makes an enum or union `abstract interface` instead of `sealed`. `union` is `raw` or `structural`. `triState` makes a request property tell "absent" from `null`. `dartType` is `{type, import, converter?}` where `import` is a `package:` or `dart:` library.
+`name` of a type must be an UpperCamelCase Dart identifier, of a method, parameter or field lowerCamelCase; an invalid one is TOA560 and the sanitised name is used (`"my rate"` becomes `myRate`). `group` is UpperCamelCase. `exhaustive: false` makes an enum or union `abstract interface` instead of `sealed`. `union` is `raw` or `structural`. `triState` makes a request property tell "absent" from `null`. `dartType` is `{type, import, converter?}` where `import` is a `package:` or `dart:` library. The required shape of `type` and `converter` is in [Configuration](configuration.md#the-shape-of-a-custom-type).
 
 ```yaml
 operations:
@@ -154,7 +154,7 @@ warning TOA560 override-name-invalid: The name "my rate" of this override is not
 | TOA802 | error | A value is invalid, or the path is a directory. The value is ignored. |
 | TOA803 | error | An unknown key; the fix text suggests `Did you mean "name"?` within edit distance 2. |
 | TOA804 | warning | The address finds nothing. |
-| TOA805 | error | A response has several media types and the `schema` override gives no `contentType`, or the given one is not among them. |
+| TOA805 | error | The address is ambiguous (an `operationId` two operations share: use `METHOD /path`; parameters of one operation with the same name: use `in:name`), or a response or body has several media types and the `schema` override gives no `contentType`, or the given one is not among them. |
 | TOA806 | error | Two entries change one node. |
 | TOA807 | info | The override changes nothing. |
 | TOA808 | info | The node is shared with other operations. |

@@ -118,7 +118,7 @@ clients:
         decimal: {type: Decimal, import: 'package:decimal/decimal.dart'}
 ```
 
-A property with `format: decimal` is then a `Decimal` and is decoded with `Decimal.fromJson(...)` and encoded with `.toJson()`. The package must be a dependency of your project; the generator does not check.
+A property with `format: decimal` is then a `Decimal` and is decoded with `Decimal.fromJson(...)` and encoded with `.toJson()`. The package must be a dependency of your project; the generator does not check. A `converter` entry changes the calls to `const Converter().fromJson(...)` and `.toJson(value)`; the required shape is in [Configuration](../configuration.md#the-shape-of-a-custom-type).
 
 ## Decoding
 
