@@ -67,7 +67,7 @@ final class SpecDocuments {
   /// named by its absolute path, as is every file when the root's name is
   /// absolute.
   String displayPath(Uri uri) {
-    if (uri == root.uri) return root.file;
+    if (uri == root.uri) return DisplayPaths.withSlashes(root.file);
     final path = _pathOf(uri);
     final rootPath = _pathOf(root.uri);
     if (path == null || rootPath == null) return '$uri';
