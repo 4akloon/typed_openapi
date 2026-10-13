@@ -744,7 +744,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `SpecChecker`, `ClientCheck`, `TypedOpenApiCli`, `ConfigLoader`,
   `ClientConfig`, `Preset`, `ProjectConfig`, `GenerationConfig`, `GroupBy`,
   `TriStateRule`, `OperationFilter`, `FilterPattern`, `ModelLibrary`,
-  `OutputWriter`, `OutputChanges`, the IR (`IrBuilder`,
+  `ApiLibrary` (M11: the fuzz of `packages/typed_openapi_tool` emits whole
+  clients in-process), `OutputWriter`, `OutputChanges`, the IR (`IrBuilder`,
   `IrJson`, `ClientIr` and its node classes, among them the M9 ones
   (`RootIr`, `ServerIr`, `ServerVariableIr`, `StatusTypeIr`, `StatusCaseIr`,
   `PartIr`, `EncodingIr`, `SecurityUseIr`, `SecuritySchemeIr`,
@@ -768,7 +769,7 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `BaselineCommand`, `GenerateCommand`, `RealPaths`, the emitters
   (`DartCode`, `DartWriter`, `Imports`, `TypeCodec`, `ModelEmitter`,
   `ModelConstructors`, `EnumEmitter`, `UnionEmitter`, `DiscriminatorDecoder`,
-  `UnionVariants`, and the API emitters `ApiLibrary`,
+  `UnionVariants`, and the API emitters (`ApiLibrary` aside),
   `OperationEmitter`, `RequestWriter`, `DecoderWriter`, `PartsEmitter`,
   `StatusTypeEmitter`: `generate` runs them, there is no public entry
   point yet), the

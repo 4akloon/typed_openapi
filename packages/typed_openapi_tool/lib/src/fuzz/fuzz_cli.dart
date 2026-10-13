@@ -1,0 +1,64 @@
+import 'dart:io';
+
+import 'package:args/args.dart';
+import 'package:path/path.dart' as p;
+
+import 'fuzz_run.dart';
+
+/// The `fuzz` command line of the repository (M11): runs the escaping fuzz
+/// on a range of seeds and exits `1` when it finds a problem.
+final class FuzzCli {
+  /// Creates the command line; the summary goes to [out], problems to [err].
+  FuzzCli({StringSink? out, StringSink? err})
+    : _out = out ?? stdout,
+      _err = err ?? stderr;
+
+  final StringSink _out;
+  final StringSink _err;
+
+  static final _parser = ArgParser()
+    ..addOption('seeds', defaultsTo: '200', help: 'How many seeds to run.')
+    ..addOption('from', defaultsTo: '0', help: 'The first seed.')
+    ..addOption(
+      'sample-every',
+      defaultsTo: '12',
+      help: 'Every how many seeds an output is analyzed.',
+    )
+    ..addOption(
+      'work',
+      defaultsTo: '.dart_tool/fuzz',
+      help: 'Where the sample package is written.',
+    )
+    ..addOption(
+      'runtime',
+      defaultsTo: '../typed_openapi_runtime',
+      help: 'The typed_openapi_runtime package the sample depends on.',
+    );
+
+  /// Runs the fuzz with [args]; returns the exit code.
+  Future<int> run(List<String> args) async {
+    final ArgResults results;
+    try {
+      results = _parser.parse(args);
+    } on FormatException catch (e) {
+      _err
+        ..writeln(e.message)
+        ..writeln(_parser.usage);
+      return 64;
+    }
+    int number(String name) => int.parse(results.option(name)!);
+    final report = await FuzzRun(
+      work: p.normalize(p.absolute(results.option('work')!)),
+      runtime: p.normalize(p.absolute(results.option('runtime')!)),
+      log: _err,
+      sampleEvery: number('sample-every'),
+    ).run(from: number('from'), count: number('seeds'));
+    report.failures.forEach(_err.writeln);
+    _out.writeln(
+      '${number('seeds')} seeds: ${report.builds} builds, '
+      '${report.files} files, ${report.sampled} sampled; '
+      '${report.failures.length} problems.',
+    );
+    return report.failures.isEmpty ? 0 : 1;
+  }
+}

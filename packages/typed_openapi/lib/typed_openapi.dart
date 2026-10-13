@@ -40,6 +40,7 @@ export 'src/diagnostics/reporters.dart'
 export 'src/diagnostics/sarif_reporter.dart' show SarifReporter;
 export 'src/diagnostics/severity.dart' show Severity;
 export 'src/diagnostics/severity_levels.dart' show SeverityLevels;
+export 'src/emit/api_library.dart' show ApiLibrary;
 export 'src/emit/model_library.dart' show ModelLibrary;
 export 'src/generate/output_writer.dart' show OutputChanges, OutputWriter;
 export 'src/ir/api_ir.dart'
