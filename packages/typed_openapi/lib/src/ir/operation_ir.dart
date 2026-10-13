@@ -1,6 +1,8 @@
 import '../model/spec_node.dart';
 import 'ir.dart';
 
+export 'event_stream_ir.dart';
+
 /// An operation: one method of a group.
 final class OperationIr {
   /// Creates an operation.
@@ -22,6 +24,7 @@ final class OperationIr {
     this.successType,
     this.errorType,
     this.partsName,
+    this.events,
   });
 
   /// This operation with the names of the types the API emitter declares
@@ -48,6 +51,7 @@ final class OperationIr {
     successType: successType,
     errorType: errorType,
     partsName: partsName,
+    events: events,
   );
 
   /// Where the Operation Object is.
@@ -106,6 +110,11 @@ final class OperationIr {
 
   /// The class of the parts of a multipart body ([RequestBodyIr.parts]).
   final String? partsName;
+
+  /// The events, when the method returns an event stream: its successes
+  /// with a body are `text/event-stream` and their type is the type of
+  /// each event's data.
+  final EventStreamIr? events;
 
   /// The key of the operation in the overrides file: its `operationId`,
   /// or `METHOD /path`.

@@ -194,7 +194,10 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `set`); `OverrideEdit` is in `override_edit.dart`, re-exported by the
   applier.
 - `config/` - `ConfigLoader`, `ProjectConfig`, `ClientConfig`, `Preset`,
-  `GenerationConfig` (`naming`, `group_by`, `include`/`exclude`
+  `GenerationConfig` (`naming` (also `stream_suffix`, default `Stream`),
+  `sse.reconnect` (GET event streams reconnect unless a call says no;
+  `OperationSettingsReader` reads these and `operation_prefix`), `group_by`,
+  `include`/`exclude`
   (`OperationFilter`, `FilterPattern`), `types`, `tri_state`, `union`
   (`raw`, the default, or `structural`: how a `oneOf`/`anyOf` without a
   discriminator whose variants share a JSON type is generated, TOA453; an
@@ -344,7 +347,23 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   override names first, then
   `operationId` without the `operation_prefix`, then the path; TOA563 when
   no operation is generated, at the config client if filters left some
-  out, else at `#/paths`; then everything above). `IrJson` dumps an IR, the operations through `IrOperationJson`: every
+  out, else at `#/paths`; then everything above). Event streams (M10):
+  `OperationBuilder` builds the parameters and hands an operation to
+  `MethodBuilder` (`RequestBodyBuilder`, `ResponseBuilder`, `EventStreams`),
+  which gives one method, or two when a success offers JSON (or another
+  body) and `text/event-stream` (`chat` and `chatStream`, the suffix from
+  `naming.stream_suffix`, claimed after every other method of the group,
+  TOA663, TOA551 on a collision). A method that returns events has
+  `OperationIr.events` (`EventStreamIr`: the data type, null for text, and
+  `StreamReconnection` `off` for a non-GET with TOA665, `onRequest`, `on`
+  with `sse.reconnect`); its event-stream successes are `String` responses
+  and it has no sealed success type. `EventData` reads the data type:
+  `itemSchema.properties.data` with a JSON `contentMediaType` and a
+  `contentSchema`, a string `data` is text, anything else text with TOA666;
+  `schema` is the data's JSON, an array its items (TOA664), a plain string
+  text. TOA654 is now only an operation whose event-stream successes
+  disagree on the data type or sit next to successes with another body.
+  `IrJson` dumps an IR, the operations through `IrOperationJson`: every
   field of the operation IR (encoding, parts, security, servers, status
   types, `sensitive`, defaults), except the locations of parameters, bodies
   and responses and a response's text and media type; `ir_json_test.dart`

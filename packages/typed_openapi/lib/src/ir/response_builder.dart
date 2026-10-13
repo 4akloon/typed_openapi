@@ -25,16 +25,39 @@ final class ResponseBuilder {
   final MediaTypePicker _picker;
 
   /// The generated responses of [operation] with the media type used for
-  /// each, before any type is mapped.
-  List<PickedResponse> pick(Operation operation) => [
+  /// each, before any type is mapped: for the method that returns the
+  /// [events], the event stream of each success that has one. When the
+  /// operation [hasStreamMethod], the event streams of its successes are not
+  /// dropped (TOA651).
+  List<PickedResponse> pick(
+    Operation operation, {
+    bool events = false,
+    bool hasStreamMethod = false,
+  }) => [
     for (final (status, written) in _statuses.of(operation))
       if (_context.model.resolve(written) case final response?)
         (
           status,
           response,
-          _picker.pick(response.content, response.location, 'response'),
+          (events && status.startsWith('2') ? _eventStream(response) : null) ??
+              _picker.pick(
+                response.content,
+                response.location,
+                'response',
+                hasStreamMethod: hasStreamMethod && status.startsWith('2'),
+              ),
         ),
   ];
+
+  /// The `text/event-stream` media type of [response], if it has one.
+  (String?, MediaType?)? _eventStream(Response response) {
+    for (final MapEntry(:key, :value) in response.content.entries) {
+      if (MediaTypePicker.kindOf(key) == .eventStream) {
+        return (key, _context.model.resolve(value));
+      }
+    }
+    return null;
+  }
 
   /// The IR of the picked [responses]; [prefix] starts the names of their
   /// inline types.
@@ -79,7 +102,7 @@ final class ResponseBuilder {
   /// The type of a response body of [kind] whose schema is [schema].
   DartType? _bodyType(Schema? schema, BodyKind kind, NameHint hint) =>
       switch ((schema, kind)) {
-        (_, .text) => const CoreType(.string),
+        (_, .text || .eventStream) => const CoreType(.string),
         (_, .bytes) => const CoreType(.binary),
         (final schema?, _) => _mapper.typeOf(
           schema,

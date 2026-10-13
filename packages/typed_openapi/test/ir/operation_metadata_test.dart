@@ -172,7 +172,7 @@ paths:
       );
     });
 
-    test('an event stream is generated from M10 (TOA654)', () {
+    test('an event stream next to another body is not generated (TOA654)', () {
       final fixture = IrFixture('''
 openapi: 3.1.0
 info: {title: t, version: "1"}
@@ -183,16 +183,17 @@ paths:
       tags: [t]
       responses:
         "200": {description: ok, content: {text/event-stream: {schema: {type: string}}}}
+        "201": {description: ok, content: {application/json: {schema: {type: string}}}}
 ''');
       final ir = build(fixture);
       expect(ir.groups, isEmpty);
       expect(
         reported(fixture, .eventStreamNotGenerated).single.pointer?.value,
-        '#/paths/~1a/get/responses/200',
+        '#/paths/~1a/get/responses',
       );
       expect(
         reported(fixture, .clientEmpty).single.message,
-        contains('1 is an event stream, generated from M10 (TOA654)'),
+        contains('1 has event streams the client cannot express (TOA654)'),
       );
     });
   });

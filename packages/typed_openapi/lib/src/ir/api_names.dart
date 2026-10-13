@@ -121,11 +121,12 @@ final class ApiNames {
       );
 
   /// [operation] with the names of the types the emitter declares for it;
-  /// [inlineBodies] tells which names its own inline bodies have.
+  /// [inlineBodies] tells which names its own inline bodies have. A method
+  /// that returns events has no sealed successes: it returns the stream.
   OperationIr name(OperationIr operation, ResponseBodyNames inlineBodies) {
     final prefix = _names.pascal(operation.name) ?? 'Operation';
     final bodies = {for (final s in operation.successes) s.type};
-    final successType = bodies.length > 1
+    final successType = bodies.length > 1 && operation.events == null
         ? _statusType(
             operation,
             _sealedName('${prefix}Response', operation, inlineBodies),

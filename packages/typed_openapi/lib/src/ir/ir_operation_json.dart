@@ -77,6 +77,11 @@ final class IrOperationJson {
     if (o.successType case final type?) 'successType': _statusType(type),
     if (o.errorType case final type?) 'errorType': _statusType(type),
     'partsName': ?o.partsName,
+    if (o.events case final events?)
+      'events': {
+        if (events.data case final data?) 'data': _type(data),
+        'reconnection': events.reconnection.name,
+      },
   };
 
   Map<String, Object?> _parameter(ParameterIr p) => {

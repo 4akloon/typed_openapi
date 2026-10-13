@@ -4,29 +4,24 @@ import 'dart_type.dart';
 import 'ir.dart';
 import 'ir_context.dart';
 import 'media_type_picker.dart';
+import 'method_builder.dart';
 import 'names.dart';
-import 'operation_checks.dart';
 import 'parameter_checks.dart';
-import 'request_body_builder.dart';
-import 'response_builder.dart';
 import 'schema_defaults.dart';
 import 'schema_mapper.dart';
-import 'security_builder.dart';
 import 'spec_operation.dart';
 
 export 'spec_operation.dart';
 
-/// Builds the IR of operations: parameters, bodies, responses and errors
-/// (R10.3, R10.4, R10.6, R11.4); types come from a [SchemaMapper].
+/// Builds the IR of operations: their parameters here (R10.3), and through
+/// a [MethodBuilder] their methods with bodies, responses and errors
+/// (R10.4, R10.6, R11.4, R12.1); types come from a [SchemaMapper].
 final class OperationBuilder {
   /// Creates a builder that maps types with [_mapper].
   OperationBuilder(this._context, this._mapper)
-    : _checks = OperationChecks(_context),
-      _parameterChecks = ParameterChecks(_context),
-      _security = SecurityBuilder(_context),
-      _bodies = RequestBodyBuilder(_context, _mapper),
+    : _parameterChecks = ParameterChecks(_context),
+      _methods = MethodBuilder(_context, _mapper),
       _defaults = SchemaDefaults(_context),
-      _responses = ResponseBuilder(_context, _mapper),
       _picker = MediaTypePicker(_context);
 
   static const _names = DartNames();
@@ -37,58 +32,37 @@ final class OperationBuilder {
 
   final IrContext _context;
   final SchemaMapper _mapper;
-  final ResponseBuilder _responses;
-  final OperationChecks _checks;
   final ParameterChecks _parameterChecks;
-  final SecurityBuilder _security;
-  final RequestBodyBuilder _bodies;
+  final MethodBuilder _methods;
   final SchemaDefaults _defaults;
   final MediaTypePicker _picker;
 
-  /// How many operations [build] left out because a success is an event
-  /// stream (TOA654).
+  /// How many operations [build] left out because their event streams
+  /// cannot be expressed (TOA654).
   int streams = 0;
 
   /// How many operations [build] left out because a path variable has no
   /// parameter (TOA556).
   int unbound = 0;
 
-  /// The IR of [entry], named [name]; null when its path template cannot
-  /// be filled, or when a success is an event stream (counted in
-  /// [streams]).
-  OperationIr? build(SpecOperation entry, String name) {
-    final operation = entry.operation;
-    final prefix = _names.pascal(name) ?? name;
-    final parameters = _parameters(entry, prefix);
+  /// The methods of [entry], named [name]: one, or for an operation that
+  /// returns JSON or an event stream also one that returns the events,
+  /// named in the group's [methods] (TOA663). Empty when its path template
+  /// cannot be filled (counted in [unbound]) or its event streams cannot be
+  /// expressed (in [streams]).
+  List<OperationIr> build(
+    SpecOperation entry,
+    String name,
+    NameScope methods,
+  ) {
+    final parameters = _parameters(entry, _names.pascal(name) ?? name);
     if (parameters == null) {
       unbound++;
-      return null;
+      return const [];
     }
-    final picked = _responses.pick(operation);
-    if (_checks.isEventStream(picked)) {
-      streams++;
-      return null;
-    }
-    final responses = _responses.of(picked, prefix);
-    _checks.successes(operation);
-    _checks.servers(entry);
-    _checks.callbacks(operation);
-    return OperationIr(
-      location: operation.location,
-      name: name,
-      method: entry.method.toUpperCase(),
-      path: entry.path,
-      operationId: operation.operationId,
-      tags: operation.tags,
-      summary: operation.summary,
-      description: operation.description,
-      deprecated: operation.deprecated,
-      parameters: parameters,
-      body: _bodies.of(operation, entry.method, prefix),
-      responses: responses,
-      errors: _responses.errors(responses),
-      security: _security.of(operation),
-    );
+    final built = _methods.of(entry, name, parameters, methods);
+    if (built.isEmpty) streams++;
+    return built;
   }
 
   List<ParameterIr>? _parameters(SpecOperation entry, String prefix) {

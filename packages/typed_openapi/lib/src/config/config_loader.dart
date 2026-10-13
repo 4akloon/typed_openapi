@@ -15,6 +15,7 @@ import '../load/yaml_composer.dart';
 import '../normalize/normalizer.dart';
 import '../overrides/override_set.dart';
 import 'generation_config.dart';
+import 'operation_settings_reader.dart';
 import 'project_config.dart';
 
 /// Reads `typed_openapi.yaml` into a [ProjectConfig].
@@ -36,6 +37,7 @@ final class ConfigLoader {
     'tri_state',
     'union',
     'errors',
+    'sse',
   };
   static const _defaultsKeys = {
     'preset',
@@ -500,6 +502,7 @@ final class _GenerationReader {
     'input_suffix',
     'patch_suffix',
     'operation_prefix',
+    'stream_suffix',
   };
   static const _filterKeys = {'tags', 'operations', 'paths'};
   static const _typesKeys = {'number', 'formats', 'schemas'};
@@ -512,26 +515,19 @@ final class _GenerationReader {
   final List<(Map<String, Object?>, JsonPointer)> _sources;
 
   GenerationConfig read() {
-    for (final (map, at) in _sources) {
-      for (final (section, keys) in [
-        ('naming', _namingKeys),
-        ('types', _typesKeys),
-        ('errors', const {'default_schema'}),
-      ]) {
-        if (_reader.mapAt(map, section, at) case final inner?) {
-          _reader.checkKeys(inner, keys, at.child(section));
-        }
-      }
-    }
+    _checkSectionKeys();
     final suffixes = _suffixes();
     final client = _sources.last.$2;
     final errorSchema = _string('errors', 'default_schema');
+    final operations = OperationSettingsReader(_sources, _reader.invalid);
     return GenerationConfig(
       groupTemplate: _groupTemplate() ?? GenerationConfig.defaultGroupTemplate,
       defaultGroup: _defaultGroup() ?? GenerationConfig.defaultDefaultGroup,
       inputSuffix: suffixes.$1,
       patchSuffix: suffixes.$2,
-      operationPrefix: _pattern(),
+      operationPrefix: operations.operationPrefix(),
+      streamSuffix: operations.streamSuffix(),
+      streamReconnect: operations.streamReconnect(),
       clientClass: _clientClass(),
       groupBy: _choice('group_by', GroupBy.values) ?? .tag,
       include: _filter('include'),
@@ -550,6 +546,21 @@ final class _GenerationReader {
       client: client,
       clientSpan: _reader.spanAt(client),
     );
+  }
+
+  void _checkSectionKeys() {
+    for (final (map, at) in _sources) {
+      for (final (section, keys) in [
+        ('naming', _namingKeys),
+        ('types', _typesKeys),
+        ('errors', const {'default_schema'}),
+        ('sse', const {'reconnect'}),
+      ]) {
+        if (_reader.mapAt(map, section, at) case final inner?) {
+          _reader.checkKeys(inner, keys, at.child(section));
+        }
+      }
+    }
   }
 
   /// The value of [key] (or of [key] in [section]) from the last source
@@ -651,21 +662,6 @@ final class _GenerationReader {
       GenerationConfig.defaultInputSuffix,
       GenerationConfig.defaultPatchSuffix,
     );
-  }
-
-  RegExp? _pattern() {
-    final picked = _string('naming', 'operation_prefix');
-    if (picked == null) return null;
-    final (value, at) = picked;
-    try {
-      return RegExp(value);
-    } on FormatException catch (e) {
-      return _invalid(
-        '"operation_prefix" is not a valid regular expression: '
-        '${e.message}.',
-        at,
-      );
-    }
   }
 
   String? _numberType() {

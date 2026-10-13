@@ -67,6 +67,12 @@ paths:
       responses:
         "200": {description: ok, content: {application/json: {schema: {type: object, properties: {data: {type: string}}, required: [data]}}}}
         "400": {description: bad, content: {application/json: {schema: {type: object, properties: {c: {type: string}}}}}}
+  /feed:
+    get:
+      operationId: feed
+      tags: [files]
+      responses:
+        "200": {description: ok, content: {text/event-stream: {schema: {type: object, properties: {n: {type: integer}}}}}}
 components:
   securitySchemes:
     key: {type: apiKey, name: X-Key, in: header}
@@ -109,6 +115,7 @@ final _classes = <Type>[
   ClientIr,
   GroupIr,
   OperationIr,
+  EventStreamIr,
   ParameterIr,
   RequestBodyIr,
   ResponseIr,

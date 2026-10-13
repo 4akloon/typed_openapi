@@ -409,8 +409,10 @@ enum DiagnosticCode {
   /// value is the body as `JsonValue`.
   successUndocumented('TOA653', 'success-undocumented', .warning),
 
-  /// A success of an operation is `text/event-stream`; the operation is not
-  /// generated until M10 generates event streams.
+  /// An event-stream operation has a shape the client cannot express: its
+  /// event-stream successes have different event types, or another success
+  /// has a body that is not an event stream; the operation is not
+  /// generated.
   eventStreamNotGenerated('TOA654', 'event-stream-not-generated', .warning),
 
   /// The schema of a multipart body is not an object with properties (a
@@ -463,6 +465,27 @@ enum DiagnosticCode {
   /// JSON (`application/xml`). The client writes JSON only, so the part is
   /// a `String` the caller supplies, sent with that media type.
   partMediaTypeNotJson('TOA662', 'part-media-type-not-json', .warning),
+
+  /// A success of an operation offers JSON (or another body) and
+  /// `text/event-stream`: the operation gets a second method, named with
+  /// `naming.stream_suffix`, that returns the events.
+  eventStreamMethodAdded('TOA663', 'event-stream-method-added', .info),
+
+  /// The `schema` of an event stream is an array: each event's data is
+  /// taken to be one item, as code-first frameworks write it.
+  eventDataArrayItems('TOA664', 'event-data-array-items', .info),
+
+  /// `sse.reconnect` in the config asks event streams to reconnect, but it
+  /// applies to GET only: an event-stream operation that is not GET does
+  /// not reconnect, since repeating the request may not be safe, unless its
+  /// own `sse.reconnect` override enables it. Reported once per such
+  /// operation, and only when the config asks.
+  eventStreamReconnectOff('TOA665', 'event-stream-reconnect-off', .info),
+
+  /// The `itemSchema` of an event stream does not say what the data of an
+  /// event is (no `data` property, or one that is neither text nor JSON
+  /// with a `contentSchema`): the data is read as text.
+  eventItemSchemaUnread('TOA666', 'event-item-schema-unread', .warning),
 
   /// A normalizer fix or an override was not applied: its file cannot be
   /// read, its target is gone, the spec kept changing after the last pass, or

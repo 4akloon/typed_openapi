@@ -1,0 +1,77 @@
+import '../diagnostics/json_pointer.dart';
+import 'generation_config.dart';
+
+/// Reads the settings of how a client's operations are generated:
+/// `naming.operation_prefix`, `naming.stream_suffix` and `sse.reconnect`,
+/// each from the last source that has it (`defaults` first). A bad value
+/// is reported through the `invalid` function (TOA902) and the default is
+/// used.
+final class OperationSettingsReader {
+  /// Creates a reader of [_sources] that reports through [_invalid].
+  const OperationSettingsReader(this._sources, this._invalid);
+
+  /// The maps to read, `defaults` first, with their pointers.
+  final List<(Map<String, Object?>, JsonPointer)> _sources;
+
+  final void Function(String message, JsonPointer at) _invalid;
+
+  static final _identifierPart = RegExp(r'^[A-Za-z0-9_$]+$');
+
+  /// `naming.operation_prefix`: what is removed from the start of an
+  /// `operationId`; null when not set or not a valid regular expression.
+  RegExp? operationPrefix() {
+    final picked = _pick('naming', 'operation_prefix');
+    if (picked == null) return null;
+    final (value, at) = picked;
+    if (value is! String || value.isEmpty) {
+      _invalid('"operation_prefix" must be a non-empty string.', at);
+      return null;
+    }
+    try {
+      return RegExp(value);
+    } on FormatException catch (e) {
+      _invalid(
+        '"operation_prefix" is not a valid regular expression: '
+        '${e.message}.',
+        at,
+      );
+      return null;
+    }
+  }
+
+  /// `naming.stream_suffix`: what the name of the event-stream method of an
+  /// operation that also returns JSON ends with.
+  String streamSuffix() {
+    final picked = _pick('naming', 'stream_suffix');
+    if (picked == null) return GenerationConfig.defaultStreamSuffix;
+    final (value, at) = picked;
+    if (value is String && _identifierPart.hasMatch(value)) return value;
+    _invalid(
+      r'"stream_suffix" must be letters, digits, "_" or "$", such as '
+      'Stream; ${GenerationConfig.defaultStreamSuffix} is used.',
+      at,
+    );
+    return GenerationConfig.defaultStreamSuffix;
+  }
+
+  /// `sse.reconnect`: whether the event streams of GET operations
+  /// reconnect unless a call says no.
+  bool streamReconnect() {
+    final picked = _pick('sse', 'reconnect');
+    if (picked == null) return false;
+    final (value, at) = picked;
+    if (value is bool) return value;
+    _invalid('"reconnect" must be true or false.', at);
+    return false;
+  }
+
+  (Object?, JsonPointer)? _pick(String section, String key) {
+    for (final (map, at) in _sources.reversed) {
+      final inner = map[section];
+      if (inner is Map<String, Object?> && inner.containsKey(key)) {
+        return (inner[key], at.child(section).child(key));
+      }
+    }
+    return null;
+  }
+}

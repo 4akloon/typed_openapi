@@ -87,6 +87,8 @@ final class GenerationConfig {
     this.inputSuffix = defaultInputSuffix,
     this.patchSuffix = defaultPatchSuffix,
     this.operationPrefix,
+    this.streamSuffix = defaultStreamSuffix,
+    this.streamReconnect = false,
     this.clientClass,
     this.groupBy = .tag,
     this.include = const OperationFilter(),
@@ -116,6 +118,9 @@ final class GenerationConfig {
   /// The default of [patchSuffix].
   static const defaultPatchSuffix = 'Patch';
 
+  /// The default of [streamSuffix].
+  static const defaultStreamSuffix = 'Stream';
+
   /// `naming.group`: the class name of a group, with `{Tag}` for the
   /// group's name in UpperCamelCase.
   final String groupTemplate;
@@ -144,6 +149,15 @@ final class GenerationConfig {
   /// client's name in UpperCamelCase with `Client` (`petstore` gives
   /// `PetstoreClient`).
   final String? clientClass;
+
+  /// `naming.stream_suffix`: the end of the name of the event-stream
+  /// method of an operation that also returns JSON (`chatStream`).
+  final String streamSuffix;
+
+  /// `sse.reconnect`: whether the event streams of GET operations
+  /// reconnect unless a call says no (R12.5); a POST reconnects only by
+  /// the `sse.reconnect` override.
+  final bool streamReconnect;
 
   /// `group_by`.
   final GroupBy groupBy;
@@ -209,6 +223,8 @@ final class GenerationConfig {
     'patch_suffix': patchSuffix,
     'operation_prefix': operationPrefix?.pattern,
     'client_class': clientClass,
+    'stream_suffix': streamSuffix,
+    'stream_reconnect': streamReconnect,
     'group_by': groupBy.name,
     'include': include.toJson(),
     'exclude': exclude.toJson(),
