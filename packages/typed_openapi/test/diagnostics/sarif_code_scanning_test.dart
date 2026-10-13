@@ -76,6 +76,18 @@ void main() {
     );
   });
 
+  test('a fingerprint does not depend on the directory of an outside file', () {
+    String fingerprintOf(String file) {
+      final bag = DiagnosticBag()..report(.binaryObject, 'Same.', file: file);
+      final result = resultsOf(runOf(const SarifReporter().format(bag))).single;
+      return (result['partialFingerprints']! as Map).values.single as String;
+    }
+
+    final here = fingerprintOf('/home/ann/specs/api.yaml');
+    expect(fingerprintOf('/runner/work/specs/api.yaml'), here);
+    expect(fingerprintOf('/home/ann/specs/other.yaml'), isNot(here));
+  });
+
   test('a file without a position is located at its first line', () {
     final results = resultsOf(runOf(const SarifReporter().format(sample())));
     expect(physicalOf(withMessage(results, 'Without a position'))?['region'], {
@@ -132,6 +144,7 @@ void main() {
       for (final rule in (driver['rules']! as List<Object?>).cast<Map>())
         rule['id']: (rule['help'] as Map)['text'] as String,
     };
+    expect(help.values, everyElement(isNot(contains('catalog'))));
     expect(help['TOA901'], contains('cannot be changed'));
     expect(
       help[DiagnosticCode.parseError.id],

@@ -92,7 +92,7 @@ final class SarifReporter implements DiagnosticReporter {
   /// How the level of [code] can be changed, which the config allows only
   /// for codes that are neither fixed nor config codes.
   static String _help(DiagnosticCode code) {
-    final catalog = 'See ${code.id} in the catalog of diagnostic codes;';
+    final catalog = '${code.id} (${code.slug}):';
     if (DiagnosticCode.configCodes.contains(code)) {
       return '$catalog its level cannot be changed.';
     }
@@ -160,11 +160,17 @@ final class SarifReporter implements DiagnosticReporter {
 
   /// The partial fingerprint of [d]: the first 16 hexadecimal digits of the
   /// SHA-256 of its code, file, pointer and message.
-  static String _fingerprint(Diagnostic d) =>
-      '${sha256.convert(
-            utf8.encode(jsonEncode([d.code.id, d.file, d.pointer?.value, d.message])),
-          )}'
-          .substring(0, 16);
+  ///
+  /// The same finding must keep its fingerprint on any machine, so a file
+  /// outside the working directory (an absolute path) counts by its file
+  /// name alone; a file below the working directory counts by its relative
+  /// path.
+  static String _fingerprint(Diagnostic d) {
+    final file = d.file;
+    final stable = file != null && p.isAbsolute(file) ? p.basename(file) : file;
+    final text = jsonEncode([d.code.id, stable, d.pointer?.value, d.message]);
+    return '${sha256.convert(utf8.encode(text))}'.substring(0, 16);
+  }
 
   /// [file] as a URI reference: relative paths keep `/` separators and are
   /// percent-encoded; absolute paths become `file:` URIs.
