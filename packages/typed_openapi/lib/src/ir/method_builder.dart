@@ -52,30 +52,32 @@ final class MethodBuilder {
     };
     final stream = switch (shape) {
       .only => _streamOperation(entry, name, parameters),
-      .both => _streamOperation(
-        entry,
-        _streams.methodName(entry, name, methods),
-        parameters,
-      ),
+      .both => _streamOperation(entry, name, parameters, methods: methods),
       .none || .mixed || .excluded => null,
     };
     return [?main, ?stream];
   }
 
-  /// The method of [entry] that returns its events, or null (TOA654).
+  /// The method of [entry] that returns its events, or null (TOA654), which
+  /// claims no name and maps no type. With the group's [methods] it is a
+  /// second method, named after [name] in them (TOA663).
   OperationIr? _streamOperation(
     SpecOperation entry,
     String name,
-    List<ParameterIr> parameters,
-  ) {
+    List<ParameterIr> parameters, {
+    NameScope? methods,
+  }) {
     final picked = _responses.pick(entry.operation, events: true);
+    if (!_streams.agree(entry, picked)) return null;
+    final named = methods == null
+        ? name
+        : _streams.methodName(entry, name, methods);
     final events = _streams.events(
       entry,
       picked,
-      _names.pascal(name) ?? name,
+      _names.pascal(named) ?? named,
     );
-    if (events == null) return null;
-    return _operation(entry, name, parameters, picked, events: events);
+    return _operation(entry, named, parameters, picked, events: events);
   }
 
   OperationIr _operation(

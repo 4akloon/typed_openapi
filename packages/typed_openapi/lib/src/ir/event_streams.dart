@@ -1,4 +1,5 @@
 import '../model/operation.dart';
+import 'event_agreement.dart';
 import 'event_data.dart';
 import 'ir.dart';
 import 'ir_context.dart';
@@ -37,13 +38,15 @@ final class EventStreams {
   /// Creates the decisions; types are mapped with [mapper].
   EventStreams(this._context, SchemaMapper mapper)
     : _statuses = ResponseStatuses(_context),
-      _data = EventData(_context, mapper);
+      _data = EventData(_context, mapper),
+      _agreement = EventAgreement(_context);
 
   static final _reservedSuffix = RegExp(r'_+$');
 
   final IrContext _context;
   final ResponseStatuses _statuses;
   final EventData _data;
+  final EventAgreement _agreement;
 
   /// How the successes of [operation] use event streams; [StreamShape.mixed]
   /// is reported (TOA654).
@@ -117,39 +120,47 @@ final class EventStreams {
     return claimed;
   }
 
-  /// The events of the stream successes of [picked] (their media types are
-  /// `text/event-stream`), named after [prefix]; null, reported (TOA654),
-  /// when they disagree on the type of an event.
-  EventStreamIr? events(
+  /// Whether the event-stream successes of [picked] (their media types are
+  /// `text/event-stream`) describe their events alike; not, reported
+  /// (TOA654), the operation's stream is not generated. Decided from the
+  /// spec, so nothing is declared or named for a stream that is not
+  /// generated.
+  bool agree(SpecOperation entry, List<PickedResponse> picked) {
+    final medias = [
+      for (final (status, _, (contentType, media)) in picked)
+        if (status.startsWith('2') && contentType != null) media,
+    ];
+    if (_agreement.agree(medias)) return true;
+    _context.report(
+      .eventStreamNotGenerated,
+      'The event-stream successes of this operation have different event '
+      'types, so one stream cannot hold them; the operation is not '
+      'generated.',
+      entry.operation.location.child('responses'),
+      fix: 'Give every event-stream success the same schema at the source.',
+    );
+    return false;
+  }
+
+  /// The events of the stream successes of [picked], which [agree]: those of
+  /// the first, named after [prefix].
+  EventStreamIr events(
     SpecOperation entry,
     List<PickedResponse> picked,
     String prefix,
   ) {
     final sse = _context.overrides.operationAt(entry.operation.location)?.sse;
-    // Event streams agree when they have one data type or one union.
-    final shapes = <Object?, EventShape>{};
+    EventShape? shape;
     for (final (status, response, (contentType, media)) in picked) {
       if (!status.startsWith('2') || contentType == null) continue;
-      final shape = _data.of(
+      shape = _data.of(
         media,
         response.location.child('content').child(contentType),
         prefix,
         sse: sse,
       );
-      shapes[shape.union?.location ?? shape.data] = shape;
+      break;
     }
-    if (shapes.length > 1) {
-      _context.report(
-        .eventStreamNotGenerated,
-        'The event-stream successes of this operation have different event '
-        'types, so one stream cannot hold them; the operation is not '
-        'generated.',
-        entry.operation.location.child('responses'),
-        fix: 'Give every event-stream success the same schema at the source.',
-      );
-      return null;
-    }
-    final shape = shapes.values.firstOrNull;
     final keep = sse?.keepUnknown;
     return EventStreamIr(
       data: shape?.data,

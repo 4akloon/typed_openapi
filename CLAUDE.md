@@ -391,6 +391,12 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `2` on a collision, TOA551). No `SchemaMapper` change: the variants'
   types come from `typeOf`. TOA654 is now only an operation whose event-stream successes
   disagree on the data type or sit next to successes with another body.
+  `EventAgreement` decides "the same event types" from the spec before any
+  type is mapped (same `itemSchema` or `schema`; the schema at the end of the
+  `$ref`s, one location or two written alike in one document), and
+  `MethodBuilder` asks it before it claims the stream method's name (TOA663,
+  TOA551) or maps its events, so a stream that is not generated declares
+  nothing, claims no name and reports only TOA654.
   `IrJson` dumps an IR, the operations through `IrOperationJson`: every
   field of the operation IR (encoding, parts, security, servers, status
   types, `sensitive`, defaults), except the locations of parameters, bodies
