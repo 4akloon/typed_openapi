@@ -508,10 +508,10 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   never touches locks (the TOA831 message says to delete the lock file or
   use `--break-lock`, never `--force`).
   A run killed between the renames leaves `.<output>.typed_openapi-<8
-  letters or digits>[-old]` directories. Under the lock, `_leftovers` skips
+  letters or digits>[-old]` directories. Under the lock, `OutputRecovery.leftovers` skips
   any that holds an input of the run (by location, by symbolic link and by
-  file identity), `_inspect` checks the output (or the newest backup, when
-  the output is missing) as above, and only then `_recover` restores that
+  file identity), `OutputInspector.inspect` checks the output (or the newest backup, when
+  the output is missing) as above, and only then `OutputRecovery.recover` restores that
   backup and removes the other leftovers (a backup only once the output
   holds a manifest), reporting TOA832 (info). `OutputWriter.forTesting`
   (`@visibleForTesting`) takes the test hooks (`beforeInstall`, and `run`
@@ -526,7 +526,18 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   overrides and baseline, the `$ref`'d files of the clients that were
   checked, and the config itself. A client whose output overlaps another's
   (TOA904) is skipped by `generate`. `GenerateCommand` has `--config/-c`, `--force` and
-  `--break-lock`.
+  `--break-lock`. `OutputWriter` (`output_writer.dart`) only orchestrates a
+  run, in this order: `OutputParents` (the missing directories above the
+  output), `LockAcquirer` (`OutputLock`, `LockHolder`: the lock, its
+  take-over), `GeneratedTree` (files, hashes, manifest text),
+  `OutputRecovery` (leftovers, the restorable backup, recover),
+  `OutputInspector` (`ExistingOutput`, `OutputStray`; the TOA830 checks),
+  `OutputInstaller` (staging, mode copy, swap, `beforeInstall`) and
+  `TreeRemover`; `OutputManifest` reads, hashes and renders `.typed_openapi.json`,
+  `OutputTarget` is the client's output with the run's inputs, and
+  `OutputChanges` lives in `output_changes.dart` (re-exported). The `run`
+  hook of `forTesting` (`ProcessRunner`: `chmod`, `kill`) is handed to the
+  collaborators that start processes.
 - `check/` - `SpecChecker`: config -> load -> version -> overrides ->
   `Normalizer` -> `IrBuilder` once per run (file, preset, rules, overrides
   file, `GenerationConfig.key`); an overrides file that cannot be used is
