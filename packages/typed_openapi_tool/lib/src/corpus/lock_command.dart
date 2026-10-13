@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:args/command_runner.dart';
 import 'package:path/path.dart' as p;
 
-import 'corpus_exception.dart';
 import 'corpus_lock.dart';
 import 'corpus_run.dart';
 import 'fetch_command.dart';
@@ -61,34 +60,33 @@ final class LockCommand extends Command<int> {
   Future<int> run() async {
     final results = argResults!;
     final specs = FetchCommand.specsOf(results);
-    final cache = SpecCache(results.option('cache')!, _download);
-    final CorpusResult result;
-    try {
-      result =
-          await CorpusRun(
-            work: p.normalize(p.absolute(results.option('work')!)),
-            runtime: p.normalize(p.absolute(results.option('runtime')!)),
-          ).run(specs, {
-            for (final spec in specs)
-              spec.name: p.normalize(p.absolute(await cache.fetch(spec))),
-          });
-    } on CorpusException catch (e) {
-      _err.writeln(e.message);
-      return 1;
-    }
     final lockFile = File(results.option('lock')!);
-    final differences = _writes || !lockFile.existsSync()
-        ? <String>[]
-        : result.lock.differencesFrom(
-            CorpusLock.parse(lockFile.readAsStringSync()),
-          );
-    if (_writes) lockFile.writeAsStringSync(result.lock.format());
-    if (!_writes && !lockFile.existsSync()) {
-      differences.add('${lockFile.path} does not exist: run corpus update.');
-    }
+    // A lock that cannot be read fails before the long run.
+    final expected = _writes || !lockFile.existsSync()
+        ? null
+        : CorpusLock.parse(lockFile.readAsStringSync());
+    final cache = SpecCache(results.option('cache')!, _download);
+    final result =
+        await CorpusRun(
+          work: p.normalize(p.absolute(results.option('work')!)),
+          runtime: p.normalize(p.absolute(results.option('runtime')!)),
+        ).run(specs, {
+          for (final spec in specs)
+            spec.name: p.normalize(p.absolute(await cache.fetch(spec))),
+        });
+    final differences = [
+      if (expected != null) ...result.lock.differencesFrom(expected),
+      if (!_writes && expected == null)
+        '${lockFile.path} does not exist: run corpus update.',
+    ];
     result.failures.forEach(_err.writeln);
     for (final failure in result.roundTrips) {
       _err.writeln('round trip: $failure');
+    }
+    if (_writes && result.failures.isEmpty) {
+      lockFile.writeAsStringSync(result.lock.format());
+    } else if (_writes) {
+      _err.writeln('${lockFile.path} was not written: the run has failures.');
     }
     differences.forEach(_out.writeln);
     _out.writeln(_summary(result.lock, differences));

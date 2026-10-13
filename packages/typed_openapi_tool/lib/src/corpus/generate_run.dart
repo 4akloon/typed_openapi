@@ -1,11 +1,9 @@
 import 'package:typed_openapi/typed_openapi.dart';
 
+import 'corpus_exception.dart';
+
 /// What one `typed_openapi generate` of a corpus package did.
-typedef GenerateResult = ({
-  Map<String, int> changed,
-  Set<String> skipped,
-  String report,
-});
+typedef GenerateResult = ({Map<String, int> changed, String report});
 
 /// Runs `typed_openapi generate` and `check` in-process on the config of a
 /// corpus package.
@@ -19,33 +17,37 @@ final class GenerateRun {
   static final _generated = RegExp(
     r'^Generated (\S+) in .*: \d+ files?, (\d+) written, (\d+) deleted\.',
   );
-  static final _skipped = RegExp(r'^Skipped (\S+):');
 
   /// Generates every client; [GenerateResult.changed] counts the files each
-  /// generated client wrote or deleted, and [GenerateResult.skipped] names
-  /// the clients that were not generated.
+  /// generated client wrote or deleted. A client the report does not name
+  /// was not generated; why is in [GenerateResult.report].
   Future<GenerateResult> generate() async {
     final out = StringBuffer();
     await TypedOpenApiCli(out: out, err: out).run(['generate', '-c', config]);
     final changed = <String, int>{};
-    final skipped = <String>{};
     for (final line in out.toString().split('\n')) {
       if (_generated.firstMatch(line) case final m?) {
         if ((m[1], m[2], m[3]) case (final name?, final w?, final d?)) {
           changed[name] = int.parse(w) + int.parse(d);
         }
-      } else if (_skipped.firstMatch(line)?[1] case final name?) {
-        skipped.add(name);
       }
     }
-    return (changed: changed, skipped: skipped, report: '$out');
+    return (changed: changed, report: '$out');
   }
 
-  /// The diagnostics of each client of the config, by client name.
+  /// What checking each client of the config found: its diagnostics and
+  /// its IR. A config that cannot be loaded, or that reports an error, is a
+  /// [CorpusException]: the tool writes the config itself, so that is a
+  /// defect of the tool and no client can be judged.
   List<ClientCheck> check() {
     final bag = DiagnosticBag();
     final project = ConfigLoader(bag).load(config);
-    if (project == null) return const [];
+    if (project == null || bag.hasErrors) {
+      throw CorpusException(
+        '$config: the generator config is not valid:\n'
+        '${const TextReporter().format(bag)}',
+      );
+    }
     return SpecChecker(bag).check(project);
   }
 }

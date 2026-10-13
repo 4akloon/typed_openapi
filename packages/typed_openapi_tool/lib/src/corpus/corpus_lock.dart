@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'client_lock.dart';
+import 'corpus_exception.dart';
 
 /// `corpus.lock`: the generated output of every corpus client, which CI
 /// compares with a new run (spec decision 2).
@@ -12,16 +13,30 @@ final class CorpusLock {
   /// Creates the lock of [clients].
   const CorpusLock(this.clients);
 
-  /// Reads the lock from its text [text].
+  /// Reads the lock from its text [text]; text that is not a lock of this
+  /// version is a [CorpusException].
   factory CorpusLock.parse(String text) {
-    final json = jsonDecode(text) as Map<String, Object?>;
+    try {
+      return CorpusLock._fromJson(jsonDecode(text));
+    } on FormatException catch (e) {
+      throw CorpusException('corpus.lock is not a valid lock: ${e.message}');
+    }
+  }
+
+  factory CorpusLock._fromJson(Object? json) {
+    if (json is! Map<String, Object?>) {
+      throw const FormatException('the top level is not an object.');
+    }
     if (json['version'] != version) {
-      throw FormatException('corpus.lock: version ${json['version']}.');
+      throw FormatException('version ${json['version']}.');
+    }
+    final clients = json['clients'];
+    if (clients is! Map<String, Object?>) {
+      throw const FormatException('"clients" is not an object.');
     }
     return CorpusLock({
-      for (final MapEntry(:key, :value)
-          in (json['clients'] as Map<String, Object?>).entries)
-        key: ClientLock.fromJson(value as Map<String, Object?>),
+      for (final MapEntry(:key, :value) in clients.entries)
+        key: ClientLock.fromJson(key, value),
     });
   }
 

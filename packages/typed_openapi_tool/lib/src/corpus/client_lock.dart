@@ -12,24 +12,55 @@ final class ClientLock {
     this.values,
   });
 
-  /// Reads the record from its JSON [json].
-  factory ClientLock.fromJson(Map<String, Object?> json) => ClientLock(
-    files: {
-      for (final MapEntry(:key, :value)
-          in ((json['files'] ?? const <String, Object?>{}) as Map).entries)
-        '$key': '$value',
-    },
-    diagnostics: {
-      for (final MapEntry(:key, :value) in (json['diagnostics'] as Map).entries)
-        '$key': value as int,
-    },
-    values: switch (json['values']) {
-      final Map<String, Object?> values => {
-        for (final MapEntry(:key, :value) in values.entries) key: value as int,
-      },
-      _ => null,
-    },
-  );
+  /// Reads the record of the client [name] from its JSON [json]; a value
+  /// of another shape is a [FormatException].
+  factory ClientLock.fromJson(String name, Object? json) {
+    if (json is! Map<String, Object?>) {
+      throw FormatException('the client $name is not an object.');
+    }
+    return ClientLock(
+      files: _strings(name, 'files', json['files']),
+      diagnostics: _counts(name, 'diagnostics', json['diagnostics'])!,
+      values: _counts(name, 'values', json['values'], required: false),
+    );
+  }
+
+  static Map<String, String> _strings(String name, String field, Object? json) {
+    if (json == null) return const {};
+    if (json is! Map<String, Object?>) {
+      throw FormatException('$name: "$field" is not an object.');
+    }
+    return {
+      for (final MapEntry(:key, :value) in json.entries)
+        key: switch (value) {
+          final String text => text,
+          _ => throw FormatException(
+            '$name: "$field" has a value that is not a string.',
+          ),
+        },
+    };
+  }
+
+  static Map<String, int>? _counts(
+    String name,
+    String field,
+    Object? json, {
+    bool required = true,
+  }) {
+    if (json == null && !required) return null;
+    if (json is! Map<String, Object?>) {
+      throw FormatException('$name: "$field" is not an object.');
+    }
+    return {
+      for (final MapEntry(:key, :value) in json.entries)
+        key: switch (value) {
+          final int count => count,
+          _ => throw FormatException(
+            '$name: "$field" has a value that is not a count.',
+          ),
+        },
+    };
+  }
 
   /// The SHA-256 of each generated file, by its path in the output.
   final Map<String, String> files;

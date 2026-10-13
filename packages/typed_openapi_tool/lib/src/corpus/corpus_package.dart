@@ -47,7 +47,7 @@ final class CorpusPackage {
     final clients = StringBuffer();
     for (final MapEntry(key: name, value: input) in inputs.entries) {
       clients
-        ..writeln('  $name:')
+        ..writeln('  ${_quoted(name)}:')
         ..writeln('    input: ${_quoted(input)}')
         ..writeln('    output: ${_quoted(outputOf(name))}');
     }

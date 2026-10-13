@@ -4,20 +4,10 @@ library;
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:typed_openapi_tool/src/corpus/corpus_run.dart';
-import 'package:typed_openapi_tool/src/corpus/corpus_spec.dart';
 import 'package:typed_openapi_tool/src/corpus/expectation.dart';
-import 'package:typed_openapi_tool/src/corpus/spec_source.dart';
 
+import '../helpers/corpus_entry.dart';
 import '../helpers/temp_dir.dart';
-
-/// An entry named [name] with the expectation [expectation].
-CorpusSpec entry(String name, Expectation expectation) => CorpusSpec(
-  name: name,
-  source: FileSource(Uri.parse('https://example.com/$name.yaml')),
-  sha256: '',
-  license: 'MIT',
-  expectation: expectation,
-);
 
 const _pets = r'''
 openapi: 3.1.0
@@ -62,10 +52,9 @@ void main() {
     final result =
         await CorpusRun(
           work: p.join(temp.path, 'work'),
-          runtime: p.normalize(
-            p.absolute(p.join('..', 'typed_openapi_runtime')),
-          ),
+          runtime: runtimeDirectory(),
           modes: const ['raw'],
+          fetchesPackages: false,
         ).run([
           entry('pets', const Generates()),
           entry('broken', const CheckErrors(['TOA009'])),
