@@ -35,7 +35,7 @@ Every Dart file starts with the same three lines:
 // ignore_for_file: deprecated_member_use_from_same_package
 ```
 
-`dart format off` keeps `dart format` from rewriting the files, so a formatter run in your project never makes a generated file differ from what the generator writes. The ignore is there because a model whose spec deprecates a field uses that field in its own `fromJson`, `==` and `toString`, which the analyzer of Dart 3.10 reports. Do not edit the files: the next `generate` run refuses to replace a file whose hash no longer matches the manifest (`TOA830`, see [Generate output](../generate_output.md)).
+`dart format off` keeps `dart format` from rewriting the files, so a formatter run in your project never makes a generated file differ from what the generator writes. The ignore is there because a model whose spec deprecates a field uses that field in its own `fromJson`, `==` and `toString`, which the analyzer of Dart 3.10 reports. Users who enable the `unnecessary_ignore` lint will see an info on that line in files that deprecate nothing. Do not edit the files: the next `generate` run refuses to replace a file whose hash no longer matches the manifest (`TOA830`, see [Generate output](../generate_output.md)).
 
 ## The root class
 

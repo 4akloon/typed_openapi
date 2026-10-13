@@ -1,6 +1,10 @@
 ## 0.0.1 - Unreleased
 
 ### Output changes
+- Paths in reports, baseline entries and CI annotations use `/` as the
+  separator on every OS, with a drive letter kept on an absolute Windows
+  path, so a report and its fingerprints do not depend on the OS. Nothing
+  changes on POSIX (M11).
 - Every generated file has a third header line,
   `// ignore_for_file: deprecated_member_use_from_same_package`: a model
   whose spec deprecates a field, enum value or type uses it in its own code,

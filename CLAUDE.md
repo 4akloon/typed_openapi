@@ -1186,7 +1186,8 @@ are not, so follow them by hand:
   comment on why, and no rule removed from `analysis_options.yaml` to make a
   change pass. Generated files are the exception: each carries
   `// ignore_for_file: deprecated_member_use_from_same_package` in its header,
-  because a model whose spec deprecates a field uses it in its own
+  because a model whose spec deprecates a member (field, enum value, type)
+  uses it in its own
   `fromJson`/`==`/`toString` and the analyzer of Dart 3.10 reports that
   (stable does not). To enable a new lint: stable, available in the minimum SDK,
   zero findings (or fix them in the same change), no conflict with an enabled
