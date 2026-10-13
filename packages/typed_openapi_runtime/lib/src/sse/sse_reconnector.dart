@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 
 import '../result/result.dart';
+import 'cancellable_wait.dart';
 import 'sse_item.dart';
 import 'sse_options.dart';
 
@@ -25,7 +26,12 @@ typedef SseResume = ({String lastEventId, Duration? retry});
 final class SseReconnector<T>
     extends StreamTransformerBase<SseItem<T>, SseItem<T>> {
   /// Creates the reconnection of one call.
-  const SseReconnector(this.options, this.reopen, {this.cancelled});
+  const SseReconnector(
+    this.options,
+    this.reopen, {
+    this.cancelled,
+    this.onCancel,
+  });
 
   /// The delays and the number of attempts.
   final SseOptions options;
@@ -37,6 +43,10 @@ final class SseReconnector<T>
   /// Completes when the call's cancel token is cancelled.
   final Future<DioException>? cancelled;
 
+  /// Called when the listener cancels the stream, to abort a request that
+  /// [reopen] has in flight.
+  final void Function()? onCancel;
+
   @override
   Stream<SseItem<T>> bind(Stream<SseItem<T>> stream) =>
       _Reconnection<T>(this).start(stream);
@@ -44,9 +54,10 @@ final class SseReconnector<T>
 
 /// The state of one reconnecting stream.
 final class _Reconnection<T> {
-  _Reconnection(this._owner);
+  _Reconnection(this._owner) : _sleep = CancellableWait(_owner.options.wait);
 
   final SseReconnector<T> _owner;
+  final CancellableWait _sleep;
   // Set in start, before anything can listen.
   late final StreamController<SseItem<T>> _out;
   StreamSubscription<SseItem<T>>? _current;
@@ -57,13 +68,18 @@ final class _Reconnection<T> {
   DioException? _cancel;
 
   Stream<SseItem<T>> start(Stream<SseItem<T>> first) {
-    _owner.cancelled?.then((e) => _cancel = e);
+    _owner.cancelled?.then((e) {
+      _cancel = e;
+      _sleep.cancel();
+    });
     _out = StreamController<SseItem<T>>(
       onListen: () => _listen(first),
       onPause: () => _current?.pause(),
       onResume: () => _current?.resume(),
       onCancel: () {
         _closed = true;
+        _sleep.cancel();
+        _owner.onCancel?.call();
         return _current?.cancel();
       },
     );
@@ -172,7 +188,7 @@ final class _Reconnection<T> {
   }
 
   Future<void> _wait(Duration delay) {
-    final wait = (_owner.options.wait ?? Future<void>.delayed)(delay);
+    final wait = _sleep.wait(delay);
     final cancelled = _owner.cancelled;
     return cancelled == null ? wait : Future.any([wait, cancelled]);
   }

@@ -62,8 +62,9 @@ final class DioCall {
       'Accept': ?(events ? 'text/event-stream' : request.accept),
       ...request.resolveHeaders(),
       for (final MapEntry(:key, :value) in call?.headers.entries ?? const [])
-        key: ?value,
-      if (_isHeaderValue(lastEventId)) 'Last-Event-ID': lastEventId,
+        // The stream's last event id replaces the user's `Last-Event-ID`.
+        if (!events || !_isLastEventId(key)) key: ?value,
+      if (events && _isHeaderValue(lastEventId)) 'Last-Event-ID': lastEventId,
       ...const DioBody().headers(request.body),
     },
     extra: {...?call?.extra, OperationInfo.extraKey: request.operation},
@@ -76,6 +77,20 @@ final class DioCall {
             .bytes => .bytes,
           },
   );
+
+  /// The `Last-Event-ID` that the user's [headers] set (in any case), which
+  /// is where the stream's last event id starts: it is sent with the first
+  /// request, the ids of the events replace it, and an `id:` that resets it
+  /// leaves it gone, as `EventSource` does. Empty when there is none.
+  static String userLastEventId(Map<String, Object?>? headers) {
+    for (final MapEntry(:key, :value) in headers?.entries ?? const []) {
+      if (_isLastEventId(key) && value != null) return '$value';
+    }
+    return '';
+  }
+
+  static bool _isLastEventId(String header) =>
+      header.toLowerCase() == 'last-event-id';
 
   /// Whether [id] is a non-empty header value that every HTTP client sends:
   /// printable ASCII, spaces and tabs. The VM's `HttpClient` throws on any

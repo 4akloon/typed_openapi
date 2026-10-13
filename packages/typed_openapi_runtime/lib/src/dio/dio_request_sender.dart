@@ -16,6 +16,7 @@ import '../sse/sse_reconnector.dart';
 import 'call_options.dart';
 import 'dio_call.dart';
 import 'dio_results.dart';
+import 'event_call.dart';
 
 /// Sends an [OperationRequest] through the user's [Dio] and turns every
 /// outcome into a [Result].
@@ -134,13 +135,11 @@ final class DioRequestSender {
       );
       return TransportError(exception, StackTrace.current);
     }
-    final first = await _open(
-      request,
-      decodeEvent,
-      decodeError,
-      call,
-      (lastEventId: '', retry: null),
-    );
+    final eventCall = EventCall(request, decodeEvent, decodeError, call);
+    final first = await _open(eventCall, (
+      lastEventId: DioCall.userLastEventId(call?.headers),
+      retry: null,
+    ));
     final options = call?.sse ?? const SseOptions();
     if (first case Success(
       :final data,
@@ -150,8 +149,9 @@ final class DioRequestSender {
       return Success(
         SseReconnector<T>(
           options,
-          (resume) => _open(request, decodeEvent, decodeError, call, resume),
+          (resume) => _open(eventCall, resume),
           cancelled: call?.cancelToken?.whenCancel,
+          onCancel: eventCall.tokens.cancel,
         ).bind(data),
         statusCode: statusCode,
         headers: headers,
@@ -163,18 +163,15 @@ final class DioRequestSender {
   /// One connection of [openEvents]: it sends `Last-Event-ID` and starts
   /// the decoder from [resume].
   Future<Result<Stream<SseItem<T>>, E>> _open<T, E>(
-    OperationRequest request,
-    T Function(SseMessage message) decodeEvent,
-    Result<Stream<SseItem<T>>, E> Function(RawResponse response) decodeError,
-    CallOptions? call,
+    EventCall<T, E> event,
     SseResume resume,
   ) async {
-    final token = _linkedToken(call?.cancelToken);
+    final token = event.tokens.next();
     final Response<Object?> response;
     try {
       response = await _call.send(
-        request,
-        call,
+        event.request,
+        event.call,
         events: true,
         cancelToken: token,
         lastEventId: resume.lastEventId,
@@ -182,17 +179,18 @@ final class DioRequestSender {
     } on DioException catch (e, stackTrace) {
       final failed = e.response;
       if (e.type == .badResponse && failed != null) {
-        return _openFailed(failed, decodeError);
+        return _openFailed(failed, event.decodeError);
       }
       return _results.failure(e, stackTrace);
     }
     final status = response.statusCode ?? 0;
     final body = response.data;
-    if (!request.streamStatuses.contains(status) || body is! ResponseBody) {
-      return _openFailed(response, decodeError);
+    if (!event.request.streamStatuses.contains(status) ||
+        body is! ResponseBody) {
+      return _openFailed(response, event.decodeError);
     }
     final items = SseItemDecoder<T>(
-      decodeEvent,
+      event.decodeEvent,
       onClose: () {
         if (!token.isCancelled) token.cancel('the event stream was closed');
       },
@@ -200,22 +198,6 @@ final class DioRequestSender {
       retry: resume.retry,
     ).bind(body.stream);
     return Success(items, statusCode: status, headers: response.headers.map);
-  }
-
-  /// A token of one connection that [outer] (the call's token) cancels, so
-  /// that closing the stream cancels the connection and not the call's
-  /// token.
-  static CancelToken _linkedToken(CancelToken? outer) {
-    final token = CancelToken();
-    if (outer == null) return token;
-    if (outer.isCancelled) {
-      token.cancel(outer.cancelError?.error);
-    } else {
-      outer.whenCancel.then((e) {
-        if (!token.isCancelled) token.cancel(e.error);
-      });
-    }
-    return token;
   }
 
   /// Explains why server-sent events cannot stream on the web with the

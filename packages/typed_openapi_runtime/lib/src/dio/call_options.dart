@@ -29,6 +29,12 @@ final class CallOptions {
   /// (`OperationRequest.contentType`, set for a request body) wins over a
   /// `Content-Type` given here, so it cannot be used to pick another media
   /// type such as `application/merge-patch+json`.
+  ///
+  /// For an event stream a `Last-Event-ID` given here is where the stream's
+  /// last event id starts, as it would for `EventSource`: it goes with the
+  /// first request and with a reconnection until an event's `id` replaces
+  /// it, and an empty `id:` removes it. It is sent only when it is a valid
+  /// header value (printable ASCII).
   final Map<String, Object?> headers;
 
   /// Data for interceptors, merged into `RequestOptions.extra`.

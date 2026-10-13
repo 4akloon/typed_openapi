@@ -32,7 +32,9 @@ final class SseOptions {
 
   /// How many attempts in a row may fail before the stream ends; a message
   /// on a new connection (an event, also one that does not decode or that
-  /// the program drops) starts the count again.
+  /// the program drops) starts the count again. A connection that brings
+  /// only comments, or blocks with just an `id:` or a `retry:` (they move
+  /// the last event id and the delay, but are no message), does not.
   final int maxAttempts;
 
   /// Waits [delay] before an attempt; `Future.delayed` when null. Tests
