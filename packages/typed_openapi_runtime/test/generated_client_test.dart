@@ -163,6 +163,7 @@ void main() {
               (item) => switch (item) {
                 SseEvent(:final data) => data.name,
                 SseDecodeError() => 'bad event',
+                SseReconnecting() => 'reconnecting',
                 SseDisconnected() => 'end',
               },
             )

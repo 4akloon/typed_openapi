@@ -77,6 +77,31 @@ final class IrOperationJson {
     if (o.successType case final type?) 'successType': _statusType(type),
     if (o.errorType case final type?) 'errorType': _statusType(type),
     'partsName': ?o.partsName,
+    'accept': ?o.accept,
+    if (o.events case final events?)
+      'events': {
+        if (events.data case final data?) 'data': _type(data),
+        if (events.union case final union?) 'union': _union(union),
+        'reconnection': events.reconnection.name,
+      },
+  };
+
+  Map<String, Object?> _union(EventUnionIr union) => {
+    'name': union.name,
+    'at': _at(union.location),
+    if (union.keepUnknown) 'unknownName': union.unknownName,
+    'keepUnknown': union.keepUnknown,
+    if (union.unknownSensitive) 'unknownSensitive': true,
+    'variants': [
+      for (final v in union.variants)
+        {
+          'event': v.event,
+          'name': v.name,
+          'hasData': v.hasData,
+          if (v.data case final data?) 'data': _type(data),
+          if (v.sensitive) 'sensitive': true,
+        },
+    ],
   };
 
   Map<String, Object?> _parameter(ParameterIr p) => {

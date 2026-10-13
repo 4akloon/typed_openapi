@@ -146,7 +146,39 @@ switch (await client.pets.getPet(petId: 1)) {
   `Content-Type: text/plain; charset=utf-8` (перед ними — без нього); частина,
   чий `encoding` називає список чи шаблон медіатипів, іде з одним конкретним
   типом (TOA661), а об'єктна частина не в JSON — це `String`, яку даєш ти
-  (TOA662); бінарне тіло — `FileUpload`. Потоки подій — у M10 (TOA654).
+  (TOA662); бінарне тіло — `FileUpload`.
+- Потоки подій (`text/event-stream`): метод повертає
+  `Future<Result<Stream<SseItem<T>>, E>>`. Потік відкривається лише для
+  задокументованого успіху (інший статус декодується як вище), дає
+  `SseEvent` з декодованими даними (`T` — тип схеми, елемент схеми-масиву,
+  `contentSchema` поля `data` з `itemSchema` OpenAPI 3.2 або `String` для
+  тексту), `SseDecodeError` для події, що не декодується, і закінчується
+  `SseDisconnected`; помилок потік не видає. Операція, що дає JSON і потік
+  подій, має два методи: `chat` і `chatStream` (`naming.stream_suffix`).
+  Перепідключення вимкнене: GET перепідключається, коли передаєш
+  `CallOptions(sse: SseOptions(reconnect: true))` або з `sse: {reconnect:
+  true}` у конфігу, надсилає `Last-Event-ID` і сповіщає кожну спробу через
+  `SseReconnecting`; затримка — `retry` сервера, інакше 1 с, подвоюється до
+  30 с (`retry` сервера понад 30 с зберігається), 5 спроб, які
+  лічаться заново після повідомлення. POST перепідключається лише тоді, коли
+  override `sse.reconnect` його операції це вмикає. У вебі підключи до свого Dio
+  адаптер на fetch: стандартний не вміє потоків.
+- Події, типізовані поодинці (`itemSchema` OpenAPI 3.2, чиї гілки `oneOf`
+  фіксують `event` константою), — sealed-union за назвою події:
+  `ChatEvent` з `ChatEventDelta(data)`, `ChatEventDone()` і
+  `ChatEventUnknown(event, data)`, тож `switch` називає кожну подію.
+  Override `sse` операції задає те, чого не каже специфікація:
+
+  ```yaml
+  operations:
+    createChat:
+      sse:
+        data: ChatChunk          # один тип для всіх подій, або:
+        events: {delta: ChatDelta, done: null}   # тип на назву події
+        unknown: ignore          # відкидати невідомі події (типово: keep)
+        reconnect: true          # перепідключатися типово, також для POST
+        method: only             # лише метод потоку (stream | only | none)
+  ```
 - Клієнт не змінює твій Dio: base URL задаєш ти, з констант серверів
   кореневого класу (`PetstoreClient.server`, або метод на кшталт
   `PetstoreClient.server1(region: 'eu')` для URL зі змінними). Коли query

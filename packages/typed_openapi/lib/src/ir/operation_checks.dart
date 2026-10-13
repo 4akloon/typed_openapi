@@ -2,43 +2,17 @@ import '../diagnostics/json_pointer.dart';
 import '../model/operation.dart';
 import '../model/spec_node.dart';
 import 'ir_context.dart';
-import 'media_type_picker.dart';
 import 'operation_builder.dart';
 import 'response_statuses.dart';
 
 /// Reports what an operation has that the client does not generate (M9):
-/// event streams (until M10), a missing 2xx, servers of a path item or an
-/// operation, callbacks and the document's webhooks.
+/// a missing 2xx, servers of a path item or an operation, callbacks and the
+/// document's webhooks.
 final class OperationChecks {
   /// Creates the checks; they report through [_context].
   const OperationChecks(this._context);
 
   final IrContext _context;
-
-  /// Whether a success of [picked], the responses of an operation with the
-  /// media type used for each, is an event stream, which is reported
-  /// (TOA654): such an operation is generated from M10. This is asked before
-  /// any type is mapped, so an operation that is left out declares nothing.
-  bool isEventStream(Iterable<PickedResponse> picked) {
-    final stream = picked
-        .where(
-          (r) =>
-              r.$1.startsWith('2') &&
-              r.$3.$1 != null &&
-              MediaTypePicker.kindOf(r.$3.$1!) == .eventStream,
-        )
-        .firstOrNull;
-    if (stream == null) return false;
-    final (status, response, (contentType, _)) = stream;
-    _context.report(
-      .eventStreamNotGenerated,
-      'The $status response is "$contentType": event streams are generated '
-      'from M10, so the operation is not generated.',
-      response.location,
-      fix: 'Leave it out with exclude until then.',
-    );
-    return true;
-  }
 
   /// Reports an operation without a 2xx response (TOA653); a 2xx response
   /// that cannot be resolved is reported already.

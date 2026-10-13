@@ -1,0 +1,87 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND.
+// dart format off
+
+import 'package:dio/dio.dart' show Dio;
+import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'
+    show
+        CallOptions,
+        DioRequestSender,
+        JsonReader,
+        OperationInfo,
+        OperationRequest,
+        PathParameter,
+        RawResponse,
+        Result,
+        SseItem;
+
+import '../models/problem.dart';
+import '../models/thread.dart';
+
+/// The operations of the `ThreadsApi` group.
+class ThreadsApi {
+  /// Sends the requests through [dio], which it uses as it is.
+  ThreadsApi(Dio dio) : _sender = DioRequestSender(dio);
+
+  final DioRequestSender _sender;
+
+  static const _tailLog = OperationInfo(
+    operationId: 'tailLog',
+    method: 'GET',
+    pathTemplate: '/log',
+    tags: ['threads'],
+  );
+
+  static const _watchThread = OperationInfo(
+    operationId: 'watchThread',
+    method: 'GET',
+    pathTemplate: '/threads/{threadId}/events',
+    tags: ['threads'],
+  );
+
+  /// Returns the events of `text/event-stream` as they arrive; the stream ends
+  /// with `SseDisconnected`. It reconnects with `Last-Event-ID` when `call.sse`
+  /// asks for it.
+  ///
+  /// `GET /log` (`tailLog`).
+  Future<Result<Stream<SseItem<String>>, Never>> tailLog({
+    CallOptions? call,
+  }) => _sender.openEvents(
+    OperationRequest(
+      _tailLog,
+      streamStatuses: {200},
+    ),
+    (m) => m.data,
+    _decodeTailLog,
+    call: call,
+  );
+
+  static Result<Stream<SseItem<String>>, Never> _decodeTailLog(RawResponse r) =>
+      switch (r.statusCode) {
+        _ => r.undocumented(),
+      };
+
+  /// Returns the events of `text/event-stream` as they arrive; the stream ends
+  /// with `SseDisconnected`. It reconnects with `Last-Event-ID` when `call.sse`
+  /// asks for it.
+  ///
+  /// `GET /threads/{threadId}/events` (`watchThread`).
+  Future<Result<Stream<SseItem<Thread>>, Problem>> watchThread({
+    required String threadId,
+    CallOptions? call,
+  }) => _sender.openEvents(
+    OperationRequest(
+      _watchThread,
+      path: [PathParameter('threadId', threadId)],
+      streamStatuses: {200, 204},
+    ),
+    (m) => Thread.fromJson(JsonReader.asObject(m.json)),
+    _decodeWatchThread,
+    call: call,
+  );
+
+  static Result<Stream<SseItem<Thread>>, Problem> _decodeWatchThread(RawResponse r) =>
+      switch (r.statusCode) {
+        404 => r.error(Problem.fromJson(JsonReader.asObject(r.json))),
+        _ => r.undocumented(),
+      };
+}

@@ -1,6 +1,7 @@
 import '../diagnostics/json_pointer.dart';
 import '../model/spec_node.dart';
 import 'dart_type.dart';
+import 'event_union_names.dart';
 import 'ir.dart';
 import 'ir_context.dart';
 import 'names.dart';
@@ -24,7 +25,8 @@ final class ApiNames {
     : this._(context, TypeClaims(context, types));
 
   ApiNames._(this._context, this._claims)
-    : _root = RootNames(_context, _claims);
+    : _root = RootNames(_context, _claims),
+      _events = EventUnionNames(_context, _claims);
 
   static const _names = DartNames();
 
@@ -67,6 +69,7 @@ final class ApiNames {
   final IrContext _context;
   final TypeClaims _claims;
   final RootNames _root;
+  final EventUnionNames _events;
 
   /// The variant name of [status]: the reason phrase of a code, the name of
   /// a range (`4XX` is `ClientError`), `Other` for `default`, and `Status`
@@ -121,11 +124,12 @@ final class ApiNames {
       );
 
   /// [operation] with the names of the types the emitter declares for it;
-  /// [inlineBodies] tells which names its own inline bodies have.
+  /// [inlineBodies] tells which names its own inline bodies have. A method
+  /// that returns events has no sealed successes: it returns the stream.
   OperationIr name(OperationIr operation, ResponseBodyNames inlineBodies) {
     final prefix = _names.pascal(operation.name) ?? 'Operation';
     final bodies = {for (final s in operation.successes) s.type};
-    final successType = bodies.length > 1
+    final successType = bodies.length > 1 && operation.events == null
         ? _statusType(
             operation,
             _sealedName('${prefix}Response', operation, inlineBodies),
@@ -159,6 +163,7 @@ final class ApiNames {
       successType: successType,
       errorType: errorType,
       partsName: partsName,
+      events: _events.name(operation, prefix),
     );
   }
 

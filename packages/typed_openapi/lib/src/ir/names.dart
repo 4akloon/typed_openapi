@@ -78,7 +78,9 @@ final class DartNames {
     'PathStyle', 'QueryParameter', 'QueryStyle', 'RawResponse',
     'ResponseKind', 'Result', 'SecurityLocation', 'SecurityScheme',
     'SecuritySchemeType', 'SecurityUse', 'SseDecoder', 'SseDecodeError',
-    'SseDisconnected', 'SseEvent', 'SseItem', 'SseItemDecoder', 'SseMessage',
+    'SseDisconnected', 'SseEvent', 'SseEventIgnored', 'SseItem',
+    'SseItemDecoder', 'SseMessage', 'SseOptions', 'SseReconnecting',
+    'SseReconnection', 'SseReconnector', 'SseResume',
     'Success', 'TransportError', 'UndocumentedStatus',
     // package:dio, which the API files import with `show Dio` only.
     'Dio',

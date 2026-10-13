@@ -1,0 +1,126 @@
+openapi: 3.2.0
+info: {title: Chat, version: "1"}
+paths:
+  /chat:
+    post:
+      operationId: chat
+      tags: [chat]
+      summary: Answers a prompt, whole or as it is written.
+      requestBody:
+        required: true
+        content:
+          application/json: {schema: {$ref: '#/components/schemas/Prompt'}}
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json: {schema: {$ref: '#/components/schemas/Reply'}}
+            text/event-stream: {schema: {$ref: '#/components/schemas/Delta'}}
+        "400":
+          description: A bad prompt.
+          content:
+            application/json: {schema: {$ref: '#/components/schemas/Problem'}}
+  /chat/stream:
+    get:
+      operationId: chatStream
+      tags: [chat]
+      summary: Taken by an older method, so the stream of chat is chatStream2.
+      responses:
+        "204": {description: Nothing.}
+  /threads/{threadId}/events:
+    get:
+      operationId: watchThread
+      tags: [threads]
+      parameters:
+        - {name: threadId, in: path, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: Changes to the thread, one event each.
+          content:
+            text/event-stream:
+              itemSchema:
+                type: object
+                properties:
+                  event: {type: string}
+                  data:
+                    type: string
+                    contentMediaType: application/json
+                    contentSchema: {$ref: '#/components/schemas/Thread'}
+        "204": {description: The thread is closed.}
+        "404":
+          description: No such thread.
+          content:
+            application/json: {schema: {$ref: '#/components/schemas/Problem'}}
+  /chat/{chatId}/follow:
+    get:
+      operationId: followChat
+      tags: [chat]
+      summary: The events of a chat, typed one by one.
+      parameters:
+        - {name: chatId, in: path, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: One event per change.
+          content:
+            text/event-stream:
+              itemSchema:
+                oneOf:
+                  - type: object
+                    required: [event, data]
+                    properties:
+                      event: {const: delta}
+                      data: {type: string, contentMediaType: application/json, contentSchema: {$ref: '#/components/schemas/Delta'}}
+                  - type: object
+                    properties:
+                      event: {enum: [usage]}
+                      data: {type: string, contentMediaType: application/json, contentSchema: {$ref: '#/components/schemas/Usage'}}
+                  - type: object
+                    properties:
+                      event: {const: note}
+                      data: {type: string}
+                  - type: object
+                    properties:
+                      event: {const: done}
+  /log:
+    get:
+      operationId: tailLog
+      tags: [threads]
+      responses:
+        "200":
+          description: Log lines as text.
+          content:
+            text/event-stream: {schema: {type: string}}
+components:
+  schemas:
+    Prompt:
+      type: object
+      required: [text]
+      properties:
+        text: {type: string}
+    Reply:
+      type: object
+      required: [text]
+      properties:
+        text: {type: string}
+    Delta:
+      type: object
+      required: [part]
+      properties:
+        part: {type: string}
+        sessionToken: {type: string, format: password}
+    Thread:
+      type: object
+      required: [id]
+      properties:
+        id: {type: string}
+        replies: {type: array, items: {$ref: '#/components/schemas/Thread'}}
+    Usage:
+      type: object
+      required: [tokens]
+      properties:
+        tokens: {type: integer}
+    Problem:
+      type: object
+      required: [code]
+      properties:
+        code: {type: string}

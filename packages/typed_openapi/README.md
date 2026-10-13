@@ -146,8 +146,40 @@ switch (await client.pets.getPet(petId: 1)) {
   `Content-Type: text/plain; charset=utf-8` (a text part before them has
   none); a part whose `encoding` names a list or a wildcard of media types is
   sent with one concrete type (TOA661), and an object part that is not JSON
-  is a `String` you supply (TOA662); a binary body is a `FileUpload`. Event
-  streams come with M10 (TOA654).
+  is a `String` you supply (TOA662); a binary body is a `FileUpload`.
+- Event streams (`text/event-stream`): the method returns
+  `Future<Result<Stream<SseItem<T>>, E>>`. The stream opens for a documented
+  success only (any other status is decoded as above), gives `SseEvent`s
+  with the decoded data (`T` is the schema's type, an array schema's item,
+  OpenAPI 3.2 `itemSchema.data`'s `contentSchema`, or `String` for text), an
+  `SseDecodeError` for an event that does not decode, and ends with
+  `SseDisconnected`; it never emits errors. An operation that offers JSON
+  and an event stream gets two methods, `chat` and `chatStream`
+  (`naming.stream_suffix`). Reconnection is off by default: a GET
+  reconnects when you pass `CallOptions(sse: SseOptions(reconnect: true))`,
+  or by default with `sse: {reconnect: true}` in the config, sending
+  `Last-Event-ID` and announcing each attempt with `SseReconnecting`; the
+  delay is the server's `retry`, else 1 s, doubling to 30 s (a server
+  `retry` over 30 s is kept), 5 attempts, counted again after a message. A
+  POST reconnects only when the operation's `sse.reconnect` override enables
+  it. On the web, plug a fetch-based adapter into your
+  Dio: the default one cannot stream.
+- Events typed one by one (an OpenAPI 3.2 `itemSchema` whose `oneOf`
+  branches fix `event` to a constant) are a sealed union by event name,
+  `ChatEvent` with `ChatEventDelta(data)`, `ChatEventDone()` and
+  `ChatEventUnknown(event, data)`, so a `switch` names every event. The
+  `sse` override of an operation sets what the spec does not say:
+
+  ```yaml
+  operations:
+    createChat:
+      sse:
+        data: ChatChunk          # one type for every event, or:
+        events: {delta: ChatDelta, done: null}   # a type per event name
+        unknown: ignore          # drop unknown events (default: keep)
+        reconnect: true          # reconnect by default, also for a POST
+        method: only             # only the stream method (stream | only | none)
+  ```
 - The client never changes your Dio: set the base URL there, from the root
   class's server constants (`PetstoreClient.server`, or a method such as
   `PetstoreClient.server1(region: 'eu')` for a URL with variables). When the

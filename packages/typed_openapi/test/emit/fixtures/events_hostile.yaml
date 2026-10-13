@@ -1,0 +1,68 @@
+openapi: 3.2.0
+info: {title: Hostile events, version: "1"}
+paths:
+  /feed:
+    get:
+      operationId: feed
+      responses:
+        "200":
+          description: Events with names that must never reach code unescaped.
+          content:
+            text/event-stream:
+              itemSchema:
+                oneOf:
+                  - {properties: {event: {const: "-"}}}
+                  - {properties: {event: {const: "*/"}, data: {type: string}}}
+                  - {properties: {event: {const: "{@inject x}"}, data: {type: string}}}
+                  - {properties: {event: {const: "a b"}, data: {type: string}}}
+                  - {properties: {event: {const: "‮evil"}, data: {type: string}}}
+                  - {properties: {event: {const: "$cost"}, data: {type: string}}}
+                  - {properties: {event: {const: "it's \"quoted\""}, data: {type: string}}}
+                  - {properties: {event: {const: class}, data: {type: string}}}
+                  - {properties: {event: {const: unknown}, data: {type: string}}}
+                  - {properties: {event: {const: Delta}, data: {type: string}}}
+                  - {properties: {event: {const: delta}, data: {type: string}}}
+                  - {properties: {event: {const: delta}, data: {type: integer}}}
+                  - properties:
+                      event: {const: tree}
+                      data: {type: string, contentMediaType: application/json, contentSchema: {$ref: '#/components/schemas/Node'}}
+                  - properties:
+                      event: {const: shape}
+                      data: {type: string, contentMediaType: application/json, contentSchema: {$ref: '#/components/schemas/Shape'}}
+                  - properties:
+                      event: {const: secret}
+                      data: {type: string, format: password}
+  /class:
+    get:
+      operationId: class
+      responses:
+        "200":
+          description: A reserved word that returns JSON or events.
+          content:
+            application/json: {schema: {type: string}}
+            text/event-stream: {schema: {type: string}}
+components:
+  schemas:
+    FeedEvent:
+      description: A model that takes the union's first name.
+      type: object
+      properties:
+        id: {type: string}
+    Node:
+      type: object
+      properties:
+        children: {type: array, items: {$ref: '#/components/schemas/Node'}}
+    Circle:
+      type: object
+      required: [radius]
+      properties:
+        radius: {type: number}
+    Square:
+      type: object
+      required: [side]
+      properties:
+        side: {type: number}
+    Shape:
+      oneOf:
+        - {$ref: '#/components/schemas/Circle'}
+        - {$ref: '#/components/schemas/Square'}

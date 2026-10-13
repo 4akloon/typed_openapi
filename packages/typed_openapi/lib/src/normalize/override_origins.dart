@@ -33,9 +33,13 @@ final class OverrideOrigins {
     if (pointer == null || _before.contains(_keyOf(diagnostic))) {
       return diagnostic;
     }
+    // One override field may change several nodes: it is named once.
+    final fields = <String>{};
     final related = [
       for (final (file, at, field) in changes)
-        if (file == diagnostic.file && _nested(pointer, at))
+        if (file == diagnostic.file &&
+            _nested(pointer, at) &&
+            fields.add(field.value))
           RelatedLocation(
             message: 'Introduced by this override.',
             file: _overrides.file,

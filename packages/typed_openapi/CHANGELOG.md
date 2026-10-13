@@ -1,6 +1,28 @@
 ## 0.0.1 - Unreleased
 
 ### Added
+- Event streams (M10): an operation whose success is `text/event-stream` is
+  generated. A stream method returns `Future<Result<Stream<SseItem<T>>, E>>`
+  and uses `DioRequestSender.openEvents`; its `streamStatuses` are the 2xx
+  statuses of the operation, a range written once. When a success offers a
+  body and a stream, the operation gets two methods: the one that returns the
+  body (JSON, text or bytes) sends the `Accept` of the media types its 2xx
+  successes offer, and a second one named with `naming.stream_suffix`
+  (`chatStream`, default `Stream`; a reserved word keeps its stem,
+  `classStream`) returns the events. `OpenAPI 3.2` `itemSchema` and the
+  code-first `schema` give the data type; an `itemSchema` whose `oneOf` or
+  `anyOf` branches fix `event` to a constant is a sealed union
+  `<Method>Event` with a class per event (`<Union><Event>`) and an unknown
+  variant `<Union>Unknown`, and an event is dispatched by its exact name.
+  A GET reconnects when the call asks (`CallOptions.sse`), or unless it
+  says no when `sse.reconnect: true` is in the config; any other method
+  reconnects only when the operation's `sse.reconnect` override enables it.
+  The `sse` field of an operation override (`data`, `events`, `unknown`,
+  `reconnect`, `method`) types the events, drops unknown ones, enables
+  reconnection and chooses the methods; `SseOverride` and `SseMethod` are
+  part of the public overrides API. Several event-stream successes that
+  describe their events alike, whatever the annotations, the spelling of
+  `nullable` or the `allOf` wrapper, are one stream.
 - Operations (M9): an API class per group in `api/` (`PetsApi(Dio dio)`, a
   plain class that `implements` can mock), the barrel `api.dart` and the
   root client in `<client>.dart` (`PetstoreClient(Dio dio)` with a field per
@@ -204,8 +226,16 @@
     M9).
   - TOA653 success-undocumented (warning): no 2xx response; any 2xx is a
     success with the body as `JsonValue`.
-  - TOA654 event-stream-not-generated (warning): an operation whose success
-    is `text/event-stream` is not generated until M10.
+  - TOA654 event-stream-not-generated (warning): event streams that the
+    client cannot express are not generated: some successes are only a
+    stream and others offer a body (neither a method that returns the body
+    nor one that returns the events covers them: the operation is left
+    out), or the event-stream successes have different event types, or each
+    stream also offers a body while another 2xx has a body without a stream
+    (only the event-stream method is left out; the method that returns the
+    body is generated, as before M10, and the message names the statuses).
+    When `sse.data` or
+    `sse.events` left a shared response alone, the message says so.
   - TOA655 multipart-not-object (warning): a multipart body that is not an
     object with properties has no class of parts.
   - TOA656 encoding-headers-ignored (info): the `headers` of the `encoding`
@@ -231,6 +261,28 @@
   - TOA662 part-media-type-not-json (warning): an object part whose
     `contentType` is not JSON (`application/xml`) is a `String` the caller
     supplies, sent with that media type; it used to make every call throw.
+  - TOA663 event-stream-method-added (info): an operation that offers a
+    body and a stream gets a second method for the events.
+  - TOA664 event-data-array-items (info): the `schema` of an event stream is
+    an array; the data of each event is taken to be one item.
+  - TOA665 event-stream-reconnect-off (info): `sse.reconnect` in the config
+    applies to GET only, so another method does not reconnect unless its
+    own override enables it.
+  - TOA666 event-item-schema-unread (warning): an `itemSchema` does not say
+    what the data is (a string, or JSON with a `contentSchema`), or a branch
+    of a union fixes no event name; the data is read as text.
+  - TOA667 event-name-duplicate (warning): two branches fix the same event
+    name; the later one is left out.
+  - TOA668 event-name-unrepresentable (info): an event name without an ASCII
+    letter or digit; its class is named by its place.
+  - TOA669 sse-override-not-applied (warning): a part of the `sse` override
+    changes nothing (no stream written in the operation, a shared response,
+    `unknown` without events by name, an event whose data cannot be read);
+    the message names the part, and the rest of `sse` applies.
+  - TOA670 event-name-unreachable (warning): an event name that no `event:`
+    line can carry (empty, or with a line break); its variant is left out.
+  - TOA671 event-stream-error-as-text (info): a `text/event-stream` response
+    on an error status is read as text.
   - Renamed parts, group fields, server members, server variables and root
     client names (also one that gets the `Api` prefix because it starts with
     a digit) are reported (TOA550, TOA551, TOA552, TOA559); a method named `jsonEncode`,
@@ -244,6 +296,11 @@
   taken gets a suffix, TOA551), the classes of multipart parts
   (`UploadRequest`), the group fields and the servers of the root client;
   and it keeps security requirements with their schemes.
+- Config: `naming.stream_suffix` (default `Stream`; letters and digits that
+  start with an uppercase letter or a digit, else TOA902) and
+  `sse.reconnect` (default false), in `defaults` or a client. Report
+  messages and pointers print spec text with controls and bidirectional
+  marks escaped, and generated code escapes U+200E, U+200F and U+061C.
 - An `apiKey` security scheme without `in` is TOA112, as one without `name`.
 - Schemas named `Dio` or like the runtime's new names (`FileUpload`,
   `FormBody`, `MultipartBody`, `SecurityScheme`, ...) get the `Model` suffix

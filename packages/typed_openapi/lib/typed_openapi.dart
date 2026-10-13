@@ -77,6 +77,9 @@ export 'src/ir/ir.dart'
         EnumValueIr,
         ErrorsByStatus,
         ErrorsIr,
+        EventStreamIr,
+        EventUnionIr,
+        EventVariantIr,
         FieldIr,
         GroupIr,
         ModelDecl,
@@ -87,6 +90,7 @@ export 'src/ir/ir.dart'
         RequestBodyIr,
         ResponseIr,
         SingleError,
+        StreamReconnection,
         UnionDecl,
         UnionDispatch,
         UnionKind,
@@ -142,6 +146,7 @@ export 'src/overrides/override_set.dart'
         ResponseOverride,
         SchemaOverride,
         UnionMode;
+export 'src/overrides/sse_override.dart' show SseMethod, SseOverride;
 export 'src/resolve/spec_documents.dart' show SpecDocuments;
 export 'src/resolve/spec_model.dart' show SpecModel;
 export 'src/resolve/spec_reader.dart' show SpecReader;

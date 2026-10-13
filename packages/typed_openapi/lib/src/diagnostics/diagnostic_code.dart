@@ -409,8 +409,12 @@ enum DiagnosticCode {
   /// value is the body as `JsonValue`.
   successUndocumented('TOA653', 'success-undocumented', .warning),
 
-  /// A success of an operation is `text/event-stream`; the operation is not
-  /// generated until M10 generates event streams.
+  /// An event-stream operation has a shape the client cannot express: its
+  /// event-stream successes have different event types, or another success
+  /// has a body that is not an event stream. The operation is not
+  /// generated when some of its successes are only a stream; when each
+  /// stream offers a body too, only the event-stream method is left out and
+  /// the method that returns the body is generated.
   eventStreamNotGenerated('TOA654', 'event-stream-not-generated', .warning),
 
   /// The schema of a multipart body is not an object with properties (a
@@ -463,6 +467,53 @@ enum DiagnosticCode {
   /// JSON (`application/xml`). The client writes JSON only, so the part is
   /// a `String` the caller supplies, sent with that media type.
   partMediaTypeNotJson('TOA662', 'part-media-type-not-json', .warning),
+
+  /// A success of an operation offers JSON (or another body) and
+  /// `text/event-stream`: the operation gets a second method, named with
+  /// `naming.stream_suffix`, that returns the events.
+  eventStreamMethodAdded('TOA663', 'event-stream-method-added', .info),
+
+  /// The `schema` of an event stream is an array: each event's data is
+  /// taken to be one item, as code-first frameworks write it.
+  eventDataArrayItems('TOA664', 'event-data-array-items', .info),
+
+  /// `sse.reconnect` in the config asks event streams to reconnect, but it
+  /// applies to GET only: an event-stream operation that is not GET does
+  /// not reconnect, since repeating the request may not be safe, unless its
+  /// own `sse.reconnect` override enables it. Reported once per such
+  /// operation, and only when the config asks.
+  eventStreamReconnectOff('TOA665', 'event-stream-reconnect-off', .info),
+
+  /// The `itemSchema` of an event stream does not say what the data of an
+  /// event is (no `data` property, or one that is neither text nor JSON
+  /// with a `contentSchema`): the data is read as text.
+  eventItemSchemaUnread('TOA666', 'event-item-schema-unread', .warning),
+
+  /// Two branches of an `itemSchema` union fix the same event name: the
+  /// later one is left out.
+  eventNameDuplicate('TOA667', 'event-name-duplicate', .warning),
+
+  /// An event name has no ASCII letter or digit (`""`, `*/`), so its
+  /// variant is named by its place (`ChatEventEvent2`).
+  eventNameUnrepresentable('TOA668', 'event-name-unrepresentable', .info),
+
+  /// A part of the `sse` override of an operation does not apply: `data` or
+  /// `events` find no `text/event-stream` 2xx response written in the
+  /// operation (a `$ref`'d one is shared), the operation has no event stream
+  /// for `reconnect`, `method` or `unknown`, `unknown` has no events by name
+  /// to apply to, or an event's data cannot be read. The message names the
+  /// part; the rest of `sse` applies.
+  sseOverrideNotApplied('TOA669', 'sse-override-not-applied', .warning),
+
+  /// An event name that no `event:` line can carry: an empty one (the wire
+  /// reads it as `message`) or one with a line break. Its variant could
+  /// never be selected, so it is left out.
+  eventNameUnreachable('TOA670', 'event-name-unreachable', .warning),
+
+  /// A `text/event-stream` response with an error status (or `default`) of
+  /// an operation whose method does not return events: its body is read as
+  /// text, like any other error body that is not JSON.
+  eventStreamErrorAsText('TOA671', 'event-stream-error-as-text', .info),
 
   /// A normalizer fix or an override was not applied: its file cannot be
   /// read, its target is gone, the spec kept changing after the last pass, or

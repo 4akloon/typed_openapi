@@ -3,6 +3,7 @@ import '../model/operation.dart';
 import 'generation_field_reader.dart';
 import 'override_field_reader.dart';
 import 'override_set.dart';
+import 'sse_override_reader.dart';
 
 /// Reads the entries of the `operations` section: an operation with its
 /// parameters, request body and responses.
@@ -21,6 +22,7 @@ final class OperationOverrideReader {
     'parameters',
     'requestBody',
     'responses',
+    'sse',
   };
   static const _parameterKeys = {
     'reason',
@@ -54,6 +56,7 @@ final class OperationOverrideReader {
       name: _fields.string(entry, 'name', at),
       exclude: _fields.boolean(entry, 'exclude', at),
       group: _fields.string(entry, 'group', at),
+      sse: SseOverrideReader(_fields).read(entry, at),
       parameters: [
         for (final (name, value, p) in _fields.entries(entry, 'parameters', at))
           ?_parameter(name, value, p),

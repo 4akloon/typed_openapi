@@ -81,9 +81,8 @@ final class IrBuilder {
       );
       final names = _methodNames(context, groups[group]!, scope);
       for (final entry in groups[group]!) {
-        if (operations.build(entry, names[entry]!) case final operation?) {
-          (built[group] ??= []).add(operation);
-        }
+        final methods = operations.build(entry, names[entry]!, scope);
+        if (methods.isNotEmpty) (built[group] ??= []).addAll(methods);
       }
     }
     if (built.isEmpty) {
@@ -194,14 +193,14 @@ final class IrBuilder {
         '$unbound ${unbound == 1 ? 'has' : 'have'} a path variable without a '
             'parameter (TOA556)',
       if (streams > 0)
-        '$streams ${streams == 1 ? 'is an event stream' : 'are event '
-                  'streams'}, generated from M10 (TOA654)',
+        '$streams ${streams == 1 ? 'has' : 'have'} event streams the client '
+            'cannot express (TOA654)',
     ];
     final fixes = [
       if (filtered > 0) 'Check include, exclude and the overrides.',
       if (refs > 0) 'Write the operations inline at the source.',
       if (unbound > 0) 'Declare the path parameters at the source.',
-      if (streams > 0) 'Leave the event streams out with exclude.',
+      if (streams > 0) 'Offer text/event-stream on every success.',
     ];
     final config = context.config;
     final byFilter =

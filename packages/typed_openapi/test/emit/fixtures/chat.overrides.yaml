@@ -1,0 +1,12 @@
+operations:
+  followChat:
+    sse: {unknown: ignore}
+  tailLog:
+    sse:
+      events:
+        line: {type: string}
+        stats: Usage
+        eof: null
+      reconnect: true
+  chat:
+    sse: {method: only}

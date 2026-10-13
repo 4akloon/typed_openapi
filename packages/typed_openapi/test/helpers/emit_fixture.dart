@@ -24,14 +24,21 @@ Map<String, String> emitFixture(
 }
 
 /// The files of the whole client of the fixture spec [name] in
-/// `test/emit/fixtures`: models, API and the root, for the client `api`.
+/// `test/emit/fixtures`: models, API and the root, for the client `api`;
+/// [overrides] names an overrides file there.
 Map<String, String> emitClient(
   String name, {
   GenerationConfig generation = const GenerationConfig(),
+  String? overrides,
 }) {
   final fixture = IrFixture(
     File(p.join('test', 'emit', 'fixtures', name)).readAsStringSync(),
     generation: generation,
+    overrides: overrides == null
+        ? null
+        : File(
+            p.join('test', 'emit', 'fixtures', overrides),
+          ).readAsStringSync(),
   );
   final ir = IrBuilder(
     fixture.diagnostics,

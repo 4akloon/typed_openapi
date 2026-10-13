@@ -29,6 +29,7 @@ final class OperationRequest {
     this.body,
     this.contentType,
     this.responseKind = .json,
+    this.accept,
     this.streamStatuses = const {},
   });
 
@@ -62,6 +63,13 @@ final class OperationRequest {
 
   /// How the response body is read.
   final ResponseKind responseKind;
+
+  /// The `Accept` of a method that returns the body of an operation that also
+  /// has an event-stream method, so a server that picks the representation by
+  /// `Accept` does not answer with the stream; `null` sends none. A call's own
+  /// `Accept` wins; an event stream asks for `text/event-stream` and ignores
+  /// this.
+  final String? accept;
 
   /// For an event-stream operation, the documented success statuses whose
   /// body is the stream; `DioRequestSender.openEvents` opens the stream for

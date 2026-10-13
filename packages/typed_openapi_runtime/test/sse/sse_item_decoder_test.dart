@@ -28,6 +28,7 @@ void main() {
     SseEvent(:final data, :final event, :final id) => '$event $id ${data.text}',
     SseDecodeError(:final error, :final message) =>
       'error ${message.data} ${error.pointer}',
+    SseReconnecting() => 'reconnecting',
     SseDisconnected(:final cause) => 'end ${cause ?? 'closed'}',
   };
 
@@ -77,6 +78,7 @@ void main() {
         (item) => switch (item) {
           SseEvent() => 'event',
           SseDecodeError() => 'decode error',
+          SseReconnecting() => 'reconnecting',
           SseDisconnected() => 'disconnected',
         },
       ),

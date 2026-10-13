@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'diagnostic_bag.dart';
 import 'github_actions_reporter.dart';
+import 'json_pointer.dart';
+import 'message_text.dart';
 import 'sarif_reporter.dart';
 import 'severity.dart';
 
@@ -30,25 +32,39 @@ final class TextReporter implements DiagnosticReporter {
     for (final (d, accepted) in listed) {
       final mark = accepted ? ' [baselined]' : '';
       out.writeln(
-        '${d.severity.name} ${d.code.id} ${d.code.slug}$mark: ${d.message}',
+        '${d.severity.name} ${d.code.id} ${d.code.slug}$mark: '
+        '${MessageText.neutralise(d.message)}',
       );
-      final location = d.location;
-      if (location != null) out.writeln('  --> $location');
-      final pointer = d.pointer;
-      if (pointer != null) out.writeln('  at ${pointer.value}');
+      _place(out, '  ', d.location, d.pointer);
       final fix = d.fix;
       // A fix may end with an override snippet on several lines.
-      if (fix != null) out.writeln('  fix: ${fix.replaceAll('\n', '\n    ')}');
+      if (fix != null) {
+        final text = MessageText.neutralise(fix, keepLineFeeds: true);
+        out.writeln('  fix: ${text.replaceAll('\n', '\n    ')}');
+      }
       for (final related in d.related) {
-        out.writeln('  related: ${related.message}');
-        final location = related.location;
-        if (location != null) out.writeln('    --> $location');
-        final pointer = related.pointer;
-        if (pointer != null) out.writeln('    at ${pointer.value}');
+        out.writeln('  related: ${MessageText.neutralise(related.message)}');
+        _place(out, '    ', related.location, related.pointer);
       }
     }
     out.write(summary(diagnostics));
     return out.toString();
+  }
+
+  /// Writes the `-->` and `at` lines, indented by [indent]. A file name and
+  /// a pointer hold spec text (a key, a `$ref`).
+  static void _place(
+    StringBuffer out,
+    String indent,
+    String? location,
+    JsonPointer? pointer,
+  ) {
+    if (location != null) {
+      out.writeln('$indent--> ${MessageText.neutralise(location)}');
+    }
+    if (pointer != null) {
+      out.writeln('${indent}at ${MessageText.neutralise(pointer.value)}');
+    }
   }
 
   /// The summary line: errors, warnings and infos, and how many diagnostics

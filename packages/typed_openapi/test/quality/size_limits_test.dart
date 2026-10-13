@@ -17,15 +17,14 @@ import '../helpers/size_limits.dart';
 /// they were listed. Keep the entries sorted.
 const Map<String, int> _fileAllowlist = {
   // M9: naming.client is read with the other naming keys.
-  'lib/src/config/config_loader.dart': 798,
+  'lib/src/config/config_loader.dart': 782,
   'lib/src/emit/model_emitter.dart': 379,
   'lib/src/emit/union_emitter.dart': 416,
-  // M9: the fields the API emitter reads on the operation IR classes, and
-  // whether a response body is a secret.
-  'lib/src/ir/ir.dart': 824,
+  // The declarations, enums, the client and its groups; the operation's
+  // parameter, body and response nodes have files of their own.
+  'lib/src/ir/ir.dart': 496,
   // M9: event streams in the empty-client report; webhooks checked.
-  'lib/src/ir/ir_builder.dart': 538,
-  'lib/src/ir/operation_builder.dart': 509,
+  'lib/src/ir/ir_builder.dart': 537,
   'test/cli/generate_command_test.dart': 771,
   'test/emit/model_library_test.dart': 891,
   'test/ir/emitter_contract_test.dart': 576,
@@ -61,11 +60,10 @@ const Map<String, int> _methodAllowlist = {
   'lib/src/ir/ir_builder.dart#IrBuilder._methodName': 50,
   // M9: event streams are a reason a client is empty.
   'lib/src/ir/ir_builder.dart#IrBuilder._reportEmpty': 55,
-  'lib/src/ir/ir_builder.dart#IrBuilder.build': 94,
+  'lib/src/ir/ir_builder.dart#IrBuilder.build': 93,
   // M9: a parameter keeps its schema's default.
   'lib/src/ir/operation_builder.dart#OperationBuilder._parameter': 100,
   'lib/src/ir/operation_builder.dart#OperationBuilder._parameters': 74,
-  'lib/src/ir/operation_builder.dart#OperationBuilder._responses': 42,
   'lib/src/ir/operation_selector.dart#OperationSelector.select': 42,
   'lib/src/load/openapi_version.dart#OpenApiVersionDetector.detect': 47,
   'lib/src/normalize/normalizer.dart#Normalizer.normalize': 43,

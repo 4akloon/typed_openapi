@@ -43,8 +43,16 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   serious; level comparison uses its order), `SeverityLevels` (a client's
   `severity` config), `JsonPointer`, `DiagnosticBag` (baselined diagnostics kept
   apart), `DisplayPaths` (files relative to the working directory, absolute
-  outside it), and the reporters (`DiagnosticReporter`, `TextReporter`,
-  `JsonReporter`, `SarifReporter`, `GitHubActionsReporter`, `ReportFormat`).
+  outside it), `MessageText` (spec text in a message: `quote` writes
+  `"`, `\`, controls and bidirectional marks as escapes, as the event
+  names of TOA551/TOA559/TOA667/TOA668 are; `neutralise` is what the text
+  and GitHub reporters apply to every message, fix and related message, and
+  to every pointer and file location they print, so an ESC byte or a
+  `::error::` line from a spec never reaches a terminal or a CI log as
+  such; the GitHub reporter also escapes `%`, CR and LF as the
+  runner expects, and JSON and SARIF keep the text as it is), and the
+  reporters (`DiagnosticReporter`, `TextReporter`, `JsonReporter`,
+  `SarifReporter`, `GitHubActionsReporter`, `ReportFormat`).
 - `load/` - `SpecLoader` reads JSON/YAML into a `SpecDocument` (plain tree,
   absolute file URI, source spans by JSON pointer, `valueAt(pointer)`,
   `withRoot`) through `YamlComposer`, which `ConfigLoader` uses too.
@@ -136,8 +144,40 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   into spec fields (`spec`, a map where `null` removes the field) and typed
   generation fields (`name`, `exclude`, `group`, `exhaustive`, `dartType`,
   `triState`, and `union`, `raw` or `structural`, on a schema or a property)
-  that the IR builder reads (M6, M8; `sse` is not accepted until M10 settles
-  its shape). A missing file is TOA801, a directory or a
+  that the IR builder reads (M6, M8), and on an operation `sse` (M10).
+  `SseOverrideReader` reads `sse` into `SseOverride` (with `SseMethod`;
+  both are exported like the other override types): `data` or `events` (a
+  `components.schemas` key, which becomes a `$ref`, an inline schema, or
+  for an event `null`; both together are TOA802), `unknown` (`keep` |
+  `ignore`), `reconnect` and `method` (`stream` | `only` | `none`).
+  `SseOverrideApplier` writes `data`, or an object whose properties are
+  the events with data, as the `schema` of every `text/event-stream`
+  media type of the 2xx responses written in the operation and removes
+  their `itemSchema`. A `$ref`'d response is shared and not changed:
+  `WrittenStreams` tells the written stream successes from the shared
+  ones, `EventStreams.events` reads the first written one, TOA669 names a
+  shared response that was left alone, and when the event types then
+  differ TOA654 says that the shared response was not overridden (override
+  the schema it uses by its component name, or write the response in the
+  operation). A `data` the spec already has is TOA807; `events` never is,
+  since the object it writes reads as a union and the same schema without
+  it as a model. TOA669 names exactly the part that does not apply:
+  `data`/`events` with no written event stream (the applier),
+  `reconnect`/`method`/`unknown` on an operation with no event stream,
+  `unknown` on a stream with no events by name, an event the reader
+  dropped (`<<`, left out). `reconnect`, `method` and `unknown` otherwise
+  apply to the operation whatever its responses are: `method: none` on a
+  stream-only operation leaves it out (`StreamShape.excluded`, no
+  diagnostic, as `exclude` does), and `method: only` on an operation that
+  also offers bodies drops them and says so (TOA651). `OverrideEvents`
+  reads the union of the events from that object in the override's order,
+  with one union for every event-stream success; an event name that no
+  `event:` line can carry (empty, or with a line break) is left out,
+  TOA670. `unknown: ignore` makes the generated `fromEvent` throw
+  `SseEventIgnored`, which `SseItemDecoder` drops; its id, like that of a
+  block without data, still reaches `SseDisconnected.lastEventId` and so
+  the `Last-Event-ID` of a reconnection, as WHATWG keeps it. A missing file
+  is TOA801, a directory or a
   bad value TOA802 (the value is ignored), an unknown key the error TOA803
   with "did you mean" for a known key within Levenshtein distance 2.
   `OverrideResolver` maps entries to model nodes (`OverrideTarget`; a
@@ -194,7 +234,13 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `set`); `OverrideEdit` is in `override_edit.dart`, re-exported by the
   applier.
 - `config/` - `ConfigLoader`, `ProjectConfig`, `ClientConfig`, `Preset`,
-  `GenerationConfig` (`naming`, `group_by`, `include`/`exclude`
+  `GenerationConfig` (`naming` (also `stream_suffix`, default `Stream`,
+  letters and digits from an uppercase letter or a digit; a method named
+  `class_` gets `classStream`),
+  `sse.reconnect` (GET event streams reconnect unless a call says no;
+  `OperationSettingsReader` reads these and `operation_prefix`, each from
+  the last of the `ConfigSources` that has it), `group_by`,
+  `include`/`exclude`
   (`OperationFilter`, `FilterPattern`), `types`, `tri_state`, `union`
   (`raw`, the default, or `structural`: how a `oneOf`/`anyOf` without a
   discriminator whose variants share a JSON type is generated, TOA453; an
@@ -209,9 +255,15 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   are reported at its own place, not at that of a client with equal
   settings.
 - `ir/` - the semantic IR (M6): `ir.dart` (`ClientIr`, sealed `Declaration`
-  = `ModelDecl` | `EnumDecl` | `UnionDecl`, `FieldIr`, `GroupIr`,
-  `OperationIr`, `ParameterIr`, `RequestBodyIr`, `ResponseIr`, sealed
-  `ErrorsIr`), `dart_type.dart` (sealed `DartType`; `DeclId` = schema
+  = `ModelDecl` | `EnumDecl` | `UnionDecl`, `FieldIr`, `GroupIr`; it
+  exports the node files: `operation_ir.dart` (`OperationIr`),
+  `parameter_ir.dart`, `body_kind.dart`, `request_body_ir.dart`,
+  `response_ir.dart`, `errors_ir.dart` (sealed `ErrorsIr`),
+  `api_ir.dart`, and the event-stream nodes `event_stream_ir.dart`,
+  `event_union_ir.dart`, `event_variant_ir.dart`,
+  `stream_reconnection.dart`; `operation_ir.dart` imports the node files,
+  not `ir.dart`, so no import cycle), `dart_type.dart` (sealed
+  `DartType`; `DeclId` = schema
   location + `DeclVariant` (`base`, `input` for the request model of a
   schema split by direction, `patch` for the PATCH body model of a schema
   also used elsewhere); types refer to declarations by id, and
@@ -325,7 +377,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   TOA111), is TOA568 and left out as a whole when another alternative can be described;
   when none can, all stay with the scheme of kind `SecurityKind.unknown`
   (the runtime's `SecuritySchemeType.unknown`), so the metadata never says
-  less than the spec: no operation reads as open or as optional), skips event-stream operations (TOA654) and reports
+  less than the spec: no operation reads as open or as optional), skips
+  event streams it cannot express (TOA654) and reports
   operation servers (TOA566), callbacks and webhooks (TOA567) and a missing
   2xx (TOA653) through collaborators (`SecurityBuilder`, `PartsBuilder`,
   `BodyEncoding`, `OperationChecks`, `MediaTypePicker`, which picks the media
@@ -344,7 +397,82 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   override names first, then
   `operationId` without the `operation_prefix`, then the path; TOA563 when
   no operation is generated, at the config client if filters left some
-  out, else at `#/paths`; then everything above). `IrJson` dumps an IR, the operations through `IrOperationJson`: every
+  out, else at `#/paths`; then everything above). Event streams (M10):
+  `OperationBuilder` builds the parameters and hands an operation to
+  `MethodBuilder` (`RequestBodyBuilder`, `ResponseBuilder`, `EventStreams`;
+  `SpecOperation` is in `spec_operation.dart`). `EventStreams.shapeOf`
+  gives a `StreamShape`: `none` (no stream), `only` (every success with a
+  body is only a stream: one method that returns the events), `both` (the
+  successes offer a body and a stream: the method of the body and a second
+  one for the events), `bodyOnly` (every stream success offers a body, but
+  another 2xx has a body and no stream: the method of the body, exactly as
+  without the stream, and TOA654 for the stream method only, naming the
+  statuses; `sse.method: none` reports nothing and is `none`), `mixed` (some
+  successes are only a stream and others offer a body, TOA654, not
+  generated) and `excluded` (`sse.method:
+  none` on a stream-only operation: not generated, no diagnostic). The
+  second method is named with `naming.stream_suffix` (`chat` and
+  `chatStream`; a reserved word keeps its stem, `classStream`), claimed
+  after every other method of the group (TOA663; TOA550 when the name is
+  one Dart has, TOA551 on a collision).
+  The method that returns the body picks its media type as without the
+  stream (bytes for `application/octet-stream` or `application/xml`, text,
+  JSON: `MediaTypePicker` `chooseEvents: false` never chooses a success's
+  event stream for it, `sse.method: none` too). Its `OperationIr.accept`
+  lists the base media types of its 2xx bodies (`application/json`,
+  `application/vnd.api+json`, `text/plain`, each once), which the emitter
+  writes as `accept:` of the `OperationRequest` so the server does not
+  answer with the stream; it is null when the stream method is not
+  generated. `sse.method: only` drops the bodies with TOA651.
+  A method that returns events has `OperationIr.events` (`EventStreamIr`:
+  the data type, null for text, the union, and a `StreamReconnection`:
+  `off` for a non-GET, with TOA665 only when the config's `sse.reconnect`
+  asks for it, `onRequest` for a GET, `on` with the config's or the
+  override's `sse.reconnect`); its event-stream successes are `String`
+  responses and it has no sealed success type. An event stream on an error
+  status is read as text, TOA671.
+  `EventData` chooses between the override, `itemSchema` and `schema`;
+  `EventDataReader` reads one event's data: a string, also with a
+  `contentMediaType` that is not JSON, is text; `contentMediaType` JSON
+  with a `contentSchema` is JSON, also when that is a string (the quotes are
+  read off); wrappers that add nothing (annotation-only
+  `allOf`, nullable `anyOf`, `SchemaUnwrapper`) are taken off; `data` may
+  sit in an `allOf` part of the `itemSchema`; anything else is text with
+  TOA666, which is not reported on top of the TOA101 of a reference that
+  does not resolve. `schema` is the data's JSON, an array its items
+  (TOA664), a string of any shape (nullable, a string enum, a `format`
+  that stays a string) text, so no enum is declared for it.
+  An `itemSchema` whose `oneOf` (or `anyOf`) branches each fix `event` to a
+  string `const` (or a one-value `enum`) is an `EventUnionIr` (R12.2),
+  read by `EventUnionReader`: a variant (`EventVariantIr`, with the
+  `location` of its branch) per event name, `data` by the same rules, none
+  without `data` or with a `null` one; a repeated name keeps the first
+  branch (TOA667); a name no `event:` line can carry (empty, with a line
+  break) is left out (TOA670, `EventNames`); a branch that fixes no name
+  (nested `oneOf`, an `allOf` branch) makes the data text with TOA666 at
+  that branch. `unknownSensitive` is set when any event's data carries a
+  secret. `EventUnionNames` (from `ApiNames`, after the status types)
+  names it `<Method>Event`, then `<Union>Unknown`, then `<Union><Event>`
+  (`<Union>Event<n>` without letters or digits, TOA668; `2` on a
+  collision, TOA551); TOA668 and TOA559 point at the branch. No
+  `SchemaMapper` change: the variants' types come from `typeOf`.
+  TOA654 is only an operation (or its event-stream method, in the `both`
+  and `bodyOnly` shapes) whose event-stream successes disagree on the event
+  type, or successes that mix a stream alone with a body; an operation that
+  M9 generated is always generated as M9 did (`StreamSuccesses` counts the
+  statuses by how they use the stream). `EventAgreement` decides
+  "the same event types" from the spec before any type is mapped: the
+  same `itemSchema` or `schema`; the schema at the end of the `$ref`s, one
+  location or two written alike in one document by `JsonEquality`
+  (which never throws on `.nan` or `.inf`) after `SchemaEssence` took off
+  the annotations at every depth and the `null` of a type list (a
+  property named `description` stays); else the same schema once the
+  wrappers that add nothing are taken off, and for a `schema` the same text
+  or scalar type and format (no schema and a plain string are both text).
+  `MethodBuilder` asks it before it claims the stream method's name
+  (TOA663, TOA551) or maps its events, so a stream that is not generated
+  declares nothing, claims no name and reports only TOA654.
+  `IrJson` dumps an IR, the operations through `IrOperationJson`: every
   field of the operation IR (encoding, parts, security, servers, status
   types, `sensitive`, defaults), except the locations of parameters, bodies
   and responses and a response's text and media type; `ir_json_test.dart`
@@ -352,8 +480,9 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   is missing from the dump; the
   hidden `typed_openapi ir` command prints it. Naming and mapping codes use
   the second half of each area's hundred: TOA250-TOA256, TOA350-TOA351,
-  TOA450-TOA456, TOA550-TOA565, and media types and errors TOA650-TOA662
-  (TOA561 became TOA650 and TOA651, TOA562 TOA652, the querystring half of
+  TOA450-TOA456, TOA550-TOA565, and media types, errors and event streams
+  TOA650-TOA671 (TOA654 and TOA663-TOA671 are event streams; TOA561 became
+  TOA650 and TOA651, TOA562 TOA652, the querystring half of
   TOA564 TOA565); `generate` has TOA830 (output not owned),
   TOA831 (output not written, or its lock held) and TOA832 (an interrupted
   run recovered, or a lock taken over; info). TOA552 on an enum value is an info (an override cannot name enum
@@ -361,7 +490,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   the enum value scope (`unknown_`).
 - `emit/` - the model emitter (M8), whose only input is the IR (it never
   reads the spec): `DartCode` (string literals: `\`, `'`, `$`, line breaks
-  including U+0085, U+2028 and U+2029, controls, bidirectional controls and
+  including U+0085, U+2028 and U+2029, controls, bidirectional controls (also
+  U+200E, U+200F and U+061C) and
   lone surrogates are escaped; one-line code spans `docSpan`/`jsonSpan`;
   `docLines` for spec text: `[`, `]`, `<`, `>`, `\` and `{@` escaped outside
   code spans, controls dropped, wrapped at the width (a span is never
@@ -457,7 +587,18 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   static decoder per operation (private names apart in their own scope),
   methods with named arguments only (`required` for required ones; enum
   arguments take the known values), `body`, then `CallOptions? call`,
-  returning `Future<Result<T, E>>` from `DioRequestSender.send`; the
+  returning `Future<Result<T, E>>` from `DioRequestSender.send` (a method
+  with `OperationIr.events` returns `Stream<SseItem<T>>` from `openEvents`
+  through `EventStreamWriter`: `streamStatuses` are its 2xx statuses, a
+  range written once as `for (var s = 200; s < 300; s++) s` and not next to
+  the codes it holds; the event decoder `(m) => ...` reads `m.json` or
+  `m.data` for text, a `reconnection:` argument unless `onRequest`, and its
+  decoder has error arms only; the method that returns the body of such an
+  operation passes `accept:` to the `OperationRequest`; an event union is
+  written after the status types by `EventUnionEmitter`: an `@immutable
+  sealed` class whose static `fromEvent(SseMessage)` switches on the event
+  name (escaped literals), plain variant classes equal by value with
+  `<redacted>` for secrets, and the unknown variant `(event, data)`); the
   decoder switches on the status: codes, then ranges, then `default`
   (every status but 2xx), `_` is `undocumented()`; Dio reads JSON unless
   every success with a body is text (`text`) or something else is
@@ -594,7 +735,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `IrJson`, `ClientIr` and its node classes, among them the M9 ones
   (`RootIr`, `ServerIr`, `ServerVariableIr`, `StatusTypeIr`, `StatusCaseIr`,
   `PartIr`, `EncodingIr`, `SecurityUseIr`, `SecuritySchemeIr`,
-  `SecurityKind`), `DartType` and its
+  `SecurityKind`) and the M10 ones (`EventStreamIr`, `EventUnionIr`,
+  `EventVariantIr`, `StreamReconnection`), `DartType` and its
   subclasses, `DeclId`, `DeclVariant`, `UnionDispatch`, `UnionKind`,
   `UnionVariantIr`), the diagnostics (`Diagnostic`,
   `RelatedLocation`, `DiagnosticBag`, `DiagnosticCode`, `DisplayPaths`,
@@ -608,7 +750,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   (`Normalizer`, `NormalizedSpec`, `NormalizerRule`, `RuleContext`,
   `Finding`, `SpecEdit`, `EditOperation`) and the overrides file
   (`OverrideLoader`, `OverrideSet`, `OverrideEntry` and its subclasses,
-  `DartTypeOverride`, `UnionMode`). Not exported: `CheckCommand`,
+  `DartTypeOverride`, `UnionMode`, `SseOverride`, `SseMethod`). Not
+  exported: `CheckCommand`,
   `BaselineCommand`, `GenerateCommand`, `RealPaths`, the emitters
   (`DartCode`, `DartWriter`, `Imports`, `TypeCodec`, `ModelEmitter`,
   `EnumEmitter`, `UnionEmitter`, and the API emitters `ApiLibrary`,
@@ -684,7 +827,9 @@ that the API composes, including an `implements` fake of a tag class.
   metadata only; `SecuritySchemeType.unknown` is a scheme the spec names
   but does not define), `OperationRequest` (resolves the path and the query
   itself; `pathVariable` is the one pattern of a path variable, which the
-  generator copies; `streamStatuses` for event streams), `RawResponse` (what
+  generator copies; `streamStatuses` for event streams; `accept` is the
+  `Accept` of the method that returns the body of an operation that also
+  has an event-stream method, and a call's own `Accept` wins), `RawResponse` (what
   a generated decoder switches on; `parsedJson` parses a JSON body that Dio
   read as text or bytes), and the bodies `FileUpload` (bytes or a stream),
   `FormBody`/`FormEncoding` and `MultipartBody`/`MultipartPart`, which
@@ -707,7 +852,9 @@ that the API composes, including an `implements` fake of a tag class.
   non-JSON value in a JSON part, or an object with a media type that is not
   JSON is `ArgumentError`, never stringified.
 - `dio/` - `DioRequestSender(dio, {isWeb})` (`send`, `openEvents`; requests
-  only through `dio.request`, never mutates the user's Dio, never retries;
+  only through `dio.request` (`DioCall`), never mutates the user's Dio,
+  never retries a request (an event stream reconnects only as R12.5 says);
+  `DioResults` maps responses and Dio failures to `Result`s;
   decoding catches only `DioException`, `JsonDecodeException` and, from the
   user's decoder, `FormatException` (a converter or `Date.parse` rejecting
   the data: `DecodeError` at the root pointer, `SseDecodeError` in a
@@ -715,16 +862,53 @@ that the API composes, including an `implements` fake of a tag class.
   non-stream body into `TransportError`, and an `Error` is never caught; the
   query is
   built by the runtime, so interceptors see an empty `queryParameters`),
-  `CallOptions`. `openEvents` needs its stream listened to or cancelled; a
-  listener cancel cancels the request.
-- `sse/` - `SseDecoder` (WHATWG, bytes -> `SseMessage`), `SseItemDecoder`
-  (-> `SseEvent` / `SseDecodeError` / `SseDisconnected`; data problems are
-  items, an `Error` from the user's decoder is the only stream error). Use
+  `CallOptions` (`sse`: `SseOptions`). `openEvents` needs its stream
+  listened to or cancelled; a listener cancel cancels the request. An
+  `EventCall` holds what every connection of one call shares, and its
+  `ConnectionTokens` give each connection a cancel token of its own and
+  put one listener, not one per reconnection, on the call's token. A
+  `Last-Event-ID` in `call.headers` is where the stream's last event id
+  starts (`DioCall.userLastEventId`): it goes with the first request and the
+  reconnections until an event id replaces it, and an empty `id:` removes
+  it; `DioCall` sends the stream's id only, never both.
+- `sse/` - `SseDecoder` (WHATWG, bytes -> `SseMessage`; it may start from
+  a last event id and retry; it keeps the messages of `SseBlockDecoder`,
+  which reports every block, one `SseBlock` per empty line with the
+  stream's last id and retry, since WHATWG sets the id there also when
+  the block has no `data`), `SseItemDecoder` (-> `SseEvent` /
+  `SseDecodeError` / `SseDisconnected`; data problems are items, an
+  `Error` from the user's decoder is the only stream error; the event
+  decoder of a generated union throws `SseEventIgnored` for an event the
+  stream drops, `sse.unknown: ignore`: no item, but its id and `retry`
+  still move the stream's). `SseDisconnected` is always the last item and
+  carries the stream's `lastEventId` (`''` when it had none, from a block
+  without data too), its `retry` and `receivedMessage` (whether the
+  connection delivered an event, a decode error or a dropped event; comments
+  and blocks with only an `id:` or `retry:` are not messages, so such a
+  connection is a failed attempt). `SseReconnector` (R12.5):
+  `SseReconnecting(attempt, delay, cause)` before each attempt,
+  `Last-Event-ID`, the server's `retry` (also above the cap) or 1 s
+  doubling to 30 s, 5 attempts in a row without a message (a message resets
+  the count: a stream of ignored heartbeats is not given up), all in
+  `SseOptions` with an injectable `wait` (the default is a
+  `CancellableWait`, a timer a cancel stops, so a cancelled stream does not
+  keep the program alive). `SseReconnection` is the operation's policy:
+  `off` (a POST that does not enable it; the call cannot), `onRequest`
+  (GET), `on`. Cancel, an error status (the `Failure` is the cause) and 204
+  end the stream; a listener cancel also aborts a request that is in flight
+  (`SseReconnector.onCancel`); a pause of the listener, also during a wait
+  or a reopen, holds the next connection; an exception or `Error` thrown on
+  an attempt, by a `wait` or an interceptor, is the stream's one error,
+  never the zone's. An event id that is not printable ASCII, space or tab is
+  not sent as `Last-Event-ID`, on the web too (a browser would send UTF-8,
+  but the VM's `HttpClient` rejects it and every reconnection would fail),
+  and the reconnection goes on without it. Use
   `transformer.bind(stream)`, not `stream.transform`: Dio gives a
   `Stream<Uint8List>`.
 
 Runtime tests never touch the network: Dio gets `FakeAdapter`
-(`test/helpers/fake_adapter.dart`). They also run in Chrome (the two
+(`test/helpers/fake_adapter.dart`), or `GatedAdapter` when a test holds an
+answer back (`test/helpers/gated_adapter.dart`). They also run in Chrome (the two
 commands above; `CHROME_EXECUTABLE` if Chrome is not found): a file that
 needs the VM (`dart:io`, int64 literals, which dart2js rejects) carries
 `@TestOn('vm')`, a single test `testOn: 'vm'`, and `test/dio/web_test.dart`

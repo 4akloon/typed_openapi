@@ -30,6 +30,9 @@ final class DartCode {
         0x85 ||
         0x2028 ||
         0x2029 ||
+        0x061c ||
+        0x200e ||
+        0x200f ||
         (>= 0x202a && <= 0x202e) ||
         (>= 0x2066 && <= 0x2069) ||
         (>= 0xd800 && <= 0xdfff) => '\\u{${unit.toRadixString(16)}}',
@@ -147,7 +150,7 @@ final class DartCode {
   static final _lineBreaks = RegExp('[\r\n\u2028\u2029\u0085]+');
   static final _lineBreak = RegExp('\r\n?|[\u2028\u2029\u0085]');
   static final _dropped = RegExp(
-    '[\x00-\x08\x0b-\x1f\x7f\u202a-\u202e\u2066-\u2069]',
+    '[\x00-\x08\x0b-\x1f\x7f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]',
   );
   static final _loneSurrogate = RegExp(
     '[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]',

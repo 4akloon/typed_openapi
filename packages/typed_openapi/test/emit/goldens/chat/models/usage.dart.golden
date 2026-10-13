@@ -1,0 +1,32 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND.
+// dart format off
+
+import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'
+    show DeepEquality, JsonReader, immutable;
+
+@immutable
+class Usage {
+  /// Creates a [Usage].
+  const Usage({required this.tokens});
+
+  /// Decodes a [Usage] from [json]; throws a `JsonDecodeException` when it does
+  /// not match the schema.
+  factory Usage.fromJson(Map<String, Object?> json) {
+    final r = JsonReader(json, schema: 'Usage');
+    return Usage(tokens: r.required('tokens', JsonReader.asInt));
+  }
+
+  final int tokens;
+
+  /// Encodes this [Usage]; optional fields that are not set are not sent.
+  Map<String, Object?> toJson() => {'tokens': tokens};
+
+  @override
+  bool operator ==(Object other) => other is Usage && other.tokens == tokens;
+
+  @override
+  int get hashCode => const DeepEquality().hash([tokens]);
+
+  @override
+  String toString() => 'Usage(tokens: $tokens)';
+}

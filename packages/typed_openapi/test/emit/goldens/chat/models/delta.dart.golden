@@ -1,0 +1,43 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND.
+// dart format off
+
+import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'
+    show DeepEquality, JsonReader, immutable;
+
+@immutable
+class Delta {
+  /// Creates a [Delta].
+  const Delta({required this.part, this.sessionToken});
+
+  /// Decodes a [Delta] from [json]; throws a `JsonDecodeException` when it does
+  /// not match the schema.
+  factory Delta.fromJson(Map<String, Object?> json) {
+    final r = JsonReader(json, schema: 'Delta');
+    return Delta(
+      part: r.required('part', JsonReader.asString),
+      sessionToken: r.optional('sessionToken', JsonReader.asString),
+    );
+  }
+
+  final String part;
+
+  final String? sessionToken;
+
+  /// Encodes this [Delta]; optional fields that are not set are not sent.
+  Map<String, Object?> toJson() => {
+    'part': part,
+    'sessionToken': ?sessionToken,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is Delta &&
+      other.part == part &&
+      other.sessionToken == sessionToken;
+
+  @override
+  int get hashCode => const DeepEquality().hash([part, sessionToken]);
+
+  @override
+  String toString() => 'Delta(part: $part, sessionToken: <redacted>)';
+}

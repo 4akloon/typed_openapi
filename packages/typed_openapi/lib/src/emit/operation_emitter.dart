@@ -4,6 +4,8 @@ import '../ir/names.dart';
 import 'dart_code.dart';
 import 'dart_writer.dart';
 import 'decoder_writer.dart';
+import 'event_stream_writer.dart';
+import 'event_union_emitter.dart';
 import 'parts_emitter.dart';
 import 'request_writer.dart';
 import 'status_type_emitter.dart';
@@ -20,14 +22,17 @@ import 'type_codec.dart';
 /// Every argument is named and the last one is `CallOptions? call`; a
 /// method returns `Future<Result<T, E>>` and never throws for a response.
 final class OperationEmitter {
-  /// Creates an emitter that writes with [_codec].
-  OperationEmitter(this._codec)
+  /// Creates an emitter that writes with [codec].
+  OperationEmitter(TypeCodec codec) : this._(codec, DecoderWriter(codec));
+
+  OperationEmitter._(this._codec, this._decoder)
     : _request = RequestWriter(_codec),
-      _decoder = DecoderWriter(_codec);
+      _events = EventStreamWriter(_decoder);
 
   final TypeCodec _codec;
   final RequestWriter _request;
   final DecoderWriter _decoder;
+  final EventStreamWriter _events;
 
   static const _code = DartCode();
   static const _names = DartNames();
@@ -78,6 +83,10 @@ final class OperationEmitter {
       if (operation.partsName case final parts?) {
         out.line();
         PartsEmitter(_codec).write(out, parts, operation, group);
+      }
+      if (operation.events?.union case final union?) {
+        out.line();
+        EventUnionEmitter(_codec).write(out, union, operation, group);
       }
     }
   }
@@ -165,10 +174,12 @@ final class OperationEmitter {
     }
     out.list(
       'Future<Result<${_decoder.successType(operation)}, '
-          '${_decoder.errorType(operation)}>> '
-          '${operation.name}({',
+      '${_decoder.errorType(operation)}>> '
+      '${operation.name}({',
       _arguments(operation),
-      '}) => _sender.send(',
+      operation.events == null
+          ? '}) => _sender.send('
+          : '}) => _sender.openEvents(',
     );
     out.indented(() => _send(out, operation, info, decoder));
     out.line(');');
@@ -208,11 +219,19 @@ final class OperationEmitter {
       _request.body(out, operation);
       final kind = DecoderWriter.responseKind(operation);
       if (kind != 'json') out.line('responseKind: .$kind,');
+      if (operation.accept case final accept?) {
+        out.line('accept: ${_code.string(accept)},');
+      }
+      if (operation.events != null) _events.statuses(out, operation);
     });
+    out.line('),');
+    if (operation.events case final events?) {
+      out.line('${_events.decoder(events)},');
+    }
     out
-      ..line('),')
       ..line('$decoder,')
       ..line('call: call,');
+    if (operation.events case final events?) _events.reconnection(out, events);
   }
 
   /// The declaration of a named argument of the Dart type [declared]:
@@ -241,6 +260,11 @@ final class OperationEmitter {
     out.doc(operation.description);
     if (operation.summary != null || operation.description != null) {
       out.line('///');
+    }
+    if (operation.events case final events?) {
+      out
+        ..prose(_events.doc(events, method: operation.method))
+        ..line('///');
     }
     out.prose(
       '`${_code.docSpan('${operation.method} ${operation.path}')}`'

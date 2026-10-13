@@ -67,6 +67,35 @@ paths:
       responses:
         "200": {description: ok, content: {application/json: {schema: {type: object, properties: {data: {type: string}}, required: [data]}}}}
         "400": {description: bad, content: {application/json: {schema: {type: object, properties: {c: {type: string}}}}}}
+  /feed:
+    get:
+      operationId: feed
+      tags: [files]
+      responses:
+        "200": {description: ok, content: {text/event-stream: {schema: {type: object, properties: {n: {type: integer}}}}}}
+  /chat:
+    get:
+      operationId: chat
+      tags: [files]
+      responses:
+        "200":
+          description: ok
+          content:
+            text/event-stream:
+              itemSchema:
+                oneOf:
+                  - {properties: {event: {const: token}, data: {type: string, format: password}}}
+                  - {properties: {event: {const: done}}}
+  /talk:
+    get:
+      operationId: talk
+      tags: [files]
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json: {schema: {type: object, properties: {n: {type: integer}}}}
+            text/event-stream: {schema: {type: object, properties: {n: {type: integer}}}}
 components:
   securitySchemes:
     key: {type: apiKey, name: X-Key, in: header}
@@ -109,6 +138,9 @@ final _classes = <Type>[
   ClientIr,
   GroupIr,
   OperationIr,
+  EventStreamIr,
+  EventUnionIr,
+  EventVariantIr,
   ParameterIr,
   RequestBodyIr,
   ResponseIr,
@@ -223,6 +255,11 @@ void main() {
     });
     expect(upload['sensitiveErrors'], ['404']);
     expect(upload['partsName'], 'UploadRequest');
+  });
+
+  test('the Accept of the method that returns the body is written', () {
+    expect(_operation(json, 'talk')['accept'], 'application/json');
+    expect(_operation(json, 'talkStream').containsKey('accept'), isFalse);
   });
 }
 

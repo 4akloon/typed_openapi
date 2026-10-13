@@ -74,6 +74,7 @@ void main() {
   String describe(SseItem<Delta> item) => switch (item) {
     SseEvent(:final data) => data.text,
     SseDecodeError(:final error) => 'error ${error.pointer}',
+    SseReconnecting(:final attempt) => 'reconnecting $attempt',
     SseDisconnected(cause: final DioException cause) =>
       'end ${cause.type.name}',
     SseDisconnected(:final cause) => 'end ${cause ?? 'closed'}',

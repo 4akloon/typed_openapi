@@ -21,12 +21,17 @@ final class MediaTypePicker {
   /// streams and anything else, each in document order. [location] is the
   /// object that has [content] and [what] says what it is. The media types
   /// that are dropped are reported (TOA651), and so is a chosen one that
-  /// becomes bytes and takes its schema with it (TOA650).
+  /// becomes bytes and takes its schema with it (TOA650). An event stream
+  /// is not dropped when [hasStreamMethod]: another method returns it. It is
+  /// not chosen either when [chooseEvents] is false, whatever else is
+  /// offered: a stream is not the body of a method that returns the body.
   (String?, MediaType?) pick(
     Map<String, RefOr<MediaType>> content,
     SpecLocation location,
-    String what,
-  ) {
+    String what, {
+    bool hasStreamMethod = false,
+    bool chooseEvents = true,
+  }) {
     if (content.isEmpty) return (null, null);
     const preference = [
       BodyKind.json,
@@ -37,10 +42,17 @@ final class MediaTypePicker {
       BodyKind.bytes,
     ];
     for (final kind in preference) {
+      if (kind == .eventStream && !chooseEvents) continue;
       for (final type in content.keys) {
         if (kindOf(type) != kind) continue;
         final media = _context.model.resolve(content[type]!);
-        _reportDropped(content, type, location, what);
+        _reportDropped(
+          content,
+          type,
+          location,
+          what,
+          hasStreamMethod: hasStreamMethod,
+        );
         final schema = media?.schema;
         if (kind == .bytes && schema != null) {
           _reportBytes(schema, type, location, what);
@@ -59,11 +71,13 @@ final class MediaTypePicker {
     Map<String, RefOr<MediaType>> content,
     String type,
     SpecLocation location,
-    String what,
-  ) {
+    String what, {
+    required bool hasStreamMethod,
+  }) {
     final dropped = [
       for (final other in content.keys)
         if (other != type &&
+            !(hasStreamMethod && kindOf(other) == .eventStream) &&
             MediaTypeName(other).base != MediaTypeName(type).base &&
             !(kindOf(type) == .json && kindOf(other) == .json))
           other,

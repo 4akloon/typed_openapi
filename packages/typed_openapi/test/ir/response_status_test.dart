@@ -23,9 +23,11 @@ components:
     Item: {type: object, properties: {id: {type: string}}}
 ''';
 
-String body(String schema) =>
+/// A response with a JSON object body whose only property is [property],
+/// so that bodies with different properties have different types.
+String bodyWith(String property) =>
     '{description: d, content: {application/json: {schema: '
-    '{type: object, properties: {$schema: {type: string}}}}}}';
+    '{type: object, properties: {$property: {type: string}}}}}}';
 
 (ClientIr, IrFixture) build(Map<String, String> responses) {
   final fixture = IrFixture(specOf(responses));
@@ -43,8 +45,8 @@ void main() {
   group('a response key that is not an HTTP status', () {
     test('never reaches a name: it is reported and skipped', () {
       final (ir, fixture) = build({
-        '''"200'; injected(); '"''': body('a'),
-        '"2XX"': body('b'),
+        '''"200'; injected(); '"''': bodyWith('a'),
+        '"2XX"': bodyWith('b'),
       });
       expect(statuses(ir), ['2XX']);
       expect(fixture.codes, [
@@ -72,7 +74,10 @@ void main() {
       '"٢٠٠"',
     ]) {
       test('$key is reported (TOA657) and its response is skipped', () {
-        final (ir, fixture) = build({'"200"': body('a'), key: body('b')});
+        final (ir, fixture) = build({
+          '"200"': bodyWith('a'),
+          key: bodyWith('b'),
+        });
         expect(statuses(ir), ['200']);
         expect(
           [for (final (code, _) in fixture.codes) code],
@@ -84,7 +89,10 @@ void main() {
     }
 
     test('names the key and what is accepted', () {
-      final (_, fixture) = build({'"200"': body('a'), '"20X"': body('b')});
+      final (_, fixture) = build({
+        '"200"': bodyWith('a'),
+        '"20X"': bodyWith('b'),
+      });
       final message = fixture.reported.single.message;
       expect(message, contains('"20X"'));
       expect(message, contains('4XX'));
@@ -95,17 +103,20 @@ void main() {
   group('a valid response key', () {
     test('is accepted as a code, a range in either case or default', () {
       final (ir, fixture) = build({
-        '"201"': body('a'),
-        '"4xx"': body('b'),
-        '"5XX"': body('c'),
-        'default': body('d'),
+        '"201"': bodyWith('a'),
+        '"4xx"': bodyWith('b'),
+        '"5XX"': bodyWith('c'),
+        'default': bodyWith('d'),
       });
       expect(statuses(ir), ['201', '4XX', '5XX', 'default']);
       expect(fixture.reported, isEmpty);
     });
 
     test('written as 2xx and 2XX is a duplicate: the second is reported', () {
-      final (ir, fixture) = build({'"2XX"': body('a'), '"2xx"': body('b')});
+      final (ir, fixture) = build({
+        '"2XX"': bodyWith('a'),
+        '"2xx"': bodyWith('b'),
+      });
       expect(statuses(ir), ['2XX']);
       expect(fixture.codes, [
         (DiagnosticCode.responseStatusInvalid, '#/paths/~1a/get/responses/2xx'),
@@ -116,7 +127,10 @@ void main() {
   group('a documented 1xx or 3xx response', () {
     for (final key in ['"100"', '"1XX"', '"301"', '"3XX"', '"304"']) {
       test('$key is reported as info (TOA658) and not generated', () {
-        final (ir, fixture) = build({'"200"': body('a'), key: body('b')});
+        final (ir, fixture) = build({
+          '"200"': bodyWith('a'),
+          key: bodyWith('b'),
+        });
         expect(statuses(ir), ['200']);
         expect(fixture.codes, [
           (
@@ -129,15 +143,18 @@ void main() {
     }
 
     test('is an undocumented status at run time, or the default one', () {
-      final (_, plain) = build({'"200"': body('a'), '"304"': body('b')});
+      final (_, plain) = build({
+        '"200"': bodyWith('a'),
+        '"304"': bodyWith('b'),
+      });
       expect(
         plain.reported.single.message,
         contains('an undocumented status (UndocumentedStatus)'),
       );
       final (_, caught) = build({
-        '"200"': body('a'),
-        '"304"': body('b'),
-        'default': body('c'),
+        '"200"': bodyWith('a'),
+        '"304"': bodyWith('b'),
+        'default': bodyWith('c'),
       });
       final message = caught.reported.single.message;
       expect(message, contains('handled by the default response'));
@@ -146,8 +163,8 @@ void main() {
 
     test('does not declare a model for its body', () {
       final (ir, _) = build({
-        '"200"': body('a'),
-        '"304"': body('b'),
+        '"200"': bodyWith('a'),
+        '"304"': bodyWith('b'),
       });
       expect(ir.declarations.map((d) => d.name), ['ReadResponse']);
     });
@@ -156,7 +173,10 @@ void main() {
   test(
     'an operation whose only 2xx key is invalid has no success (TOA653)',
     () {
-      final (_, fixture) = build({'"20X"': body('a'), '"404"': body('b')});
+      final (_, fixture) = build({
+        '"20X"': bodyWith('a'),
+        '"404"': bodyWith('b'),
+      });
       expect(
         [for (final (code, _) in fixture.codes) code],
         [
