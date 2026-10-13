@@ -97,8 +97,11 @@ final class UnionNotices {
   }
 
   /// [value] of an enum as it is written in a Dart list, for a message.
-  static String _valueText(Object? value) =>
-      value is String ? "'${value.replaceAll("'", r"\'")}'" : '$value';
+  static String _valueText(Object? value) {
+    if (value is! String) return MessageText.neutralise('$value');
+    final escaped = value.replaceAll(r'\', r'\\').replaceAll("'", r"\'");
+    return "'${MessageText.neutralise(escaped)}'";
+  }
 
   /// Reports the discriminator of [schema], which is generated as a model
   /// because it is no union and no schema extends it: it picks nothing.
@@ -164,8 +167,8 @@ final class UnionNotices {
   void mappingToBase(Discriminator discriminator, String value) {
     _context.report(
       .discriminatorMappingNotVariant,
-      'Discriminator value "$value" maps to the base schema itself, '
-      'which is generated as the union of its subtypes; a value with '
+      'Discriminator value ${MessageText.quote(value)} maps to the base '
+      'schema itself, which is generated as the union of its subtypes; a value with '
       'it is decoded as unknown, with its JSON kept.',
       discriminator.location.child('mapping').child(value),
       fix: 'Map the value to a schema that extends the base.',
@@ -177,8 +180,8 @@ final class UnionNotices {
   void mappingNotVariant(Discriminator discriminator, String value) {
     _context.report(
       .discriminatorMappingNotVariant,
-      'Discriminator value "$value" maps to a schema that is not a '
-      'variant of this union; it is ignored.',
+      'Discriminator value ${MessageText.quote(value)} maps to a schema that '
+      'is not a variant of this union; it is ignored.',
       discriminator.location.child('mapping').child(value),
       fix: "Map the value to one of the union's variants.",
     );
@@ -217,9 +220,9 @@ final class UnionNotices {
   void valueDuplicate(String value, Schema variant) {
     _context.report(
       .discriminatorValueDuplicate,
-      'Discriminator value "$value" also selects an earlier variant; '
-      'the earlier one decodes it, so this variant is never picked by '
-      'that value.',
+      'Discriminator value ${MessageText.quote(value)} also selects an '
+      'earlier variant; the earlier one decodes it, so this variant is never '
+      'picked by that value.',
       variant.location,
       fix:
           'Give each variant its own discriminator value, in the '
@@ -232,8 +235,8 @@ final class UnionNotices {
   void defaultNotVariant(Discriminator discriminator, String ref) {
     _context.report(
       .discriminatorMappingNotVariant,
-      'The default mapping "$ref" is not a variant of this union; it '
-      'is ignored.',
+      'The default mapping ${MessageText.quote(ref)} is not a variant of '
+      'this union; it is ignored.',
       discriminator.location.child('defaultMapping'),
       fix: "Map the default to one of the union's variants.",
     );
