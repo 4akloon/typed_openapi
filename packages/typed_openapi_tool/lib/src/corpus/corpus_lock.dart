@@ -57,7 +57,8 @@ final class CorpusLock {
 
   /// The differences from the [expected] lock, one line each: clients that
   /// appeared or are gone, files added, removed or changed, codes whose count
-  /// changed, and round-trip counts (`values`) that changed. Empty when the locks are equal.
+  /// changed, and round-trip counts (`values`) that changed. Empty when the
+  /// locks are equal.
   List<String> differencesFrom(CorpusLock expected) {
     final keys = {...clients.keys, ...expected.clients.keys}.toList()..sort();
     return [

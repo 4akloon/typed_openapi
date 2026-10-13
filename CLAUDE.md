@@ -66,7 +66,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   rule descriptions and help (the help says whether the level can be
   lowered), a partial fingerprint per result, a region for every physical
   location, line 1 for a file without a position, and `defaultFile`, the
-  config `check` passes, for a result without a file), `GitHubActionsReporter`, `ReportFormat`).
+  config `check` passes, for a result without a file),
+  `GitHubActionsReporter`, `ReportFormat`).
 - `load/` - `SpecLoader` reads JSON/YAML into a `SpecDocument` (plain tree,
   absolute file URI, source spans by JSON pointer, `valueAt(pointer)`,
   `withRoot`) through `YamlComposer`, which `ConfigLoader` uses too.
@@ -790,8 +791,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `ModelConstructors`, `EnumEmitter`, `UnionEmitter`, `DiscriminatorDecoder`,
   `UnionVariants`, and the API emitters (`ApiLibrary` aside),
   `OperationEmitter`, `RequestWriter`, `DecoderWriter`, `PartsEmitter`,
-  `StatusTypeEmitter`: `generate` runs them, there is no public entry
-  point yet), the
+  `StatusTypeEmitter`: `generate` runs them through `ApiLibrary`, the one
+  public entry point), the
   internals of `parse/` (`OpenApiParser`, `OperationParser`, `SchemaParser`,
   `ObjectReader`, `ParseContext`, `SpecIndex`, `DialectChecker`), `resolve/`
   (`RefTarget`, `RefResolver`), `normalize/` (`TreeEditor`, the rule
