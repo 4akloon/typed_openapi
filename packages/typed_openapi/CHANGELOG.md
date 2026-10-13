@@ -44,7 +44,8 @@
 
 ### Added
 - `ApiLibrary` is exported: the files of a whole client from its IR, as
-  `generate` writes them (M11).
+  `generate` writes them (M11). The programmatic guide now writes a whole
+  client with it, and a test checks the files equal those of `generate`.
 - Event streams (M10): an operation whose success is `text/event-stream` is
   generated. A stream method returns `Future<Result<Stream<SseItem<T>>, E>>`
   and uses `DioRequestSender.openEvents`; its `streamStatuses` are the 2xx

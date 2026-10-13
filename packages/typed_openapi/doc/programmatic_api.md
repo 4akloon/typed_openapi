@@ -2,7 +2,7 @@
 
 The library `package:typed_openapi/typed_openapi.dart` exposes the pipeline the command line uses: load a config, check the specs, build the semantic model of each client, write files. It is meant for tools that wrap the generator (a build script, an editor plugin, a test). Everything the CLI reports is also available as data.
 
-> **Note:** The API is pre-release (version 0.0.1) and may change before 1.0. The emitter for the operation classes is not exported yet: from the library you can write the model files of a client (`ModelLibrary`), not the whole client that `generate` writes. To write the whole client, run [`typed_openapi generate`](cli.md#generate) through `TypedOpenApiCli`.
+> **Note:** The API is pre-release (version 0.0.1) and may change before 1.0. `ApiLibrary` writes the whole client that [`typed_openapi generate`](cli.md#generate) writes; `ModelLibrary` writes only its model files.
 
 ## Entry points
 
@@ -13,13 +13,14 @@ The library `package:typed_openapi/typed_openapi.dart` exposes the pipeline the 
 | `ConfigLoader` | `load(path)` reads `typed_openapi.yaml` into a `ProjectConfig` (its `clients` are `ClientConfig`s). It returns `null` when the file is missing or unusable, with the reason in the bag (TOA901, TOA902). |
 | `SpecChecker` | `check(config, {only, strictBaseline})` checks every client and applies its levels and baseline; `checkClients` does the same without baselines. Both return one `ClientCheck` per client. |
 | `ClientCheck` | The result for one client: `client`, `diagnostics`, `errors` (errors left after levels and baseline), `ir` (`null` when the spec could not be read), `irJson`, and `sources` (the files that were read). |
+| `ApiLibrary` | `files(ir, client: name)` returns every file of the client, as `generate` writes them: the models, a file per group in `api/` with the barrel `api.dart`, and the root client `<client>.dart`, as a map from path to text sorted by path. `ApiLibrary(width: 80)` sets the line width (`ClientConfig.lineWidth`). |
 | `ModelLibrary` | `files(ir)` returns the model files (`models/<name>.dart` and the barrel `models.dart`) as a map from path to text, sorted by path. |
 | `OutputWriter` | `write(client, files, inputs: ...)` writes a map of files into the client's output directory with the [atomic, ownership-checked procedure](generate_output.md) and returns an `OutputChanges` (`written`, `unchanged`, `deleted`, `forced`), or `null` after reporting why nothing was written. |
 | `TextReporter`, `JsonReporter`, `SarifReporter`, `GitHubActionsReporter` | Turn a bag into the [report formats](cli.md#formats). |
 
 The library also exports the loader (`SpecLoader`, `SpecDocument`), the typed model of the spec (`OpenApiDocument` and the other OpenAPI objects), the normalizer (`Normalizer`, `NormalizerRule`, `Finding`, `SpecEdit`), the overrides reader (`OverrideLoader`, `OverrideSet`), the baseline classes (`Baseline`, `BaselineLoader`) and the IR (`IrBuilder`, `ClientIr`, `DartType`, ...). Each has a doc comment in the source; this guide covers the path from config to files.
 
-## Check a config and write the models
+## Check a config and write the client
 
 `pets.yaml` has one client, and `specs/pets.yaml` is a spec with a `Pet` schema and one `GET /pets` operation:
 
@@ -45,7 +46,8 @@ void main() {
   for (final check in checks) {
     final ir = check.ir;
     if (ir == null || check.errors > 0) continue;
-    final files = const ModelLibrary(width: 80).files(ir);
+    final files = ApiLibrary(width: check.client.lineWidth)
+        .files(ir, client: check.client.name);
     final changes = OutputWriter(diagnostics)
         .write(check.client, files, inputs: 'my-run');
     if (changes == null) continue;
@@ -57,13 +59,17 @@ void main() {
 }
 ```
 
-Running it twice prints:
+Running it twice prints (the spec has no tags, hence the info TOA554; the output was analysed with `dart analyze` and has no issues):
 
 ```text
-errors: 0, warnings: 0, infos: 0
-pets: models.dart, models/pet.dart; 2 written, 0 unchanged
-errors: 0, warnings: 0, infos: 0
-pets: models.dart, models/pet.dart; 0 written, 2 unchanged
+info TOA554 operation-untagged: No operation of the spec has a tag, so all operations are in DefaultApi.
+  --> specs/pets.yaml:4:3
+  at #/paths
+  fix: Tag the operations at the source, or set group_by to path or single in the config.
+errors: 0, warnings: 0, infos: 1
+pets: api.dart, api/default_api.dart, models.dart, models/pet.dart, models/pet_status.dart, pets.dart; 6 written, 0 unchanged
+(the same report again)
+pets: api.dart, api/default_api.dart, models.dart, models/pet.dart, models/pet_status.dart, pets.dart; 0 written, 6 unchanged
 ```
 
 Notes on the example:
