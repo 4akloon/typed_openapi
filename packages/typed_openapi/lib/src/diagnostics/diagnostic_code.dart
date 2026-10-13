@@ -288,6 +288,17 @@ enum DiagnosticCode {
     .warning,
   ),
 
+  /// A `$ref` variant that the discriminator's `mapping` does not name fixes
+  /// the discriminator property to one value (a `const` or a one-value
+  /// `enum`, also through a `$ref` or an `allOf` part) that is not its
+  /// component name: that value selects it, not the name OpenAPI implies
+  /// (OpenAI's tool unions). An explicit `mapping` entry always wins.
+  discriminatorValueDerived(
+    'TOA457',
+    'discriminator-value-derived',
+    .info,
+  ),
+
   /// A variable of the path template has no path parameter; one is added.
   missingPathParameter('TOA501', 'missing-path-parameter', .warning),
 

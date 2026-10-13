@@ -79,8 +79,7 @@ final class SyntheticValues {
     final value = _value(variant.type, depth + 1);
     final property = union.discriminator;
     if (property == null || value == null) return value;
-    final values = variant.discriminatorValues;
-    if (values.isEmpty || _fixes(variant.type, property, values)) return null;
+    if (variant.discriminatorValues.isEmpty) return null;
     return switch (value.$1) {
       final Map<String, Object?> object => (
         {...object, property: variant.discriminatorValues.first},
@@ -88,23 +87,6 @@ final class SyntheticValues {
       _ => value,
     };
   }
-
-  /// Whether the model [type] fixes the discriminator [property] to a
-  /// constant that none of the variant's discriminator [values] is: no JSON
-  /// selects such a variant (OpenAI's unions without a mapping).
-  bool _fixes(DartType type, String property, List<String> values) =>
-      switch (type) {
-        NamedType(:final id) => switch (_byId[id]) {
-          ModelDecl(:final fields) => fields.any(
-            (f) =>
-                f.jsonKey == property &&
-                f.constValue != null &&
-                !values.contains(f.constValue),
-          ),
-          _ => false,
-        },
-        _ => false,
-      };
 
   (Object?,)? _value(DartType type, int depth) {
     if (depth > maxDepth) return null;

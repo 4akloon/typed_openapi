@@ -194,6 +194,21 @@ final class UnionNotices {
     );
   }
 
+  /// Reports that the constant [value] of the discriminator property of
+  /// [variant], not its component name [key], selects it.
+  void valueDerived(String value, String key, Schema variant) {
+    _context.report(
+      .discriminatorValueDerived,
+      'The mapping does not name this variant, and its discriminator '
+      'property is always "$value", so "$value" selects it, not the '
+      'component name "$key".',
+      variant.location,
+      fix:
+          'Add "$value" to the mapping to say so, or map the name "$key" '
+          'if the payloads carry it.',
+    );
+  }
+
   /// Reports the discriminator [value] that also selects the earlier
   /// variant, so [variant] is never picked by it.
   void valueDuplicate(String value, Schema variant) {

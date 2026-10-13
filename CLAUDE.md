@@ -480,7 +480,7 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   is missing from the dump; the
   hidden `typed_openapi ir` command prints it. Naming and mapping codes use
   the second half of each area's hundred: TOA250-TOA256, TOA350-TOA351,
-  TOA450-TOA456, TOA550-TOA565, and media types, errors and event streams
+  TOA450-TOA457, TOA550-TOA565, and media types, errors and event streams
   TOA650-TOA671 (TOA654 and TOA663-TOA671 are event streams; TOA561 became
   TOA650 and TOA651, TOA562 TOA652, the querystring half of
   TOA564 TOA565); `generate` has TOA830 (output not owned),
@@ -523,7 +523,12 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   shares its type is `JsonValue` (TOA453), also when a variant takes any
   JSON, which makes the union structural with TOA453; duplicate variant
   types are dropped (TOA454); two variants selected by one discriminator
-  value are TOA456 (the earlier one decodes it). A nested union without a
+  value are TOA456 (the earlier one decodes it). A variant the `mapping`
+  does not name is selected by the value its discriminator property is
+  fixed to (a `const` or a one-value `enum`, also through a `$ref` or an
+  `allOf` part), else by its component name; TOA457 (info) reports a fixed
+  value that differs from the name (OpenAI), and a `mapping` entry always
+  wins. A nested union without a
   discriminator counts as holding several JSON types, also when the user
   made it `structural`. In a union without a discriminator an inline enum
   or `const` of a primitive type next to a branch of that type that has all

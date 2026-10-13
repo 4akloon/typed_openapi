@@ -1,5 +1,12 @@
 ## 0.0.1 - Unreleased
 
+### Output changes
+- A discriminator variant that the `mapping` does not name and that fixes
+  the discriminator property to one value is selected by that value, not
+  by its component name (TOA457, info). OpenAI's unions now decode real
+  payloads (`{"type": "function"}` is a `FunctionTool`); in the corpus the
+  `openai` client's union files change (M11).
+
 ### Added
 - Event streams (M10): an operation whose success is `text/event-stream` is
   generated. A stream method returns `Future<Result<Stream<SseItem<T>>, E>>`
