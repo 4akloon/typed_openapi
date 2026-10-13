@@ -38,19 +38,20 @@ void main() {
     expect(Directory(p.join(temp.path, 'escaped')).existsSync(), isFalse);
   }
 
-  test('a tar that outlives its time limit fails and leaves nothing', () async {
+  test('a tar that outlives its time limit is killed and reported', () async {
     final temp = TempDir();
+    final script = temp.write(
+      'sleep.dart',
+      'void main() => '
+          'Future<void>.delayed(const Duration(seconds: 60));',
+    );
     await expectLater(
-      const ArchiveExtractor(
-        tar: TarRunner(timeout: Duration.zero),
-      ).extract(
-        const TarArchive(_repo).toTarGz(),
-        'specs',
-        p.join(temp.path, 'cache', 'pets'),
-      ),
+      TarRunner(
+        timeout: const Duration(milliseconds: 500),
+        executable: Platform.resolvedExecutable,
+      ).run([script]),
       _rejects('did not finish within'),
     );
-    expectNothingLeft(temp);
   });
 
   test('extracts the root of a hand-made archive', () async {

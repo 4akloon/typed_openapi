@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:args/args.dart';
 import 'package:args/command_runner.dart';
 import 'package:path/path.dart' as p;
 
@@ -71,9 +72,9 @@ final class LockCommand extends Command<int> {
       );
   }
 
-  @override
-  Future<int> run() async {
-    final results = argResults!;
+  /// Throws a [UsageException] for a name that is no spec, and for any name
+  /// given to `update`.
+  void _checkNames(ArgResults results) {
     FetchCommand.checkNames(results, usage);
     if (_writes && results.rest.isNotEmpty) {
       throw UsageException(
@@ -82,6 +83,12 @@ final class LockCommand extends Command<int> {
         usage,
       );
     }
+  }
+
+  @override
+  Future<int> run() async {
+    final results = argResults!;
+    _checkNames(results);
     final specs = FetchCommand.specsOf(results);
     final lockFile = File(results.option('lock')!);
     // A lock that cannot be read fails before the long run.
@@ -105,6 +112,15 @@ final class LockCommand extends Command<int> {
       if (!_writes && expected == null)
         '${lockFile.path} does not exist: run corpus update.',
     ];
+    _report(result, lockFile, differences);
+    return result.failures.isEmpty && differences.isEmpty ? 0 : 1;
+  }
+
+  void _report(
+    CorpusResult result,
+    File lockFile,
+    List<String> differences,
+  ) {
     result.failures.forEach(_err.writeln);
     for (final failure in result.roundTrips) {
       _err.writeln('round trip: $failure');
@@ -117,7 +133,6 @@ final class LockCommand extends Command<int> {
     }
     differences.forEach(_out.writeln);
     _out.writeln(_summary(result.lock, differences));
-    return result.failures.isEmpty && differences.isEmpty ? 0 : 1;
   }
 
   /// Lists the examples that do not match their own schema, the first
