@@ -52,7 +52,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `severity` config), `JsonPointer`, `DiagnosticBag` (baselined diagnostics kept
   apart), `DisplayPaths` (files relative to the working directory, absolute
   outside it), `MessageText` (spec text in a message: `quote` writes
-  `"`, `\`, controls and bidirectional marks as escapes, as the event
+  `"`, `\`, controls, bidirectional marks and lone surrogates as escapes
+  (a lone surrogate as its code point, `\u{d800}`), as the event
   names of TOA551/TOA559/TOA667/TOA668 are; `neutralise` is what the text
   and GitHub reporters apply to every message, fix and related message, and
   to every pointer and file location they print, so an ESC byte or a
@@ -852,7 +853,11 @@ generator's public API only. Its network use is the `SpecCache` download
   `dart format --set-exit-if-changed`; then a `RoundTrip` per client),
   `CorpusLock`/`ClientLock`, and the commands `fetch` (a name that is
   neither a spec nor a schema is a usage error, exit 64), `update` and
-  `check`, which `CorpusCli` runs with `semver`.
+  `check`, which `CorpusCli` runs with `semver`. `update` and `check` give
+  an unknown name the same usage error; `update` takes no names (a partial
+  update would drop the other clients from the lock), and `check` with
+  names compares only the clients of those specs (`CorpusLock.only`).
+  `tar` runs through `TarRunner` under a 2-minute timeout.
   `update` writes no `corpus.lock` when a gate failed (an expectation that
   does not hold, a client not generated or written by a second run, `pub
   get`, `dart analyze`, `dart format`, a round trip that did not run) and
@@ -878,12 +883,22 @@ generator's public API only. Its network use is the `SpecCache` download
   value), `RoundTripProgram` (a Dart program in the corpus package:
   `fromJson`, `toJson`, JSON text, `fromJson`, `==`), `RoundTrip`.
 - `lib/src/fuzz/` - `FuzzSpec` (a spec and an overrides file per seed, with
-  `FuzzSchemas`, `FuzzOperations` and the `Hostile` strings), `FuzzBuild`
-  (six clients of one spec, in-process with `ApiLibrary`), `LeakCheck`
-  (no smuggled line, no raw control or bidi character in code or in the
-  text report), `LiteralCheck` (`DartLiterals` finds the literals of a
-  sampled output, the VM evaluates them, and every `SpecStrings` string of
-  the IR must be among them), `FuzzRun`.
+  `FuzzSchemas`, `FuzzOperations`, `FuzzSecurity` (an API key, an OAuth 2
+  and an HTTP scheme, each with hostile names, URLs and scopes) and the
+  `Hostile` strings), `FuzzBuild` (six clients of one spec, in-process with
+  `ApiLibrary`), `SeedBuilds` (runs the two builds of a seed and names the
+  build when the generator crashes), `SeedChecks` (the two builds are
+  equal, `LeakCheck` finds nothing), `LeakCheck` (no raw control, bidi
+  character or lone surrogate in code or in the text report; no
+  `injected` call, which the hostile texts write, anywhere in the code of
+  a line outside comments and literals: `DartLiterals.masked` blanks them
+  out, line breaks kept), `LiteralCheck` (`DartLiterals` finds the literals
+  of a sampled output, the VM evaluates them, and every `SpecStrings`
+  string of the IR must be among them), `FuzzRun`; `FuzzCli` prints a
+  `CorpusException` or file-system error as one line and exits `1`. A work
+  directory (`--work`) that is not empty and has no `.typed_openapi_work`
+  marker (`CorpusPackage.marker`, written with the package) is refused, so
+  a real package is never cleaned.
 - `lib/src/semver/` - `SemverRule` and `corpus semver`: when `corpus.lock`
   (once the base has one) or a golden file changed since the base, the
   generator's CHANGELOG needs an entry under `### Output changes` in its
