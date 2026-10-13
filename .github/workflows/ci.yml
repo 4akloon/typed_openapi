@@ -63,6 +63,12 @@ jobs:
         run: dart test
         working-directory: packages/typed_openapi_runtime
 
+      # The SARIF tests read the schema from the corpus cache and fail in CI
+      # when it is missing.
+      - name: Fetch the SARIF schema
+        run: dart run bin/corpus.dart fetch sarif_schema
+        working-directory: packages/typed_openapi_tool
+
       - name: Test typed_openapi_tool
         run: dart test
         working-directory: packages/typed_openapi_tool

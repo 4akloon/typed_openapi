@@ -32,6 +32,14 @@ void main() {
     expect(at('ci.yml', [...matrix, 'include', 1, 'os']), 'windows-latest');
   });
 
+  test('the tool tests run after the SARIF schema is fetched', () {
+    final runs = runsOf('ci.yml', 'analyze-test');
+    final fetch = runs.indexOf('dart run bin/corpus.dart fetch sarif_schema');
+    expect(fetch, isNonNegative);
+    // The tool tests are the last `dart test` of the job.
+    expect(runs.lastIndexOf('dart test'), greaterThan(fetch));
+  });
+
   test('every PR runs the runtime on dart2js and dart2wasm', () {
     expect(at('ci.yml', ['jobs', 'web', 'strategy', 'matrix', 'compiler']), [
       'dart2js',

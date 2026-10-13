@@ -41,8 +41,8 @@ final class CorpusLock {
   }
 
   /// The differences from the [expected] lock, one line each: clients that
-  /// appeared or are gone, files added, removed or changed, and codes whose
-  /// count changed. Empty when the locks are equal.
+  /// appeared or are gone, files added, removed or changed, codes whose count
+  /// changed, and round-trip counts (`values`) that changed. Empty when the locks are equal.
   List<String> differencesFrom(CorpusLock expected) {
     final keys = {...clients.keys, ...expected.clients.keys}.toList()..sort();
     return [
@@ -62,6 +62,23 @@ final class CorpusLock {
         if (got.diagnostics[code] != want.diagnostics[code])
           '$key: $code ${want.diagnostics[code] ?? 0} -> '
               '${got.diagnostics[code] ?? 0}',
+      ..._values(key, got.values, want.values),
+    ];
+  }
+
+  /// The round-trip counts that differ; a client that is skipped has none.
+  static List<String> _values(
+    String key,
+    Map<String, int>? got,
+    Map<String, int>? want,
+  ) {
+    if (got == null && want == null) return const [];
+    if (want == null) return ['$key: round-trip counts added'];
+    if (got == null) return ['$key: round-trip counts removed'];
+    return [
+      for (final name in _union(got, want))
+        if (got[name] != want[name])
+          '$key: $name ${want[name] ?? 0} -> ${got[name] ?? 0}',
     ];
   }
 

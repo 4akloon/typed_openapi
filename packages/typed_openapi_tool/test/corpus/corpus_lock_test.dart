@@ -44,4 +44,49 @@ void main() {
     ]);
     expect(want.differencesFrom(want), isEmpty);
   });
+
+  group('round-trip counts', () {
+    ClientLock withValues(Map<String, int>? values) => ClientLock(
+      files: const {'api.dart': 'a'},
+      diagnostics: const {},
+      values: values,
+    );
+
+    List<String> differences(Map<String, int>? got, Map<String, int>? want) =>
+        CorpusLock({'raw/p': withValues(got)}).differencesFrom(
+          CorpusLock({'raw/p': withValues(want)}),
+        );
+
+    test('a changed count is a difference that names the count', () {
+      expect(
+        differences(
+          {'failures': 1, 'synthetic': 5},
+          {
+            'failures': 0,
+            'synthetic': 5,
+          },
+        ),
+        ['raw/p: failures 0 -> 1'],
+      );
+    });
+
+    test('a client without counts equals itself', () {
+      expect(differences(null, null), isEmpty);
+      expect(
+        const CorpusLock({'raw/z': skipped}).differencesFrom(
+          CorpusLock({'raw/z': skipped}),
+        ),
+        isEmpty,
+      );
+    });
+
+    test('gaining or losing counts is a difference', () {
+      expect(differences({'failures': 0}, null), [
+        'raw/p: round-trip counts added',
+      ]);
+      expect(differences(null, {'failures': 0}), [
+        'raw/p: round-trip counts removed',
+      ]);
+    });
+  });
 }
