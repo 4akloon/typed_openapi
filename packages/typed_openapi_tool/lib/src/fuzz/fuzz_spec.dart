@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'fuzz_operations.dart';
 import 'fuzz_schemas.dart';
+import 'fuzz_security.dart';
 import 'hostile.dart';
 
 /// The spec and the overrides file the fuzz builds from one seed.
@@ -40,25 +41,16 @@ final class FuzzSpec {
       for (var i = 0; i < 1 + random.nextInt(3); i++)
         '/p$i/{id}': _pathItem(i, random, operations, overrides),
     };
-    final scheme = schemas.pick(['key', ...Hostile.names]);
+    final security = FuzzSecurity(schemas);
     return (
       spec: jsonEncode({
         'openapi': schemas.pick(['3.0.3', '3.1.0', '3.2.0']),
         'info': {'title': schemas.pick(Hostile.texts), 'version': '1'},
         'servers': [_server(schemas)],
-        'security': [
-          {scheme: <String>[]},
-        ],
+        'security': security.requirements,
         'paths': paths,
         'components': {
-          'securitySchemes': {
-            scheme: {
-              'type': 'apiKey',
-              'in': 'header',
-              'name': schemas.pick(Hostile.names),
-              'description': schemas.pick(Hostile.texts),
-            },
-          },
+          'securitySchemes': security.schemes,
           'schemas': {
             for (final name in schemas.names) name: schemas.component(),
           },
