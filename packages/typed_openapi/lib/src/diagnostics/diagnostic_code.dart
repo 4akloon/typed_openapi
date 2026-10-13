@@ -378,7 +378,8 @@ enum DiagnosticCode {
 
   /// A security requirement names a scheme that `components.securitySchemes`
   /// does not have (or defines without a valid type), or is not an object
-  /// (a string, `null`; also TOA111): the alternative is left out of the
+  /// (a string, `null`; also TOA111), or the `security` field is not a list
+  /// (also TOA111): the alternative is left out of the
   /// operation's metadata when another one can be described, else it stays
   /// with a scheme of the kind unknown.
   securitySchemeUnknown('TOA568', 'security-scheme-unknown', .warning),

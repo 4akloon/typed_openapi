@@ -42,6 +42,7 @@ final class SecurityBuilder {
               (name: '', scopes: const [], scheme: null, isDefined: false),
           ],
           isMalformed: requirement.isMalformed,
+          isNotList: requirement.isNotList,
         ),
     ];
     final complete = [
@@ -66,9 +67,14 @@ final class SecurityBuilder {
     if (alternative.isMalformed) {
       _context.report(
         .securitySchemeUnknown,
-        'The security requirement is not an object of scheme names; $outcome.',
+        alternative.isNotList
+            ? 'The "security" field is not a list of requirements; $outcome.'
+            : 'The security requirement is not an object of scheme names; '
+                  '$outcome.',
         alternative.location,
-        fix: 'Write the requirement as an object at the source.',
+        fix: alternative.isNotList
+            ? 'Write "security" as a list of requirements at the source.'
+            : 'Write the requirement as an object at the source.',
       );
       return;
     }
@@ -122,12 +128,21 @@ final class SecurityBuilder {
 /// The schemes of one security requirement (an alternative), each with its
 /// scopes and the scheme it names, null when that is not defined.
 final class _Alternative {
-  const _Alternative(this.location, this.entries, {required this.isMalformed});
+  const _Alternative(
+    this.location,
+    this.entries, {
+    required this.isMalformed,
+    required this.isNotList,
+  });
 
   final SpecLocation location;
 
   /// Whether the requirement was not an object: its schemes are unknown.
   final bool isMalformed;
+
+  /// Whether the requirement stands for a whole `security` field that was not
+  /// a list.
+  final bool isNotList;
   final List<
     ({
       String name,

@@ -72,7 +72,7 @@ final class OpenApiParser {
             const {},
         webhooks: r.map('webhooks', _operations.pathItem) ?? const {},
         components: r.object('components', _components),
-        security: r.list('security', _operations.securityRequirement),
+        security: _operations.securityRequirements(r),
         tags: r.list('tags', _tag) ?? const [],
         extensions: r.extensions,
         unknownKeys: r.unknownKeys(),

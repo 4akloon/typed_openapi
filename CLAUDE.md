@@ -99,7 +99,9 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   parent) gets the first node and reports nothing again;
   `DialectChecker` turns the constructs into TOA020-TOA022. `ObjectReader`
   reports `$ref` objects, commented-out `$ref`s and merge keys through
-  `BundlerConstructs`; `OperationParser` reads servers through `ServerParser`.
+  `BundlerConstructs`; `OperationParser` reads servers through `ServerParser` and the `security` field
+  through `SecurityParser` (a field that is not a list is one malformed
+  requirement, `SecurityRequirement.isNotList`, with TOA111 kept).
 - `resolve/` - `RefTarget` reads a `$ref` value (a query, a bad fragment or a
   file name that is not UTF-8 after percent-decoding -> TOA100, a host ->
   TOA102), `SpecDocuments` loads other local files once by
@@ -376,7 +378,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   that is not JSON a `String` the caller supplies, TOA662); `OperationBuilder` keeps security requirements
   (an alternative that names a scheme `components.securitySchemes` does not
   define, or is not an object (`SecurityRequirement.isMalformed`, also
-  TOA111), is TOA568 and left out as a whole when another alternative can be described;
+  TOA111; a `security` field that is not a list is one such requirement at
+  the field), is TOA568 and left out as a whole when another alternative can be described;
   when none can, all stay with the scheme of kind `SecurityKind.unknown`
   (the runtime's `SecuritySchemeType.unknown`), so the metadata never says
   less than the spec: no operation reads as open or as optional), skips
