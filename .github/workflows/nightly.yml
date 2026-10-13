@@ -1,0 +1,83 @@
+name: Nightly
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+# The nightly layer of the M11 matrix (spec decision 4): the beta SDK, where
+# a failure is a warning only; the corpus on Windows; the long fuzz.
+jobs:
+  beta:
+    name: Test (beta, warning only)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: beta
+
+      - name: Install dependencies (workspace)
+        run: dart pub get
+
+      - name: Test typed_openapi
+        run: dart test
+        working-directory: packages/typed_openapi
+
+      - name: Test typed_openapi_runtime
+        run: dart test
+        working-directory: packages/typed_openapi_runtime
+
+      - name: Test the runtime in Chrome
+        run: dart test -p chrome
+        working-directory: packages/typed_openapi_runtime
+
+      - name: Check the corpus
+        run: dart run bin/corpus.dart check
+        working-directory: packages/typed_openapi_tool
+
+      - name: Report a failure as a warning
+        if: failure()
+        run: echo "::warning::The beta SDK fails the suite; see the log."
+
+  corpus-windows:
+    name: Corpus (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Install dependencies (workspace)
+        run: dart pub get
+
+      - name: Cache the corpus specs
+        uses: actions/cache@v4
+        with:
+          path: packages/typed_openapi_tool/.dart_tool/corpus/specs
+          key: corpus-specs-windows-${{ hashFiles('packages/typed_openapi_tool/corpus.yaml') }}
+
+      - name: Check the corpus against corpus.lock
+        run: dart run bin/corpus.dart check
+        working-directory: packages/typed_openapi_tool
+
+  fuzz:
+    name: Escaping fuzz (6000 seeds)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Install dependencies (workspace)
+        run: dart pub get
+
+      - name: Fuzz
+        run: dart run bin/fuzz.dart --seeds 6000
+        working-directory: packages/typed_openapi_tool
