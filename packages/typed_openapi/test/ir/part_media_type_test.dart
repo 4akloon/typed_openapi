@@ -187,5 +187,55 @@ void main() {
       ]);
       expect(fixture.reportedOf(.partMediaTypeChosen), hasLength(1));
     });
+
+    group('a value Dio would reject at call time', () {
+      // Each value is the text of a YAML double-quoted scalar.
+      const hostile = {
+        'a line break inside a quoted parameter': r'text/plain; x=\"a\nb\"',
+        'a line break between parameters': r'text/plain;\nx=y',
+        'a tab inside a quoted parameter': r'text/plain; x=\"a\tb\"',
+        'a NUL inside a quoted parameter': r'text/plain; x=\"a\0b\"',
+        'a DEL inside a quoted parameter': r'text/plain; x=\"a\x7fb\"',
+        'a control character in a quoted pair': r'text/plain; x=\"a\\\x01\"',
+        'a control character in a parameter name': r'text/plain; x\x01=y',
+      };
+
+      for (final MapEntry(key: name, value: media) in hostile.entries) {
+        test('$name falls back to no type for text, with TOA661', () {
+          final fixture = IrFixture(
+            _spec('{note: {type: string}}', '{note: {contentType: "$media"}}'),
+          );
+          expect(_parts(fixture, fixture.build()), ['note: String?, null']);
+          final [info] = fixture.reportedOf(.partMediaTypeChosen);
+          expect(info.pointer?.value, '$_pointer/note/contentType');
+        });
+
+        test('$name falls back to bytes for a file, with TOA661', () {
+          final fixture = IrFixture(
+            _spec(
+              '{avatar: {type: string, format: binary}}',
+              '{avatar: {contentType: "$media"}}',
+            ),
+          );
+          expect(_parts(fixture, fixture.build()), [
+            'avatar: Uint8List?, application/octet-stream',
+          ]);
+          expect(fixture.reportedOf(.partMediaTypeChosen), hasLength(1));
+        });
+      }
+
+      test('a quoted string with escapes and spaces is kept', () {
+        final fixture = IrFixture(
+          _spec(
+            '{note: {type: string}}',
+            r'{note: {contentType: "text/plain; a=\"x y\\\"z\"; b=c"}}',
+          ),
+        );
+        expect(_parts(fixture, fixture.build()), [
+          r'note: String?, text/plain; a="x y\"z"; b=c',
+        ]);
+        expect(fixture.reported, isEmpty);
+      });
+    });
   });
 }

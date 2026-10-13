@@ -37,6 +37,7 @@ paths:
                 history: {type: object, properties: {b: {type: string}}}
                 rows: {type: string}
                 note: {type: string}
+                broken: {type: string}
             encoding:
               avatar: {contentType: "image/png, image/jpeg"}
               scan: {contentType: "image/*"}
@@ -44,6 +45,7 @@ paths:
               history: {contentType: "application/xml; charset=utf-8"}
               rows: {contentType: "text/csv, text/plain"}
               note: {contentType: "text/*"}
+              broken: {contentType: "text/plain; x=\"a\nb\""}
       responses:
         "204": {description: ok}
   /strings:

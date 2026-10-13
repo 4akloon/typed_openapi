@@ -370,8 +370,10 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   the suffix, TOA551) and the class of
   multipart parts (`RequestBodyIr.parts`, TOA655 when the schema is not an
   object; `PartMediaType` makes each part's `encoding.contentType` one
-  concrete type, TOA661, and an object part that is not JSON a `String` the
-  caller supplies, TOA662); `OperationBuilder` keeps security requirements
+  concrete type, TOA661 (a type is concrete when it is an RFC 9110 media
+  type whose quoted strings hold no control character, a tab included:
+  Dio's `DioMediaType.parse` would throw at call time), and an object part
+  that is not JSON a `String` the caller supplies, TOA662); `OperationBuilder` keeps security requirements
   (an alternative that names a scheme `components.securitySchemes` does not
   define, or is not an object (`SecurityRequirement.isMalformed`, also
   TOA111), is TOA568 and left out as a whole when another alternative can be described;
