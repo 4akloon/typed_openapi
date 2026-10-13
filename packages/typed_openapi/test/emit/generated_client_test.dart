@@ -68,6 +68,7 @@ linter:
         'wire_calls',
         'stream_calls',
         'hostile_events',
+        'union_calls',
       ]) {
         temp.write(
           'bin/$program.dart',
@@ -90,6 +91,8 @@ linter:
         'events_hostile',
         'event_bodies',
         'event_ranges',
+        'discriminator_scalars',
+        'optional_constant',
       ]) {
         for (final mode in UnionMode.values) {
           final files = emitClient(
@@ -136,6 +139,12 @@ linter:
       final result = dart(['run', 'bin/hostile_events.dart'], package);
       expect(result.stderr, '');
       expect(result.stdout, _hostileEvents);
+    });
+
+    test('decodes a discriminated union of scalars and optional constants', () {
+      final result = dart(['run', 'bin/union_calls.dart'], package);
+      expect(result.stderr, '');
+      expect(result.stdout, _unions);
     });
 
     test('puts every value on the wire as the spec says (R10)', () {
@@ -224,6 +233,33 @@ success 200
 line 2
   end closed
 failure UndocumentedStatus(503)
+''';
+
+/// What `bin/union_calls.dart` prints.
+const _unions = '''
+value 1.5 -> ValueNum 1.5
+value 3 -> ValueInt 3
+value "x" -> ValueString "x"
+value "red" -> ValueString "red"
+value true -> decode at ""
+value null -> decode at ""
+value {"kind":"cat","lives":9} -> ValueCat {"kind":"cat","lives":9}
+value {"kind":"dog"} -> ValueUnknown {"kind":"dog"}
+defaulted {"kind":"other","barks":1} -> DefaultedDog {"kind":"other","barks":1}
+defaulted {"barks":2} -> decode at "/kind"
+defaulted "text" -> DefaultedString "text"
+bare {"kind":"zzz","size":1} -> BarePlain {"size":1,"kind":"zzz"}
+bare {"size":2} -> BarePlain {"size":2,"kind":"plain"}
+bare false -> BareBool false
+facet -> FacetValueFacet {"field":"f"}
+value facet {"field":"f"} -> {"field":"f"}
+value facet {"field":"f","type":"value"} -> {"field":"f","type":"value"}
+value facet {"field":"f","version":2} -> {"field":"f","version":2}
+value facet {"field":"f","type":"value","version":2} -> {"field":"f","type":"value","version":2}
+made in code {"field":"f","type":"value","version":2}
+same getters true
+equal false
+equal to its own decoding true
 ''';
 
 /// What `bin/wire_calls.dart` prints.

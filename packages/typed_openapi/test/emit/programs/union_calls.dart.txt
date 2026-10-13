@@ -1,0 +1,78 @@
+// A program that calls the clients generated from
+// test/emit/fixtures/discriminator_scalars.yaml and optional_constant.yaml
+// through a Dio whose adapter answers from memory, and prints what each
+// call decoded and what it writes back.
+// The test reads what the program prints, so it prints.
+// ignore_for_file: avoid_print
+import 'dart:convert';
+
+import 'package:dio/dio.dart';
+import 'package:fixture/discriminator_scalars_raw/api_client.dart';
+import 'package:fixture/optional_constant_structural/api_client.dart'
+    as optional;
+import 'package:typed_openapi_runtime/typed_openapi_runtime.dart';
+
+import 'fake_dio.dart';
+
+String show(Result<Object?, Object?> result) => switch (result) {
+  Success(:final data) => '${data.runtimeType} ${jsonEncode(toJson(data))}',
+  HttpError() => 'http error',
+  UndocumentedStatus() => 'undocumented',
+  DecodeError(:final error) => 'decode at "${error.pointer}"',
+  TransportError() => 'transport',
+  Cancelled() => 'cancelled',
+};
+
+Object? toJson(Object? data) => switch (data) {
+  Value() => data.toJson(),
+  Defaulted() => data.toJson(),
+  Bare() => data.toJson(),
+  optional.Facet() => data.toJson(),
+  _ => data,
+};
+
+Future<void> main() async {
+  final adapter = Adapter();
+  final dio = Dio(BaseOptions(baseUrl: 'https://values.example.com'))
+    ..httpClientAdapter = adapter;
+  final api = ApiClient(dio).defaultApi;
+
+  // A value that is not an object has no discriminator property: it is
+  // picked by its JSON type, an integer before a number, and the first
+  // variant of a type wins (the enum after the string is never produced).
+  for (final body in [1.5, 3, 'x', 'red', true, null, {'kind': 'cat', 'lives': 9}, {'kind': 'dog'}]) {
+    adapter.answers.add(() => json(200, body));
+    print('value ${jsonEncode(body)} -> ${show(await api.getValue())}');
+  }
+
+  // The default mapping decodes a value with another discriminator.
+  for (final body in [{'kind': 'other', 'barks': 1}, {'barks': 2}, 'text']) {
+    adapter.answers.add(() => json(200, body));
+    print('defaulted ${jsonEncode(body)} -> ${show(await api.getDefaulted())}');
+  }
+  for (final body in [{'kind': 'zzz', 'size': 1}, {'size': 2}, false]) {
+    adapter.answers.add(() => json(200, body));
+    print('bare ${jsonEncode(body)} -> ${show(await api.getBare())}');
+  }
+
+  // A model decoded without its optional constants writes none of them; one
+  // made in code writes them all, so the two are not equal.
+  final facets = optional.ApiClient(dio).defaultApi;
+  adapter.answers.add(() => json(200, {'field': 'f'}));
+  print('facet -> ${show(await facets.getFacet())}');
+  for (final body in [
+    {'field': 'f'},
+    {'field': 'f', 'type': 'value'},
+    {'field': 'f', 'version': 2},
+    {'field': 'f', 'type': 'value', 'version': 2},
+  ]) {
+    print('value facet ${jsonEncode(body)} -> '
+        '${jsonEncode(optional.ValueFacet.fromJson(body).toJson())}');
+  }
+  final decoded = optional.ValueFacet.fromJson({'field': 'f'});
+  final made = optional.ValueFacet(field: 'f');
+  print('made in code ${jsonEncode(made.toJson())}');
+  print('same getters ${decoded.type == made.type && decoded.version == made.version}');
+  print('equal ${decoded == made}');
+  print('equal to its own decoding ${decoded == optional.ValueFacet.fromJson({'field': 'f'})}');
+}

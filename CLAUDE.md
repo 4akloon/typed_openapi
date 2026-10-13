@@ -494,7 +494,7 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   is missing from the dump; the
   hidden `typed_openapi ir` command prints it. Naming and mapping codes use
   the second half of each area's hundred: TOA250-TOA256, TOA350-TOA351,
-  TOA450-TOA457, TOA550-TOA565, and media types, errors and event streams
+  TOA450-TOA458, TOA550-TOA565, and media types, errors and event streams
   TOA650-TOA671 (TOA654 and TOA663-TOA671 are event streams; TOA561 became
   TOA650 and TOA651, TOA562 TOA652, the querystring half of
   TOA564 TOA565); `generate` has TOA830 (output not owned),
@@ -522,8 +522,9 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   an optional constant keeps the keys of those the decoded JSON lacked in
   a private `_absent` list, which `toJson` leaves out and `==` compares, so
   a decoded value is written back as it came, while a model made in code
-  writes every constant),
-  `EnumEmitter`, `UnionEmitter` and `ModelLibrary` (`models/<snake>.dart`
+  writes every constant, so the two are not equal when a constant was
+  absent; the generated `fromJson` needs a runtime whose
+  `JsonReader.constant` returns a bool), `EnumEmitter`, `UnionEmitter` and `ModelLibrary` (`models/<snake>.dart`
   per declaration, names that clash get `2`, `3`...; the barrel
   `models.dart`; the header is `// GENERATED CODE - DO NOT MODIFY BY HAND.`
   and, on the second line, `// dart format off`). Generated classes are
@@ -550,7 +551,11 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   fixed to (a `const` or a one-value `enum`, also through a `$ref` or an
   `allOf` part), else by its component name; TOA457 (info) reports a fixed
   value that differs from the name (OpenAI), and a `mapping` entry always
-  wins. A nested union without a
+  wins. In a union with a discriminator a variant that is not an object is
+  picked by its JSON type before the property is read, `int` before `num`
+  whatever the order of the variants; a later variant of the same JSON type
+  (a string enum after a string) is never produced, TOA458 (info,
+  `UnionMapper._reportShadowed`). A nested union without a
   discriminator counts as holding several JSON types, also when the user
   made it `structural`. In a union without a discriminator an inline enum
   or `const` of a primitive type next to a branch of that type that has all

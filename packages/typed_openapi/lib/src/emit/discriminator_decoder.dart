@@ -18,8 +18,8 @@ final class DiscriminatorDecoder {
 
   static const _code = DartCode();
 
-  /// The JSON pattern of an object: a variant of it has the property.
-  static const _object = 'Map<String, Object?>';
+  static const _object = TypeCodec.objectPattern;
+  static const _number = 'num';
 
   /// Writes the `fromJson` factory of [decl] to [out].
   void write(DartWriter out, UnionDecl decl) {
@@ -53,14 +53,21 @@ final class DiscriminatorDecoder {
   }
 
   /// The variants whose JSON is not an object, each with the pattern of its
-  /// JSON type; the first variant of a type wins.
+  /// JSON type; the first variant of a type wins (the others are TOA458).
+  /// An `int` is matched before a `num`, which would take it.
   List<(String, UnionVariantIr)> _byJsonType(UnionDecl decl) {
     final patterns = <String>{};
-    return [
+    final byType = [
       for (final variant in decl.variants)
         if (_codec.jsonPattern(variant.type) case final pattern?
             when pattern != _object && patterns.add(pattern))
           (pattern, variant),
+    ];
+    return [
+      for (final entry in byType)
+        if (entry.$1 != _number) entry,
+      for (final entry in byType)
+        if (entry.$1 == _number) entry,
     ];
   }
 

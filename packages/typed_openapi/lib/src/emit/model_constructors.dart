@@ -14,7 +14,9 @@ import 'type_codec.dart';
 /// constants the JSON did not have ([absent]), which `toJson` leaves out,
 /// so a decoded value is written back as it came (a `structural` `oneOf`
 /// of overlapping branches keeps its variant); a model made in code writes
-/// every constant (decision 8).
+/// every constant (decision 8). So a decoded value is not equal to a model
+/// made in code with the same getters when an optional constant was absent:
+/// `_absent` is part of equality.
 final class ModelConstructors {
   /// Creates the writer that writes with [_codec].
   const ModelConstructors(this._codec);
@@ -35,32 +37,52 @@ final class ModelConstructors {
     List<FieldIr> fields,
     List<FieldIr> constants,
   ) {
-    final name = model.name;
     final extra = model.additionalProperties;
     final known =
         model.direction != .response &&
         (fields.any((f) => _codec.hasEnum(f.type)) ||
             (extra != null && _codec.hasEnum(extra)));
     final tracks = constants.any((f) => !f.required);
+    _constructors(out, model, fields, known: known, tracks: tracks);
+    out.line();
+    _fromJson(out, model, (fields, constants), private: known || tracks);
+    if (tracks) _absentField(out);
+  }
+
+  /// Writes the public constructor of [model], and the private one `_` when
+  /// it takes only [known] enum values or [tracks] optional constants.
+  void _constructors(
+    DartWriter out,
+    ModelDecl model,
+    List<FieldIr> fields, {
+    required bool known,
+    required bool tracks,
+  }) {
+    final name = model.name;
     out.prose('Creates a [$name].');
     _constructor(
       out,
-      ('const $name', tracks ? ' : $absent = const []' : ''),
-      (model, fields),
-      typed: known,
+      _Constructor(
+        'const $name',
+        initializer: tracks ? ' : $absent = const []' : '',
+        isTyped: known,
+      ),
+      model,
+      fields,
     );
     if (known || tracks) {
       out.line();
       _constructor(
         out,
-        ('const $name._(${tracks ? 'this.$absent, ' : ''}', ''),
-        (model, fields),
-        typed: false,
+        _Constructor(
+          'const $name._',
+          leading: tracks ? 'this.$absent' : null,
+          isTyped: false,
+        ),
+        model,
+        fields,
       );
     }
-    out.line();
-    _fromJson(out, model, (fields, constants), private: known || tracks);
-    if (tracks) _absentField(out);
   }
 
   /// Writes the field [absent].
@@ -76,28 +98,27 @@ final class ModelConstructors {
   static bool isJson(DartType type) =>
       type is CoreType && type.kind == CoreKind.json;
 
-  /// Writes a constructor; [shape] is its head up to the named parameters
-  /// (`const Pet(` or `const Pet._(this._absent, `) and its initializer
-  /// list, [of] the model and its fields.
+  /// Writes the constructor [shape] of [model], with a named parameter for
+  /// each of [fields].
   void _constructor(
     DartWriter out,
-    (String, String) shape,
-    (ModelDecl, List<FieldIr>) of, {
-    required bool typed,
-  }) {
-    final (opening, initializer) = shape;
-    final (model, fields) = of;
-    final head = opening.contains('(') ? opening : '$opening(';
+    _Constructor shape,
+    ModelDecl model,
+    List<FieldIr> fields,
+  ) {
+    final typed = shape.isTyped;
     final params = [
       for (final field in fields) _parameter(field, typed: typed),
       if (model.additionalProperties case final extra?)
         '${typed && _codec.hasEnum(extra) ? '${_codec.known(MapType(extra))} ' : ''}'
             'this.${model.additionalPropertiesName} = const {}',
     ];
+    final leading = shape.leading;
     if (params.isEmpty) {
-      out.line('${head.replaceFirst(RegExp(r', $'), '')})$initializer;');
+      out.line('${shape.name}(${leading ?? ''})${shape.initializer};');
     } else {
-      out.list('$head{', params, '})$initializer;');
+      final head = '${shape.name}(${leading == null ? '' : '$leading, '}{';
+      out.list(head, params, '})${shape.initializer};');
     }
   }
 
@@ -199,4 +220,27 @@ final class ModelConstructors {
         ? 'r.requiredNullable($key, $decoder)'
         : 'r.required($key, $decoder)';
   }
+}
+
+/// How a constructor of a model starts and ends: its name, the positional
+/// parameter before the named ones, and its initializer list.
+final class _Constructor {
+  /// A constructor called [name] (with `const`, and the `_` of a private
+  /// one); [isTyped] says its enum parameters take the known values only.
+  const _Constructor(
+    this.name, {
+    required this.isTyped,
+    this.leading,
+    this.initializer = '',
+  });
+
+  final String name;
+
+  /// The positional parameter before the named ones, or null.
+  final String? leading;
+
+  /// The initializer list, with its leading space and colon, or empty.
+  final String initializer;
+
+  final bool isTyped;
 }

@@ -192,6 +192,10 @@ final class TypeCodec {
     NamedType() || CustomType() => false,
   };
 
+  /// The pattern of a JSON object, which a variant that has properties
+  /// matches.
+  static const objectPattern = 'Map<String, Object?>';
+
   /// The pattern a `switch` on a JSON value uses for a variant of [type],
   /// such as `String`; null for a type that takes any JSON.
   String? jsonPattern(DartType type) => switch (type) {
@@ -203,11 +207,11 @@ final class TypeCodec {
       .json => null,
     },
     ListType() => 'List<Object?>',
-    MapType() => 'Map<String, Object?>',
+    MapType() => objectPattern,
     CustomType(:final json) => jsonPattern(json),
     PatchType(:final value) => jsonPattern(value),
     NamedType(:final id) => switch (declaration(id)) {
-      ModelDecl() => 'Map<String, Object?>',
+      ModelDecl() => objectPattern,
       EnumDecl(:final kind) => switch (kind) {
         .string => 'String',
         .integer => 'int',
@@ -218,7 +222,7 @@ final class TypeCodec {
       // discriminator decodes an object. The variants are not looked at:
       // unions may refer to each other.
       UnionDecl(:final dispatch) =>
-        dispatch == .discriminator ? 'Map<String, Object?>' : null,
+        dispatch == .discriminator ? objectPattern : null,
     },
   };
 

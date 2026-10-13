@@ -10,6 +10,7 @@ String toJsonOf(Map<String, String> files, String name) {
   final start = source.indexOf('class $name ');
   if (start < 0) throw StateError('no class $name');
   final end = source.indexOf('Object? toJson()', start);
+  if (end < 0) throw StateError('no toJson in class $name');
   return source.substring(end, source.indexOf('\n', end));
 }
 
