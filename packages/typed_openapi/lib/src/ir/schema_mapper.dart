@@ -2,12 +2,10 @@ import 'dart:convert';
 
 import '../model/schema.dart';
 import '../model/spec_node.dart';
-import '../overrides/override_set.dart';
 import 'custom_types.dart';
 import 'dart_type.dart';
 import 'declaration_names.dart';
 import 'direction_index.dart';
-import 'discriminator_reader.dart';
 import 'enum_mapper.dart';
 import 'ir.dart';
 import 'ir_context.dart';
@@ -23,10 +21,9 @@ import 'schema_queries.dart';
 import 'schema_shapes.dart';
 import 'subtype_finder.dart';
 import 'type_recursion.dart';
+import 'union_mapper.dart';
 import 'union_notices.dart';
 import 'union_state.dart';
-import 'variant_collector.dart';
-import 'variant_names.dart';
 
 export 'pending_declaration.dart' show NameHint;
 
@@ -71,24 +68,19 @@ final class SchemaMapper {
   late final EnumMapper _enums = EnumMapper(_tools);
   late final JsonKinds _kinds = JsonKinds(_tools);
   late final SubtypeFinder _subtypeFinder = SubtypeFinder(_tools);
-  late final VariantNames _variantNames = VariantNames(_tools.state);
   late final UnionNotices _unionNotices = UnionNotices(_context, _queries);
-  late final VariantCollector _variantCollector = VariantCollector(
-    _tools,
-    _types,
-    _kinds,
-    _unionNotices,
-  );
-  late final DiscriminatorReader _discriminators = DiscriminatorReader(
-    _tools,
-    _unionNotices,
-  );
   late final TypeRecursion _types = TypeRecursion(
     map: _map,
     component: _component,
     replaced: _replaced,
   );
   late final ModelMapper _models = ModelMapper(_tools, _types);
+  late final UnionMapper _unions = UnionMapper(
+    _tools,
+    _types,
+    _kinds,
+    _unionNotices,
+  );
 
   Map<DeclId, PendingDeclaration> get _pending => _tools.state.pending;
   Map<String, PendingDeclaration> get _inlineEnums => _tools.state.inlineEnums;
@@ -251,7 +243,7 @@ final class SchemaMapper {
         '',
       );
       if (single != null) {
-        _reportSubsumed(schema, inner, collapsed: true);
+        _unionNotices.subsumedBranches(schema, inner, collapsed: true);
         final type = _map(single, hint, inner);
         return type.withNullable(type.nullable || _isNullable(schema));
       }
@@ -301,7 +293,7 @@ final class SchemaMapper {
   DartType _inline(SchemaObject schema, NameHint hint, MappingScope scope) {
     final single = SchemaShapes.singleOf(schema, refs: _refs);
     if (single != null) {
-      _reportSubsumed(schema, scope, collapsed: true);
+      _unionNotices.subsumedBranches(schema, scope, collapsed: true);
       final type = _map(single, hint, scope);
       return type.withNullable(type.nullable || _isNullable(schema));
     }
@@ -312,39 +304,6 @@ final class SchemaMapper {
     }
     return _structural(schema, hint, scope);
   }
-
-  /// Reports the branches of [schema] that add no value to another branch
-  /// (TOA455), unless a custom type replaces [schema]. [collapsed] says the
-  /// union is left with one branch, which is then its type.
-  void _reportSubsumed(
-    SchemaObject schema,
-    MappingScope scope, {
-    required bool collapsed,
-  }) {
-    if (scope.replacing) return;
-    for (final MapEntry(key: branch, value: kind)
-        in SchemaShapes.subsumedBranches(schema, refs: _refs).entries) {
-      final values = SchemaShapes.enumValues(branch)!;
-      final shown = [
-        for (final value in values.take(3)) _valueText(value),
-        if (values.length > 3) '...',
-      ].join(', ');
-      _context.report(
-        .unionBranchSubsumed,
-        'The enum [$shown] branch adds no value to the ${kind.name} branch; '
-        '${collapsed ? 'the schema is generated as the ${kind.name} branch '
-                  'alone.' : 'it is dropped from the union.'}',
-        branch.location,
-        fix:
-            'Remove the enum branch at the source, or leave it for the '
-            'documentation.',
-      );
-    }
-  }
-
-  /// [value] of an enum as it is written in a Dart list, for a message.
-  static String _valueText(Object? value) =>
-      value is String ? "'${value.replaceAll("'", r"\'")}'" : '$value';
 
   /// The type of a declaring [schema] inside a replaced schema: nothing is
   /// declared, so the type is that of its JSON value (a map for an object,
@@ -405,7 +364,7 @@ final class SchemaMapper {
       if (_branches(schema) case (
         _,
         final branches,
-      ) when _isRawUnion(schema, branches)) {
+      ) when _unions.isRawUnion(schema, branches)) {
         return const CoreType(.json);
       }
     }
@@ -445,10 +404,10 @@ final class SchemaMapper {
       if (values != null && kind != null) {
         _enums.declare(schema, pending, values, kind, labels);
       } else if (_branches(schema) case (final kind, final branches)) {
-        _union(UnionSite(schema, pending, kind, branches, scope));
+        _unions.declare(UnionSite(schema, pending, kind, branches, scope));
       } else if (_subtypeFinder.subtypes(schema) case final subtypes
           when subtypes.isNotEmpty) {
-        _union(
+        _unions.declare(
           UnionSite(schema, pending, .oneOf, subtypes, scope, isSubtypes: true),
         );
       } else {
@@ -461,187 +420,6 @@ final class SchemaMapper {
         ..addAll(aliases);
     }
     return NamedType(id, nullable: nullable);
-  }
-
-  /// Whether the union [schema] of [branches] is generated as `JsonValue`
-  /// (R9.2): it has no discriminator, no variant has a JSON type of its own
-  /// ([_conflicts]), and its override `union` (or else the config's) is
-  /// `raw`. Reported, with the override that changes it (TOA453).
-  bool _isRawUnion(SchemaObject schema, List<Schema> branches) {
-    if (schema.discriminator?.propertyName != null) return false;
-    if (_unionMode(schema) == .structural) return false;
-    final (conflicts, distinct) = _kinds.conflicts(branches);
-    if (conflicts.length < distinct) return false;
-    final kind = schema.oneOf.isNotEmpty ? 'oneOf' : 'anyOf';
-    // A variant without one JSON type conflicts with every other variant.
-    final reason = conflicts.values.contains(null)
-        ? 'a variant that can hold values of several JSON types (a union '
-              'without a discriminator, or a schema without a type)'
-        : 'variants that share a JSON type';
-    _context.report(
-      .unionUndiscriminated,
-      'This $kind has no discriminator and $reason, so a value cannot be '
-      'told apart by its type; it is generated as JsonValue.',
-      schema.location,
-      fix:
-          'Add a discriminator at the source, or generate a union that tries '
-          'the variants with union: structural (an override of the schema, '
-          'or the config key for every such union).',
-      override: _context.schemaOverride(schema.location, {
-        'union': 'structural',
-      }),
-    );
-    return true;
-  }
-
-  /// The `union` of [schema]: its override, else the override of the
-  /// property it is written in, else the config's.
-  UnionMode _unionMode(SchemaObject schema) {
-    final overrides = _context.overrides;
-    return overrides.schemaAt(schema.location)?.union ??
-        overrides.propertyAt(schema.location)?.union ??
-        _context.config.union;
-  }
-
-  /// The union at [site]: a `oneOf`/`anyOf`, or, for a polymorphic base, the
-  /// schemas that extend it with `allOf` (their flat models).
-  void _union(UnionSite site) {
-    final schema = site.schema;
-    _unionNotices.partsIgnored(site);
-    if (!site.isSubtypes) {
-      _reportSubsumed(schema, site.scope, collapsed: false);
-    }
-    final choice = _chooseDispatch(schema, site.branches);
-    final set = _variantCollector.collect(site, choice);
-    _reportOutcome(site, choice, set);
-    final draft = UnionDraft(
-      site,
-      choice.dispatch,
-      set,
-      _discriminators.read(site, set.variants),
-    );
-    site.pending.build = (name, types) => _buildUnion(draft, name, types);
-  }
-
-  /// How the union [schema] of [branches] tells its variants apart: by its
-  /// discriminator, else by the JSON type of a value, else, when its
-  /// `union` is `structural` and the JSON type does not tell them apart, by
-  /// trying them.
-  DispatchChoice _chooseDispatch(SchemaObject schema, List<Schema> branches) {
-    final hasDiscriminator = schema.discriminator?.propertyName != null;
-    final allConflicts = hasDiscriminator
-        ? const <int, JsonKind?>{}
-        : _kinds.conflicts(branches).$1;
-    final UnionDispatch dispatch;
-    if (hasDiscriminator) {
-      dispatch = .discriminator;
-    } else if (allConflicts.isEmpty) {
-      dispatch = .jsonType;
-    } else if (_unionMode(schema) == .structural) {
-      dispatch = .structural;
-    } else {
-      dispatch = .jsonType;
-    }
-    // Branches of a JSON type others share are one variant of any JSON
-    // value, unless the union tries them all.
-    return DispatchChoice(
-      dispatch,
-      allConflicts,
-      dispatch == .jsonType ? allConflicts : const {},
-    );
-  }
-
-  /// Reports the branches that share a JSON type, and the override `union`
-  /// that changes nothing for the union at [site].
-  void _reportOutcome(UnionSite site, DispatchChoice choice, VariantSet set) {
-    if (choice.conflicts.isNotEmpty) {
-      _unionNotices.sharedJsonType(
-        site,
-        choice.conflicts.keys.toSet(),
-        set.sharedKinds,
-      );
-    }
-    if (choice.dispatch == .discriminator || choice.allConflicts.isEmpty) {
-      _notices.unionHasNoEffect(
-        site.schema,
-        choice.dispatch == .discriminator
-            ? 'the union has a discriminator'
-            : set.droppedDuplicate && set.variants.length < 2
-            ? 'the duplicate variants were dropped (TOA454), and one variant '
-                  'is left'
-            : 'the variants of the union have JSON types of their own',
-      );
-    }
-  }
-
-  /// The declaration of the union [draft], with its variant classes named in
-  /// [types].
-  UnionDecl _buildUnion(UnionDraft draft, String name, NameScope types) {
-    final site = draft.site;
-    final schema = site.schema;
-    final variants = draft.set.variants;
-    final classes = _variantNames.classes(name, [
-      for (final variant in variants) variant.type,
-    ]);
-    return UnionDecl(
-      id: site.pending.id,
-      name: name,
-      kind: site.kind,
-      dispatch: draft.dispatch,
-      discriminator: schema.discriminator?.propertyName,
-      defaultVariant: draft.values.fallback,
-      exhaustive:
-          _context.overrides.schemaAt(schema.location)?.exhaustive ?? true,
-      unknownSensitive: site.branches.any(
-        (branch) => SchemaShapes.carriesSecret(
-          branch,
-          refs: _refs,
-          intoProperties: true,
-        ),
-      ),
-      description: schema.description,
-      deprecated: schema.deprecated,
-      variants: [
-        for (final (i, variant) in variants.indexed)
-          _variantIr(draft, variant, (classes[i], name), types),
-      ],
-      unknownName: _declNames.helperName(
-        types,
-        '${name}Unknown',
-        site.pending,
-        'the unknown variant class of $name',
-      ),
-    );
-  }
-
-  /// The variant [variant] of the union [draft], wrapped in the class named
-  /// by [named] (the class and the union) in [types].
-  UnionVariantIr _variantIr(
-    UnionDraft draft,
-    VariantDraft variant,
-    (String, String) named,
-    NameScope types,
-  ) {
-    final (className, union) = named;
-    return UnionVariantIr(
-      variant.type,
-      discriminatorValues: [
-        ...?draft.values.byTarget[variant.target ?? variant.branch.location],
-      ]..sort(),
-      name: _declNames.helperName(
-        types,
-        className,
-        draft.site.pending,
-        'a variant class of $union',
-      ),
-      jsonKinds: [...variant.kinds]..sort((a, b) => a.index - b.index),
-      sensitive:
-          SchemaShapes.carriesSecret(variant.branch, refs: _refs) ||
-          variant.type.holdsRawJson &&
-              [variant.branch, ...variant.also].any(
-                (branch) => _rawSecret(branch, variant.type),
-              ),
-    );
   }
 
   /// The type of a schema without a declaration: a scalar, a list or a
@@ -755,7 +533,4 @@ final class SchemaMapper {
 
   (UnionKind, List<Schema>)? _branches(SchemaObject schema) =>
       _queries.branches(schema);
-
-  bool _rawSecret(Schema schema, DartType? type) =>
-      _queries.holdsRawSecret(schema, type);
 }

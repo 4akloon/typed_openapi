@@ -2,7 +2,9 @@ import '../model/schema.dart';
 import 'declaration_names.dart';
 import 'ir.dart';
 import 'ir_context.dart';
+import 'mapping_scope.dart';
 import 'schema_queries.dart';
+import 'schema_shapes.dart';
 import 'union_state.dart';
 
 /// Reports what a union's schema says that its variants do not keep: parts
@@ -63,6 +65,39 @@ final class UnionNotices {
       fix: 'Remove the duplicate variant at the source.',
     );
   }
+
+  /// Reports the branches of [schema] that add no value to another branch
+  /// (TOA455), unless a custom type replaces [schema]. [collapsed] says the
+  /// union is left with one branch, which is then its type.
+  void subsumedBranches(
+    SchemaObject schema,
+    MappingScope scope, {
+    required bool collapsed,
+  }) {
+    if (scope.replacing) return;
+    for (final MapEntry(key: branch, value: kind)
+        in SchemaShapes.subsumedBranches(schema, refs: _queries.refs).entries) {
+      final values = SchemaShapes.enumValues(branch)!;
+      final shown = [
+        for (final value in values.take(3)) _valueText(value),
+        if (values.length > 3) '...',
+      ].join(', ');
+      _context.report(
+        .unionBranchSubsumed,
+        'The enum [$shown] branch adds no value to the ${kind.name} branch; '
+        '${collapsed ? 'the schema is generated as the ${kind.name} branch '
+                  'alone.' : 'it is dropped from the union.'}',
+        branch.location,
+        fix:
+            'Remove the enum branch at the source, or leave it for the '
+            'documentation.',
+      );
+    }
+  }
+
+  /// [value] of an enum as it is written in a Dart list, for a message.
+  static String _valueText(Object? value) =>
+      value is String ? "'${value.replaceAll("'", r"\'")}'" : '$value';
 
   /// Reports the discriminator of [schema], which is generated as a model
   /// because it is no union and no schema extends it: it picks nothing.
