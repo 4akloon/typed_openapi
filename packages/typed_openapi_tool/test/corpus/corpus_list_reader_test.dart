@@ -1,4 +1,5 @@
 import 'package:test/test.dart';
+import 'package:typed_openapi_tool/src/corpus/corpus_exception.dart';
 import 'package:typed_openapi_tool/src/corpus/corpus_list_reader.dart';
 import 'package:typed_openapi_tool/src/corpus/expectation.dart';
 import 'package:typed_openapi_tool/src/corpus/spec_source.dart';
@@ -40,14 +41,14 @@ specs:
     ]);
   });
 
-  test('an entry without a lowercase sha256 is a FormatException', () {
+  test('an entry without a lowercase sha256 is a CorpusException', () {
     expect(
       () => reader.read('''
 specs:
   pets: {url: https://example.com/a.yaml, sha256: ABC, license: MIT, expect: generate}
 '''),
       throwsA(
-        isA<FormatException>().having(
+        isA<CorpusException>().having(
           (e) => e.message,
           'message',
           contains('pets has no lowercase sha256'),
@@ -56,20 +57,20 @@ specs:
     );
   });
 
-  test('an unknown key or expectation is a FormatException', () {
+  test('an unknown key or expectation is a CorpusException', () {
     expect(
       () => reader.read('''
 specs:
   pets: {url: u, sha256: $_hash, license: MIT, expect: generate, mode: x}
 '''),
-      throwsA(isA<FormatException>()),
+      throwsA(isA<CorpusException>()),
     );
     expect(
       () => reader.read('''
 specs:
   pets: {url: u, sha256: $_hash, license: MIT, expect: compile}
 '''),
-      throwsA(isA<FormatException>()),
+      throwsA(isA<CorpusException>()),
     );
   });
 
@@ -89,12 +90,100 @@ schemas:
     expect(reader.read('specs: {}\nschemas: {a: 1}\n'), isEmpty);
   });
 
-  test('a schema without a lowercase sha256 is a FormatException', () {
+  test('a schema without a lowercase sha256 is a CorpusException', () {
     expect(
       () => reader.readSchemas(
         'schemas: {a: {url: u, sha256: x, license: MIT}}',
       ),
-      throwsA(isA<FormatException>()),
+      throwsA(isA<CorpusException>()),
     );
+  });
+
+  test('bad YAML is a CorpusException, not a YamlException', () {
+    expect(
+      () => reader.read('specs: [unclosed\n'),
+      throwsA(
+        isA<CorpusException>().having(
+          (e) => e.message,
+          'message',
+          startsWith('corpus.yaml: '),
+        ),
+      ),
+    );
+    expect(
+      () => reader.readSchemas('schemas: {a: [\n'),
+      throwsA(isA<CorpusException>()),
+    );
+  });
+
+  test('a wrong type or a URL that does not parse is a CorpusException', () {
+    for (final text in [
+      'specs: [a, b]\n',
+      'specs: {pets: 3}\n',
+      'specs: {pets: {url: [x], sha256: $_hash, license: MIT, expect: generate}}',
+      'specs: {pets: {url: "http://[::", sha256: $_hash, license: MIT, '
+          'expect: generate}}',
+      'specs: {pets: {url: u, sha256: $_hash, license: MIT, '
+          'expect: {check-errors: [1]}}}',
+    ]) {
+      expect(
+        () => reader.read(text),
+        throwsA(isA<CorpusException>()),
+        reason: text,
+      );
+    }
+  });
+
+  group('a file or archive path', () {
+    String archive(String root, String entry) =>
+        'specs: {shop: {archive: https://example.com/s.tar.gz, '
+        'root: "$root", entry: "$entry", sha256: $_hash, license: MIT, '
+        'expect: generate}}';
+
+    test('with a dot-dot, an absolute path or an empty segment fails', () {
+      for (final (root, entry) in [
+        ('../x', 'a.yaml'),
+        ('a/../b', 'a.yaml'),
+        ('/etc', 'a.yaml'),
+        ('a//b', 'a.yaml'),
+        ('a/', 'a.yaml'),
+        (r'a\\b', 'a.yaml'),
+        ('C:/x', 'a.yaml'),
+        ('x', '../a.yaml'),
+        ('x', '/a.yaml'),
+        ('x', 'a//b.yaml'),
+        ('x', '.'),
+        ('x', 'a/./b.yaml'),
+      ]) {
+        expect(
+          () => reader.read(archive(root, entry)),
+          throwsA(
+            isA<CorpusException>().having(
+              (e) => e.message,
+              'message',
+              contains('shop'),
+            ),
+          ),
+          reason: '$root | $entry',
+        );
+      }
+    });
+
+    test('a file URL without a usable last segment fails', () {
+      for (final url in [
+        'https://example.com/dir/',
+        'https://example.com',
+        'https://example.com/a/..',
+      ]) {
+        expect(
+          () => reader.read(
+            'specs: {pets: {url: "$url", sha256: $_hash, license: MIT, '
+            'expect: generate}}',
+          ),
+          throwsA(isA<CorpusException>()),
+          reason: url,
+        );
+      }
+    });
   });
 }

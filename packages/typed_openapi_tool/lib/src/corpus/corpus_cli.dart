@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:args/command_runner.dart';
 
 import '../semver/semver_command.dart';
+import 'corpus_exception.dart';
 import 'fetch_command.dart';
 import 'http_download.dart';
 import 'lock_command.dart';
@@ -31,7 +32,9 @@ final class CorpusCli {
   final CommandRunner<int> _runner;
   final StringSink _err;
 
-  /// Runs the command line with [args]; returns the exit code.
+  /// Runs the command line with [args]; returns the exit code: `0` ok, `1` a
+  /// failure the tool reports (a bad corpus file, a download, a hash, a file
+  /// system error), `64` a usage error.
   Future<int> run(List<String> args) async {
     try {
       return await _runner.run(args) ?? 0;
@@ -41,6 +44,12 @@ final class CorpusCli {
         ..writeln()
         ..writeln(e.usage);
       return 64;
+    } on CorpusException catch (e) {
+      _err.writeln(e.message);
+      return 1;
+    } on FileSystemException catch (e) {
+      _err.writeln('${e.message}: ${e.path}');
+      return 1;
     }
   }
 }
