@@ -12,6 +12,7 @@ import 'ir_context.dart';
 import 'mapping_scope.dart';
 import 'mapping_state.dart';
 import 'names.dart';
+import 'override_notices.dart';
 import 'pending_declaration.dart';
 import 'ref_follower.dart';
 import 'schema_shapes.dart';
@@ -40,7 +41,8 @@ final class SchemaMapper {
             _context.model,
             isExcluded: _context.isPropertyExcluded,
           ),
-      _declNames = DeclarationNames(_context);
+      _declNames = DeclarationNames(_context),
+      _notices = OverrideNotices(_context);
 
   static const _names = DartNames();
 
@@ -51,6 +53,7 @@ final class SchemaMapper {
   final IrContext _context;
   final DirectionIndex _directions;
   final DeclarationNames _declNames;
+  final OverrideNotices _notices;
 
   // The four fields below are shared mutable state: every call during one
   // mapping reads and writes the same collections, so they cannot be passed
@@ -218,7 +221,7 @@ final class SchemaMapper {
     // A structural schema (array, map, scalar) has no declaration of its
     // own: each use gets its type. One that refers back to itself without
     // a declaration in between cannot be spelled out.
-    if (!inner.replacing) _reportAliasOverride(schema);
+    if (!inner.replacing) _notices.aliasHasNoEffect(schema);
     if (!_enterAlias(schema.location, inner)) return const CoreType(.json);
     try {
       final hint = NameHint(
@@ -256,29 +259,6 @@ final class SchemaMapper {
               what: 'type',
             ),
     );
-  }
-
-  /// Reports the `name` and `exhaustive` of the override of [schema], an
-  /// alias that is not a declaration: they would change a type it does not
-  /// have (TOA807).
-  void _reportAliasOverride(SchemaObject schema) {
-    final entry = _context.overrides.schemaAt(schema.location);
-    if (entry == null) return;
-    for (final (field, written) in [
-      ('name', entry.name),
-      ('exhaustive', entry.exhaustive),
-    ]) {
-      if (written == null) continue;
-      _context.reportAtOverride(
-        .overrideUnchanged,
-        'The $field of this override has no effect: the schema is not '
-        'generated as a type of its own, its uses are the type of what it '
-        'stands for.',
-        entry,
-        field,
-        fix: 'Remove it, or override the schema this one refers to.',
-      );
-    }
   }
 
   /// Marks the structural alias at [location] as being mapped; false, with
@@ -642,20 +622,6 @@ final class SchemaMapper {
     };
   }
 
-  /// Reports the override `union` of [schema], which has no effect on
-  /// [what].
-  void _reportUnionOverride(SchemaObject schema, String what) {
-    final entry = _context.overrides.schemaAt(schema.location);
-    if (entry == null || entry.union == null) return;
-    _context.reportAtOverride(
-      .overrideUnchanged,
-      'The union of this override has no effect: $what.',
-      entry,
-      'union',
-      fix: 'Remove it.',
-    );
-  }
-
   void _model(
     SchemaObject schema,
     PendingDeclaration pending,
@@ -664,7 +630,7 @@ final class SchemaMapper {
     final fields = <FieldDraft>[];
     final (properties, required, additionalSchema) = _merged(schema);
     _reportBranchesBesideModel(schema);
-    _reportUnionOverride(schema, 'the schema is a model, not a union');
+    _notices.unionHasNoEffect(schema, 'the schema is a model, not a union');
     if (_context.overrides.schemaAt(schema.location) case final entry?
         when entry.exhaustive != null) {
       _context.reportAtOverride(
@@ -1244,7 +1210,7 @@ final class SchemaMapper {
       );
     }
     if (dispatch == .discriminator || allConflicts.isEmpty) {
-      _reportUnionOverride(
+      _notices.unionHasNoEffect(
         schema,
         dispatch == .discriminator
             ? 'the union has a discriminator'
@@ -1608,7 +1574,7 @@ final class SchemaMapper {
   ) {
     final exhaustive =
         _context.overrides.schemaAt(schema.location)?.exhaustive ?? true;
-    _reportUnionOverride(schema, 'the schema is an enum, not a union');
+    _notices.unionHasNoEffect(schema, 'the schema is an enum, not a union');
     pending.build = (name, types) {
       final scope = NameScope(
         reserved: {...DartNames.reservedWords, ...DartNames.enumMembers},
