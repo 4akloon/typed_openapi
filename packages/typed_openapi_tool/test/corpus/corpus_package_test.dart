@@ -5,6 +5,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+import 'package:typed_openapi_tool/src/corpus/corpus_exception.dart';
 import 'package:typed_openapi_tool/src/corpus/corpus_package.dart';
 import 'package:typed_openapi_tool/src/corpus/corpus_run.dart';
 import 'package:typed_openapi_tool/src/corpus/expectation.dart';
@@ -34,12 +35,41 @@ void main() {
     expect(config.readAsStringSync(), contains("  '123':\n"));
   });
 
+  test('a non-empty directory the tool did not make is refused untouched', () {
+    final temp = TempDir();
+    final pubspec = temp.write('pubspec.yaml', 'name: real_app');
+    final code = temp.write('lib/main.dart', 'void main() {}');
+    expect(
+      CorpusPackage(temp.path, 'fuzz').clean,
+      throwsA(
+        isA<CorpusException>().having(
+          (e) => e.message,
+          'message',
+          contains('choose another --work directory'),
+        ),
+      ),
+    );
+    expect(File(pubspec).existsSync(), isTrue);
+    expect(File(code).existsSync(), isTrue);
+  });
+
+  test('an empty directory and one written by the tool are cleaned', () {
+    final temp = TempDir();
+    CorpusPackage(temp.path, 'fuzz').clean();
+    final package = CorpusPackage(temp.path, 'fuzz')
+      ..write(const {}, '/runtime');
+    final stale = temp.write('lib/old/api.dart', '');
+    package.clean();
+    expect(File(stale).existsSync(), isFalse);
+  });
+
   test(
     'a run removes the output a reused work dir holds for other modes',
     () async {
       final temp = TempDir();
       final stale = temp.write('work/structural/lib/stale/api.dart', '');
       temp.write('work/structural/pubspec.yaml', 'name: keep');
+      temp.write('work/structural/${CorpusPackage.marker}', '');
       await CorpusRun(
         work: p.join(temp.path, 'work'),
         runtime: runtimeDirectory(),

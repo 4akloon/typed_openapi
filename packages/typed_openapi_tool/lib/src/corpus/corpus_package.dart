@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import 'corpus_exception.dart';
+
 /// The scratch package of one `union` mode of a corpus run: its pubspec, the
 /// analyzer gate's lints and the generator config, with each client's
 /// output in `lib/<name>`.
@@ -15,6 +17,10 @@ final class CorpusPackage {
   /// The `union` mode of the clients: `raw` or `structural`.
   final String mode;
 
+  /// The file [write] leaves in the directory, which says that the tool
+  /// owns it: [clean] deletes inside no other non-empty directory.
+  static const String marker = '.typed_openapi_work';
+
   /// The name of the package, for `package:` imports.
   String get name => 'corpus_$mode';
 
@@ -25,8 +31,19 @@ final class CorpusPackage {
   String outputOf(String name) => p.join(directory, 'lib', name);
 
   /// Deletes what an earlier run generated: the code, the round-trip
-  /// programs and their data.
+  /// programs and their data. A directory that exists, is not empty and has
+  /// no [marker] is somebody's own, e.g. a real package given as `--work`:
+  /// it is a [CorpusException] and nothing is deleted.
   void clean() {
+    final existing = Directory(directory);
+    if (existing.existsSync() &&
+        existing.listSync().isNotEmpty &&
+        !File(p.join(directory, marker)).existsSync()) {
+      throw CorpusException(
+        '$directory is not empty and was not made by this tool (it has no '
+        '$marker): choose another --work directory.',
+      );
+    }
     for (final folder in const ['lib', 'bin', 'roundtrip']) {
       final directory = Directory(p.join(this.directory, folder));
       if (directory.existsSync()) directory.deleteSync(recursive: true);
@@ -38,6 +55,7 @@ final class CorpusPackage {
   /// `typed_openapi_runtime`.
   void write(Map<String, String> inputs, String runtime) {
     Directory(directory).createSync(recursive: true);
+    File(p.join(directory, marker)).writeAsStringSync('');
     File(
       p.join(directory, 'pubspec.yaml'),
     ).writeAsStringSync(_pubspec(runtime));
