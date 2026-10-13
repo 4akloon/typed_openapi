@@ -20,7 +20,7 @@ Research date: 2026-10-11. Goal: collect facts about the capabilities and limits
 | dart_mappable | 4.10.0 | 2026-09-07 | |
 | http / fetch_client / dio_compatibility_layer | 1.6.0 / 1.2.1 / 0.1.1 | | |
 
-All experiments are in `/private/tmp/claude-501/…/scratchpad/agent-dart/exp/` (hereinafter `exp/`), Dart 3.13.1, macOS arm64 (Apple M5). The list of files is at the end of the document.
+All experiments are in `<scratchpad>/agent-dart/exp/` (hereinafter `exp/`), Dart 3.13.1, macOS arm64 (Apple M5). The list of files is at the end of the document.
 
 ---
 
@@ -669,7 +669,7 @@ extension PetsApiResults on PetsApi {
 - Extension types: https://dart.dev/language/extension-types · Class modifiers: https://dart.dev/language/class-modifiers · Exhaustiveness: https://dart.dev/language/branches#exhaustiveness-checking · dart format: https://dart.dev/tools/dart-format · dart install: https://dart.dev/tools/dart-install
 - OpenAPI style values: https://spec.openapis.org/oas/v3.1.0#style-values
 
-**Experiments** (`/private/tmp/claude-501/-Users-genius-Library-Application-Support-Claude-scratch-workspaces-caefcd6d-e2d0-4474-a3da-92a11b5759cf-a7084c89-0a78-4871-9d7a-89b7ea2dfa9f-scratch-2026-10-11-3d1424/43951355-e983-4f99-aeac-345c65820b5a/scratchpad/agent-dart/exp/`)
+**Experiments** (`<scratchpad>/agent-dart/exp/`)
 - `lib/models.dart` (+ `.g.dart`): checked errors, enum unknown, tri-state 6.14, sealed union as a field, generics, extension type as a field
 - `lib/open_enum.dart`, `lib/open_enum2.dart`, `lib/mood_model.dart`, `lib/shapes.dart`; `bin/exhaust.dart`, `bin/exhaust2.dart`, `bin/shapes_neg.dart`, `bin/shorthand.dart`: exhaustiveness, narrowed type in a constructor, dot shorthands
 - `lib/rt.dart`, `bin/rt_demo.dart`, `lib/bench_models.dart`, `bin/bench.dart`: prototype of a decoder with a path and a benchmark

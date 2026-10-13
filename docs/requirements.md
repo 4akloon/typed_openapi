@@ -65,7 +65,7 @@ Goal: an in-house OpenAPI codegen for Dart that covers the features of competito
    * Schema names are as in the spec: suffixes such as `Dto` are not removed automatically.
 * R5.2 [MUST] Deterministic resolution of collisions with diagnostics: reserved words and names from `dart:core`; identical names in path and query; duplicate schema names; names that coincide after normalization.
 * R5.3 [MUST] Grouping operations into classes by tag (configurable), with normalization of "dirty" tags.
-   * A class per tag with the suffix `Api` (`UsersApi`); the name template is configurable (`naming.group: '{Tag}Api'`). The root client class has the groups as fields: `zeely.users.getUser()`.
+   * A class per tag with the suffix `Api` (`UsersApi`); the name template is configurable (`naming.group: '{Tag}Api'`). The root client class has the groups as fields: `api.users.getUser()`.
    * An operation with several tags goes into the group of the first tag (without duplicating methods); the other tags get an info diagnostic.
    * Operations without a tag go into `DefaultApi` (the name is configurable) plus a diagnostic.
    * Tag normalization: case, spaces, `-`, `_`. Tags that coincide after normalization are merged with a diagnostic. Non-Latin or "descriptive" tags give a warning with a ready-made override of the group name.
