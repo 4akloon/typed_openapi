@@ -39,10 +39,12 @@ final class MessageText {
   };
 
   /// Whether [rune] is not printed as itself: a C0 or C1 control, DEL, a
-  /// line or paragraph separator, or a bidirectional control.
+  /// line or paragraph separator, a bidirectional control or a lone
+  /// surrogate (which no output encoding can hold).
   static bool _isHidden(int rune) =>
       rune < 0x20 ||
       (rune >= 0x7F && rune <= 0x9F) ||
+      (rune >= 0xD800 && rune <= 0xDFFF) ||
       rune == 0x061C ||
       rune == 0x200E ||
       rune == 0x200F ||
