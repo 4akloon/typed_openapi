@@ -11,6 +11,7 @@ import 'direction_index.dart';
 import 'enum_mapper.dart';
 import 'ir.dart';
 import 'ir_context.dart';
+import 'json_kinds.dart';
 import 'mapping_scope.dart';
 import 'mapping_state.dart';
 import 'mapping_tools.dart';
@@ -21,7 +22,9 @@ import 'pending_declaration.dart';
 import 'ref_follower.dart';
 import 'schema_queries.dart';
 import 'schema_shapes.dart';
+import 'subtype_finder.dart';
 import 'type_recursion.dart';
+import 'variant_names.dart';
 
 export 'pending_declaration.dart' show NameHint;
 
@@ -64,30 +67,17 @@ final class SchemaMapper {
   late final DeclarationNames _declNames = _tools.names;
   late final OverrideNotices _notices = _tools.notices;
   late final EnumMapper _enums = EnumMapper(_tools);
+  late final JsonKinds _kinds = JsonKinds(_tools);
+  late final SubtypeFinder _subtypeFinder = SubtypeFinder(_tools);
+  late final VariantNames _variantNames = VariantNames(_tools.state);
   late final ModelMapper _models = ModelMapper(
     _tools,
     TypeRecursion(map: _map, component: _component, replaced: _replaced),
   );
 
-  // The four fields below are shared mutable state: every call during one
-  // mapping reads and writes the same collections, so they cannot be passed
-  // down as a scope.
-
-  /// Every declaration created so far, by identity: reaching one again gives
-  /// it back.
-  final Map<DeclId, PendingDeclaration> _pending = {};
-
-  /// The inline enums created so far, by their values, so an equal one is
-  /// the same declaration.
-  final Map<String, PendingDeclaration> _inlineEnums = {};
-
-  /// The subtypes found of each polymorphic base, by its location.
-  final Map<SpecLocation, List<SchemaObject>> _subtypesOf = {};
-
-  /// The structural aliases being mapped, innermost last, since the last
-  /// declaration was entered: meeting one again is a cycle no declaration
-  /// breaks.
-  final Set<SpecLocation> _aliases = {};
+  Map<DeclId, PendingDeclaration> get _pending => _tools.state.pending;
+  Map<String, PendingDeclaration> get _inlineEnums => _tools.state.inlineEnums;
+  Set<SpecLocation> get _aliases => _tools.state.aliases;
 
   /// The type of [schema] used in [direction]; an inline declaration it
   /// needs is named by [hint]. For the request body of a PATCH operation
@@ -225,7 +215,9 @@ final class SchemaMapper {
     // A schema that extends a polymorphic base with `allOf` and adds nothing
     // is a subtype, not a reference to the base (which is the union).
     final single = switch (SchemaShapes.singleOf(schema, refs: _refs)) {
-      final part? when schema.allOf.contains(part) && _isBase(part) => null,
+      final part?
+          when schema.allOf.contains(part) && _subtypeFinder.isBase(part) =>
+        null,
       final part => part,
     };
     if (single == null && _declares(schema)) {
@@ -344,7 +336,7 @@ final class SchemaMapper {
   /// a scalar for an enum), which the custom type's `fromJson` takes;
   /// `JsonValue` when the schema may hold values of several JSON types.
   DartType _nothingDeclared(SchemaObject schema) =>
-      switch (_jsonKind(schema, {})) {
+      switch (_kinds.ofSchema(schema, {})) {
         .object => const MapType(CoreType(.json)),
         .string => const CoreType(.string),
         .integer => const CoreType(.integer),
@@ -364,7 +356,7 @@ final class SchemaMapper {
   bool _declares(SchemaObject schema) =>
       SchemaShapes.enumValues(schema) != null ||
       _branches(schema) != null ||
-      _subtypes(schema).isNotEmpty ||
+      _subtypeFinder.subtypes(schema).isNotEmpty ||
       schema.properties.isNotEmpty ||
       schema.allOf.isNotEmpty;
 
@@ -439,7 +431,7 @@ final class SchemaMapper {
         _enums.declare(schema, pending, values, kind, labels);
       } else if (_branches(schema) case (final kind, final branches)) {
         _union(schema, pending, kind, branches, scope);
-      } else if (_subtypes(schema) case final subtypes
+      } else if (_subtypeFinder.subtypes(schema) case final subtypes
           when subtypes.isNotEmpty) {
         _union(schema, pending, .oneOf, subtypes, scope, subtypes: true);
       } else {
@@ -473,7 +465,7 @@ final class SchemaMapper {
   bool _isRawUnion(SchemaObject schema, List<Schema> branches) {
     if (schema.discriminator?.propertyName != null) return false;
     if (_unionMode(schema) == .structural) return false;
-    final (conflicts, distinct) = _conflicts(branches);
+    final (conflicts, distinct) = _kinds.conflicts(branches);
     if (conflicts.length < distinct) return false;
     final kind = schema.oneOf.isNotEmpty ? 'oneOf' : 'anyOf';
     // A variant without one JSON type conflicts with every other variant.
@@ -504,97 +496,6 @@ final class SchemaMapper {
     return overrides.schemaAt(schema.location)?.union ??
         overrides.propertyAt(schema.location)?.union ??
         _context.config.union;
-  }
-
-  /// The branches of a union without a discriminator that the JSON type of
-  /// a value cannot tell apart, by index, with their JSON type (null for a
-  /// branch of any JSON value, which every other branch conflicts with),
-  /// and how many distinct branches there are. A branch that is the same
-  /// schema as an earlier one is a duplicate (TOA454): neither a conflict
-  /// nor counted. `integer` and `number` are told apart by the value.
-  (Map<int, JsonKind?>, int) _conflicts(List<Schema> branches) {
-    final kinds = <int, JsonKind?>{};
-    final seen = <SpecLocation>{};
-    for (final (i, branch) in branches.indexed) {
-      final location = _resolved(branch)?.location;
-      if (location != null && !seen.add(location)) continue;
-      kinds[i] = _jsonKind(branch, {});
-    }
-    if (kinds.values.contains(null)) return (kinds, kinds.length);
-    final counts = <JsonKind, int>{};
-    for (final kind in kinds.values) {
-      counts[kind!] = (counts[kind] ?? 0) + 1;
-    }
-    return (
-      {
-        for (final MapEntry(:key, :value) in kinds.entries)
-          if (counts[value]! > 1) key: value,
-      },
-      kinds.length,
-    );
-  }
-
-  /// The JSON type of every value of [type], or null when it takes values
-  /// of several types.
-  JsonKind? _typeKind(DartType type) => switch (type) {
-    CoreType(:final kind) => switch (kind) {
-      .string || .dateTime || .date || .bytes || .binary => .string,
-      .integer => .integer,
-      .float || .number => .number,
-      .boolean => .boolean,
-      .json => null,
-    },
-    ListType() => .array,
-    MapType() => .object,
-    CustomType(:final json) => _typeKind(json),
-    PatchType(:final value) => _typeKind(value),
-    NamedType(:final id) => _pending[id]?.jsonKind,
-  };
-
-  /// The JSON type every value of [schema] has, or null when it may have
-  /// several (or any); [seen] stops a cycle.
-  JsonKind? _jsonKind(Schema schema, Set<SpecLocation> seen) {
-    final object = _resolved(schema);
-    if (object == null || !seen.add(object.location)) return null;
-    if (SchemaShapes.enumValues(object) case final values?) {
-      return switch (EnumMapper.kindOf(object, values)) {
-        .string => .string,
-        .integer => .integer,
-        .number => .number,
-        .boolean => .boolean,
-        null => null,
-      };
-    }
-    // A union is an object when a discriminator picks its variant; any
-    // other union may hold values of several types.
-    if (_branches(object) != null) {
-      return object.discriminator?.propertyName != null ? .object : null;
-    }
-    if (SchemaShapes.singleOf(object, refs: _refs) case final single?) {
-      return _jsonKind(single, seen);
-    }
-    if (object.properties.isNotEmpty || object.allOf.isNotEmpty) {
-      return .object;
-    }
-    final types = [
-      for (final type in object.types)
-        if (type != SchemaType.nullType) type,
-    ];
-    if (types.length > 1) return null;
-    return switch (types.firstOrNull) {
-      .string => .string,
-      .integer => .integer,
-      .number => .number,
-      .boolean => .boolean,
-      .array => .array,
-      .object => .object,
-      null || SchemaType.nullType =>
-        object.items != null
-            ? .array
-            : object.additionalProperties != null
-            ? .object
-            : null,
-    };
   }
 
   /// The union [schema] of [branches]: a `oneOf`/`anyOf`, or, with
@@ -636,7 +537,7 @@ final class SchemaMapper {
     final property = discriminator?.propertyName;
     final (allConflicts, _) = property != null
         ? (const <int, JsonKind?>{}, 0)
-        : _conflicts(branches);
+        : _kinds.conflicts(branches);
     final UnionDispatch dispatch;
     if (property != null) {
       dispatch = .discriminator;
@@ -716,12 +617,12 @@ final class SchemaMapper {
       // excluded or replaced, a recursive alias) is picked by its JSON type
       // no more: its values join the variant of any JSON value.
       for (final variant in [...variants]) {
-        if (variant.kinds.isNotEmpty || _typeKind(variant.type) != null) {
+        if (variant.kinds.isNotEmpty || _kinds.ofType(variant.type) != null) {
           continue;
         }
         final at = variants.indexOf(variant);
         variants.remove(variant);
-        if (_jsonKind(variant.branch, {}) case final kind?) {
+        if (_kinds.ofSchema(variant.branch, {}) case final kind?) {
           share(kind, variant.branch, at);
         }
       }
@@ -852,7 +753,7 @@ final class SchemaMapper {
     final exhaustive =
         _context.overrides.schemaAt(schema.location)?.exhaustive ?? true;
     pending.build = (name, types) {
-      final classes = _variantClasses(name, [
+      final classes = _variantNames.classes(name, [
         for (final variant in variants) variant.type,
       ]);
       return UnionDecl(
@@ -913,117 +814,6 @@ final class SchemaMapper {
           null => '#$index',
         }
       : '#$index';
-
-  /// Whether [schema] is a polymorphic base: a schema with a discriminator
-  /// that other schemas extend ([_subtypes]).
-  bool _isBase(Schema schema) => switch (_resolved(schema)) {
-    final base? => _subtypes(base).isNotEmpty,
-    null => false,
-  };
-
-  /// The schemas that extend [base] with `allOf`, directly or through
-  /// another subtype, in the order of `components.schemas` and then of the
-  /// other files the spec reads, when [base]
-  /// has a discriminator and is not a union or an enum: a polymorphic base
-  /// (user decision for M8). A subtype an override excludes is left out.
-  List<SchemaObject> _subtypes(SchemaObject base) {
-    if (base.discriminator?.propertyName == null ||
-        _branches(base) != null ||
-        SchemaShapes.enumValues(base) != null) {
-      return const [];
-    }
-    return _subtypesOf[base.location] ??= _findSubtypes(base);
-  }
-
-  /// The schemas of the other files the spec reads that a `$ref` can name:
-  /// the root of a file and the entries of its `components.schemas`, in the
-  /// order of their locations. A file nothing refers to is not read, so a
-  /// subtype that only it has is not found.
-  late final List<SchemaObject> _foreignSchemas = [
-    for (final node in _context.model.nodes)
-      if (node is SchemaObject &&
-          node.ref == null &&
-          node.location.document != _context.model.document.location.document &&
-          (node.location.pointer.tokens.isEmpty ||
-              DeclarationNames.componentKey(node.location) != null))
-        node,
-  ];
-
-  List<SchemaObject> _findSubtypes(SchemaObject base) {
-    final components = [
-      for (final schema
-          in _context.model.document.components?.schemas.values ??
-              const <Schema>[])
-        if (schema is SchemaObject && schema.ref == null) schema,
-      ..._foreignSchemas,
-    ];
-    final found = {base.location};
-    var grew = true;
-    while (grew) {
-      grew = false;
-      for (final schema in components) {
-        if (found.contains(schema.location)) continue;
-        if (schema.allOf.any(
-          (part) => found.contains(_resolved(part)?.location),
-        )) {
-          found.add(schema.location);
-          grew = true;
-        }
-      }
-    }
-    return [
-      for (final schema in components)
-        if (schema.location != base.location &&
-            found.contains(schema.location) &&
-            !(_context.overrides.schemaAt(schema.location)?.exclude ?? false))
-          schema,
-    ];
-  }
-
-  /// The classes that wrap the variants of [types] in the union [union], in
-  /// order: [_variantClass] names, except that variants whose short names
-  /// are the same (a list of strings and a list of integers) are named by
-  /// their whole type (`PetListString`, `PetListInt`).
-  List<String> _variantClasses(String union, List<DartType> types) {
-    final short = [for (final type in types) _variantClass(union, type)];
-    return [
-      for (final (i, type) in types.indexed)
-        if (short.where((name) => name == short[i]).length > 1)
-          _variantClass(union, type, deep: true)
-        else
-          short[i],
-    ];
-  }
-
-  /// The class that wraps a variant of [type] in the union [union]: the
-  /// union's name and the variant's (`PetCat`), or the variant's name and
-  /// `Case` when it starts with the union's already (`PetVariant1Case` for
-  /// an inline variant, `PetCatCase` for a variant named `PetCat`). A
-  /// built-in type is named by its kind (`IdOrNameString`, `IdOrNameInt`);
-  /// with [deep], a list or a map also by its element (`IdOrNameListInt`).
-  String _variantClass(String union, DartType type, {bool deep = false}) {
-    String label(DartType type) => switch (type) {
-      NamedType(:final id) =>
-        _pending[id]?.name ?? DeclarationNames.fallbackName,
-      CustomType(:final type) => type,
-      ListType(:final item) => deep ? 'List${label(item)}' : 'List',
-      MapType(:final value) => deep ? 'Map${label(value)}' : 'Map',
-      PatchType() => 'Patch',
-      CoreType(:final kind) => switch (kind) {
-        .integer => 'Int',
-        .float => 'Double',
-        .number => 'Num',
-        .string => 'String',
-        .boolean => 'Bool',
-        .dateTime => 'DateTime',
-        .date => 'Date',
-        .bytes || .binary => 'Bytes',
-        .json => 'Json',
-      },
-    };
-    final name = label(type);
-    return name.startsWith(union) ? '${name}Case' : '$union$name';
-  }
 
   /// The one value the property [name] of [schema] can hold, when it is a
   /// `const` or a one-value enum, in the schema or one of its `allOf` parts;

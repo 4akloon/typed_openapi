@@ -1,6 +1,7 @@
 import 'declaration_names.dart';
 import 'direction_index.dart';
 import 'ir_context.dart';
+import 'mapping_state.dart';
 import 'model_notices.dart';
 import 'override_notices.dart';
 import 'schema_queries.dart';
@@ -17,6 +18,9 @@ final class MappingTools {
 
   /// Where each schema is used.
   final DirectionIndex directions;
+
+  /// What the mapping has created so far.
+  final MappingState state = MappingState();
 
   /// Questions about schemas that follow their `$ref`s.
   late final SchemaQueries queries = SchemaQueries(context);

@@ -195,3 +195,23 @@ final class EnumDraft {
   /// The `x-enum-descriptions`, one per value.
   final List<String?>? descriptions;
 }
+
+/// The mutable state that one mapping shares: every call reads and writes
+/// the same collections, so they cannot be passed down as a scope.
+final class MappingState {
+  /// Every declaration created so far, by identity: reaching one again
+  /// gives it back.
+  final Map<DeclId, PendingDeclaration> pending = {};
+
+  /// The inline enums created so far, by their values, so an equal one is
+  /// the same declaration.
+  final Map<String, PendingDeclaration> inlineEnums = {};
+
+  /// The subtypes found of each polymorphic base, by its location.
+  final Map<SpecLocation, List<SchemaObject>> subtypesOf = {};
+
+  /// The structural aliases being mapped, innermost last, since the last
+  /// declaration was entered: meeting one again is a cycle no declaration
+  /// breaks.
+  final Set<SpecLocation> aliases = {};
+}
