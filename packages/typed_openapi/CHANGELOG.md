@@ -229,9 +229,12 @@
   - TOA654 event-stream-not-generated (warning): event streams that the
     client cannot express are not generated: some successes are only a
     stream and others offer a body (neither a method that returns the body
-    nor one that returns the events covers them), or the event-stream
-    successes have different event types (only the event-stream method of an
-    operation that also returns a body is left out). When `sse.data` or
+    nor one that returns the events covers them: the operation is left
+    out), or the event-stream successes have different event types, or each
+    stream also offers a body while another 2xx has a body without a stream
+    (only the event-stream method is left out; the method that returns the
+    body is generated, as before M10, and the message names the statuses).
+    When `sse.data` or
     `sse.events` left a shared response alone, the message says so.
   - TOA655 multipart-not-object (warning): a multipart body that is not an
     object with properties has no class of parts.

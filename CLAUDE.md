@@ -404,8 +404,12 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   gives a `StreamShape`: `none` (no stream), `only` (every success with a
   body is only a stream: one method that returns the events), `both` (the
   successes offer a body and a stream: the method of the body and a second
-  one for the events), `mixed` (some successes are only a stream and
-  others offer a body, TOA654, not generated) and `excluded` (`sse.method:
+  one for the events), `bodyOnly` (every stream success offers a body, but
+  another 2xx has a body and no stream: the method of the body, exactly as
+  without the stream, and TOA654 for the stream method only, naming the
+  statuses; `sse.method: none` reports nothing and is `none`), `mixed` (some
+  successes are only a stream and others offer a body, TOA654, not
+  generated) and `excluded` (`sse.method:
   none` on a stream-only operation: not generated, no diagnostic). The
   second method is named with `naming.stream_suffix` (`chat` and
   `chatStream`; a reserved word keeps its stem, `classStream`), claimed
@@ -451,8 +455,10 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   collision, TOA551); TOA668 and TOA559 point at the branch. No
   `SchemaMapper` change: the variants' types come from `typeOf`.
   TOA654 is only an operation (or its event-stream method, in the `both`
-  shape) whose event-stream successes disagree on the event type, or
-  successes that mix a stream alone with a body. `EventAgreement` decides
+  and `bodyOnly` shapes) whose event-stream successes disagree on the event
+  type, or successes that mix a stream alone with a body; an operation that
+  M9 generated is always generated as M9 did (`StreamSuccesses` counts the
+  statuses by how they use the stream). `EventAgreement` decides
   "the same event types" from the spec before any type is mapped: the
   same `itemSchema` or `schema`; the schema at the end of the `$ref`s, one
   location or two written alike in one document by `JsonEquality`

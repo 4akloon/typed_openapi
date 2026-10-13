@@ -411,8 +411,10 @@ enum DiagnosticCode {
 
   /// An event-stream operation has a shape the client cannot express: its
   /// event-stream successes have different event types, or another success
-  /// has a body that is not an event stream; the operation is not
-  /// generated.
+  /// has a body that is not an event stream. The operation is not
+  /// generated when some of its successes are only a stream; when each
+  /// stream offers a body too, only the event-stream method is left out and
+  /// the method that returns the body is generated.
   eventStreamNotGenerated('TOA654', 'event-stream-not-generated', .warning),
 
   /// The schema of a multipart body is not an object with properties (a

@@ -26,8 +26,13 @@ enum StreamShape {
   /// operation's method and a second one that returns the events.
   both,
 
-  /// Some successes are event streams and others have a body that is not
-  /// (TOA654): not generated.
+  /// Every success with an event stream offers a body too, but another
+  /// success has a body without one: the operation's method, as it is
+  /// without the stream, and no method that returns the events (TOA654).
+  bodyOnly,
+
+  /// Some successes are only an event stream and others have a body or offer
+  /// one next to it (TOA654): not generated.
   mixed,
 
   /// Every success is only an event stream and the override says
@@ -56,8 +61,8 @@ final class EventStreams {
   final WrittenStreams _written;
   final SseOverrideChecks _checks;
 
-  /// How the successes of [operation] use event streams; [StreamShape.mixed]
-  /// is reported (TOA654).
+  /// How the successes of [operation] use event streams; [StreamShape.bodyOnly]
+  /// and [StreamShape.mixed] are reported (TOA654).
   StreamShape shapeOf(Operation operation) {
     final successes = StreamSuccesses.of(_context, operation);
     final (streams, alone, others) = (
@@ -65,12 +70,13 @@ final class EventStreams {
       successes.alone.length,
       successes.others.length,
     );
+    final method = _sse(operation)?.method;
     if (streams == 0) {
       if (_sse(operation) case final sse?) _checks.withoutStream(sse);
       return .none;
     }
     if (others == 0 && (alone == streams || alone == 0)) {
-      return switch ((alone == streams, _sse(operation)?.method)) {
+      return switch ((alone == streams, method)) {
         (true, .none) => .excluded,
         (true, _) => .only,
         (false, .only) => _onlyEvents(operation),
@@ -78,6 +84,7 @@ final class EventStreams {
         (false, _) => .both,
       };
     }
+    if (alone == 0) return _bodyOnly(operation, successes, method);
     _context.report(
       .eventStreamNotGenerated,
       others > 0
@@ -92,6 +99,29 @@ final class EventStreams {
       fix: 'Offer text/event-stream on every success with a body.',
     );
     return .mixed;
+  }
+
+  /// [StreamShape.bodyOnly], reported (TOA654) unless `sse.method: none`
+  /// already leaves the stream method out: the successes of [successes] with
+  /// an event stream and the ones with a body alone cannot share one method
+  /// that returns the events.
+  StreamShape _bodyOnly(
+    Operation operation,
+    StreamSuccesses successes,
+    SseMethod? method,
+  ) {
+    if (method == .none) return .none;
+    _context.report(
+      .eventStreamNotGenerated,
+      'No event-stream method is generated for this operation: status '
+      '${successes.streams.join(', ')} offers an event stream, but status '
+      '${successes.others.join(', ')} has a body that is not one, so one '
+      'stream cannot hold what every success returns. The method that '
+      'returns the body is generated.',
+      operation.location.child('responses'),
+      fix: 'Offer text/event-stream on every success with a body.',
+    );
+    return .bodyOnly;
   }
 
   SseOverride? _sse(Operation operation) =>

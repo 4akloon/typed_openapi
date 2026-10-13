@@ -215,7 +215,7 @@ Findings and decisions of M9 that were deliberately deferred (plan:
 
 | What | Where |
 |---|---|
-| Event-stream operations are not generated (TOA654) | done in M10 (tasks 3-6; TOA654 stays for event-stream successes with different data types or next to other bodies) |
+| Event-stream operations are not generated (TOA654) | done in M10 (tasks 3-6; TOA654 stays for event-stream successes with different data types or next to other bodies; an operation M9 generated keeps its body method and loses only the stream method) |
 | `in: querystring` parameters are not generated (TOA565) | when needed |
 | The headers of a multipart part's `encoding` are not sent (TOA656) | when needed |
 | A form property nested deeper than its style allows (an object in an object for `form`) makes `FormBody.encode` throw `ArgumentError` at run time; the generator does not warn | when needed (a diagnostic, or the deepObject convention of Rails and Stripe) |

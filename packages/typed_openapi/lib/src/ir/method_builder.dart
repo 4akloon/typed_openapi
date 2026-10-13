@@ -44,12 +44,12 @@ final class MethodBuilder {
     final shape = _streams.shapeOf(entry.operation);
     final streamPicked = switch (shape) {
       .only || .both => _responses.pick(entry.operation, events: true),
-      .none || .mixed || .excluded => const <PickedResponse>[],
+      .none || .bodyOnly || .mixed || .excluded => const <PickedResponse>[],
     };
     final hasStream =
         streamPicked.isNotEmpty && _streams.agree(entry, streamPicked, shape);
     final main = switch (shape) {
-      .none => _operation(
+      .none || .bodyOnly => _operation(
         entry,
         _Method(name, parameters, _responses.pick(entry.operation)),
       ),
