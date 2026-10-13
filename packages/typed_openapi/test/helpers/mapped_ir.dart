@@ -13,4 +13,10 @@ final class MappedIr {
     for (final v in declaration<UnionDecl>(ir, name).variants)
       v.type.code(ir.nameOf),
   ];
+
+  /// The values of the enum [name] as `name=value` strings.
+  static List<String> valuesOf(ClientIr ir, String name) => [
+    for (final v in declaration<EnumDecl>(ir, name).values)
+      '${v.name}=${v.value}',
+  ];
 }
