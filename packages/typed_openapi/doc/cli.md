@@ -88,7 +88,7 @@ dart run typed_openapi check --format json | jq '.summary'
 
 ## generate
 
-`typed_openapi generate [options] [client...]` runs the same checks as `check`, then writes every client that has no errors. A client with errors is skipped with `Skipped shop: see the error above.`, so one broken spec does not stop the others, and the exit code is `1`.
+`typed_openapi generate [options] [client...]` runs the same checks as `check`, then writes every client that has no errors. A client with errors is skipped with `Skipped shop: its check reports errors; fix them and run generate again.`, so one broken spec does not stop the others, and the exit code is `1`. When the check passes but the output cannot be written (TOA830, TOA831), the line is `Skipped shop: see the error above.`
 
 | Option | Default | Meaning |
 | --- | --- | --- |

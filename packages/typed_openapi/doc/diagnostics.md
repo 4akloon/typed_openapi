@@ -62,7 +62,7 @@ Reading the spec files: JSON/YAML syntax, versions and limits.
 | TOA015 | `yaml-warning` | warning | The YAML parser warns about the text, for example about an unknown directive; reading goes on. | See the message of the diagnostic. |
 | TOA020 | `openapi-3-1-in-3-0` | warning | A 3.0 document uses an OpenAPI 3.1 or JSON Schema 2020-12 construct; it is read as 3.1. | See the message of the diagnostic. |
 | TOA021 | `nullable-after-3-0` | warning | A 3.1 or later document uses `nullable`, which only 3.0 defines; it is read as in 3.0. | Write type: [<type>, "null"] instead of nullable: true. |
-| TOA022 | `openapi-3-2-in-older` | info | A document older than 3.2 uses an OpenAPI 3.2 construct; it is read anyway. | Declare "openapi: ${since.label}.0" if the backend emits ${since.label}; otherwise remove the construct. |
+| TOA022 | `openapi-3-2-in-older` | info | A document older than 3.2 uses an OpenAPI 3.2 construct; it is read anyway. | Declare "openapi: 3.2.0" if the backend emits 3.2; otherwise remove the construct. |
 
 ## Parse and resolve (TOA1xx)
 
@@ -81,7 +81,7 @@ Reading the OpenAPI objects and following `$ref`s.
 | TOA108 | `ref-commented-out` | warning | `$ref: #/...` without quotes in YAML: `#` starts a comment, so the value is null. | See the message of the diagnostic. |
 | TOA109 | `yaml-merge-key` | warning | A YAML 1.1 merge key `<<`, which OpenAPI's YAML does not have; it is read as a plain key named `<<`. | Write the keys out. |
 | TOA110 | `unknown-key` | warning | An object has a key that no OpenAPI version defines; it is ignored. | See the message of the diagnostic. |
-| TOA111 | `invalid-value` | warning | A field has the wrong JSON type or a value the spec does not allow; it is ignored. | Use one of ${SchemaType.byWire.keys.join( |
+| TOA111 | `invalid-value` | warning | A field has the wrong JSON type or a value the spec does not allow; it is ignored. | For an unknown `type`: Use one of string, number, integer, boolean, array, object, null. |
 | TOA112 | `missing-required-field` | warning | A field the spec requires is missing. | See the message of the diagnostic. |
 | TOA113 | `non-string-key` | error | A mapping key is a collection, or an alias of one, instead of a string; the entry is ignored. | Write the key as a plain or quoted string. |
 | TOA114 | `null-key` | warning | A mapping key is a YAML null (`~`, `null` or empty); it is read as its text. | Quote the key: "$text". |
@@ -204,7 +204,7 @@ Applying fixes and overrides, baselines, and writing the output.
 | TOA800 | `fix-not-applied` | warning | A normalizer fix or an override was not applied: its file cannot be read, its target is gone, the spec kept changing after the last pass, or the change would have no effect in the spec's dialect. | See the message of the diagnostic. |
 | TOA801 | `overrides-not-found` | error (fixed) | The overrides file a client names does not exist. | Create it, or fix "overrides" of this client in the config. |
 | TOA802 | `invalid-override` | error (fixed) | The overrides file cannot be read, or an override has a value of the wrong type; the value is ignored. | Point "overrides" of this client at the overrides file itself. |
-| TOA803 | `unknown-override-key` | error (fixed) | An override has a key this tool does not know, such as a misspelled field; it is ignored. | ${closest == null ?  |
+| TOA803 | `unknown-override-key` | error (fixed) | An override has a key this tool does not know, such as a misspelled field; it is ignored. | Names the closest known key (`Did you mean "name"?`) when one is within edit distance 2, then lists the allowed keys. |
 | TOA804 | `override-target-not-found` | warning | An override names an operation, a schema, a property, a parameter or a response the spec does not have; it is not applied. | Remove the override, or fix its address. |
 | TOA805 | `override-target-ambiguous` | error | An override's address names more than one node, such as an `operationId` two operations share; it is not applied. | Add "contentType" to the override. |
 | TOA806 | `override-conflict` | error | Two overrides change the same node; neither is applied. | Keep one of them. |
@@ -228,7 +228,7 @@ Reading `typed_openapi.yaml`.
 | --- | --- | --- | --- | --- |
 | TOA901 | `config-not-found` | error (config) | The configuration file does not exist. | Create typed_openapi.yaml, or pass its path with --config. |
 | TOA902 | `config-invalid` | error (config) | The configuration file is malformed or has an invalid value. | Pass the path of typed_openapi.yaml itself with --config. |
-| TOA903 | `config-unknown-key` | warning (config) | The configuration file has a key this tool does not know. | Allowed keys here: ${(allowed.toList()..sort()).join( |
+| TOA903 | `config-unknown-key` | warning (config) | The configuration file has a key this tool does not know. | Lists the allowed keys at that place (`Allowed keys here: ...`). |
 | TOA904 | `output-overlap` | error (config) | Two clients write to the same or nested output directories. | Give each client its own output directory. |
 ## Where codes are reported
 
