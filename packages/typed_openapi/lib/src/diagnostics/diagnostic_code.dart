@@ -242,7 +242,7 @@ enum DiagnosticCode {
 
   /// A `oneOf` or `anyOf` without a discriminator has variants of the same
   /// JSON type, or a variant that can hold several (a nested union without a
-  /// discriminator), so a value cannot be told apart (R9.2): the
+  /// discriminator), so a value cannot be told apart: the
   /// union keeps it as `JsonValue` in one variant (`PetJson`), or, when no
   /// variant has a JSON type of its own, is `JsonValue` itself. An override
   /// `union: structural` (or the config key `union`) generates a union that
