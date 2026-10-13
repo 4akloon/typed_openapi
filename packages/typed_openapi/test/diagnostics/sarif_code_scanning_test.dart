@@ -76,16 +76,32 @@ void main() {
     );
   });
 
-  test('a fingerprint does not depend on the directory of an outside file', () {
-    String fingerprintOf(String file) {
-      final bag = DiagnosticBag()..report(.binaryObject, 'Same.', file: file);
-      final result = resultsOf(runOf(const SarifReporter().format(bag))).single;
-      return (result['partialFingerprints']! as Map).values.single as String;
-    }
+  String fingerprintOf(String file, {String workingDirectory = '/work/app'}) {
+    final bag = DiagnosticBag()..report(.binaryObject, 'Same.', file: file);
+    final reporter = SarifReporter(workingDirectory: workingDirectory);
+    final result = resultsOf(runOf(reporter.format(bag))).single;
+    return (result['partialFingerprints']! as Map).values.single as String;
+  }
 
-    final here = fingerprintOf('/home/ann/specs/api.yaml');
-    expect(fingerprintOf('/runner/work/specs/api.yaml'), here);
-    expect(fingerprintOf('/home/ann/specs/other.yaml'), isNot(here));
+  test('outside files with one basename in two directories differ', () {
+    expect(
+      fingerprintOf('/work/a/api.yaml'),
+      isNot(fingerprintOf('/work/b/api.yaml')),
+    );
+    expect(
+      fingerprintOf('/work/api.yaml'),
+      isNot(fingerprintOf('api.yaml')),
+    );
+  });
+
+  test('a fingerprint does not depend on the prefix of the checkout', () {
+    expect(
+      fingerprintOf('/work/specs/api.yaml'),
+      fingerprintOf(
+        '/runner/ci/specs/api.yaml',
+        workingDirectory: '/runner/ci/app',
+      ),
+    );
   });
 
   test('a file without a position is located at its first line', () {

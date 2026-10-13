@@ -31,11 +31,15 @@ import 'severity.dart';
 /// config file), or without a physical location when there is none.
 final class SarifReporter implements DiagnosticReporter {
   /// Creates a SARIF reporter that locates a result without a file at
-  /// [defaultFile].
-  const SarifReporter({this.defaultFile});
+  /// [defaultFile] and fingerprints files relative to [workingDirectory].
+  const SarifReporter({this.defaultFile, this.workingDirectory});
 
   /// The file a result without one is located at.
   final String? defaultFile;
+
+  /// The directory an absolute file is named relative to in a fingerprint;
+  /// the current directory when null.
+  final String? workingDirectory;
 
   /// The key of the partial fingerprint of a result.
   static const fingerprintKey = 'typedOpenapi/v1';
@@ -161,13 +165,23 @@ final class SarifReporter implements DiagnosticReporter {
   /// The partial fingerprint of [d]: the first 16 hexadecimal digits of the
   /// SHA-256 of its code, file, pointer and message.
   ///
-  /// The same finding must keep its fingerprint on any machine, so a file
-  /// outside the working directory (an absolute path) counts by its file
-  /// name alone; a file below the working directory counts by its relative
-  /// path.
-  static String _fingerprint(Diagnostic d) {
+  /// The same finding must keep its fingerprint on any machine, so an
+  /// absolute file (outside the working directory) counts by its path
+  /// relative to the working directory, with `/` separators: the directory
+  /// part tells two files with one name apart, and a checkout in another
+  /// place gives the same text. A relative file counts as it is.
+  String _fingerprint(Diagnostic d) {
     final file = d.file;
-    final stable = file != null && p.isAbsolute(file) ? p.basename(file) : file;
+    final stable = file != null && p.isAbsolute(file)
+        ? p.posix.joinAll(
+            p.split(
+              p.relative(
+                file,
+                from: p.absolute(workingDirectory ?? p.current),
+              ),
+            ),
+          )
+        : file;
     final text = jsonEncode([d.code.id, stable, d.pointer?.value, d.message]);
     return '${sha256.convert(utf8.encode(text))}'.substring(0, 16);
   }
