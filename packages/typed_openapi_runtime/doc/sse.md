@@ -196,7 +196,8 @@ final result = await api.pets.watchPet(
 | `wait` | `null` | `Future<void> Function(Duration)`; a timer when `null`. Tests pass one that does not sleep |
 
 The delay before attempt *n* is the server's last `retry` (else `delay`),
-doubled each attempt up to `maxDelay`: 1, 2, 4, 8, 16, 30, 30 s. A server
+doubled each attempt up to `maxDelay`: with the defaults 1, 2, 4, 8 and 16 s
+for the five attempts (a larger `maxAttempts` continues 30, 30 s). A server
 `retry` longer than `maxDelay` is kept as it is. The default wait is a timer
 that a cancel stops, so a cancelled stream does not keep the program alive.
 

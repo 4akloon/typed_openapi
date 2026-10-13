@@ -91,9 +91,10 @@ FormBody(
 ```
 
 A value nested deeper than the style allows (an object inside an object
-with `form`) throws `ArgumentError`, as for query parameters, and a `json`
-that is not an object (`FormBody([1])`) throws
-`ArgumentError: A form body must be a JSON object`.
+with `form`) throws `ArgumentError`, as for query parameters. A `json` that is
+not an object is rejected too, but at a different time: `FormBody([1])` is
+built and throws an `ArgumentError` ("A form body must be a JSON object") when
+it is encoded, while `MultipartBody.fromJson([1])` throws at construction.
 
 ## Files: `FileUpload`
 
@@ -212,8 +213,8 @@ with `toJson` first.
 ## Progress
 
 `CallOptions.onSendProgress` and `onReceiveProgress` are Dio's callbacks and
-are passed through. Dio reports send progress only when it streams the body
-to the adapter, which it does on the VM and not on the web.
+are passed through. On the web `dio_web_adapter` reports send progress when
+the request has a body; see [Web and platforms](web_and_platforms.md).
 
 ## See also
 

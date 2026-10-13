@@ -14,12 +14,12 @@ floors.
 | `QueryParameter('x', 1.0)` | `x=1.0` | `x=1` (`1.0` is the int `1`) | `test/platform/platform_semantics_test.dart` |
 | `DeepEquality().equals([nan], [nan])` | `true` (`identical` compares bits) | `false` (`NaN !== NaN`) | `test/platform/platform_semantics_test.dart` |
 | `JsonReader.asInt(1.0)` | rejected | accepted (it is the integer `1`) | `test/json/json_reader_test.dart` |
-| Integers beyond 2^53 | exact up to int64 (VM) | lose precision | `test/json/json_reader_int64_test.dart` (VM only) |
+| Integers beyond 2^53 | exact up to int64 | lose precision | `test/json/json_reader_int64_test.dart` (VM only) |
 | Malformed JSON body: `DecodeError.rawBody` | the body text | `null` (only the browser's `SyntaxError`) | `test/dio/web_test.dart` |
 | `Cookie` header from a cookie parameter | sent | **dropped by the browser** | `test/dio/cookie_browser_test.dart` |
 | `openEvents` with Dio's default adapter | streams | `TransportError` that explains how to fix it | `test/dio/web_test.dart` |
-| `FileUpload.stream` | streamed | buffered into one `Uint8List` by Dio's browser adapter | doc of `FileUpload` |
-| `onSendProgress` | reported | not reported by Dio's browser adapter | `test/dio/dio_request_sender_test.dart` |
+| `FileUpload.stream` | streamed | buffered into one `Uint8List` by Dio's browser adapter | the doc comment of `FileUpload` |
+| `onSendProgress` | reported | reported by `dio_web_adapter` 2.2.2 through `XMLHttpRequest.upload` when the request has a body | `test/dio/dio_request_sender_test.dart` (VM) |
 
 dart2wasm keeps `0` and `0.0` apart, so it behaves like the VM everywhere in
 the table except the malformed-JSON `rawBody`, where the body bytes are
@@ -79,7 +79,7 @@ package:fetch_client.
 
 `TransportError.exception.error` is an `UnsupportedError`, and the request
 options carry the `OperationInfo`, so an error handler can name the
-operation. A reconnecting stream fails the same way, without ever waiting.
+operation. A reconnecting stream fails the same way: `openEvents` returns the `TransportError` before any stream exists, so there is no wait and no reconnection.
 Once you set a non-default adapter, the stream opens:
 `test/dio/open_events_test.dart` (VM, with `isWeb: true`) and
 `test/dio/web_test.dart` (a real browser) pin both halves.
@@ -109,8 +109,10 @@ because the two failures cannot be told apart there.
 
 `FileUpload.bytes` works everywhere. `FileUpload.stream` is sent as it is
 read on the VM; Dio's browser adapter buffers a stream into one `Uint8List`,
-so it is not streamed on the web. Dio reports send progress only when it
-streams the body to the adapter, which it does on the VM and not on the web.
+so it is not streamed on the web. `onSendProgress` is passed to Dio. On the web
+`dio_web_adapter` 2.2.2 reports it through the upload events of the
+`XMLHttpRequest` when the request has a body, and only logs a warning when
+there is no body to report on.
 
 ## Running the tests
 
