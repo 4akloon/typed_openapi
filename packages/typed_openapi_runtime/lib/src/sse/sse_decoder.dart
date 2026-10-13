@@ -19,21 +19,29 @@ import 'sse_message.dart';
 ///
 /// Malformed input never throws; errors of the source stream pass through.
 final class SseDecoder extends StreamTransformerBase<List<int>, SseMessage> {
-  /// Creates a decoder; each bound stream gets its own state.
-  const SseDecoder();
+  /// Creates a decoder; each bound stream gets its own state, which starts
+  /// from [lastEventId] and [retry].
+  const SseDecoder({this.lastEventId = '', this.retry});
+
+  /// The last event id before the stream starts: a reconnection carries the
+  /// id of the connection before it, as an `EventSource` does.
+  final String lastEventId;
+
+  /// The reconnection time before the stream starts.
+  final Duration? retry;
 
   @override
   Stream<SseMessage> bind(Stream<List<int>> stream) => Stream.eventTransformed(
     // bind, not stream.transform: a Stream<Uint8List> (what Dio gives) does
     // not accept a transformer of List<int> at run time.
     const Utf8Decoder(allowMalformed: true).bind(stream),
-    _SseSink.new,
+    (out) => _SseSink(out, lastEventId, retry),
   );
 }
 
 /// The parser state of one stream.
 final class _SseSink implements EventSink<String> {
-  _SseSink(this._out);
+  _SseSink(this._out, this._lastEventId, this._retry);
 
   final EventSink<SseMessage> _out;
   final StringBuffer _line = StringBuffer();
@@ -41,7 +49,7 @@ final class _SseSink implements EventSink<String> {
   bool _afterCr = false;
   bool _hasData = false;
   String _eventType = '';
-  String _lastEventId = '';
+  String _lastEventId;
   Duration? _retry;
 
   @override

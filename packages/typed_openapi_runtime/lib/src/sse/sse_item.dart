@@ -2,7 +2,8 @@ import '../json/json_decode_exception.dart';
 import 'sse_message.dart';
 
 /// One item of an open event stream: an [SseEvent], an [SseDecodeError]
-/// for one event that did not decode (the stream goes on), or
+/// for one event that did not decode (the stream goes on), an
+/// [SseReconnecting] before each reconnection attempt, or
 /// [SseDisconnected], always the last item. The stream never emits errors.
 ///
 /// ```dart
@@ -10,6 +11,7 @@ import 'sse_message.dart';
 ///   switch (item) {
 ///     case SseEvent(:final data): show(data);
 ///     case SseDecodeError(:final error): log(error);
+///     case SseReconnecting(:final attempt): showRetrying(attempt);
 ///     case SseDisconnected(): break;
 ///   }
 /// }
@@ -54,9 +56,41 @@ final class SseDecodeError<T> extends SseItem<T> {
   String toString() => 'SseDecodeError(${message.event}: $error)';
 }
 
+/// The connection ended and the stream reconnects after [delay] (R12.5):
+/// attempt number [attempt], counted from 1 since the last event.
+final class SseReconnecting<T> extends SseItem<T> {
+  /// Creates the item of [attempt].
+  const SseReconnecting(
+    this.attempt,
+    this.delay, {
+    this.cause,
+    this.stackTrace,
+  });
+
+  /// The number of the attempt, from 1.
+  final int attempt;
+
+  /// How long the stream waits before the attempt.
+  final Duration delay;
+
+  /// Why the last connection ended: null when the server closed it, else
+  /// the error (usually a `DioException`).
+  final Object? cause;
+
+  /// Where [cause] was raised.
+  final StackTrace? stackTrace;
+
+  @override
+  String toString() =>
+      'SseReconnecting($attempt after $delay${cause == null ? '' : ': $cause'})';
+}
+
 /// The end of the stream: the server closed it ([cause] is `null`) or the
 /// connection failed ([cause] is the error, usually a `DioException`, also
-/// for a cancelled request). Always the last item.
+/// for a cancelled request). When the stream reconnects, it comes after
+/// the last attempt, and a reconnection the server answers with another
+/// status ends the stream with that `Failure` as [cause]. Always the last
+/// item.
 final class SseDisconnected<T> extends SseItem<T> {
   /// Creates the last item.
   const SseDisconnected({this.cause, this.stackTrace});

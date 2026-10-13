@@ -1,5 +1,7 @@
 import 'package:dio/dio.dart';
 
+import '../sse/sse_options.dart';
+
 /// Per-call options: the optional `call` parameter of every generated
 /// method.
 ///
@@ -15,6 +17,7 @@ final class CallOptions {
     this.extra = const {},
     this.onSendProgress,
     this.onReceiveProgress,
+    this.sse,
   });
 
   /// Cancels the request; the operation then returns `Cancelled`.
@@ -36,4 +39,8 @@ final class CallOptions {
 
   /// Reports received bytes.
   final ProgressCallback? onReceiveProgress;
+
+  /// How an event stream reconnects; null for the defaults of
+  /// [SseOptions]. Other operations ignore it.
+  final SseOptions? sse;
 }

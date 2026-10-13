@@ -11,6 +11,8 @@ import '../result/result.dart';
 import '../sse/sse_item.dart';
 import '../sse/sse_item_decoder.dart';
 import '../sse/sse_message.dart';
+import '../sse/sse_options.dart';
+import '../sse/sse_reconnector.dart';
 import 'call_options.dart';
 import 'dio_call.dart';
 import 'dio_results.dart';
@@ -100,6 +102,10 @@ final class DioRequestSender {
   /// so it reaches the listener as a stream error and the stream closes.
   /// Problems with the data are items ([SseDecodeError]), never errors.
   ///
+  /// The stream reconnects (R12.5) when [reconnection] and `call.sse` say
+  /// so (see [SseReconnection], [SseOptions] and [SseReconnector]); a 204
+  /// No Content never reconnects.
+  ///
   /// [OperationRequest.streamStatuses] must not be empty (checked by an
   /// `assert`): a generated method always sets it.
   Future<Result<Stream<SseItem<T>>, E>> openEvents<T, E>(
@@ -107,6 +113,7 @@ final class DioRequestSender {
     T Function(SseMessage message) decodeEvent,
     Result<Stream<SseItem<T>>, E> Function(RawResponse response) decodeError, {
     CallOptions? call,
+    SseReconnection reconnection = .onRequest,
   }) async {
     assert(
       request.streamStatuses.isNotEmpty,
@@ -127,17 +134,42 @@ final class DioRequestSender {
       );
       return TransportError(exception, StackTrace.current);
     }
-    final token = CancelToken();
-    final outer = call?.cancelToken;
-    if (outer != null) {
-      if (outer.isCancelled) {
-        token.cancel(outer.cancelError?.error);
-      } else {
-        outer.whenCancel.then((e) {
-          if (!token.isCancelled) token.cancel(e.error);
-        });
-      }
+    final first = await _open(
+      request,
+      decodeEvent,
+      decodeError,
+      call,
+      (lastEventId: '', retry: null),
+    );
+    final options = call?.sse ?? const SseOptions();
+    if (first case Success(
+      :final data,
+      :final statusCode,
+      :final headers,
+    ) when statusCode != 204 && reconnection.reconnects(options)) {
+      return Success(
+        SseReconnector<T>(
+          options,
+          (resume) => _open(request, decodeEvent, decodeError, call, resume),
+          cancelled: call?.cancelToken?.whenCancel,
+        ).bind(data),
+        statusCode: statusCode,
+        headers: headers,
+      );
     }
+    return first;
+  }
+
+  /// One connection of [openEvents]: it sends `Last-Event-ID` and starts
+  /// the decoder from [resume].
+  Future<Result<Stream<SseItem<T>>, E>> _open<T, E>(
+    OperationRequest request,
+    T Function(SseMessage message) decodeEvent,
+    Result<Stream<SseItem<T>>, E> Function(RawResponse response) decodeError,
+    CallOptions? call,
+    SseResume resume,
+  ) async {
+    final token = _linkedToken(call?.cancelToken);
     final Response<Object?> response;
     try {
       response = await _call.send(
@@ -145,6 +177,7 @@ final class DioRequestSender {
         call,
         events: true,
         cancelToken: token,
+        lastEventId: resume.lastEventId,
       );
     } on DioException catch (e, stackTrace) {
       final failed = e.response;
@@ -155,19 +188,34 @@ final class DioRequestSender {
     }
     final status = response.statusCode ?? 0;
     final body = response.data;
-    if (request.streamStatuses.contains(status) && body is ResponseBody) {
-      return Success(
-        SseItemDecoder<T>(
-          decodeEvent,
-          onClose: () {
-            if (!token.isCancelled) token.cancel('the event stream was closed');
-          },
-        ).bind(body.stream),
-        statusCode: status,
-        headers: response.headers.map,
-      );
+    if (!request.streamStatuses.contains(status) || body is! ResponseBody) {
+      return _openFailed(response, decodeError);
     }
-    return _openFailed(response, decodeError);
+    final items = SseItemDecoder<T>(
+      decodeEvent,
+      onClose: () {
+        if (!token.isCancelled) token.cancel('the event stream was closed');
+      },
+      lastEventId: resume.lastEventId,
+      retry: resume.retry,
+    ).bind(body.stream);
+    return Success(items, statusCode: status, headers: response.headers.map);
+  }
+
+  /// A token of one connection that [outer] (the call's token) cancels, so
+  /// that closing the stream cancels the connection and not the call's
+  /// token.
+  static CancelToken _linkedToken(CancelToken? outer) {
+    final token = CancelToken();
+    if (outer == null) return token;
+    if (outer.isCancelled) {
+      token.cancel(outer.cancelError?.error);
+    } else {
+      outer.whenCancel.then((e) {
+        if (!token.isCancelled) token.cancel(e.error);
+      });
+    }
+    return token;
   }
 
   /// Explains why server-sent events cannot stream on the web with the

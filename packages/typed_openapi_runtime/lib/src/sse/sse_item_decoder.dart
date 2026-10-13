@@ -17,8 +17,14 @@ import 'sse_message.dart';
 /// subscription cancels the body.
 final class SseItemDecoder<T>
     extends StreamTransformerBase<List<int>, SseItem<T>> {
-  /// Creates a decoder whose events [decode] reads.
-  const SseItemDecoder(this.decode, {this.onClose});
+  /// Creates a decoder whose events [decode] reads; the stream's state
+  /// starts from [lastEventId] and [retry] (see [SseDecoder]).
+  const SseItemDecoder(
+    this.decode, {
+    this.onClose,
+    this.lastEventId = '',
+    this.retry,
+  });
 
   /// Reads the data of one event.
   final T Function(SseMessage message) decode;
@@ -28,6 +34,12 @@ final class SseItemDecoder<T>
   /// [decode] threw an [Error]. Never called for a stream nobody listens to.
   /// `openEvents` closes the connection here.
   final void Function()? onClose;
+
+  /// The last event id before the stream starts.
+  final String lastEventId;
+
+  /// The reconnection time before the stream starts.
+  final Duration? retry;
 
   @override
   Stream<SseItem<T>> bind(Stream<List<int>> stream) {
@@ -49,7 +61,7 @@ final class SseItemDecoder<T>
 
     items = StreamController<SseItem<T>>(
       onListen: () {
-        source = const SseDecoder()
+        source = SseDecoder(lastEventId: lastEventId, retry: retry)
             .bind(stream)
             .listen(
               (message) {

@@ -707,7 +707,9 @@ that the API composes, including an `implements` fake of a tag class.
   non-JSON value in a JSON part, or an object with a media type that is not
   JSON is `ArgumentError`, never stringified.
 - `dio/` - `DioRequestSender(dio, {isWeb})` (`send`, `openEvents`; requests
-  only through `dio.request`, never mutates the user's Dio, never retries;
+  only through `dio.request` (`DioCall`), never mutates the user's Dio,
+  never retries a request (an event stream reconnects only as R12.5 says);
+  `DioResults` maps responses and Dio failures to `Result`s;
   decoding catches only `DioException`, `JsonDecodeException` and, from the
   user's decoder, `FormatException` (a converter or `Date.parse` rejecting
   the data: `DecodeError` at the root pointer, `SseDecodeError` in a
@@ -715,11 +717,18 @@ that the API composes, including an `implements` fake of a tag class.
   non-stream body into `TransportError`, and an `Error` is never caught; the
   query is
   built by the runtime, so interceptors see an empty `queryParameters`),
-  `CallOptions`. `openEvents` needs its stream listened to or cancelled; a
-  listener cancel cancels the request.
-- `sse/` - `SseDecoder` (WHATWG, bytes -> `SseMessage`), `SseItemDecoder`
-  (-> `SseEvent` / `SseDecodeError` / `SseDisconnected`; data problems are
-  items, an `Error` from the user's decoder is the only stream error). Use
+  `CallOptions` (`sse`: `SseOptions`). `openEvents` needs its stream
+  listened to or cancelled; a listener cancel cancels the request.
+- `sse/` - `SseDecoder` (WHATWG, bytes -> `SseMessage`; it may start from
+  a last event id and retry), `SseItemDecoder` (-> `SseEvent` /
+  `SseDecodeError` / `SseDisconnected`; data problems are items, an `Error`
+  from the user's decoder is the only stream error), `SseReconnector`
+  (R12.5: `SseReconnecting(attempt, delay, cause)` before each attempt,
+  `Last-Event-ID`, the server's `retry` or 1 s doubling to 30 s, 5 attempts
+  in a row without an event, all in `SseOptions` with an injectable `wait`;
+  `SseReconnection` is the operation's policy: `off` (a POST that does not
+  enable it; the call cannot), `onRequest` (GET), `on`; cancel, an error
+  status (the `Failure` is the cause) and 204 end the stream). Use
   `transformer.bind(stream)`, not `stream.transform`: Dio gives a
   `Stream<Uint8List>`.
 

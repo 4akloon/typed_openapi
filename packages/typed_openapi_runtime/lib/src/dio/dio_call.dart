@@ -18,14 +18,21 @@ final class DioCall {
   /// Sends [request] with [call]: for an event stream ([events]) as a
   /// stream with `Accept: text/event-stream`, else read as
   /// [OperationRequest.responseKind] says. [cancelToken] wins over the
-  /// call's.
+  /// call's. A reconnection of an event stream sends [lastEventId] as
+  /// `Last-Event-ID` when it is not empty.
   Future<Response<Object?>> send(
     OperationRequest request,
     CallOptions? call, {
     bool events = false,
     CancelToken? cancelToken,
+    String lastEventId = '',
   }) {
-    final options = _options(request, call, events: events);
+    final options = _options(
+      request,
+      call,
+      events: events,
+      lastEventId: lastEventId,
+    );
     // The type argument picks how Dio reads the body: Dio forces JSON for
     // any type but String, List<int> with bytes or ResponseBody with stream.
     Future<Response<R>> send<R>() => dio.request<R>(
@@ -48,6 +55,7 @@ final class DioCall {
     OperationRequest request,
     CallOptions? call, {
     required bool events,
+    required String lastEventId,
   }) => Options(
     method: request.operation.method,
     headers: {
@@ -55,6 +63,7 @@ final class DioCall {
       ...request.resolveHeaders(),
       for (final MapEntry(:key, :value) in call?.headers.entries ?? const [])
         key: ?value,
+      if (lastEventId.isNotEmpty) 'Last-Event-ID': lastEventId,
       ...const DioBody().headers(request.body),
     },
     extra: {...?call?.extra, OperationInfo.extraKey: request.operation},
