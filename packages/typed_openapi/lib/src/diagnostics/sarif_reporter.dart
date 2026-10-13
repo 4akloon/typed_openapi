@@ -85,13 +85,25 @@ final class SarifReporter implements DiagnosticReporter {
           '${code.id} ${code.slug}, a diagnostic of typed_openapi '
           '(${_level(code.defaultSeverity)} by default).',
     },
-    'help': {
-      'text':
-          'See ${code.id} in the catalog of diagnostic codes; set its level '
-          'with `severity: {${code.slug}: off}` in typed_openapi.yaml.',
-    },
+    'help': {'text': _help(code)},
     'defaultConfiguration': {'level': _level(code.defaultSeverity)},
   };
+
+  /// How the level of [code] can be changed, which the config allows only
+  /// for codes that are neither fixed nor config codes.
+  static String _help(DiagnosticCode code) {
+    final catalog = 'See ${code.id} in the catalog of diagnostic codes;';
+    if (DiagnosticCode.configCodes.contains(code)) {
+      return '$catalog its level cannot be changed.';
+    }
+    if (DiagnosticCode.fixedCodes.contains(code)) {
+      return '$catalog its level can be raised with '
+          '`severity: {${code.slug}: error}` in typed_openapi.yaml, not '
+          'lowered.';
+    }
+    return '$catalog set its level with `severity: {${code.slug}: off}` in '
+        'typed_openapi.yaml.';
+  }
 
   Map<String, Object?> _result(
     Diagnostic d,

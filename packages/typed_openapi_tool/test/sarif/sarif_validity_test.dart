@@ -8,6 +8,7 @@ import 'package:source_span/source_span.dart';
 import 'package:test/test.dart';
 import 'package:typed_openapi/typed_openapi.dart';
 
+import '../helpers/cached_schema.dart';
 import '../helpers/code_scanning_rules.dart';
 import '../helpers/json_schema.dart';
 
@@ -56,16 +57,14 @@ DiagnosticBag sample() {
 }
 
 void main() {
-  final schemaFile = File(
-    '.dart_tool/corpus/specs/sarif_schema/sarif-schema-2.1.0.json',
+  final cached = CachedSchema(
+    'sarif_schema',
+    corpusFile: 'corpus.yaml',
+    cacheDirectory: '.dart_tool/corpus/specs',
+    environment: Platform.environment,
   );
-  final schemaSkip = schemaFile.existsSync()
-      ? null
-      : 'The SARIF schema is not in the cache: run '
-            '`dart run bin/corpus.dart fetch sarif_schema`.';
-  JsonSchema loadSchema() => JsonSchema(
-    jsonDecode(schemaFile.readAsStringSync()) as Map<String, Object?>,
-  );
+  final schemaSkip = cached.skipReason;
+  JsonSchema loadSchema() => JsonSchema(cached.load());
   Map<String, Object?> log(SarifReporter reporter) =>
       jsonDecode(reporter.format(sample(), showBaselined: true))
           as Map<String, Object?>;

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:source_span/source_span.dart';
 import 'package:test/test.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_bag.dart';
+import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
 import 'package:typed_openapi/src/diagnostics/json_pointer.dart';
 import 'package:typed_openapi/src/diagnostics/sarif_reporter.dart';
 
@@ -116,5 +117,26 @@ void main() {
       (physicalOf(result)?['artifactLocation'] as Map?)?['uri'],
       'missing.yaml',
     );
+  });
+
+  test('the help of a rule says how its level can be changed', () {
+    final bag = DiagnosticBag()
+      ..report(.binaryObject, 'Changeable.', file: 'a.yaml')
+      ..report(.parseError, 'Fixed.', file: 'a.yaml')
+      ..report(.configNotFound, 'Config.', file: 'a.yaml');
+    final driver =
+        (runOf(const SarifReporter().format(bag))['tool']!
+                as Map<String, Object?>)['driver']!
+            as Map<String, Object?>;
+    final help = {
+      for (final rule in (driver['rules']! as List<Object?>).cast<Map>())
+        rule['id']: (rule['help'] as Map)['text'] as String,
+    };
+    expect(help['TOA901'], contains('cannot be changed'));
+    expect(
+      help[DiagnosticCode.parseError.id],
+      allOf(contains('raised'), isNot(contains(': off'))),
+    );
+    expect(help[DiagnosticCode.binaryObject.id], contains(': off}'));
   });
 }

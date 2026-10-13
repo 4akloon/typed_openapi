@@ -10,8 +10,9 @@ import 'spec_source.dart';
 /// An entry has `url` (one file) or `archive`, `root` and `entry` (a
 /// `.tar.gz` of several files), a `sha256`, a `license` and `expect`:
 /// `generate`, or `{check-errors: [TOA...]}`. The optional map `schemas`
-/// pins single files with a `url`, a `sha256` and a `license`. A malformed file is a
-/// [FormatException] that names the entry: the file is ours, not a user's.
+/// pins single files with a `url`, a `sha256` and a `license`. A malformed
+/// file is a [FormatException] that names the entry: the file is ours, not a
+/// user's.
 final class CorpusListReader {
   /// Creates the reader.
   const CorpusListReader();

@@ -59,6 +59,10 @@ final class SpecCache {
     return entry;
   }
 
+  /// The hash of the cached file of [schema], or null when there is none.
+  String? hashOfSchema(PinnedSchema schema) =>
+      _hashOf(schema.name, FileSource(schema.url));
+
   /// The hash of the cached files of [spec], or null when there are none.
   String? hashOf(CorpusSpec spec) => _hashOf(spec.name, spec.source);
 
