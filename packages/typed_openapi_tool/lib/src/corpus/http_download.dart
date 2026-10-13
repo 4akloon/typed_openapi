@@ -29,6 +29,9 @@ final class HttpDownload {
     if (url.scheme != 'http' && url.scheme != 'https') {
       throw CorpusException('GET $url: only http and https are fetched.');
     }
+    if (url.host.isEmpty) {
+      throw CorpusException('GET $url: the URL has no host.');
+    }
     final client = HttpClient()..connectionTimeout = connectionTimeout;
     try {
       return await _get(client, url).timeout(totalTimeout);

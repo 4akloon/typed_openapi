@@ -18,12 +18,15 @@ final class TarEntry {
   /// A hard link [name] to [linkName].
   const TarEntry.hardlink(this.name, this.linkName) : type = '1', content = '';
 
+  /// A FIFO [name].
+  const TarEntry.fifo(this.name) : type = '6', content = '', linkName = '';
+
   /// The name exactly as written in the header, so `../x` and `/x` are
   /// possible, which the system `tar` would never create.
   final String name;
 
   /// The tar type flag: `0` file, `1` hard link, `2` symbolic link, `5`
-  /// directory.
+  /// directory, `6` FIFO.
   final String type;
 
   /// The text of a regular file.

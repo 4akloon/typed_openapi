@@ -243,4 +243,30 @@ void main() {
       expect(Directory(p.join(temp.path, 'pets')).existsSync(), isFalse);
     },
   );
+
+  test(
+    'an entry that leaves the cache folder is refused before any write',
+    () async {
+      final temp = TempDir();
+      var downloads = 0;
+      final cache = SpecCache(p.join(temp.path, 'cache'), (url) async {
+        downloads++;
+        return utf8.encode(_text);
+      });
+      for (final url in [
+        'https://example.com/a%2F..%2F..%2Fx.json',
+        'https://example.com/',
+        'https://example.com',
+      ]) {
+        await expectLater(
+          cache.fetch(spec(FileSource(Uri.parse(url)), pinned)),
+          throwsA(isA<CorpusException>()),
+          reason: url,
+        );
+      }
+      expect(downloads, 0);
+      expect(File(p.join(temp.path, 'x.json')).existsSync(), isFalse);
+      expect(Directory(p.join(temp.path, 'cache')).existsSync(), isFalse);
+    },
+  );
 }

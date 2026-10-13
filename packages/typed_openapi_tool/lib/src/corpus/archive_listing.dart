@@ -40,25 +40,39 @@ final class ArchiveListing {
   /// it, which could lead a later write or a later read out of the target.
   void check(String kept) {
     for (final (index, name) in names.indexed) {
-      final segments = name.split('/');
-      if (name.startsWith('/') ||
-          name.contains(r'\') ||
-          segments.contains('..') ||
-          RegExp('^[A-Za-z]:').hasMatch(name)) {
-        throw CorpusException('The archive has the unsafe entry "$name".');
-      }
-      final isLink = _types[index] == 'l' || _types[index] == 'h';
       final path = name.endsWith('/')
           ? name.substring(0, name.length - 1)
           : name;
-      if (isLink && (_isWithin(kept, path) || _isWithin(path, kept))) {
+      if (_isUnsafe(path)) {
+        throw CorpusException('The archive has the unsafe entry "$name".');
+      }
+      final type = _types[index];
+      final isNear = _isWithin(path, kept) || _isWithin(kept, path);
+      if (isNear && (type == 'l' || type == 'h')) {
         throw CorpusException(
           'The archive has the link "$name" in or on the way to "$kept"; '
           'links are not extracted.',
         );
       }
+      if (_isWithin(kept, path) && type != '-' && type != 'd') {
+        throw CorpusException(
+          'The archive has "$name", which is neither a file nor a '
+          'directory, in "$kept".',
+        );
+      }
     }
   }
+
+  static final _drive = RegExp('^[A-Za-z]:');
+
+  /// Whether [path] could be written elsewhere than its own place: absolute,
+  /// with a backslash or drive, or with an empty, `.` or `..` segment (so a
+  /// link written as `./a`, `a//b` or `a/./b` cannot dodge a comparison).
+  static bool _isUnsafe(String path) =>
+      path.startsWith('/') ||
+      path.contains(r'\') ||
+      _drive.hasMatch(path) ||
+      path.split('/').any((s) => s.isEmpty || s == '.' || s == '..');
 
   /// Whether [path] is [directory] or lies below it.
   static bool _isWithin(String directory, String path) =>

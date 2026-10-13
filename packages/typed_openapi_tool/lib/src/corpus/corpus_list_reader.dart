@@ -58,7 +58,7 @@ final class CorpusListReader {
     final map = _entryMap(name, value, const {'url', 'sha256', 'license'});
     return PinnedSchema(
       name: name,
-      url: _uri(name, map, 'url'),
+      url: _fileSource(name, map).url,
       sha256: _hash(name, map),
       license: _text(name, map, 'license'),
     );
@@ -108,12 +108,15 @@ final class CorpusListReader {
 
   static FileSource _fileSource(String name, YamlMap value) {
     final source = FileSource(_uri(name, value, 'url'));
-    // The cache saves the file under the last segment of the URL.
-    const SpecPath().check(
-      name,
-      'url',
-      source.url.pathSegments.lastOrNull ?? '',
-    );
+    // The cache saves the file under the last segment of the URL, decoded:
+    // `%2F` would make it a path, so it must be one plain segment.
+    final last = source.entry;
+    const SpecPath().check(name, 'url', last);
+    if (last.contains('/')) {
+      throw CorpusException(
+        'corpus.yaml: $name has a "url" whose file name "$last" is a path.',
+      );
+    }
     return source;
   }
 

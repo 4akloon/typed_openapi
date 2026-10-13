@@ -64,10 +64,10 @@ void main() {
     );
   });
 
-  test('a host that does not exist is a CorpusException', () async {
+  test('a URL without a host is a CorpusException', () async {
     await expectLater(
-      const HttpDownload()(Uri.parse('http://nonexistent.invalid/spec.yaml')),
-      _corpusError(contains('could not be fetched')),
+      const HttpDownload()(Uri.parse('http:///spec.yaml')),
+      _corpusError(contains('no host')),
     );
   });
 

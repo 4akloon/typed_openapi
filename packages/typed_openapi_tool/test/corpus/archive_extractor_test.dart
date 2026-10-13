@@ -113,6 +113,34 @@ void main() {
     },
   );
 
+  test(
+    'a link written with . or empty segments cannot dodge the check',
+    () async {
+      for (final name in [
+        './repo/specs/l',
+        'repo//specs/l',
+        'repo/./specs/l',
+      ]) {
+        final temp = TempDir();
+        await expectLater(
+          extract(temp, [..._repo, TarEntry.symlink(name, '/etc')]),
+          throwsA(isA<CorpusException>()),
+          reason: name,
+        );
+        expectNothingLeft(temp);
+      }
+    },
+  );
+
+  test('a FIFO in the kept root fails and names the entry', () async {
+    final temp = TempDir();
+    await expectLater(
+      extract(temp, [..._repo, const TarEntry.fifo('repo/specs/pipe')]),
+      _rejects('repo/specs/pipe'),
+    );
+    expectNothingLeft(temp);
+  });
+
   test('an archive without the root fails', () async {
     final temp = TempDir();
     await expectLater(

@@ -10,13 +10,14 @@ sealed class SpecSource {
   String get entry;
 }
 
-/// A spec that is one file, saved under the last segment of its URL.
+/// A spec that is one file, saved under the last segment of its URL (empty
+/// when the URL has none; the reader refuses that).
 final class FileSource extends SpecSource {
   /// Creates the source at [url].
   const FileSource(super.url);
 
   @override
-  String get entry => url.pathSegments.last;
+  String get entry => url.pathSegments.lastOrNull ?? '';
 }
 
 /// A spec of several files: a `.tar.gz` archive whose top directory holds

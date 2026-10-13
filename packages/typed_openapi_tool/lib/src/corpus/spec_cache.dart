@@ -37,6 +37,11 @@ final class SpecCache {
   Future<String> _fetch(String name, SpecSource source, String pinned) async {
     final folder = p.join(directory, name);
     final entry = p.joinAll([folder, ...source.entry.split('/')]);
+    if (source.entry.isEmpty || !p.isWithin(folder, entry)) {
+      throw CorpusException(
+        '$name: "${source.entry}" is not a path inside the cache folder.',
+      );
+    }
     if (_hashOf(name, source) == pinned) return entry;
     _delete(folder);
     final bytes = await _download(source.url);

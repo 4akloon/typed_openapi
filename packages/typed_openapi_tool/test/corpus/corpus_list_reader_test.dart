@@ -174,6 +174,11 @@ schemas:
         'https://example.com/dir/',
         'https://example.com',
         'https://example.com/a/..',
+        'https://example.com/a/.',
+        'https://example.com/a%2F..%2F..%2Fx.json',
+        'https://example.com/a%2Fb.json',
+        'https://example.com/a%5Cb.json',
+        'https://example.com/%2E%2E',
       ]) {
         expect(
           () => reader.read(
@@ -181,7 +186,14 @@ schemas:
             'expect: generate}}',
           ),
           throwsA(isA<CorpusException>()),
-          reason: url,
+          reason: 'spec $url',
+        );
+        expect(
+          () => reader.readSchemas(
+            'schemas: {pets: {url: "$url", sha256: $_hash, license: MIT}}',
+          ),
+          throwsA(isA<CorpusException>()),
+          reason: 'schema $url',
         );
       }
     });
