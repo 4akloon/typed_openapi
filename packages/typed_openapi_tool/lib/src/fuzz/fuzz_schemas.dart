@@ -63,6 +63,12 @@ final class FuzzSchemas {
 
   /// A property schema.
   Map<String, Object?> primitive() => pick<Map<String, Object?> Function()>([
+    ..._constrained(),
+    ..._formatted(),
+    ..._composite(),
+  ])();
+
+  List<Map<String, Object?> Function()> _constrained() => [
     () => {
       'type': 'string',
       'minLength': _random.nextInt(3),
@@ -77,6 +83,9 @@ final class FuzzSchemas {
       'minItems': 1,
     },
     enumeration,
+  ];
+
+  List<Map<String, Object?> Function()> _formatted() => [
     () => {'type': 'string', 'format': 'date-time'},
     () => {'type': 'string', 'format': 'date'},
     () => {'type': 'string', 'format': 'byte'},
@@ -87,6 +96,9 @@ final class FuzzSchemas {
       'type': 'object',
       'additionalProperties': {'type': 'string'},
     },
+  ];
+
+  List<Map<String, Object?> Function()> _composite() => [
     ref,
     () => {
       'allOf': [
@@ -117,7 +129,7 @@ final class FuzzSchemas {
         {'type': 'null'},
       ],
     },
-  ])();
+  ];
 
   /// A branch of a union.
   Map<String, Object?> variant() => pick<Map<String, Object?> Function()>([

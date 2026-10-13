@@ -28,10 +28,15 @@ final class LeakCheck {
     ],
   ];
 
+  /// A workflow command a CI log would run if a spec line reached it raw.
+  static final _command = RegExp('^::[a-z-]+::', multiLine: true);
+
   /// The problems of the text report [report].
   List<String> report(String report) => [
     if (_unsafeInCode.firstMatch(report) case final m?)
       'The report holds a raw U+${_hex(m[0] ?? '')}.',
+    if (_command.hasMatch(report))
+      'The report holds a line that starts like a workflow command.',
   ];
 
   static String _hex(String char) =>

@@ -27,7 +27,8 @@ final class DartLiterals {
         final end = _source.indexOf('\n', _at);
         _at = end < 0 ? _source.length : end;
       } else if (_source.startsWith('/*', _at)) {
-        _at = _source.indexOf('*/', _at) + 2;
+        final end = _source.indexOf('*/', _at + 2);
+        _at = end < 0 ? _source.length : end + 2;
       } else if (char == "'" || char == '"') {
         _string(raw: _at > 0 && _source[_at - 1] == 'r' && _isRawPrefix());
       } else {

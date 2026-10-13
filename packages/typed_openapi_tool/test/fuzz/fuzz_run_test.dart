@@ -35,6 +35,14 @@ void main() {
     expect('$log', isEmpty);
   }, timeout: const Timeout(Duration(minutes: 3)));
 
+  test('successive samples cover every client', () {
+    final clients = {
+      for (var seed = 0; seed < 72; seed += 12) FuzzRun.sampledClient(seed, 12),
+    };
+    expect(clients, hasLength(6));
+    expect(clients.where((c) => c.endsWith('_structural')), hasLength(3));
+  });
+
   test('a spec string that no literal holds is reported', () async {
     final temp = TempDir()
       ..write('pubspec.yaml', 'name: sample\nenvironment:\n  sdk: ^3.10.0\n')

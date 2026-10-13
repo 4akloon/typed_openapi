@@ -24,6 +24,11 @@ abstract final class Hostile {
     'delta',
     '"double"',
     'tab\there',
+    '\u001b[31mred',
+    'next\u0085line',
+    'mark\u200Eltr\u200Frtl\u061Carabic',
+    'lone\uD800surrogate',
+    'a\n::error::x',
   ];
 
   /// Strings for sinks that become documentation: descriptions, titles and
@@ -37,6 +42,11 @@ abstract final class Hostile {
     '\u2028injected();',
     r'ends with a backslash \',
     r"$it's",
+    '\u001b[31mred\u001b[0m',
+    '\n::error::x',
+    '\u0085injected();',
+    'bidi \u200E\u200F\u061C mark',
+    'lone \uD800 surrogate',
   ];
 
   /// Media types that are valid by RFC 9110 and hold characters that a

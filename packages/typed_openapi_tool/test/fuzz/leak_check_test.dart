@@ -29,4 +29,11 @@ void main() {
     ]);
     expect(check.report('error - a\nb\n'), isEmpty);
   });
+
+  test('a report line that starts like a workflow command is a leak', () {
+    expect(check.report('error - x\n::error::boom\n'), [
+      'The report holds a line that starts like a workflow command.',
+    ]);
+    expect(check.report('error - ::error::inside a line'), isEmpty);
+  });
 }

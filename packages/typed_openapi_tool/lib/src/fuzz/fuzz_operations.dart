@@ -20,57 +20,70 @@ final class FuzzOperations {
   /// A parameter; [i] keeps names of one operation apart.
   Map<String, Object?> parameter(int i) =>
       _pick<Map<String, Object?> Function()>([
-        () => {'name': 'q$i', 'in': 'query', 'schema': schemas.primitive()},
-        () => {
-          'name': _pick(Hostile.names),
-          'in': 'query',
-          'description': _pick(Hostile.texts),
-          'schema': schemas.primitive(),
-        },
-        () => {
-          'name': 'h$i',
-          'in': 'header',
-          'required': true,
-          'schema': schemas.primitive(),
-        },
-        () => {
-          'name': 'c$i',
-          'in': 'cookie',
-          'explode': schemas.coin(),
-          'schema': schemas.primitive(),
-        },
-        () => {
-          'name': 'd$i',
-          'in': 'query',
-          'style': 'deepObject',
-          'explode': true,
-          'schema': {
-            'type': 'object',
-            'additionalProperties': {'type': 'string'},
-          },
-        },
-        () => {
-          'name': 'p$i',
-          'in': 'query',
-          'style': _pick(['pipeDelimited', 'spaceDelimited', 'form']),
-          'schema': {'type': 'array', 'items': schemas.enumeration()},
-        },
-        () => {
-          'name': 'j$i',
-          'in': 'query',
-          'content': {
-            'application/json': {'schema': schemas.primitive()},
-          },
-        },
-        () => {
-          'name': "x'\$\n*/$i",
-          'in': 'query',
-          'schema': {'type': 'string', 'default': r"*/ $x '"},
-        },
+        ..._plainParameters(i),
+        ..._styledParameters(i),
       ])();
+
+  List<Map<String, Object?> Function()> _plainParameters(int i) => [
+    () => {'name': 'q$i', 'in': 'query', 'schema': schemas.primitive()},
+    () => {
+      'name': _pick(Hostile.names),
+      'in': 'query',
+      'description': _pick(Hostile.texts),
+      'schema': schemas.primitive(),
+    },
+    () => {
+      'name': 'h$i',
+      'in': 'header',
+      'required': true,
+      'schema': schemas.primitive(),
+    },
+    () => {
+      'name': 'c$i',
+      'in': 'cookie',
+      'explode': schemas.coin(),
+      'schema': schemas.primitive(),
+    },
+  ];
+
+  List<Map<String, Object?> Function()> _styledParameters(int i) => [
+    () => {
+      'name': 'd$i',
+      'in': 'query',
+      'style': 'deepObject',
+      'explode': true,
+      'schema': {
+        'type': 'object',
+        'additionalProperties': {'type': 'string'},
+      },
+    },
+    () => {
+      'name': 'p$i',
+      'in': 'query',
+      'style': _pick(['pipeDelimited', 'spaceDelimited', 'form']),
+      'schema': {'type': 'array', 'items': schemas.enumeration()},
+    },
+    () => {
+      'name': 'j$i',
+      'in': 'query',
+      'content': {
+        'application/json': {'schema': schemas.primitive()},
+      },
+    },
+    () => {
+      'name': "x'\$\n*/$i",
+      'in': 'query',
+      'schema': {'type': 'string', 'default': r"*/ $x '"},
+    },
+  ];
 
   /// The content of a body or a response.
   Map<String, Object?> content() => _pick<Map<String, Object?> Function()>([
+    ..._jsonContent(),
+    ..._otherContent(),
+  ])();
+
+  List<Map<String, Object?> Function()> _jsonContent() => [
     () => {
       'application/json': {'schema': schemas.ref()},
     },
@@ -80,6 +93,9 @@ final class FuzzOperations {
     () => {
       _pick(Hostile.mediaTypes): {'schema': schemas.ref()},
     },
+  ];
+
+  List<Map<String, Object?> Function()> _otherContent() => [
     () => {
       'text/plain': {
         'schema': {'type': 'string'},
@@ -111,7 +127,7 @@ final class FuzzOperations {
       'application/json': {'schema': schemas.ref()},
       'text/event-stream': _stream(),
     },
-  ])();
+  ];
 
   Map<String, Object?> _stream() => _pick<Map<String, Object?> Function()>([
     () => {'schema': schemas.primitive()},

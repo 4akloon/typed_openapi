@@ -29,4 +29,8 @@ final c = '\$cost';
 """;
     expect(DartLiterals(source).scan(), ["'key'", r"'\$cost'"]);
   });
+
+  test('an unterminated block comment runs to the end of the input', () {
+    expect(DartLiterals("const a = 'x'; /* never closed 'y'").scan(), ["'x'"]);
+  });
 }

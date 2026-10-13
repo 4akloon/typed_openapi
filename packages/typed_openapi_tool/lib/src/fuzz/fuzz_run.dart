@@ -8,6 +8,7 @@ import 'fuzz_build.dart';
 import 'fuzz_spec.dart';
 import 'leak_check.dart';
 import 'literal_check.dart';
+import 'seed_checks.dart';
 import 'spec_strings.dart';
 
 /// What a fuzz run found.
@@ -104,22 +105,11 @@ final class FuzzRun {
     return (
       builds: first.files.length,
       files: first.files.values.fold(0, (n, f) => n + f.length),
-      failures: _problems(seed, first, second),
-      strings: seed % sampleEvery == 0 ? _sample(seed, first, sample) : null,
+      failures: const SeedChecks().of(seed, first, second),
+      strings: seed % sampleEvery == 0
+          ? _sample(seed, first, sample, sampleEvery)
+          : null,
     );
-  }
-
-  static List<String> _problems(int seed, FuzzOutput first, FuzzOutput second) {
-    const leaks = LeakCheck();
-    return [
-      for (final MapEntry(key: client, value: files)
-          in first.files.entries) ...[
-        if (!_same(files, second.files[client]))
-          'seed $seed: $client is not deterministic.',
-        ...leaks.code('seed $seed $client', files),
-      ],
-      for (final problem in leaks.report(first.report)) 'seed $seed: $problem',
-    ];
   }
 
   /// Writes the output of one client of the seed into [sample] and returns
@@ -128,8 +118,9 @@ final class FuzzRun {
     int seed,
     FuzzOutput output,
     CorpusPackage sample,
+    int sampleEvery,
   ) {
-    final client = '${FuzzBuild.configs[seed % 3].$1}_raw';
+    final client = sampledClient(seed, sampleEvery);
     final ir = output.irs[client];
     if (ir == null) return null;
     for (final MapEntry(key: path, value: text)
@@ -141,8 +132,13 @@ final class FuzzRun {
     return const SpecStrings().of(ir);
   }
 
-  static bool _same(Map<String, String> a, Map<String, String>? b) =>
-      b != null &&
-      a.length == b.length &&
-      a.entries.every((e) => b[e.key] == e.value);
+  /// The client whose output the seed [seed] adds to the sample: successive
+  /// samples cycle through the configs, then through the `union` modes, so
+  /// every client is analyzed (seeds are multiples of [sampleEvery]).
+  static String sampledClient(int seed, int sampleEvery) {
+    final index = seed ~/ sampleEvery;
+    final config = FuzzBuild.configs[index % FuzzBuild.configs.length].$1;
+    final mode = FuzzBuild.modes[(index ~/ FuzzBuild.configs.length) % 2];
+    return '${config}_$mode';
+  }
 }

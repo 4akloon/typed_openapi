@@ -38,27 +38,44 @@ final class FuzzCli {
   /// Runs the fuzz with [args]; returns the exit code.
   Future<int> run(List<String> args) async {
     final ArgResults results;
+    final int seeds;
+    final int from;
+    final int sampleEvery;
     try {
       results = _parser.parse(args);
+      seeds = _number(results, 'seeds', least: 0);
+      from = _number(results, 'from', least: 0);
+      sampleEvery = _number(results, 'sample-every', least: 1);
     } on FormatException catch (e) {
       _err
         ..writeln(e.message)
         ..writeln(_parser.usage);
       return 64;
     }
-    int number(String name) => int.parse(results.option(name)!);
     final report = await FuzzRun(
       work: p.normalize(p.absolute(results.option('work')!)),
       runtime: p.normalize(p.absolute(results.option('runtime')!)),
       log: _err,
-      sampleEvery: number('sample-every'),
-    ).run(from: number('from'), count: number('seeds'));
+      sampleEvery: sampleEvery,
+    ).run(from: from, count: seeds);
     report.failures.forEach(_err.writeln);
     _out.writeln(
-      '${number('seeds')} seeds: ${report.builds} builds, '
+      '$seeds seeds: ${report.builds} builds, '
       '${report.files} files, ${report.sampled} sampled; '
       '${report.failures.length} problems.',
     );
     return report.failures.isEmpty ? 0 : 1;
+  }
+
+  static int _number(ArgResults results, String name, {required int least}) {
+    final text = results.option(name)!;
+    final value = int.tryParse(text);
+    if (value == null || value < least) {
+      throw FormatException(
+        '--$name must be a whole number of $least or more, '
+        'not "$text".',
+      );
+    }
+    return value;
   }
 }

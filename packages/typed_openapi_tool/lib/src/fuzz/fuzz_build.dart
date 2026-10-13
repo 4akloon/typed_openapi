@@ -26,7 +26,7 @@ final class FuzzBuild {
     ).writeAsStringSync(input.overrides);
     final clients = StringBuffer();
     for (final (name, settings) in configs) {
-      for (final mode in const ['raw', 'structural']) {
+      for (final mode in modes) {
         clients.writeln(
           '  ${name}_$mode: {input: spec.json, output: out/${name}_$mode, '
           'overrides: overrides.json, union: $mode, $settings}',
@@ -43,6 +43,9 @@ final class FuzzBuild {
     ('path', 'group_by: path, tri_state: optional'),
     ('single', 'group_by: single, tri_state: extension'),
   ];
+
+  /// The `union` modes every config is built in.
+  static const modes = ['raw', 'structural'];
 
   /// The directory of the seed's files.
   final String directory;
