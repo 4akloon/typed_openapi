@@ -2,14 +2,13 @@ import 'dart:convert';
 
 import '../model/schema.dart';
 import '../model/spec_node.dart';
-import 'custom_types.dart';
+import 'custom_schemas.dart';
 import 'dart_type.dart';
 import 'declaration_names.dart';
 import 'direction_index.dart';
 import 'enum_mapper.dart';
 import 'ir.dart';
 import 'ir_context.dart';
-import 'json_kinds.dart';
 import 'mapping_scope.dart';
 import 'mapping_tools.dart';
 import 'model_mapper.dart';
@@ -19,6 +18,7 @@ import 'pending_declaration.dart';
 import 'ref_follower.dart';
 import 'schema_queries.dart';
 import 'schema_shapes.dart';
+import 'structural_mapper.dart';
 import 'subtype_finder.dart';
 import 'type_recursion.dart';
 import 'union_mapper.dart';
@@ -66,7 +66,6 @@ final class SchemaMapper {
   late final DeclarationNames _declNames = _tools.names;
   late final OverrideNotices _notices = _tools.notices;
   late final EnumMapper _enums = EnumMapper(_tools);
-  late final JsonKinds _kinds = _tools.kinds;
   late final SubtypeFinder _subtypeFinder = _tools.subtypes;
   late final UnionNotices _unionNotices = _tools.unionNotices;
   late final TypeRecursion _types = TypeRecursion(
@@ -75,6 +74,8 @@ final class SchemaMapper {
     replaced: _replaced,
   );
   late final ModelMapper _models = ModelMapper(_tools, _types);
+  late final StructuralMapper _structural = StructuralMapper(_tools, _types);
+  late final CustomSchemas _custom = CustomSchemas(_tools, _types);
   late final UnionMapper _unions = UnionMapper(_tools, _types);
 
   Map<DeclId, PendingDeclaration> get _pending => _tools.state.pending;
@@ -184,35 +185,7 @@ final class SchemaMapper {
 
   /// The type of a schema a `$ref` points to.
   DartType _component(SchemaObject schema, MappingScope scope) {
-    if (!scope.replacing) {
-      final custom = _customSchemaType(schema, scope);
-      final excluded =
-          _context.overrides.schemaAt(schema.location)?.exclude ?? false;
-      if (custom != null) {
-        if (excluded) {
-          _context.report(
-            .excludedSchemaReferenced,
-            'This schema is excluded by an override, but it also has a custom '
-            'Dart type; the type is used and the exclude has no effect.',
-            schema.location,
-            fix: 'Remove the exclude, or the custom type.',
-          );
-        }
-        return custom;
-      }
-      if (excluded) {
-        _context.report(
-          .excludedSchemaReferenced,
-          'This schema is excluded by an override, but a generated type uses '
-          'it; the use is generated as JsonValue.',
-          schema.location,
-          fix:
-              'Exclude what uses the schema too, or give the schema a Dart '
-              'type instead of excluding it.',
-        );
-        return const CoreType(.json);
-      }
-    }
+    if (_custom.substitute(schema, scope) case final type?) return type;
     final (id, inner) = _idOf(schema, scope);
     // A schema that extends a polymorphic base with `allOf` and adds nothing
     // is a subtype, not a reference to the base (which is the union).
@@ -223,26 +196,29 @@ final class SchemaMapper {
       final part => part,
     };
     if (single == null && _declares(schema)) {
-      if (inner.replacing) return _nothingDeclared(schema);
+      if (inner.replacing) return _structural.nothingDeclared(schema);
       return _declareNamed(schema, id, inner);
     }
-    // A structural schema (array, map, scalar) has no declaration of its
-    // own: each use gets its type. One that refers back to itself without
-    // a declaration in between cannot be spelled out.
-    if (!inner.replacing) _notices.aliasHasNoEffect(schema);
-    if (!_enterAlias(schema.location, inner)) return const CoreType(.json);
+    return _alias(schema, single, inner);
+  }
+
+  /// The type of the component [schema] that has no declaration of its own
+  /// (an array, a map, a scalar), or that stands for the one schema [single]:
+  /// each use gets its type. One that refers back to itself without a
+  /// declaration in between cannot be spelled out.
+  DartType _alias(SchemaObject schema, Schema? single, MappingScope scope) {
+    if (!scope.replacing) _notices.aliasHasNoEffect(schema);
+    if (!_enterAlias(schema.location, scope)) return const CoreType(.json);
     try {
       final hint = NameHint(
         _names.pascal(DeclarationNames.referenceName(schema.location)) ??
             DeclarationNames.fallbackName,
         '',
       );
-      if (single != null) {
-        _unionNotices.subsumedBranches(schema, inner, collapsed: true);
-        final type = _map(single, hint, inner);
-        return type.withNullable(type.nullable || _isNullable(schema));
-      }
-      return _structural(schema, hint, inner);
+      if (single == null) return _structural.structural(schema, hint, scope);
+      _unionNotices.subsumedBranches(schema, scope, collapsed: true);
+      final type = _map(single, hint, scope);
+      return type.withNullable(type.nullable || _isNullable(schema));
     } finally {
       _aliases.remove(schema.location);
     }
@@ -293,26 +269,12 @@ final class SchemaMapper {
       return type.withNullable(type.nullable || _isNullable(schema));
     }
     if (_declares(schema)) {
-      if (scope.replacing) return _nothingDeclared(schema);
+      if (scope.replacing) return _structural.nothingDeclared(schema);
       final (id, inner) = _idOf(schema, scope);
       return _declare(schema, id, inner, hint: hint);
     }
-    return _structural(schema, hint, scope);
+    return _structural.structural(schema, hint, scope);
   }
-
-  /// The type of a declaring [schema] inside a replaced schema: nothing is
-  /// declared, so the type is that of its JSON value (a map for an object,
-  /// a scalar for an enum), which the custom type's `fromJson` takes;
-  /// `JsonValue` when the schema may hold values of several JSON types.
-  DartType _nothingDeclared(SchemaObject schema) =>
-      switch (_kinds.ofSchema(schema, {})) {
-        .object => const MapType(CoreType(.json)),
-        .string => const CoreType(.string),
-        .integer => const CoreType(.integer),
-        .number => const CoreType(.number),
-        .boolean => const CoreType(.boolean),
-        _ => const CoreType(.json),
-      }.withNullable(_isNullable(schema));
 
   /// The JSON side of [schema], which a custom type replaces (R6.8): scalars,
   /// lists and maps; a schema that would be a declaration is `JsonValue`, so
@@ -415,109 +377,6 @@ final class SchemaMapper {
         ..addAll(aliases);
     }
     return NamedType(id, nullable: nullable);
-  }
-
-  /// The type of a schema without a declaration: a scalar, a list or a
-  /// map.
-  DartType _structural(SchemaObject schema, NameHint hint, MappingScope scope) {
-    final nullable = _isNullable(schema);
-    final types = [
-      for (final type in schema.types)
-        if (type != SchemaType.nullType) type,
-    ];
-    if (types.length > 1) {
-      // A custom type replaces the schema, so it has nothing to report.
-      if (!scope.replacing) {
-        _context.report(
-          .mixedTypeSchema,
-          'This schema allows ${types.map((t) => t.wire).join(', ')}; it is '
-          'generated as JsonValue.',
-          schema.location,
-          fix:
-              'Give the schema one type at the source, or a Dart type with an '
-              'override.',
-          override: _context.schemaOverride(schema.location, {
-            'dartType': {
-              'type': 'MyType',
-              'import': 'package:app/my_type.dart',
-            },
-          }),
-        );
-      }
-      return const CoreType(.json);
-    }
-    final type =
-        types.firstOrNull ??
-        (schema.items != null
-            ? SchemaType.array
-            : schema.additionalProperties != null
-            ? SchemaType.object
-            : null);
-    final DartType base = switch (type) {
-      null || SchemaType.nullType => const CoreType(.json),
-      .integer => const CoreType(.integer),
-      .number => switch (schema.format) {
-        'float' || 'double' => const CoreType(.float),
-        _ => switch (_context.config.numberType) {
-          'double' => const CoreType(.float),
-          'int' => const CoreType(.integer),
-          _ => const CoreType(.number),
-        },
-      },
-      .boolean => const CoreType(.boolean),
-      .string => switch (schema.format) {
-        'date-time' => const CoreType(.dateTime),
-        'date' => const CoreType(.date),
-        'byte' => const CoreType(.bytes),
-        'binary' => const CoreType(.binary),
-        _ => const CoreType(.string),
-      },
-      .array => ListType(
-        switch (schema.items) {
-          final items? => _map(items, _suffixed(hint, 'Item'), scope),
-          null => const CoreType(.json),
-        },
-      ),
-      .object => MapType(
-        switch (schema.additionalProperties) {
-          final BooleanSchema _ || null => const CoreType(.json),
-          final values => _map(values, _suffixed(hint, 'Value'), scope),
-        },
-      ),
-    };
-    final format = schema.format;
-    final custom = format == null ? null : _context.config.formats[format];
-    final mapped = custom == null ? base : CustomTypes.of(custom, base);
-    return mapped.withNullable(nullable);
-  }
-
-  static NameHint _suffixed(NameHint hint, String suffix) =>
-      switch (hint.parent) {
-        final parent? => NameHint.under(parent, '${hint.suffix}$suffix'),
-        null => NameHint(hint.prefix!, '${hint.suffix}$suffix'),
-      };
-
-  /// The custom type every use of [schema] gets (R6.8): an override's
-  /// `dartType` or `types.schemas` of the config.
-  DartType? _customSchemaType(SchemaObject schema, MappingScope scope) {
-    final override = _context.overrides.schemaAt(schema.location)?.dartType;
-    final key = DeclarationNames.componentKey(schema.location);
-    final custom =
-        override ?? (key == null ? null : _context.config.schemas[key]);
-    if (custom == null) return null;
-    // The schema is an alias open while its JSON side is built, so a cycle
-    // through it ends there.
-    _aliases.add(schema.location);
-    try {
-      final json = _replaced(
-        schema,
-        NameHint(_names.pascal(key ?? '') ?? DeclarationNames.fallbackName, ''),
-        scope,
-      );
-      return CustomTypes.of(custom, json).withNullable(_isNullable(schema));
-    } finally {
-      _aliases.remove(schema.location);
-    }
   }
 
   // Forwards to [SchemaQueries], until the code that asks moves out too.
