@@ -17,9 +17,11 @@ import 'variant_names.dart';
 /// classes (R9).
 final class UnionMapper {
   /// A union mapper that maps the branches of a union with [types].
-  UnionMapper(this._tools, TypeRecursion types, this._kinds, this._notices)
-    : _collector = VariantCollector(_tools, types, _kinds, _notices),
-      _discriminators = DiscriminatorReader(_tools, _notices),
+  UnionMapper(this._tools, TypeRecursion types)
+    : _kinds = _tools.kinds,
+      _notices = _tools.unionNotices,
+      _collector = VariantCollector(_tools, types),
+      _discriminators = DiscriminatorReader(_tools),
       _variantNames = VariantNames(_tools.state);
 
   final MappingTools _tools;

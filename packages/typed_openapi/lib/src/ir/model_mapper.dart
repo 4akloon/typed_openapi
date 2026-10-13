@@ -3,7 +3,6 @@ import '../overrides/override_set.dart';
 import 'allof_merger.dart';
 import 'custom_types.dart';
 import 'dart_type.dart';
-import 'enum_mapper.dart';
 import 'field_notes_reader.dart';
 import 'ir.dart';
 import 'mapping_scope.dart';
@@ -180,7 +179,7 @@ final class ModelMapper {
     final values = SchemaShapes.enumValues(property);
     if (values == null || values.length != 1) return null;
     final value = values.single!;
-    return switch (EnumMapper.kindOf(property, values)) {
+    return switch (SchemaQueries.enumKind(property, values)) {
       .string => (value, const CoreType(.string)),
       .integer => (value, const CoreType(.integer)),
       .number => (value, const CoreType(.number)),

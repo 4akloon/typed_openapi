@@ -14,12 +14,9 @@ import 'union_state.dart';
 /// variant of any JSON value.
 final class VariantCollector {
   /// A collector that maps branches with [_types].
-  const VariantCollector(
-    this._tools,
-    this._types,
-    this._kinds,
-    this._notices,
-  );
+  VariantCollector(this._tools, this._types)
+    : _kinds = _tools.kinds,
+      _notices = _tools.unionNotices;
 
   final MappingTools _tools;
   final TypeRecursion _types;

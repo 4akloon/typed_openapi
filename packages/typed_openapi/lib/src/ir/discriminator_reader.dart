@@ -13,7 +13,7 @@ import 'union_state.dart';
 /// and the component key of a `$ref` variant (R9.1).
 final class DiscriminatorReader {
   /// A reader for the spec of [_tools].
-  const DiscriminatorReader(this._tools, this._notices);
+  DiscriminatorReader(this._tools) : _notices = _tools.unionNotices;
 
   final MappingTools _tools;
   final UnionNotices _notices;

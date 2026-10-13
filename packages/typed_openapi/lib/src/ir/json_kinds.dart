@@ -1,18 +1,20 @@
 import '../model/schema.dart';
 import '../model/spec_node.dart';
 import 'dart_type.dart';
-import 'enum_mapper.dart';
 import 'ir.dart' show JsonKind;
-import 'mapping_tools.dart';
+import 'mapping_state.dart';
+import 'schema_queries.dart';
 import 'schema_shapes.dart';
 
 /// Which JSON type a schema's values have, and which branches of a union a
 /// value's JSON type cannot tell apart (R9.2).
 final class JsonKinds {
-  /// Questions about JSON types for the mapping of [_tools].
-  JsonKinds(this._tools);
+  /// Questions about JSON types: [_queries] follow the `$ref`s, and the
+  /// declarations of [_state] know the JSON type of their values.
+  JsonKinds(this._queries, this._state);
 
-  final MappingTools _tools;
+  final SchemaQueries _queries;
+  final MappingState _state;
 
   /// The branches of a union without a discriminator that the JSON type of
   /// a value cannot tell apart, by index, with their JSON type (null for a
@@ -24,7 +26,7 @@ final class JsonKinds {
     final kinds = <int, JsonKind?>{};
     final seen = <SpecLocation>{};
     for (final (i, branch) in branches.indexed) {
-      final location = _tools.queries.resolved(branch)?.location;
+      final location = _queries.resolved(branch)?.location;
       if (location != null && !seen.add(location)) continue;
       kinds[i] = ofSchema(branch, {});
     }
@@ -56,24 +58,23 @@ final class JsonKinds {
     MapType() => .object,
     CustomType(:final json) => ofType(json),
     PatchType(:final value) => ofType(value),
-    NamedType(:final id) => _tools.state.pending[id]?.jsonKind,
+    NamedType(:final id) => _state.pending[id]?.jsonKind,
   };
 
   /// The JSON type every value of [schema] has, or null when it may have
   /// several (or any); [seen] stops a cycle.
   JsonKind? ofSchema(Schema schema, Set<SpecLocation> seen) {
-    final queries = _tools.queries;
-    final object = queries.resolved(schema);
+    final object = _queries.resolved(schema);
     if (object == null || !seen.add(object.location)) return null;
     if (SchemaShapes.enumValues(object) case final values?) {
       return _enumKind(object, values);
     }
     // A union is an object when a discriminator picks its variant; any
     // other union may hold values of several types.
-    if (queries.branches(object) != null) {
+    if (_queries.branches(object) != null) {
       return object.discriminator?.propertyName != null ? .object : null;
     }
-    if (SchemaShapes.singleOf(object, refs: queries.refs) case final single?) {
+    if (SchemaShapes.singleOf(object, refs: _queries.refs) case final single?) {
       return ofSchema(single, seen);
     }
     if (object.properties.isNotEmpty || object.allOf.isNotEmpty) {
@@ -83,7 +84,7 @@ final class JsonKinds {
   }
 
   JsonKind? _enumKind(SchemaObject schema, List<Object?> values) =>
-      switch (EnumMapper.kindOf(schema, values)) {
+      switch (SchemaQueries.enumKind(schema, values)) {
         .string => .string,
         .integer => .integer,
         .number => .number,

@@ -66,21 +66,16 @@ final class SchemaMapper {
   late final DeclarationNames _declNames = _tools.names;
   late final OverrideNotices _notices = _tools.notices;
   late final EnumMapper _enums = EnumMapper(_tools);
-  late final JsonKinds _kinds = JsonKinds(_tools);
-  late final SubtypeFinder _subtypeFinder = SubtypeFinder(_tools);
-  late final UnionNotices _unionNotices = UnionNotices(_context, _queries);
+  late final JsonKinds _kinds = _tools.kinds;
+  late final SubtypeFinder _subtypeFinder = _tools.subtypes;
+  late final UnionNotices _unionNotices = _tools.unionNotices;
   late final TypeRecursion _types = TypeRecursion(
     map: _map,
     component: _component,
     replaced: _replaced,
   );
   late final ModelMapper _models = ModelMapper(_tools, _types);
-  late final UnionMapper _unions = UnionMapper(
-    _tools,
-    _types,
-    _kinds,
-    _unionNotices,
-  );
+  late final UnionMapper _unions = UnionMapper(_tools, _types);
 
   Map<DeclId, PendingDeclaration> get _pending => _tools.state.pending;
   Map<String, PendingDeclaration> get _inlineEnums => _tools.state.inlineEnums;
@@ -349,7 +344,7 @@ final class SchemaMapper {
     final nullable = _isNullable(schema);
     if (_pending.containsKey(id)) return NamedType(id, nullable: nullable);
     final values = SchemaShapes.enumValues(schema);
-    final kind = values == null ? null : EnumMapper.kindOf(schema, values);
+    final kind = values == null ? null : SchemaQueries.enumKind(schema, values);
     if (values != null && kind == null) {
       _context.report(
         .enumMixedValues,

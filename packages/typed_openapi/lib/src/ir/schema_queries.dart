@@ -1,6 +1,6 @@
 import '../model/schema.dart';
 import 'dart_type.dart';
-import 'ir.dart' show UnionKind;
+import 'ir.dart' show EnumKind, UnionKind;
 import 'ir_context.dart';
 import 'ref_follower.dart';
 import 'schema_shapes.dart';
@@ -41,6 +41,18 @@ final class SchemaQueries {
             SchemaShapes.isAnnotationOnly(part) &&
             SchemaShapes.allowsNull(part),
       );
+
+  /// The kind of the enum [schema] with [values]; null when the values are
+  /// not all strings, all numbers or all booleans.
+  static EnumKind? enumKind(SchemaObject schema, List<Object?> values) {
+    if (values.every((v) => v is String)) return .string;
+    if (values.every((v) => v is bool)) return .boolean;
+    if (values.every((v) => v is int)) {
+      return schema.types.contains(SchemaType.number) ? .number : .integer;
+    }
+    if (values.every((v) => v is num)) return .number;
+    return null;
+  }
 
   /// The kind and the non-null branches of a union: a `oneOf` (or else an
   /// `anyOf`) with more than one branch besides `null` and the branches

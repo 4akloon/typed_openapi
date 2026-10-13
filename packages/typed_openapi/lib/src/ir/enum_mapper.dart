@@ -25,18 +25,6 @@ final class EnumMapper {
   final DeclarationNames _declNames;
   final OverrideNotices _notices;
 
-  /// The kind of the enum [schema] with [values]; null when the values are
-  /// not all strings, all numbers or all booleans.
-  static EnumKind? kindOf(SchemaObject schema, List<Object?> values) {
-    if (values.every((v) => v is String)) return .string;
-    if (values.every((v) => v is bool)) return .boolean;
-    if (values.every((v) => v is int)) {
-      return schema.types.contains(SchemaType.number) ? .number : .integer;
-    }
-    if (values.every((v) => v is num)) return .number;
-    return null;
-  }
-
   /// The `x-enum-varnames` and `x-enum-descriptions` of the enum [schema]
   /// with [values]: a list of strings with one entry per value, or null when
   /// the extension is missing or malformed (TOA351); a description may be
