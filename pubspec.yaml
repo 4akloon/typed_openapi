@@ -11,3 +11,4 @@ dev_dependencies:
 workspace:
   - packages/typed_openapi
   - packages/typed_openapi_runtime
+  - packages/typed_openapi_tool
