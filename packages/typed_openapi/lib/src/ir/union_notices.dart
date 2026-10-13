@@ -1,3 +1,4 @@
+import '../diagnostics/message_text.dart';
 import '../model/schema.dart';
 import 'declaration_names.dart';
 import 'ir.dart';
@@ -197,15 +198,17 @@ final class UnionNotices {
   /// Reports that the constant [value] of the discriminator property of
   /// [variant], not its component name [key], selects it.
   void valueDerived(String value, String key, Schema variant) {
+    final quotedValue = MessageText.quote(value);
+    final quotedKey = MessageText.quote(key);
     _context.report(
       .discriminatorValueDerived,
       'The mapping does not name this variant, and its discriminator '
-      'property is always "$value", so "$value" selects it, not the '
-      'component name "$key".',
+      'property is always $quotedValue, so $quotedValue selects it, not '
+      'the component name $quotedKey.',
       variant.location,
       fix:
-          'Add "$value" to the mapping to say so, or map the name "$key" '
-          'if the payloads carry it.',
+          'Add $quotedValue to the mapping to say so, or map the name '
+          '$quotedKey if the payloads carry it.',
     );
   }
 

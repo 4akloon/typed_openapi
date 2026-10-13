@@ -147,4 +147,26 @@ void main() {
       isEmpty,
     );
   });
+
+  test('a value with a quote and a line break is escaped in the message', () {
+    final fixture = IrFixture(
+      spec(
+        r'''
+        - $ref: '#/components/schemas/Odd'
+        - $ref: '#/components/schemas/Plain'
+''',
+        '{propertyName: type}',
+        '$_components    Odd: {type: object, properties: '
+            '{type: {const: "a\\"b\\n"}}}\n',
+      ),
+    );
+    mapComponents(fixture, ['Tool']);
+    final derived = fixture.reportedOf(
+      DiagnosticCode.discriminatorValueDerived,
+    );
+    expect(derived, hasLength(1));
+    final message = derived.single.message;
+    expect(message, isNot(contains('\n')));
+    expect(message, contains(r'"a\"b\n"'));
+  });
 }
