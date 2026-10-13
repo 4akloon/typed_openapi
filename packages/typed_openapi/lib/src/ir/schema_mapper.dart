@@ -14,7 +14,6 @@ import 'model_mapper.dart';
 import 'names.dart';
 import 'override_notices.dart';
 import 'pending_declaration.dart';
-import 'ref_follower.dart';
 import 'schema_queries.dart';
 import 'schema_shapes.dart';
 import 'structural_mapper.dart';
@@ -165,9 +164,12 @@ final class SchemaMapper {
     ];
   }
 
+  /// The declarations in the order their names are claimed.
   List<PendingDeclaration> get _ordered =>
       DeclarationNames.inClaimOrder(_pending.values);
 
+  /// The type of [schema], written inline or as a `$ref`; an inline
+  /// declaration it needs is named by [hint].
   DartType _map(Schema schema, NameHint hint, MappingScope scope) {
     if (schema is BooleanSchema) return const CoreType(.json);
     final object = schema as SchemaObject;
@@ -176,7 +178,9 @@ final class SchemaMapper {
       // A broken `$ref` is reported by the resolver (TOA101).
       if (target is! SchemaObject) return const CoreType(.json);
       final type = _component(target, scope);
-      return type.withNullable(type.nullable || _isNullable(object));
+      return type.withNullable(
+        type.nullable || SchemaQueries.isNullable(object),
+      );
     }
     return _inline(object, hint, scope);
   }
@@ -187,7 +191,7 @@ final class SchemaMapper {
     final (id, inner) = _idOf(schema, scope);
     // A schema that extends a polymorphic base with `allOf` and adds nothing
     // is a subtype, not a reference to the base (which is the union).
-    final single = switch (SchemaShapes.singleOf(schema, refs: _refs)) {
+    final single = switch (SchemaShapes.singleOf(schema, refs: _queries.refs)) {
       final part?
           when schema.allOf.contains(part) && _subtypeFinder.isBase(part) =>
         null,
@@ -216,7 +220,9 @@ final class SchemaMapper {
       if (single == null) return _structural.structural(schema, hint, scope);
       _unionNotices.subsumedBranches(schema, scope, collapsed: true);
       final type = _map(single, hint, scope);
-      return type.withNullable(type.nullable || _isNullable(schema));
+      return type.withNullable(
+        type.nullable || SchemaQueries.isNullable(schema),
+      );
     } finally {
       _aliases.remove(schema.location);
     }
@@ -238,12 +244,16 @@ final class SchemaMapper {
     return false;
   }
 
+  /// The type of the schema written inline: the schema it stands for, a
+  /// declaration of its own, or a scalar, a list or a map.
   DartType _inline(SchemaObject schema, NameHint hint, MappingScope scope) {
-    final single = SchemaShapes.singleOf(schema, refs: _refs);
+    final single = SchemaShapes.singleOf(schema, refs: _queries.refs);
     if (single != null) {
       _unionNotices.subsumedBranches(schema, scope, collapsed: true);
       final type = _map(single, hint, scope);
-      return type.withNullable(type.nullable || _isNullable(schema));
+      return type.withNullable(
+        type.nullable || SchemaQueries.isNullable(schema),
+      );
     }
     if (_declares(schema)) {
       if (scope.replacing) return _structural.nothingDeclared(schema);
@@ -263,17 +273,8 @@ final class SchemaMapper {
   /// properties or the merge of an `allOf`.
   bool _declares(SchemaObject schema) =>
       SchemaShapes.enumValues(schema) != null ||
-      _branches(schema) != null ||
+      _queries.branches(schema) != null ||
       _subtypeFinder.subtypes(schema).isNotEmpty ||
       schema.properties.isNotEmpty ||
       schema.allOf.isNotEmpty;
-
-  // Forwards to [SchemaQueries], until the code that asks moves out too.
-  RefFollower get _refs => _queries.refs;
-
-  static bool _isNullable(SchemaObject schema) =>
-      SchemaQueries.isNullable(schema);
-
-  (UnionKind, List<Schema>)? _branches(SchemaObject schema) =>
-      _queries.branches(schema);
 }

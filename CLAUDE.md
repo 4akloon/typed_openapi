@@ -232,8 +232,19 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   TOA652), `SchemaShapes` (shape questions the mapper and `DirectionIndex`
   share: null-only, enum values, the one schema a wrapper stands for; an
   `allOf` part with no structure, only annotations and `nullable`, is not a
-  merge part and is set aside next to the one `$ref`),
-  `SchemaMapper` (types, models, enums, unions, `allOf` merge,
+  merge part and is set aside next to the one `$ref`; its static API is
+  thin delegates to `SchemaForms`, `SubsumedBranches` and `SecretDetection`),
+  `SchemaMapper` (a facade: `typeOf`, `typeOfComponent` and the naming
+  calls; the work is done by collaborators that never hold the mapper, only
+  `MappingTools` (context, directions, queries, names, notices, the shared
+  `MappingState`) and a `TypeRecursion` of its own mapping functions, with
+  what a call depends on passed down as an immutable `MappingScope`
+  (direction, PATCH target, replacing): `Declarer` creates a declaration once
+  and hands it to `EnumMapper`, `ModelMapper` (`AllOfMerger`,
+  `FieldNotesReader`) or `UnionMapper` (`VariantCollector`,
+  `DiscriminatorReader`, `VariantNames`, `SubtypeFinder`, `JsonKinds`);
+  `StructuralMapper`, `CustomSchemas`, `DeclarationNames`, `SchemaQueries`
+  and the `*Notices` classes do the rest; types, models, enums, unions, `allOf` merge,
   single-schema collapse, custom types; a field's `description`, `default`,
   `deprecated` come from the property, then its annotation-only `allOf`
   parts, then the schema it refers to (3.0 ignores siblings of a `$ref`);
@@ -427,7 +438,7 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   stays raw JSON (`DartType.holdsRawJson`: `JsonValue` or a list, map or
   patch of it) is redacted when `carriesSecret(intoProperties: true)`, which
   also looks into properties and `allOf` parts at any depth (cycle-guarded
-  by location), finds a secret in its schema (`SchemaMapper._rawSecret`: a
+  by location), finds a secret in its schema (`SchemaQueries.holdsRawSecret`: a
   field, `additionalProperties`, the shared `JsonValue` variant of a union
   over every branch it keeps); `UnionDecl.unknownSensitive` (a secret
   anywhere in any branch) and a secret variant make the unknown variant
@@ -598,8 +609,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   (`RefTarget`, `RefResolver`), `normalize/` (`TreeEditor`, the rule
   classes), `overrides/` (`OverrideResolver`, `OverrideApplier`,
   `OverrideSnippet`), `ir/` internals (`IrContext`, `IrOverrides`,
-  `SchemaMapper`, `SchemaShapes`, `RefFollower`, `Decimal`, `NameHint`,
-  `DirectionIndex`,
+  `SchemaMapper` and its collaborators, `SchemaShapes` and its collaborators,
+  `RefFollower`, `Decimal`, `NameHint`, `DirectionIndex`,
   `OperationSelector`, `OperationBuilder`, `SpecOperation`, `DartNames`,
   `NameScope`, `MediaTypePicker`, `RootNames`, `TypeClaims`, `PartsBuilder`,
   `BodyEncoding`, `SchemaDefaults`, `DefaultMatcher`), `IrCommand`, `YamlComposer` and `load/yaml/`.
