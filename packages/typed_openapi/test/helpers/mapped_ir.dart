@@ -1,0 +1,16 @@
+import 'package:typed_openapi/src/ir/ir.dart';
+
+/// Reads declarations back from the IR a schema mapper test built.
+final class MappedIr {
+  const MappedIr._();
+
+  /// The declaration [name] of [ir].
+  static T declaration<T extends Declaration>(ClientIr ir, String name) =>
+      ir.declarations.firstWhere((d) => d.name == name) as T;
+
+  /// The variants of the union [name] as `type` strings.
+  static List<String> variantsOf(ClientIr ir, String name) => [
+    for (final v in declaration<UnionDecl>(ir, name).variants)
+      v.type.code(ir.nameOf),
+  ];
+}
