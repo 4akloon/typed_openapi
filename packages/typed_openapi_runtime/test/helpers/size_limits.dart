@@ -92,10 +92,13 @@ final class SizeLimits {
   /// - its length counts from the signature to that line, annotations and
   ///   doc comments excluded.
   ///
-  /// Control statements, closures, assignments, `=>` bodies and type headers
-  /// are not methods (the line is skipped). A method with an expression
-  /// body, a one-line `{}` body and a nested type are not seen: false
-  /// negatives are accepted, a false positive is a bug of this class.
+  /// A member with an expression body (`=>`) is measured from its signature
+  /// to the `;` that ends it.
+  ///
+  /// Control statements, closures, assignments and type headers are not
+  /// methods (the line is skipped). A one-line `{}` body and a nested type
+  /// are not seen: false negatives are accepted, a false positive is a bug
+  /// of this class.
   /// Constructors, getters, setters and operators count as methods. A name
   /// that repeats in one type gets `@2`, `@3`... in file order. Test files are
   /// not measured: their `main` holds the test closures.
@@ -230,7 +233,15 @@ final class SizeLimits {
         }
         continue;
       }
-      if (type == null || !_endsBody(line)) {
+      if (type == null) {
+        continue;
+      }
+      if (_arrowMember(lines, i) case final arrow?) {
+        _record(methods, seen, '$type.${_memberName(type, arrow.name)}', arrow);
+        i = arrow.end;
+        continue;
+      }
+      if (!_endsBody(line)) {
         continue;
       }
       final start = _signatureStart(lines, i);
@@ -240,12 +251,93 @@ final class SizeLimits {
         continue;
       }
       final key = '$type.${_memberName(type, name)}';
-      final count = seen.update(key, (n) => n + 1, ifAbsent: () => 1);
-      methods.add(_Method(count == 1 ? key : '$key@$count', end - start + 1));
+      _record(methods, seen, key, (name: name, start: start, end: end));
       i = end;
     }
     return methods;
   }
+
+  /// Adds the member at [span] to [methods] under [key], numbering a repeated
+  /// key through [seen].
+  void _record(
+    List<_Method> methods,
+    Map<String, int> seen,
+    String key,
+    _Span span,
+  ) {
+    final count = seen.update(key, (n) => n + 1, ifAbsent: () => 1);
+    methods.add(
+      _Method(count == 1 ? key : '$key@$count', span.end - span.start + 1),
+    );
+  }
+
+  /// The member with an expression body (`=>`) that starts on line [first],
+  /// or null when that line starts none.
+  ///
+  /// The signature runs over the continuation lines until a `=>` outside
+  /// every bracket; a line that ends in `;` or opens a block body first, or
+  /// a `=` before the parameter list (a field), is not an arrow member. The
+  /// member ends on the first line that ends with `;` and is followed by a
+  /// line that is not indented deeper than the member.
+  _Span? _arrowMember(List<String> lines, int first) {
+    if (!_startsDeclaration(lines[first]) ||
+        _statement.hasMatch(lines[first]) ||
+        _notAMethod.hasMatch(_beforeParameters(lines[first]))) {
+      return null;
+    }
+    final name = _nameOf(lines[first]);
+    final arrow = _arrowLine(lines, first);
+    if (name == null || arrow == null) {
+      return null;
+    }
+    for (var i = arrow; i < lines.length; i++) {
+      final isLast = i + 1 == lines.length || !lines[i + 1].startsWith('   ');
+      if (lines[i].endsWith(';') && isLast) {
+        return (name: name, start: first, end: i);
+      }
+    }
+    return null;
+  }
+
+  /// The index of the line with the `=>` of the member that starts on line
+  /// [first], or null when the member has a block body or is a field.
+  int? _arrowLine(List<String> lines, int first) {
+    var depth = 0;
+    for (var i = first; i < lines.length; i++) {
+      if (i > first && !_continues(lines[i])) {
+        return null;
+      }
+      final line = lines[i];
+      final text = i == first ? _withoutOperatorName(line) : line;
+      for (var c = 0; c < text.length; c++) {
+        if (depth == 0 && text.startsWith('=>', c)) {
+          return i;
+        }
+        if (depth == 0 && text[c] == '=' && !text.startsWith('==', c)) {
+          return null;
+        }
+        depth += switch (text[c]) {
+          '(' || '[' || '{' => 1,
+          ')' || ']' || '}' => -1,
+          _ => 0,
+        };
+      }
+      if (depth == 0 && (line.endsWith(';') || line.endsWith('{'))) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  /// Whether [line] continues the member above it: it is indented deeper
+  /// than a member, or closes a bracket the member opened.
+  bool _continues(String line) =>
+      line.startsWith('   ') || line.startsWith(RegExp(r'  [)}\]]'));
+
+  /// [line] with the name of an operator (`operator ==`) blanked, so that its
+  /// `=` is not read as an assignment.
+  String _withoutOperatorName(String line) =>
+      line.replaceFirstMapped(_operator, (_) => 'operator x(');
 
   /// [name] as a member of [type]: a constructor is `new` or its own name
   /// without the type's.
@@ -370,6 +462,9 @@ final class SizeLimits {
     return null;
   }
 }
+
+/// Where a member sits in a file: its [name] and the first and last line.
+typedef _Span = ({String name, int start, int end});
 
 /// One method found by [SizeLimits.measureMethods].
 final class _Method {
