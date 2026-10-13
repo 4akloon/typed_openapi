@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:path/path.dart' as p;
 import 'package:source_span/source_span.dart';
 import 'package:test/test.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic.dart';
@@ -10,6 +11,14 @@ import 'package:typed_openapi/src/diagnostics/sarif_reporter.dart';
 import 'package:typed_openapi/src/diagnostics/severity.dart';
 
 void main() {
+  // Absolute on every platform: a bare `/abs` gets the current drive on Windows.
+  final absoluteSpec = p.join(
+    p.rootPrefix(p.current),
+    'abs',
+    'specs',
+    'api.yaml',
+  );
+
   final source = SourceFile.fromString(
     'openapi: 3.0.3\ncomponents:\n  schemas:\n    Pet: {type: object}\n',
     url: Uri.parse('specs/my api.yaml'),
@@ -39,7 +48,7 @@ void main() {
         related: [
           RelatedLocation(
             message: 'The schema it changes.',
-            file: '/abs/specs/api.yaml',
+            file: absoluteSpec,
             pointer: JsonPointer.parse('#/components/schemas/Pet'),
             span: source.span(48, 61),
           ),
@@ -100,7 +109,7 @@ void main() {
       'id': 1,
       'message': {'text': 'The schema it changes.'},
       'physicalLocation': {
-        'artifactLocation': {'uri': 'file:///abs/specs/api.yaml'},
+        'artifactLocation': {'uri': '${p.toUri(absoluteSpec)}'},
         'region': {
           'startLine': 4,
           'startColumn': 11,
