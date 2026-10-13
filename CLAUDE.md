@@ -516,7 +516,10 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   of the additional properties field and the helper types
   (`EnumDecl.knownName`/`unknownName`, `UnionVariantIr.name`,
   `UnionDecl.unknownName`, named after the groups) come from `SchemaMapper`.
-  `UnionDispatch` is `discriminator`, `jsonType` (by JSON type, `int`
+  `UnionDispatch` is `discriminator` (`DiscriminatorDecoder`; a variant
+  whose JSON is not an object, such as GitHub's directory listing array,
+  is picked by its JSON type before the property is read; `UnionVariants`
+  holds what the union writers share), `jsonType` (by JSON type, `int`
   before `num`; the variants of a JSON type several share are one variant
   of `JsonValue`, `UnionVariantIr.jsonKinds`, with TOA453) or `structural`
   (`union: structural`, tries the variants); a union where every variant

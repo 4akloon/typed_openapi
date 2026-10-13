@@ -5,8 +5,10 @@ import 'type_codec.dart';
 import 'union_variants.dart';
 
 /// Writes the `fromJson` of a union that dispatches by a discriminator
-/// property (R9.1): a `switch` on the property's value, with the default
-/// mapping's variant or the unknown variant for any other value.
+/// property (R9.1): a variant whose JSON is not an object (GitHub's
+/// directory listing is an array) is picked by its JSON type first, as it
+/// has no property to read; then a `switch` on the property's value, with
+/// the default mapping's variant or the unknown variant for any other value.
 final class DiscriminatorDecoder {
   /// Creates the writer that writes with [_codec] and [_variants].
   const DiscriminatorDecoder(this._codec, this._variants);
@@ -15,6 +17,9 @@ final class DiscriminatorDecoder {
   final UnionVariants _variants;
 
   static const _code = DartCode();
+
+  /// The JSON pattern of an object: a variant of it has the property.
+  static const _object = 'Map<String, Object?>';
 
   /// Writes the `fromJson` factory of [decl] to [out].
   void write(DartWriter out, UnionDecl decl) {
@@ -27,6 +32,13 @@ final class DiscriminatorDecoder {
         'variant has is a [${decl.unknownName}].',
       )
       ..block('factory $name.fromJson(Object? json)', () {
+        for (final (pattern, variant) in _byJsonType(decl)) {
+          final decoded = _variants.decode(variant.type, 'value');
+          out.block(
+            'if (json case final $pattern value)',
+            () => out.line('return ${_variants.wrap(variant, decoded)};'),
+          );
+        }
         out
           ..line(
             'final r = JsonReader.of(json, schema: ${_code.string(name)});',
@@ -40,11 +52,25 @@ final class DiscriminatorDecoder {
       });
   }
 
-  /// A case per variant that a discriminator value selects first.
+  /// The variants whose JSON is not an object, each with the pattern of its
+  /// JSON type; the first variant of a type wins.
+  List<(String, UnionVariantIr)> _byJsonType(UnionDecl decl) {
+    final patterns = <String>{};
+    return [
+      for (final variant in decl.variants)
+        if (_codec.jsonPattern(variant.type) case final pattern?
+            when pattern != _object && patterns.add(pattern))
+          (pattern, variant),
+    ];
+  }
+
+  /// A case per object variant that a discriminator value selects first.
   List<String> _cases(UnionDecl decl) {
     final seen = <String>{};
     final cases = <String>[];
     for (final variant in decl.variants) {
+      final json = _codec.jsonPattern(variant.type);
+      if (json != null && json != _object) continue;
       final values = [
         for (final value in variant.discriminatorValues)
           if (seen.add(value)) _code.string(value),

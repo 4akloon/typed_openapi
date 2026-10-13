@@ -1,6 +1,11 @@
 ## 0.0.1 - Unreleased
 
 ### Output changes
+- A union with a discriminator picks a variant whose JSON is not an object
+  (an array, a string, a number, a boolean) by its JSON type before it
+  reads the discriminator, so GitHub's `repos/get-content` decodes a
+  directory listing; in the corpus the `github` client's
+  `repos_get_content_response.dart` changes (M11).
 - A discriminator variant that the `mapping` does not name and that fixes
   the discriminator property to one value is selected by that value, not
   by its component name (TOA457, info). OpenAI's unions now decode real
