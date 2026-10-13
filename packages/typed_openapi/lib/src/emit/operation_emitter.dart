@@ -263,7 +263,7 @@ final class OperationEmitter {
     }
     if (operation.events case final events?) {
       out
-        ..prose(_events.doc(events))
+        ..prose(_events.doc(events, method: operation.method))
         ..line('///');
     }
     out.prose(

@@ -69,8 +69,8 @@ final class ResponseBuilder {
     for (final (status, response, (contentType, media)) in responses) {
       final kind = _responseKind(contentType, response);
       final success = status.startsWith('2');
-      if (kind == .eventStream && !success) {
-        _reportErrorStream(contentType!, response);
+      if ((kind, contentType) case (.eventStream, final type?) when !success) {
+        _reportErrorStream(type, response);
       }
       final base = ResponseStatuses.nameOf(status, shared: false);
       final suffix = ResponseStatuses.nameOf(

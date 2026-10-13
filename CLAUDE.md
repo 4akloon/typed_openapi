@@ -735,7 +735,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `IrJson`, `ClientIr` and its node classes, among them the M9 ones
   (`RootIr`, `ServerIr`, `ServerVariableIr`, `StatusTypeIr`, `StatusCaseIr`,
   `PartIr`, `EncodingIr`, `SecurityUseIr`, `SecuritySchemeIr`,
-  `SecurityKind`), `DartType` and its
+  `SecurityKind`) and the M10 ones (`EventStreamIr`, `EventUnionIr`,
+  `EventVariantIr`, `StreamReconnection`), `DartType` and its
   subclasses, `DeclId`, `DeclVariant`, `UnionDispatch`, `UnionKind`,
   `UnionVariantIr`), the diagnostics (`Diagnostic`,
   `RelatedLocation`, `DiagnosticBag`, `DiagnosticCode`, `DisplayPaths`,

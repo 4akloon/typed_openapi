@@ -22,7 +22,8 @@ final class SseOverrideChecks {
     _context.reportAtPointer(
       .sseOverrideNotApplied,
       'The operation has no 2xx response with content text/event-stream, '
-      'so ${fields.join(', ')} of "sse" change nothing.',
+      'so ${fields.join(', ')} of "sse" '
+      '${fields.length == 1 ? 'changes' : 'change'} nothing.',
       sse.pointer,
       fix: 'Remove "sse".',
     );

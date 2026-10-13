@@ -20,8 +20,9 @@ final class SseOptions {
 
   /// Whether the stream reconnects; null keeps the operation's setting
   /// (see [SseReconnection]). `true` has no effect on an operation whose
-  /// reconnection is [SseReconnection.off] (a POST that does not enable it):
-  /// repeating such a request may not be safe.
+  /// reconnection is [SseReconnection.off] (a POST that does not enable it,
+  /// or an operation whose `sse.reconnect` override turns it off): repeating
+  /// such a request may not be safe.
   final bool? reconnect;
 
   /// The first delay when the server sent no `retry`.
@@ -58,7 +59,8 @@ final class SseOptions {
 /// says: by default a GET reconnects when the call asks for it, and an
 /// operation that enables reconnection reconnects unless the call says no.
 enum SseReconnection {
-  /// Never: the operation is not GET and does not enable reconnection.
+  /// Never: the operation is not GET and does not enable reconnection, or
+  /// its override turns reconnection off.
   off,
 
   /// When [SseOptions.reconnect] is true.

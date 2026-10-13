@@ -39,9 +39,14 @@ final class EventStreamWriter {
     out.line('reconnection: .${events.reconnection.name},');
   }
 
-  /// The doc paragraph of a method that returns [events].
-  String doc(EventStreamIr events) {
+  /// The doc paragraph of a method that returns [events] with the HTTP
+  /// [method]: a GET that does not reconnect has an override that says so,
+  /// any other method does not unless the override enables it.
+  String doc(EventStreamIr events, {required String method}) {
     final reconnect = switch (events.reconnection) {
+      .off when method == 'GET' =>
+        "It does not reconnect: the operation's `sse.reconnect` override "
+            'turns it off.',
       .off =>
         "It does not reconnect unless the operation's `sse.reconnect` "
             'override enables it.',

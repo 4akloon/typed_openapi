@@ -131,7 +131,11 @@ default browser adapter delivers a body only when the connection closes, so
 an event-stream operation returns a `TransportError` that says so
 (`DioRequestSender.webStreamingMessage`). Set a fetch-based adapter on your
 Dio, such as `ConversionLayerAdapter` from `dio_compatibility_layer` with
-`package:http`'s `BrowserClient` or `fetch_client`.
+`package:http`'s `BrowserClient` or `fetch_client`. A reconnection sends
+`Last-Event-ID`, which is not a CORS-safelisted request header: for a
+cross-origin stream the server must allow `Last-Event-ID` in
+`Access-Control-Allow-Headers` in its preflight answer, or every reconnection
+that carries an id fails with a `TransportError`.
 
 Browsers do not let a page set the `Cookie` request header, so cookie
 parameters do not work on the web (the browser keeps its own cookies and

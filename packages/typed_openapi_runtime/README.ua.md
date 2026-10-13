@@ -130,7 +130,11 @@ Runtime для клієнтів, згенерованих
 операція з потоком подій повертає `TransportError` з поясненням
 (`DioRequestSender.webStreamingMessage`). Постав у свій Dio адаптер на
 fetch, наприклад `ConversionLayerAdapter` з `dio_compatibility_layer` з
-`BrowserClient` з `package:http` або `fetch_client`.
+`BrowserClient` з `package:http` або `fetch_client`. Перепідключення надсилає
+`Last-Event-ID`, який не належить до заголовків запиту, дозволених CORS
+за замовчуванням: для потоку з іншого origin сервер має дозволити
+`Last-Event-ID` в `Access-Control-Allow-Headers` у відповіді на preflight,
+інакше кожне перепідключення з id завершується `TransportError`.
 
 Браузер не дозволяє сторінці виставляти заголовок `Cookie`, тож
 cookie-параметри на web не працюють (браузер тримає свої cookie і надсилає
