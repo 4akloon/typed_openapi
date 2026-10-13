@@ -833,8 +833,10 @@ generator's public API only. Its network use is the `SpecCache` download
   `corpus.lock` is JSON with sorted keys (`version`, `clients`): per
   `<union mode>/<client>` the SHA-256 of every generated file (the manifest
   left out), the hash of the whole output, the diagnostics by code, and the
-  round-trip counts (`values`: `examples`, `synthetic`, `spec_defects`,
-  `failures`).
+  round-trip counts (`values`: `examples`, `examples_skipped`, `synthetic`,
+  `synthetic_skipped`, `spec_defects`, `failures`). A text that is not JSON,
+  or not a lock of version 1 with the right shapes, is a clean error (exit
+  `1`), also in `check`, which reads the lock before the long run.
 - `lib/src/corpus/` - `CorpusListReader` (`corpus.yaml`), `SpecCache`
   (downloads, verifies, `ArchiveExtractor` with the system `tar`;
   `fetchSchema` for `schemas:`),
@@ -845,6 +847,16 @@ generator's public API only. Its network use is the `SpecCache` download
   `CorpusLock`/`ClientLock`, and the commands `fetch` (a name that is
   neither a spec nor a schema is a usage error, exit 64), `update` and
   `check`, which `CorpusCli` runs with `semver`.
+  `update` writes no `corpus.lock` when a gate failed (an expectation that
+  does not hold, a client not generated or written by a second run, `pub
+  get`, `dart analyze`, `dart format`, a round trip that did not run) and
+  says so; `update` and `check` print the first 50 spec defects (examples
+  that do not match their schema), then "and N more". `PackageGate` and the
+  round-trip program run under a 10-minute timeout; one that does not
+  finish is killed, and a round trip that did not run (a crash or the
+  timeout) is a gate failure, not a count. `CorpusCli`, `CorpusRun` and
+  `FuzzRun` take `fetchesPackages` (default true; no CLI flag): false keeps
+  `pub get` offline, as every test sets it.
   A round-trip failure is counted, not fatal by itself: the counts are in
   the lock (`failures` is 0 for every client) and `check` compares them
   like files and diagnostics, so a count that differs from the lock is a
@@ -853,7 +865,9 @@ generator's public API only. Its network use is the `SpecCache` download
   difference too.
 - `lib/src/roundtrip/` - `ExampleReader` (the `example`/`examples` of each
   declaration's schema and of JSON responses, at the locations the IR
-  names), `SyntheticValues` (from the IR: required fields, all fields,
+  names; what it cannot read, such as a `null`, a `$ref` to another file, an
+  entry without `value` or an `examples` of the wrong type, is counted as
+  skipped; an example `jsonEncode` rejects is a spec defect), `SyntheticValues` (from the IR: required fields, all fields,
   first and last enum value, every union variant with its discriminator
   value), `RoundTripProgram` (a Dart program in the corpus package:
   `fromJson`, `toJson`, JSON text, `fromJson`, `==`), `RoundTrip`.
