@@ -1,388 +1,168 @@
 # typed_openapi
 
-OpenAPI 3.x → Dart client generator for imperfect, code-first specs.
+![Dart SDK](https://img.shields.io/badge/Dart-%3E%3D3.10-0175C2?logo=dart&logoColor=white)
+![License](https://img.shields.io/badge/license-MIT-blue)
+![Status](https://img.shields.io/badge/status-pre--release-orange)
 
-> **Status:** early design, not published yet.
+**An OpenAPI 3.x to Dart client generator for imperfect, code-first specs** (NestJS, FastAPI, Spring, ASP.NET). It fixes what such specs get wrong, tells you every fix with a stable code, and generates Dio clients with typed errors, open enums and unions that do not break on a value the spec forgot.
 
-- Input: local OpenAPI 3.0 / 3.1 / 3.2 file (JSON or YAML).
-- Output: ready-to-use Dart code on Dio, no `build_runner` step.
-- Models follow the `json_serializable` contract (`fromJson` / `toJson`).
-- Spec defects are fixed by named normalizer rules and reported as diagnostics
-  with stable codes; anything ambiguous is reported with a suggested override.
+> **Status:** pre-release (version 0.0.1). It is not published to pub.dev yet; install it from the repository, see [Install](#install).
 
-## Usage
+## Install
 
-Describe each client in `typed_openapi.yaml` next to your `pubspec.yaml`:
+`typed_openapi` is the generator: a dev dependency and a CLI, never a runtime dependency. The generated code depends only on [`typed_openapi_runtime`](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_runtime/README.md) and Dio. Neither package is on pub.dev yet, so use git (or a path to a checkout):
 
 ```yaml
-defaults:
-  preset: nestjs          # normalizer preset; also: generic, fastapi, springdoc, aspnet
+dependencies:
+  dio: ^5.7.0
+  typed_openapi_runtime:
+    git:
+      url: https://github.com/4akloon/typed_openapi.git
+      path: packages/typed_openapi_runtime
+dev_dependencies:
+  typed_openapi:
+    git:
+      url: https://github.com/4akloon/typed_openapi.git
+      path: packages/typed_openapi
+```
+
+Pin a `ref:` (a tag or a commit) in both entries to get a reproducible build. The minimum SDK is Dart 3.10, for the generator and for the code it writes. Run the CLI with `dart run typed_openapi <command>`.
+
+## Quick start
+
+Five minutes, one spec (`specs/petstore.yaml`) with a single operation:
+
+```yaml
+openapi: 3.0.3
+info: {title: Petstore, version: "1.0"}
+servers:
+  - url: https://petstore.example.com/v1
+paths:
+  /pets/{id}:
+    get:
+      operationId: getPet
+      tags: [pets]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+      responses:
+        "200":
+          description: The pet.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Pet"}
+        "404":
+          description: No such pet.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Problem"}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [id, name, status]
+      properties:
+        id: {type: integer}
+        name: {type: string}
+        status: {type: string, enum: [available, sold]}
+    Problem:
+      type: object
+      required: [message]
+      properties:
+        message: {type: string}
+```
+
+Describe the client in `typed_openapi.yaml` next to `pubspec.yaml`:
+
+```yaml
 clients:
-  core_api:
-    input: specs/core_api.json      # local JSON or YAML snapshot
-    output: lib/src/api/core_api    # each client gets its own directory
+  petstore:
+    input: specs/petstore.yaml
+    output: lib/src/petstore
 ```
 
-Check the specs without generating anything:
-
-```sh
-dart run typed_openapi check            # all clients
-dart run typed_openapi check core_api   # one client
-dart run typed_openapi check --format json   # also: sarif, github-actions
-```
-
-Generate the clients whose check has no errors (a client with
-errors is skipped, and the exit code is the one `check` gives):
-
-```sh
-dart run typed_openapi generate          # every client
-dart run typed_openapi generate core_api # one client
-dart run typed_openapi generate --force  # also replace files it did not write
-dart run typed_openapi generate --break-lock  # take over a lock of unknown owner
-```
-
-### What `generate` writes
-
-Each client gets this tree in its `output` directory:
+Check the spec, then generate:
 
 ```text
-<output>/
-  petstore.dart          the root class; exports models.dart and api.dart
-                         (api_client.dart for a client named api or models)
-  api.dart               exports the group files
-  api/pets_api.dart      one plain class per group (tag)
-  models.dart            exports every model
-  models/pet.dart        one file per class
-  .typed_openapi.json    the manifest
+$ dart run typed_openapi check
+errors: 0, warnings: 0, infos: 0
+$ dart run typed_openapi generate
+errors: 0, warnings: 0, infos: 0
+Generated petstore in lib/src/petstore: 7 files, 7 written, 0 deleted.
 ```
 
-Every Dart file has the header `// GENERATED CODE - DO NOT MODIFY BY HAND.`
-and `// dart format off` on the second line. The code is clean under `package:lints/recommended` and the
-`flutter_lints` rules without `ignore_for_file`, and the same spec and
-config give the same bytes. The classes are plain `class`es (not `final`, so
-you can extend them); a union base is `sealed`.
-
-- Models have `fromJson(Map<String, Object?>)` and `toJson()`, `==`,
-  `hashCode` and `toString`. `fromJson` throws a `JsonDecodeException` with
-  the pointer of the first property that does not match. A property the
-  schema does not list goes to `additionalProperties` when the schema allows
-  it. `date` is the runtime's `Date`, `date-time` a `DateTime` (RFC 3339 with
-  an offset), `byte` and `binary` bytes. An optional nullable property of a
-  PATCH body is `Patch<T>?` with the `tri_state` setting.
-- Enums are open: a known value is `Status.active`, a value the spec does
-  not list is `StatusUnknown` with the raw value, and it is written back as
-  it came.
-- Unions are `sealed` classes with a class per variant (`PetCat`) and an
-  unknown variant (`PetUnknown`) with the raw JSON. With a `discriminator`
-  the value picks the variant; a model that has no property for it gets it
-  written by its wrapper, with the value it was decoded with (an alias such
-  as `kitty` for `cat` is kept). A schema with a discriminator that other
-  schemas extend with `allOf` (the whole hierarchy, also in other files the
-  spec reads) is a union of those models. Without a discriminator the
-  variants are told apart by their JSON type; variants that share one
-  (TOA453) are one variant that keeps the raw JSON, unless you ask the
-  generator to try each variant in order:
-
-  ```yaml
-  defaults:
-    union: structural        # raw (the default) or structural; per client too
-  ```
-
-  The same key is an override for one schema or property
-  (`union: structural` under it in the overrides file) and wins over the
-  config. A discriminator at the source is better than either.
-- An enum or `const` branch next to a plain branch of the same type
-  (`anyOf: [string, {enum: ['']}]`) adds no value and is dropped (info
-  `TOA455`); the field's doc comment lists the dropped values as "Known
-  values". For `oneOf` this accepts a value both branches take (`''`), which
-  the spec's `oneOf` would reject; this is on purpose, as the idiom means
-  "any of these".
-- A secret is never printed: `toString` writes `<redacted>` for a property
-  that is `writeOnly` or has `format: password` (also through a `$ref`, a
-  nullable `anyOf` such as Pydantic's `Optional[SecretStr]`, array items,
-  map values or a union variant). A value that stays raw JSON (`JsonValue`,
-  or the `...Unknown` class of a union) is printed as `<redacted>` too when
-  its schema could carry a secret: any model or union variant it may hold,
-  at any depth, has a secret property.
-
-### Operations
-
-The operations of a client are in `api/<group>.dart`, one plain class per
-group (`PetsApi`), exported by `api.dart`; the root `<client>.dart`
-(`petstore.dart`, `api_client.dart` for a client named `api` or `models`)
-exports the models and the API and holds the root class:
+Use the client with your own Dio. The result is a sealed `Result` you match on, so the 404 body arrives as a `Problem`, not as an exception:
 
 ```dart
-final client = PetstoreClient(dio); // naming.client renames it
-switch (await client.pets.getPet(petId: 1)) {
-  case Success(:final data):
-    print(data.name);
-  case HttpError(:final body):
-    print(body.code);
-  case Failure():
-    print('another failure');
+import 'package:dio/dio.dart';
+import 'package:typed_openapi_runtime/typed_openapi_runtime.dart';
+
+import 'src/petstore/petstore.dart';
+
+Future<void> main() async {
+  final dio = Dio(BaseOptions(baseUrl: PetstoreClient.server));
+  final client = PetstoreClient(dio);
+
+  switch (await client.pets.getPet(id: 7)) {
+    case Success(:final data):
+      print('${data.name} is ${data.status.value}');
+    case HttpError(:final body):
+      print('not found: ${body.message}');
+    case Failure():
+      print('request failed');
+  }
 }
 ```
 
-- Every argument is named, required ones are `required`, the request body is
-  `body` and the last argument is `CallOptions? call` (cancel token, extra
-  headers, progress, `extra` for interceptors). A method returns
-  `Future<Result<T, E>>` and never throws for a response: a documented error
-  is `HttpError` with the decoded body, any other status
-  `UndocumentedStatus`, a body that does not decode `DecodeError`, a network
-  failure `TransportError`, a cancelled call `Cancelled`.
-- `T` is the one success body (`void` without one, `JsonValue` when no 2xx
-  is documented, TOA653), or a sealed type when 2xx responses differ
-  (`CreatePetResponseOk`, `...Created`). `E` is `Never` without documented
-  errors, the one error body, or a sealed type by status
-  (`CreatePetErrorNotFound`, `...ClientError` for `4XX`, `...Other` for
-  `default`). Text successes are `String`, binary ones `Uint8List`; their
-  JSON error bodies are decoded too.
-- Bodies: JSON models; forms with the spec's `encoding`; multipart parts as a
-  class (`UploadPhotoRequest`) whose binary properties are `FileUpload`s
-  (`FileUpload.bytes`, which works on the web, or `FileUpload.stream`, which
-  Dio's browser adapter buffers); the parts are sent in the order of the
-  schema, so a text part after a file or a typed part carries
-  `Content-Type: text/plain; charset=utf-8` (a text part before them has
-  none); a part whose `encoding` names a list or a wildcard of media types is
-  sent with one concrete type (TOA661), and an object part that is not JSON
-  is a `String` you supply (TOA662); a binary body is a `FileUpload`.
-- Event streams (`text/event-stream`): the method returns
-  `Future<Result<Stream<SseItem<T>>, E>>`. The stream opens for a documented
-  success only (any other status is decoded as above), gives `SseEvent`s
-  with the decoded data (`T` is the schema's type, an array schema's item,
-  OpenAPI 3.2 `itemSchema.data`'s `contentSchema`, or `String` for text), an
-  `SseDecodeError` for an event that does not decode, and ends with
-  `SseDisconnected`; it never emits errors. An operation that offers JSON
-  and an event stream gets two methods, `chat` and `chatStream`
-  (`naming.stream_suffix`). Reconnection is off by default: a GET
-  reconnects when you pass `CallOptions(sse: SseOptions(reconnect: true))`,
-  or by default with `sse: {reconnect: true}` in the config, sending
-  `Last-Event-ID` and announcing each attempt with `SseReconnecting`; the
-  delay is the server's `retry`, else 1 s, doubling to 30 s (a server
-  `retry` over 30 s is kept), 5 attempts, counted again after a message. A
-  POST reconnects only when the operation's `sse.reconnect` override enables
-  it. On the web, plug a fetch-based adapter into your
-  Dio: the default one cannot stream.
-- Events typed one by one (an OpenAPI 3.2 `itemSchema` whose `oneOf`
-  branches fix `event` to a constant) are a sealed union by event name,
-  `ChatEvent` with `ChatEventDelta(data)`, `ChatEventDone()` and
-  `ChatEventUnknown(event, data)`, so a `switch` names every event. The
-  `sse` override of an operation sets what the spec does not say:
+Against a server that answers `{"id": 7, "name": "Rex", "status": "available"}` this prints `Rex is available`; for an id the server answers with a 404 and `{"message": "No such pet"}` it prints `not found: No such pet`. The generated files are plain Dart you commit; there is no `build_runner` step. The full walkthrough is in [Getting started](doc/getting_started.md).
 
-  ```yaml
-  operations:
-    createChat:
-      sse:
-        data: ChatChunk          # one type for every event, or:
-        events: {delta: ChatDelta, done: null}   # a type per event name
-        unknown: ignore          # drop unknown events (default: keep)
-        reconnect: true          # reconnect by default, also for a POST
-        method: only             # only the stream method (stream | only | none)
-  ```
-- The client never changes your Dio: set the base URL there, from the root
-  class's server constants (`PetstoreClient.server`, or a method such as
-  `PetstoreClient.server1(region: 'eu')` for a URL with variables). When the
-  query holds `//` (an `allowReserved` value) and the base URL is absolute,
-  the runtime joins them itself, because Dio would collapse the `//`; a
-  relative base URL is left to Dio, which then collapses it.
-- Every request carries an `OperationInfo` in `RequestOptions.extra`
-  (`OperationInfo.of(options)`): the `operationId`, tags and the security
-  requirements with their schemes, for an interceptor that adds credentials.
+## What it does
 
-`generate` writes each output directory as a whole. It builds the new tree and
-a manifest (`.typed_openapi.json`: the generator, the manifest format, a hash
-of the inputs and the hash of every file) next to the output and swaps it in,
-so a failed run leaves the previous output (or nothing) and never a half tree.
-A run that would change nothing does not touch the directory.
+- **Reads real-world specs.** OpenAPI 3.0, 3.1 and 3.2, JSON or YAML, with local `$ref`s between files. It never calls the network.
+- **Fixes and reports.** Named [normalizer rules](doc/presets_and_rules.md) repair common defects (`required: true` on a property, duplicate enum values, a missing path parameter, a discriminator whose property is not required) and framework [presets](doc/presets_and_rules.md) add recipes for NestJS, FastAPI, springdoc and ASP.NET. Every fix is a [diagnostic](doc/diagnostics.md) with a stable `TOAnnn` code, a JSON pointer, a file position and advice.
+- **Overrides by location.** Correct names, types, nullability, `required`, discriminators and SSE event schemas in an [overrides file](doc/overrides.md), without touching the backend.
+- **Types that do not lie.** [Open enums](doc/generated/enums.md) keep the raw value; [unions](doc/generated/unions.md) have an unknown variant with the raw JSON; PATCH bodies use tri-state fields (absent, `null`, value); secrets print as `<redacted>`.
+- **Typed errors per operation.** A call returns a sealed `Result` with the success body, the documented error bodies and transport, decoding and cancellation failures. See [Responses and errors](doc/generated/responses_and_errors.md).
+- **Request bodies.** JSON, forms, multipart with typed parts, text, bytes and files: [Request bodies](doc/generated/request_bodies.md).
+- **Event streams.** `text/event-stream` operations become `Stream`s with reconnection and typed event unions: [Event streams](doc/generated/event_streams.md).
+- **Security metadata.** Each operation carries its security requirements as data; it never signs requests for you: [Security](doc/generated/security.md).
+- **Your Dio stays yours.** The client uses the `Dio` you pass as it is: interceptors, adapters and options are not touched.
+- **Safe to run in CI.** [`check`](doc/cli.md) exits non-zero on new errors, a [baseline](doc/baseline.md) accepts the old ones, and output is available as text, JSON, SARIF and GitHub annotations: [CI](doc/ci.md).
+- **Deterministic, and careful with your files.** The same spec and config give byte-identical code. `generate` replaces its output atomically and refuses to delete a file it did not write: [Generated output](doc/generate_output.md).
 
-An output written by the models-only generator (before operations) upgrades
-in place: the next run writes the API files and keeps the models, with no
-`--force`. A file of your own in it whose name the full client now uses
-(`api.dart`, `<client>.dart`, in any letter case) is refused with `TOA830`
-like any other foreign file.
-
-**It replaces only what it wrote.** A file that the previous manifest lists
-and whose hash still matches is replaced or deleted. Any other file in the
-directory is foreign (a file of yours, of another client, of another tool) or
-modified (a generated file someone edited): the client is not generated, and
-error `TOA830` names the files and changes nothing. Move them away, or run
-`generate --force` to replace them (the line of the client says how many were
-replaced, and an info `TOA833` names each file it overwrote or deleted). A directory with files and no manifest of its own is refused the
-same way, as all its files are foreign, and so is a directory whose manifest
-has no hash for a file (written before manifest format 2): pass `--force`
-once and the new manifest has the hashes. A file that already holds what the
-run would write is never a problem.
-
-`--force` never replaces a directory that holds a `pubspec.yaml`, is a
-package's `lib`, holds a symbolic link or holds a file that any client of the
-config reads (the config, a spec, its `$ref`'d files, the overrides or the
-baseline; also through symbolic links, hard links or another letter case):
-`TOA830` stays. Clients whose output directories overlap are all skipped
-(`TOA904`).
-
-One run works on an output at a time. It holds the lock file
-`.<output>.typed_openapi.lock`, created next to the output, which names its
-process. A second run on the same output gets `TOA831` and changes nothing.
-The lock of a process that is gone (on the same host) is taken over (info
-`TOA832`). When typed_openapi cannot tell whether the process runs (another
-host, an unreadable lock, Windows), delete the lock file or run
-`generate --break-lock`, which takes such a lock over and replaces no file;
-`--force` does not touch locks. The lock of a process that runs stays held.
-A directory that cannot be written is `TOA831` too.
-
-A run that was killed while it swapped leaves `.<output>.typed_openapi-*`
-directories (eight letters or digits after the dash, `-old` for the backup;
-these names are the generator's, do not use them). The next run, under the
-lock and after it has checked the output as above, puts the previous output
-back if it is missing, removes them and says so (info `TOA832`); a directory
-that holds a file any client reads is left alone. TOA830-TOA833 and TOA904
-cannot be lowered.
-
-`check` reads the whole spec, follows its `$ref`s (also into other local
-files) and reports unknown keys, wrong value types, broken or looping
-references and constructs that the declared OpenAPI version does not have.
-Then it runs the normalizer: named rules fix the defects whose fix follows
-from the spec or from HTTP (`required: true` on a property, repeated enum
-values, undeclared path parameters, defaults of the wrong type) and report
-the rest with what to change at the source. A `preset` adds the recipe for
-your framework to those hints. Turn a rule off per client or in `defaults`:
-
-```yaml
-defaults:
-  rules: {dedupe-enum-values: false}
-```
-
-Fix what the normalizer cannot know in an overrides file, without touching
-the backend. Name it in the client (`overrides: typed_openapi.overrides.yaml`)
-and address the spec by operations and schemas, not by pointers:
-
-```yaml
-operations:
-  getPet:                     # operationId, or METHOD /path: 'GET /pets/{id}'
-    parameters:
-      id: {schema: {type: integer, format: int64}}   # path:id if names clash
-    responses:
-      '200': {contentType: application/json}
-schemas:
-  Pet:
-    reason: the backend sends null for pets without an owner
-    properties:
-      owner: {nullable: true}
-      photo: {type: string, format: binary}
-```
-
-Overrides change the spec before the normalizer runs; `null` removes a field.
-An override whose target is gone is a warning, one the spec already matches
-is an info that it can be removed, and a misspelled key is an error that
-suggests the closest known one. Fields for the generator (`name`, `exclude`,
-`group`, `exhaustive`, `dartType`, `triState`, `union`) name, leave out,
-group and type what is generated. A `group` is written in UpperCamelCase like the
-name of a class (`pet-store` is used as `PetStore`); a `name` of a method,
-argument or schema must be a valid Dart name, otherwise `TOA560` says which
-name is used instead. Hints of rules that cannot fix a defect themselves
-end with the override to copy.
-
-`check` also works out what will be generated: names, groups and Dart types.
-Name clashes get a suffix (`List` -> `ListModel`, `class` -> `class_`,
-`getPet2`) and an info with the override that pins the name. Choose what to
-generate and how in `defaults` or per client:
-
-```yaml
-defaults:
-  naming:
-    client: PetstoreClient       # root client class; default: client name + Client
-    group: '{Tag}Api'            # class per tag; group_by: tag|path|single
-    patch_suffix: Patch          # PetPatch: PATCH body of a schema used elsewhere too
-    operation_prefix: '^v1_'     # removed from operationIds (nestjs: XController_)
-  include: {tags: [pets], paths: ['/store/**']}
-  exclude: {operations: [deletePet]}
-  types:
-    number: double               # number without format; default num
-    formats: {decimal: {type: Decimal, import: 'package:decimal/decimal.dart'}}
-    schemas: {Money: {type: Money, import: 'package:app/money.dart', converter: MoneyConverter}}
-  tri_state: patch               # optional nullable PATCH fields are Patch<T>?
-  union: raw                     # unions without a discriminator, see above
-  errors: {default_schema: ErrorDto}
-```
-
-How the filters work:
-
-- `include` is a union: an operation is generated when any tag,
-  `operationId` or path pattern of `include` matches it. An empty `include`
-  is no filter.
-- `exclude` wins over `include`. A pattern in both is info `TOA558`, one that
-  matches no operation is a warning `TOA557`.
-- In a path pattern `*` is one segment and `**` any number of segments, `?`
-  one character. `/pets/*` matches `/pets/{id}` and does not match `/pets`;
-  `/pets/**` does not match `/pets` either, so list both to take the
-  collection and everything below it.
-- `operations` match the `operationId` as the spec writes it, before
-  `operation_prefix` is removed (with the `nestjs` preset
-  `UsersController_findAll`, not `findAll`). The prefix is removed only where
-  its match starts at the beginning of the id and is not empty.
-- Tags are case-sensitive, and an operation matches by any of its tags.
-
-Other things `check` tells you instead of guessing: a client that generates
-no operation (everything filtered out, written as `$ref`, or with a path
-variable without a parameter) is a warning `TOA563` that says why; a body
-with a media type that is not JSON, a form, text or an event stream is sent
-and read as bytes without its schema (info `TOA650`; the other media types
-of an operation that are dropped are info `TOA651`); an
-`errors.default_schema` that is not a key of `components.schemas` is a
-warning `TOA652` and is ignored; a parameter `style` that its `in` does not
-allow (path `form`, query `matrix`, ...) is a warning `TOA564` and the default
-style is used, and an `in: querystring` parameter (OpenAPI 3.2) is a warning
-`TOA565` and is not generated. Header parameters named `Accept`, `Content-Type`
-or `Authorization` are not generated, as OpenAPI says to ignore them.
-
-Every finding has a stable code (`TOA011`), a JSON pointer into the spec and,
-for files the parser could position, a line and column. Paths are relative
-to the directory you run the command in. Change the level of a code, by its
-id or name, in `defaults` or per client; `off` drops it. Codes that say a
-spec, overrides or baseline file cannot be read, and the codes of `generate`
-(TOA830-TOA833), cannot be lowered:
-
-```yaml
-defaults:
-  severity: {TOA208: off, duplicate-operation-id: warning}
-```
-
-To adopt the tool on a spec with many findings, accept the current ones in
-a baseline and fail only on new ones:
-
-```yaml
-clients:
-  core_api:
-    input: specs/core_api.json
-    output: lib/src/api/core_api
-    baseline: specs/core_api.baseline.yaml
-```
+## Commands
 
 ```sh
-dart run typed_openapi baseline create   # accept today's errors and warnings
-dart run typed_openapi check             # new findings only; "baselined: N"
-dart run typed_openapi check --show-baselined
-dart run typed_openapi baseline prune    # drop entries that no longer match
+dart run typed_openapi check              # report diagnostics, write nothing
+dart run typed_openapi generate           # check, then write every client without errors
+dart run typed_openapi baseline create    # accept the current errors and warnings
 ```
 
-A finding is matched by a fingerprint of its code and its place (the
-operation, parameter, schema or property when it has one), not by its
-message or line, so rewording a message or editing the spec elsewhere keeps
-it. An entry that no longer matches is a warning that suggests
-`baseline prune`; `check --strict-baseline` makes it an error, whatever
-level the config gives it. `check` reports `TOA820` (a missing baseline
-file) until the first `baseline create` writes it. `baseline create` and
-`baseline prune` leave the baseline of a client whose spec cannot be read
-untouched and exit with `1`. Exit code `1` means at least one error that is
-not accepted, `64` wrong arguments or an unknown client, `78` the config
-could not be read.
+Exit code `0` means no errors, `1` errors, `64` a usage error and `78` a config that could not be loaded. All options are in [Command line](doc/cli.md).
 
-`--format github-actions` prints one workflow annotation per finding; GitHub
-shows only a limited number of annotations per run, so on a spec with many
-findings adopt a baseline first.
+## Documentation
 
-Generated clients depend on
-[`typed_openapi_runtime`](../typed_openapi_runtime/README.md).
+| Guide | What it covers |
+| --- | --- |
+| [Getting started](doc/getting_started.md) | From a spec to a working call, step by step. |
+| [Command line](doc/cli.md) | `check`, `generate`, `baseline`, formats and exit codes. |
+| [Configuration](doc/configuration.md) | Every key of `typed_openapi.yaml`. |
+| [Overrides](doc/overrides.md) | Fixing a spec by location without editing it. |
+| [Presets and rules](doc/presets_and_rules.md) | The normalizer rules and the framework presets. |
+| [Diagnostics](doc/diagnostics.md) | Every `TOAnnn` code and how to fix it. |
+| [Baseline](doc/baseline.md) | Accepting existing problems; adopting on a large spec. |
+| [Generated output](doc/generate_output.md) | Ownership, manifest, locks, determinism, what to commit. |
+| [CI](doc/ci.md) | Exit codes, annotations, SARIF, a GitHub Actions workflow. |
+| [The generated client](doc/generated/overview.md) | Layout and shape of what `generate` writes. |
+| [Models](doc/generated/models.md), [Enums](doc/generated/enums.md), [Unions](doc/generated/unions.md) | Generated types. |
+| [Operations](doc/generated/operations.md), [Request bodies](doc/generated/request_bodies.md), [Responses and errors](doc/generated/responses_and_errors.md) | Generated methods. |
+| [Event streams](doc/generated/event_streams.md), [Security](doc/generated/security.md) | SSE and security metadata. |
+| [NestJS](doc/frameworks/nestjs.md), [FastAPI](doc/frameworks/fastapi.md), [Spring](doc/frameworks/spring.md), [ASP.NET](doc/frameworks/aspnet.md) | What each framework's spec needs. |
+| [Troubleshooting](doc/troubleshooting.md) | Common problems and what to do. |
+
+The runtime that generated code depends on has its own guides: [typed_openapi_runtime](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_runtime/README.md).
+
+## Contributing and license
+
+Development setup and conventions are in the [repository](https://github.com/4akloon/typed_openapi). `typed_openapi` is released under the MIT license, see [LICENSE](LICENSE).
 
 [Українська версія](README.ua.md)
