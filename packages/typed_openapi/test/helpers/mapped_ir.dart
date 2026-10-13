@@ -8,6 +8,10 @@ final class MappedIr {
   static T declaration<T extends Declaration>(ClientIr ir, String name) =>
       ir.declarations.firstWhere((d) => d.name == name) as T;
 
+  /// The union [name] of [ir].
+  static UnionDecl union(ClientIr ir, String name) =>
+      declaration<UnionDecl>(ir, name);
+
   /// The variants of the union [name] as `type` strings.
   static List<String> variantsOf(ClientIr ir, String name) => [
     for (final v in declaration<UnionDecl>(ir, name).variants)
