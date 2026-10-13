@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:args/command_runner.dart';
@@ -59,9 +60,6 @@ final class SemverCommand extends Command<int> {
     } on ProcessException catch (e) {
       _err.writeln('git could not be run: ${e.message}');
       return 1;
-    } on FileSystemException catch (e) {
-      _err.writeln('${e.message}: ${e.path}');
-      return 1;
     }
   }
 
@@ -69,8 +67,6 @@ final class SemverCommand extends Command<int> {
     if (!Directory(root).existsSync()) {
       throw _GitFailure('The root is not a directory: $root');
     }
-    final pubspec = File('$root/$_pubspec').readAsStringSync();
-    final changelog = File('$root/$_changelog').readAsStringSync();
     final sha = await _revision(root, base);
     // The lock is compared from the first base that has one (M11 adds it);
     // the goldens always are.
@@ -85,9 +81,11 @@ final class SemverCommand extends Command<int> {
     final problems = const SemverRule().problems(
       outputChanged: changed.trim().isNotEmpty,
       basePubspec: await _require(root, ['show', '$sha:$_pubspec']),
-      pubspec: pubspec,
+      // The change is what is committed: the files are read at HEAD, as the
+      // diff above is, never from the working tree.
+      pubspec: await _require(root, ['show', 'HEAD:$_pubspec']),
       baseChangelog: await _require(root, ['show', '$sha:$_changelog']),
-      changelog: changelog,
+      changelog: await _require(root, ['show', 'HEAD:$_changelog']),
     );
     problems.forEach(_err.writeln);
     _out.writeln(switch ((changed.trim().isEmpty, problems.length)) {
@@ -122,7 +120,14 @@ final class SemverCommand extends Command<int> {
   }
 
   static Future<_GitResult> _git(String root, List<String> arguments) async {
-    final result = await Process.run('git', ['-C', root, ...arguments]);
+    // A path or a file in a bad encoding must not end the run with a trace.
+    const decoder = Utf8Codec(allowMalformed: true);
+    final result = await Process.run(
+      'git',
+      ['-C', root, ...arguments],
+      stdoutEncoding: decoder,
+      stderrEncoding: decoder,
+    );
     return _GitResult(
       result.exitCode == 0,
       '${result.stdout}',
