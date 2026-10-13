@@ -39,7 +39,7 @@ info TOA650 media-type-as-bytes: The media type "*/*" of the response is not JSO
   fix: Use a JSON media type at the source if the schema matters.
 error TOA504 duplicate-operation-id: operationId "get_1" is also the id of the operation at #/paths/~1api~1invoices~1{id}/get; method names would clash.
   at #/paths/~1api~1payments~1{id}/get/operationId
-  fix: Give each operation its own operationId at the source, or override the method name of this operation. In springdoc, set @Operation(operationId = "...") explicitly; the generated _1 suffixes are not stable.
+  fix: Give each operation its own operationId at the source. To generate anyway, lower TOA504 in the client's severity and pin the second method's name with an override. In springdoc, set @Operation(operationId = "...") explicitly; the generated _1 suffixes are not stable.
 error TOA402 discriminator-mapping-unresolved: discriminator.mapping "wire" points to "#/components/schemas/Missing", which does not exist.
   at #/paths/~1api~1payments~1{id}/get/responses/200/content/*~1*/schema/discriminator/mapping/wire
   fix: Point it at an existing schema at the source; until then, override the mapping of this discriminator. In springdoc, declare the mapping: @Schema(discriminatorProperty = "kind", discriminatorMapping = {@DiscriminatorMapping(value = "foo1", schema = Foo1.class)}).

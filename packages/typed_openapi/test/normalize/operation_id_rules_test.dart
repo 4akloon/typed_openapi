@@ -72,4 +72,12 @@ paths:
       );
     }
   });
+
+  test('the TOA504 fix does not suggest a name override as the cure', () {
+    final fix = NormalizerFixture(
+      spec,
+    ).of(DiagnosticCode.duplicateOperationId).single.fix;
+    expect(fix, contains('lower TOA504'));
+    expect(fix, isNot(contains('or override the method name')));
+  });
 }
