@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:args/args.dart';
 import 'package:path/path.dart' as p;
 
+import '../corpus/corpus_exception.dart';
 import 'fuzz_run.dart';
 
 /// The `fuzz` command line of the repository (M11): runs the escaping fuzz
@@ -52,11 +53,28 @@ final class FuzzCli {
         ..writeln(_parser.usage);
       return 64;
     }
+    try {
+      return await _fuzz(results, seeds: seeds, from: from, every: sampleEvery);
+    } on CorpusException catch (e) {
+      _err.writeln(e.message);
+      return 1;
+    } on FileSystemException catch (e) {
+      _err.writeln('${e.message}: ${e.path}');
+      return 1;
+    }
+  }
+
+  Future<int> _fuzz(
+    ArgResults results, {
+    required int seeds,
+    required int from,
+    required int every,
+  }) async {
     final report = await FuzzRun(
       work: p.normalize(p.absolute(results.option('work')!)),
       runtime: p.normalize(p.absolute(results.option('runtime')!)),
       log: _err,
-      sampleEvery: sampleEvery,
+      sampleEvery: every,
     ).run(from: from, count: seeds);
     report.failures.forEach(_err.writeln);
     _out.writeln(
