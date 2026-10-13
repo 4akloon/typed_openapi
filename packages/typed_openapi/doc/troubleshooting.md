@@ -62,10 +62,10 @@ Fragments (`#/...`) and relative files are read; URLs are not. See [Diagnostics]
 error TOA504 duplicate-operation-id: operationId "list" is also the id of the operation at #/paths/~1a/get; method names would clash.
   --> specs/shop.yaml:10:20
   at #/paths/~1b/get/operationId
-  fix: Give each operation its own operationId at the source, or override the method name of this operation.
+  fix: Give each operation its own operationId at the source. To generate anyway, lower TOA504 in the client's severity and pin the second method's name with an override.
 ```
 
-**Cause:** two operations share an id; the second would clash with the first. **Fix:** make the ids unique at the source. An override does not clear this error: an override of `GET /b` with `name: listB` was tried, and TOA504 was still reported. The other way out is to lower the code in the client's `severity` (see [Configuration](configuration.md#severity)):
+**Cause:** two operations share an id; the second would clash with the first. **Fix:** make the ids unique at the source. A method-name override does not clear this error (an override of `GET /b` with `name: listB` was tried, and TOA504 was still reported), so the fix text no longer suggests one. The other way out is to lower the code in the client's `severity` (see [Configuration](configuration.md#severity)):
 
 ```yaml
 clients:

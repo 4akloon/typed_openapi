@@ -320,7 +320,7 @@ void main() {
         'JsonDecodeException: expected an RFC 3339 date-time string, '
         'got a date-time without an offset at /at in Event. '
         'If the server sends this format on purpose, map it to your own type '
-        'with a converter (types.formats in the config, R6.8) or override '
+        'with a converter (types.formats in the config) or override '
         "the property's format",
       );
       expect(

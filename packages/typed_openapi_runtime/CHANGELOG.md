@@ -67,5 +67,8 @@
   stream reconnects without `Last-Event-ID`.
 
 ### Changed
+- The hint of the `date` and `date-time` decode errors no longer names an
+  internal requirement id; the `SseOptions.wait` doc comment describes the
+  cancellable timer it uses by default.
 - Breaking: `SseItem` has a new subtype, `SseReconnecting`, so an
   exhaustive `switch` over `SseItem` stops compiling until it handles it.

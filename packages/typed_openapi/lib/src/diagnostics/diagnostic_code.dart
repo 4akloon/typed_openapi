@@ -242,7 +242,7 @@ enum DiagnosticCode {
 
   /// A `oneOf` or `anyOf` without a discriminator has variants of the same
   /// JSON type, or a variant that can hold several (a nested union without a
-  /// discriminator), so a value cannot be told apart (R9.2): the
+  /// discriminator), so a value cannot be told apart: the
   /// union keeps it as `JsonValue` in one variant (`PetJson`), or, when no
   /// variant has a JSON type of its own, is `JsonValue` itself. An override
   /// `union: structural` (or the config key `union`) generates a union that
@@ -561,7 +561,9 @@ enum DiagnosticCode {
   /// Two overrides change the same node; neither is applied.
   overrideConflict('TOA806', 'override-conflict', .error),
 
-  /// An override sets a value the spec already has; it can be removed.
+  /// An override sets a value the spec already has, or a generation field
+  /// has no effect (a `name` or `exhaustive` on an alias, a `name` on a
+  /// schema that only a multipart body uses); it can be removed.
   overrideUnchanged('TOA807', 'override-unchanged', .info),
 
   /// An override addressed through an operation changes a node other

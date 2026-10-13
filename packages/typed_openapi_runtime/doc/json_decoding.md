@@ -98,7 +98,7 @@ leap second      -> /born | expected: an RFC 3339 date-time string | actual: a s
 The error carries a hint for a server that sends another format on purpose:
 
 ```text
-JsonDecodeException: expected an RFC 3339 date-time string, got a date-time without an offset. If the server sends this format on purpose, map it to your own type with a converter (types.formats in the config, R6.8) or override the property's format
+JsonDecodeException: expected an RFC 3339 date-time string, got a date-time without an offset. If the server sends this format on purpose, map it to your own type with a converter (types.formats in the config) or override the property's format
 ```
 
 The fix is in the generator config
