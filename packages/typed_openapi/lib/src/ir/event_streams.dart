@@ -39,6 +39,8 @@ final class EventStreams {
     : _statuses = ResponseStatuses(_context),
       _data = EventData(_context, mapper);
 
+  static final _reservedSuffix = RegExp(r'_+$');
+
   final IrContext _context;
   final ResponseStatuses _statuses;
   final EventData _data;
@@ -89,7 +91,11 @@ final class EventStreams {
   /// returns JSON: [name] with `naming.stream_suffix`, claimed in the group's
   /// [methods] after every other method (TOA663, and TOA551 when taken).
   String methodName(SpecOperation entry, String name, NameScope methods) {
-    final candidate = '$name${_context.config.streamSuffix}';
+    // A reserved word's suffix (`class_`) gives way to the stream suffix,
+    // so the name stays lowerCamelCase (`classStream`).
+    final base = name.replaceFirst(_reservedSuffix, '');
+    final candidate =
+        '${base.isEmpty ? name : base}${_context.config.streamSuffix}';
     final (claimed, change) = methods.claim(candidate);
     final location = entry.operation.location;
     _context.report(

@@ -32,13 +32,13 @@ clients:
   b:
     input: b.json
     output: lib/b
-    naming: {stream_suffix: _live}
+    naming: {stream_suffix: Live2}
     sse: {reconnect: false}
 ''', bag);
     expect(bag.all, isEmpty);
     expect(clients[0].generation.streamSuffix, 'Events');
     expect(clients[0].generation.streamReconnect, isTrue);
-    expect(clients[1].generation.streamSuffix, '_live');
+    expect(clients[1].generation.streamSuffix, 'Live2');
     expect(clients[1].generation.streamReconnect, isFalse);
     expect(
       clients[0].generation.key,
@@ -53,7 +53,7 @@ clients:
   a:
     input: a.json
     output: lib/a
-    naming: {stream_suffix: 'my stream'}
+    naming: {stream_suffix: _live}
     sse: {reconnect: 'yes', retry: 3}
 ''', bag).single.generation;
     expect(config.streamSuffix, 'Stream');

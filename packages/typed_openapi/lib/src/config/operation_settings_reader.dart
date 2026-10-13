@@ -15,7 +15,8 @@ final class OperationSettingsReader {
 
   final void Function(String message, JsonPointer at) _invalid;
 
-  static final _identifierPart = RegExp(r'^[A-Za-z0-9_$]+$');
+  /// A suffix that keeps a lowerCamelCase method name lowerCamelCase.
+  static final _suffix = RegExp(r'^[A-Z0-9][A-Za-z0-9]*$');
 
   /// `naming.operation_prefix`: what is removed from the start of an
   /// `operationId`; null when not set or not a valid regular expression.
@@ -45,10 +46,11 @@ final class OperationSettingsReader {
     final picked = _pick('naming', 'stream_suffix');
     if (picked == null) return GenerationConfig.defaultStreamSuffix;
     final (value, at) = picked;
-    if (value is String && _identifierPart.hasMatch(value)) return value;
+    if (value is String && _suffix.hasMatch(value)) return value;
     _invalid(
-      r'"stream_suffix" must be letters, digits, "_" or "$", such as '
-      'Stream; ${GenerationConfig.defaultStreamSuffix} is used.',
+      '"stream_suffix" must be letters and digits that start with an '
+      'uppercase letter or a digit, such as Stream; '
+      '${GenerationConfig.defaultStreamSuffix} is used.',
       at,
     );
     return GenerationConfig.defaultStreamSuffix;

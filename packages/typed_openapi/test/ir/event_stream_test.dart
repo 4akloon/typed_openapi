@@ -228,6 +228,16 @@ $chat  /chat-stream:
       );
     });
 
+    test('of a reserved word drops its suffix: class_ and classStream', () {
+      final fixture = IrFixture(
+        _spec(
+          chat.replaceFirst('operationId: chat', 'operationId: class'),
+          schemas: schemas,
+        ),
+      );
+      expect(_methods(fixture.build()).keys, ['classStream', 'class_']);
+    });
+
     test('of a POST does not reconnect, silently by default', () {
       final fixture = IrFixture(_spec(chat, schemas: schemas));
       final stream = _methods(fixture.build())['chatStream']!;

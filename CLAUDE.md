@@ -206,7 +206,9 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `set`); `OverrideEdit` is in `override_edit.dart`, re-exported by the
   applier.
 - `config/` - `ConfigLoader`, `ProjectConfig`, `ClientConfig`, `Preset`,
-  `GenerationConfig` (`naming` (also `stream_suffix`, default `Stream`),
+  `GenerationConfig` (`naming` (also `stream_suffix`, default `Stream`,
+  letters and digits from an uppercase letter or a digit; a method named
+  `class_` gets `classStream`),
   `sse.reconnect` (GET event streams reconnect unless a call says no;
   `OperationSettingsReader` reads these and `operation_prefix`), `group_by`,
   `include`/`exclude`
