@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../model/schema.dart';
 import '../model/spec_node.dart';
 import '../overrides/override_set.dart';
@@ -158,6 +160,13 @@ final class EnumDraft {
   /// entry per value when the spec gives them.
   const EnumDraft(this.values, this.kind, this.names, this.descriptions);
 
+  /// An enum of [values] of [kind] with the [labels] the spec gives them.
+  factory EnumDraft.of(
+    List<Object?> values,
+    EnumKind kind,
+    (List<String>?, List<String?>?) labels,
+  ) => EnumDraft(values, kind, labels.$1, labels.$2);
+
   /// The non-null values.
   final List<Object?> values;
 
@@ -169,6 +178,9 @@ final class EnumDraft {
 
   /// The `x-enum-descriptions`, one per value.
   final List<String?>? descriptions;
+
+  /// What makes two inline enums the same declaration.
+  String get key => jsonEncode([kind.name, values, names, descriptions]);
 }
 
 /// The mutable state that one mapping shares: every call reads and writes

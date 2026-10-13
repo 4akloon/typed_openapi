@@ -1,10 +1,9 @@
-import 'dart:convert';
-
 import '../model/schema.dart';
 import '../model/spec_node.dart';
 import 'custom_schemas.dart';
 import 'dart_type.dart';
 import 'declaration_names.dart';
+import 'declarer.dart';
 import 'direction_index.dart';
 import 'enum_mapper.dart';
 import 'ir.dart';
@@ -23,7 +22,6 @@ import 'subtype_finder.dart';
 import 'type_recursion.dart';
 import 'union_mapper.dart';
 import 'union_notices.dart';
-import 'union_state.dart';
 
 export 'pending_declaration.dart' show NameHint;
 
@@ -74,12 +72,12 @@ final class SchemaMapper {
     replaced: _replaced,
   );
   late final ModelMapper _models = ModelMapper(_tools, _types);
+  late final Declarer _declarer = Declarer(_tools, _enums, _models, _unions);
   late final StructuralMapper _structural = StructuralMapper(_tools, _types);
   late final CustomSchemas _custom = CustomSchemas(_tools, _types);
   late final UnionMapper _unions = UnionMapper(_tools, _types);
 
   Map<DeclId, PendingDeclaration> get _pending => _tools.state.pending;
-  Map<String, PendingDeclaration> get _inlineEnums => _tools.state.inlineEnums;
   Set<SpecLocation> get _aliases => _tools.state.aliases;
 
   /// The type of [schema] used in [direction]; an inline declaration it
@@ -197,7 +195,7 @@ final class SchemaMapper {
     };
     if (single == null && _declares(schema)) {
       if (inner.replacing) return _structural.nothingDeclared(schema);
-      return _declareNamed(schema, id, inner);
+      return _declarer.declareComponent(schema, id, inner);
     }
     return _alias(schema, single, inner);
   }
@@ -222,27 +220,6 @@ final class SchemaMapper {
     } finally {
       _aliases.remove(schema.location);
     }
-  }
-
-  /// The declaration of the component [schema], named by its key or override.
-  DartType _declareNamed(SchemaObject schema, DeclId id, MappingScope scope) {
-    final key = DeclarationNames.referenceName(schema.location);
-    final override = _context.overrides.schemaAt(schema.location);
-    return _declare(
-      schema,
-      id,
-      scope,
-      componentKey: key,
-      overrideName: override == null
-          ? null
-          : _context.checkedOverrideName(
-              override,
-              'name',
-              override.name,
-              .type,
-              what: 'type',
-            ),
-    );
   }
 
   /// Marks the structural alias at [location] as being mapped; false, with
@@ -271,7 +248,7 @@ final class SchemaMapper {
     if (_declares(schema)) {
       if (scope.replacing) return _structural.nothingDeclared(schema);
       final (id, inner) = _idOf(schema, scope);
-      return _declare(schema, id, inner, hint: hint);
+      return _declarer.declareInline(schema, id, inner, hint);
     }
     return _structural.structural(schema, hint, scope);
   }
@@ -290,94 +267,6 @@ final class SchemaMapper {
       _subtypeFinder.subtypes(schema).isNotEmpty ||
       schema.properties.isNotEmpty ||
       schema.allOf.isNotEmpty;
-
-  /// The declaration of [schema] with identity [id]: the one it has already
-  /// when it is reached again, else a new one named by [hint] (an inline
-  /// schema) or by [componentKey] and [overrideName]. An inline enum equal
-  /// to an earlier one is that enum.
-  DartType _declare(
-    SchemaObject schema,
-    DeclId id,
-    MappingScope scope, {
-    NameHint? hint,
-    String? componentKey,
-    String? overrideName,
-  }) {
-    final nullable = _isNullable(schema);
-    if (_pending.containsKey(id)) return NamedType(id, nullable: nullable);
-    final values = SchemaShapes.enumValues(schema);
-    final kind = values == null ? null : SchemaQueries.enumKind(schema, values);
-    if (values != null && kind == null) {
-      _context.report(
-        .enumMixedValues,
-        'The values of this enum are not all strings, all numbers or all '
-        'booleans; it is generated as JsonValue.',
-        schema.location,
-        fix: 'Give the enum values of one JSON type at the source.',
-      );
-      return const CoreType(.json);
-    }
-    if (values == null) {
-      if (_branches(schema) case (
-        _,
-        final branches,
-      ) when _unions.isRawUnion(schema, branches)) {
-        return const CoreType(.json);
-      }
-    }
-    final (List<String>?, List<String?>?) labels = values == null
-        ? (null, null)
-        : _enums.labels(schema, values);
-    final enumKey = values == null || kind == null || componentKey != null
-        ? null
-        : jsonEncode([kind.name, values, labels.$1, labels.$2]);
-    if (enumKey != null) {
-      final known = _inlineEnums[enumKey];
-      if (known != null) return NamedType(known.id, nullable: nullable);
-    }
-    final pending = PendingDeclaration(id)
-      ..hint = hint
-      ..componentKey = componentKey
-      ..overrideName = overrideName
-      ..jsonKind = switch (kind) {
-        .string => .string,
-        .integer => .integer,
-        .number => .number,
-        .boolean => .boolean,
-        null =>
-          _branches(schema) == null ||
-                  schema.discriminator?.propertyName != null
-              ? .object
-              : null,
-      };
-    pending.depth = (hint?.parent?.depth ?? -1) + 1;
-    _pending[id] = pending;
-    if (enumKey != null) _inlineEnums[enumKey] = pending;
-    // A cycle that goes through this declaration ends at it, so what is
-    // mapped below starts with no alias open.
-    final aliases = {..._aliases};
-    _aliases.clear();
-    try {
-      if (values != null && kind != null) {
-        _enums.declare(schema, pending, values, kind, labels);
-      } else if (_branches(schema) case (final kind, final branches)) {
-        _unions.declare(UnionSite(schema, pending, kind, branches, scope));
-      } else if (_subtypeFinder.subtypes(schema) case final subtypes
-          when subtypes.isNotEmpty) {
-        _unions.declare(
-          UnionSite(schema, pending, .oneOf, subtypes, scope, isSubtypes: true),
-        );
-      } else {
-        _unionNotices.discriminatorWithoutSubtypes(schema);
-        _models.declare(schema, pending, scope);
-      }
-    } finally {
-      _aliases
-        ..clear()
-        ..addAll(aliases);
-    }
-    return NamedType(id, nullable: nullable);
-  }
 
   // Forwards to [SchemaQueries], until the code that asks moves out too.
   RefFollower get _refs => _queries.refs;

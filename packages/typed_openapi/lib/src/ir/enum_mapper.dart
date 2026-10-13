@@ -68,16 +68,13 @@ final class EnumMapper {
     return null;
   }
 
-  /// Sets how [pending], the declaration of the enum [schema] of [values] of
-  /// [kind] with [labels], is built once it is named.
+  /// Sets how [pending], the declaration of the enum [schema] described by
+  /// [draft], is built once it is named.
   void declare(
     SchemaObject schema,
     PendingDeclaration pending,
-    List<Object?> values,
-    EnumKind kind,
-    (List<String>?, List<String?>?) labels,
+    EnumDraft draft,
   ) {
-    final draft = EnumDraft(values, kind, labels.$1, labels.$2);
     _notices.unionHasNoEffect(schema, 'the schema is an enum, not a union');
     pending.build = (name, types) =>
         _build(schema, pending, draft, name, types);
