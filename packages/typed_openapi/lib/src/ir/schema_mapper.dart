@@ -7,6 +7,7 @@ import '../overrides/override_set.dart';
 import 'dart_type.dart';
 import 'declaration_names.dart';
 import 'direction_index.dart';
+import 'enum_mapper.dart';
 import 'ir.dart';
 import 'ir_context.dart';
 import 'mapping_scope.dart';
@@ -40,9 +41,7 @@ final class SchemaMapper {
           DirectionIndex(
             _context.model,
             isExcluded: _context.isPropertyExcluded,
-          ),
-      _declNames = DeclarationNames(_context),
-      _notices = OverrideNotices(_context);
+          );
 
   static const _names = DartNames();
 
@@ -52,8 +51,12 @@ final class SchemaMapper {
 
   final IrContext _context;
   final DirectionIndex _directions;
-  final DeclarationNames _declNames;
-  final OverrideNotices _notices;
+
+  // The collaborators are lazy because a field initializer cannot read the
+  // other fields.
+  late final DeclarationNames _declNames = DeclarationNames(_context);
+  late final OverrideNotices _notices = OverrideNotices(_context);
+  late final EnumMapper _enums = EnumMapper(_context, _declNames, _notices);
 
   // The four fields below are shared mutable state: every call during one
   // mapping reads and writes the same collections, so they cannot be passed
@@ -408,7 +411,7 @@ final class SchemaMapper {
     final nullable = _isNullable(schema);
     if (_pending.containsKey(id)) return NamedType(id, nullable: nullable);
     final values = SchemaShapes.enumValues(schema);
-    final kind = values == null ? null : _enumKind(schema, values);
+    final kind = values == null ? null : EnumMapper.kindOf(schema, values);
     if (values != null && kind == null) {
       _context.report(
         .enumMixedValues,
@@ -427,12 +430,12 @@ final class SchemaMapper {
         return const CoreType(.json);
       }
     }
-    final (names, descriptions) = values == null
+    final (List<String>?, List<String?>?) labels = values == null
         ? (null, null)
-        : _enumLabels(schema, values);
+        : _enums.labels(schema, values);
     final enumKey = values == null || kind == null || componentKey != null
         ? null
-        : jsonEncode([kind.name, values, names, descriptions]);
+        : jsonEncode([kind.name, values, labels.$1, labels.$2]);
     if (enumKey != null) {
       final known = _inlineEnums[enumKey];
       if (known != null) return NamedType(known.id, nullable: nullable);
@@ -461,7 +464,7 @@ final class SchemaMapper {
     _aliases.clear();
     try {
       if (values != null && kind != null) {
-        _enum(schema, pending, values, kind, names, descriptions);
+        _enums.declare(schema, pending, values, kind, labels);
       } else if (_branches(schema) case (final kind, final branches)) {
         _union(schema, pending, kind, branches, scope);
       } else if (_subtypes(schema) case final subtypes
@@ -582,7 +585,7 @@ final class SchemaMapper {
     final object = _resolved(schema);
     if (object == null || !seen.add(object.location)) return null;
     if (SchemaShapes.enumValues(object) case final values?) {
-      return switch (_enumKind(object, values)) {
+      return switch (EnumMapper.kindOf(object, values)) {
         .string => .string,
         .integer => .integer,
         .number => .number,
@@ -806,7 +809,7 @@ final class SchemaMapper {
     final values = SchemaShapes.enumValues(property);
     if (values == null || values.length != 1) return null;
     final value = values.single!;
-    return switch (_enumKind(property, values)) {
+    return switch (EnumMapper.kindOf(property, values)) {
       .string => (value, const CoreType(.string)),
       .integer => (value, const CoreType(.integer)),
       .number => (value, const CoreType(.number)),
@@ -1521,185 +1524,6 @@ final class SchemaMapper {
       written = null;
     }
     return written == null ? null : model.resolveSchema(written)?.location;
-  }
-
-  /// The `x-enum-varnames` and `x-enum-descriptions` of the enum [schema]
-  /// with [values]: a list of strings with one entry per value, or null when
-  /// the extension is missing or malformed (TOA351); a description may be
-  /// `null`, which is no description. An enum that has `null` among its
-  /// written values may list it too.
-  (List<String>?, List<String?>?) _enumLabels(
-    SchemaObject schema,
-    List<Object?> values,
-  ) {
-    // A description may be `null`: that value has none.
-    List<String?>? labels(String key, {bool allowNull = false}) {
-      final written = schema.extensions[key];
-      if (written == null) return null;
-      final all = schema.enumValues;
-      if (written is List<Object?> &&
-          written.every((e) => e is String || (allowNull && e == null))) {
-        final strings = written.cast<String?>();
-        if (strings.length == values.length) return strings;
-        if (all != null && strings.length == all.length) {
-          return [
-            for (final (i, value) in all.indexed)
-              if (value != null) strings[i],
-          ];
-        }
-      }
-      _context.report(
-        .enumVarnamesInvalid,
-        '$key must be a list of strings with one entry per enum value '
-        '(${values.length}); it is ignored.',
-        schema.location.child(key),
-        fix: 'Write one string for each value of the enum at the source.',
-      );
-      return null;
-    }
-
-    return (
-      labels('x-enum-varnames')?.cast<String>(),
-      labels('x-enum-descriptions', allowNull: true),
-    );
-  }
-
-  void _enum(
-    SchemaObject schema,
-    PendingDeclaration pending,
-    List<Object?> values,
-    EnumKind kind,
-    List<String>? names,
-    List<String?>? descriptions,
-  ) {
-    final exhaustive =
-        _context.overrides.schemaAt(schema.location)?.exhaustive ?? true;
-    _notices.unionHasNoEffect(schema, 'the schema is an enum, not a union');
-    pending.build = (name, types) {
-      final scope = NameScope(
-        reserved: {...DartNames.reservedWords, ...DartNames.enumMembers},
-        reservedSuffix: '_',
-      );
-      return EnumDecl(
-        id: pending.id,
-        name: name,
-        kind: kind,
-        exhaustive: exhaustive,
-        knownName: _declNames.helperName(
-          types,
-          '${name}Known',
-          pending,
-          'the enum of the known values of $name',
-        ),
-        unknownName: _declNames.helperName(
-          types,
-          '${name}Unknown',
-          pending,
-          'the class of an unknown value of $name',
-        ),
-        description: schema.description,
-        deprecated: schema.deprecated,
-        values: [
-          for (final (i, value) in values.indexed)
-            EnumValueIr(
-              _valueName(scope, names?[i], value!, schema.location, name),
-              value,
-              description: descriptions?[i],
-            ),
-        ],
-      );
-    };
-  }
-
-  static final _numberText = RegExp(r'^-?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?$');
-
-  /// The name of the enum value [value] of [owner]: from its
-  /// `x-enum-varnames` entry [named], else from the value. A number, or a
-  /// string that is one, is `value` and its digits (`valueMinus1`,
-  /// `value0_5`, `value1eMinus7`).
-  String _valueName(
-    NameScope scope,
-    String? named,
-    Object value,
-    SpecLocation location,
-    String owner,
-  ) {
-    final fromName = named == null ? null : _names.camel(named);
-    final text = '$value';
-    final String? candidate;
-    if (fromName != null) {
-      candidate = fromName;
-    } else if (value is num ||
-        (value is String && _numberText.hasMatch(text))) {
-      candidate = _numberName(text);
-    } else {
-      candidate = _names.camel(text);
-    }
-    final (name, change) = scope.claim(candidate ?? 'value');
-    // A fallback name for an enum value is a naming decision, not a lost
-    // type, so it is an info: an enum of a spec that is not yours can only
-    // be named at the source.
-    if (candidate == null) {
-      _context.report(
-        .nameUnrepresentable,
-        'Value "$value" of enum $owner has no ASCII letter or digit, so it '
-        'is named "$name". Add x-enum-varnames to the enum in the spec to '
-        'name its values.',
-        location,
-        severity: .info,
-        fix: 'Name the values with x-enum-varnames at the source.',
-      );
-    } else if (change != null) {
-      _context.report(
-        change == .reserved ? .nameReserved : .nameCollision,
-        'Value "$value" of enum $owner is named "$name".',
-        location,
-        fix: 'Name the values with x-enum-varnames at the source.',
-      );
-    }
-    if (named != null && fromName == null) {
-      _context.report(
-        .nameUnrepresentable,
-        'The x-enum-varnames entry "$named" of enum $owner has no ASCII '
-        'letter or digit, so the value "$value" is named "$name".',
-        location,
-        severity: .info,
-        fix: 'Write a name with a letter or digit in x-enum-varnames.',
-      );
-    }
-    if (candidate != null && value is! num) {
-      _context.checkLossyName(
-        fromName == null ? text : named!,
-        name,
-        location,
-        what: 'Value',
-        fix: 'Name it with x-enum-varnames at the source.',
-      );
-    }
-    return name;
-  }
-
-  /// The identifier for the number written as [text]: `value`, `Minus` for
-  /// a sign, `_` for the point, the exponent without a plus.
-  static String _numberName(String text) {
-    final negative = text.startsWith('-');
-    final digits = (negative ? text.substring(1) : text)
-        .replaceAll('.', '_')
-        .replaceAllMapped(
-          RegExp('([eE])([+-]?)'),
-          (m) => '${m[1]}${m[2] == '-' ? 'Minus' : ''}',
-        );
-    return 'value${negative ? 'Minus' : ''}$digits';
-  }
-
-  static EnumKind? _enumKind(SchemaObject schema, List<Object?> values) {
-    if (values.every((v) => v is String)) return .string;
-    if (values.every((v) => v is bool)) return .boolean;
-    if (values.every((v) => v is int)) {
-      return schema.types.contains(SchemaType.number) ? .number : .integer;
-    }
-    if (values.every((v) => v is num)) return .number;
-    return null;
   }
 
   /// The type of a schema without a declaration: a scalar, a list or a

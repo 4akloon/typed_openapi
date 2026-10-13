@@ -135,3 +135,23 @@ final class FieldDraft {
   /// Whether the value is a secret that must not be printed.
   final bool sensitive;
 }
+
+/// What an enum schema says: its values, their kind and the labels the spec
+/// gives them.
+final class EnumDraft {
+  /// An enum of [values] of [kind]; [names] and [descriptions] have one
+  /// entry per value when the spec gives them.
+  const EnumDraft(this.values, this.kind, this.names, this.descriptions);
+
+  /// The non-null values.
+  final List<Object?> values;
+
+  /// The kind of the values.
+  final EnumKind kind;
+
+  /// The `x-enum-varnames`, one per value.
+  final List<String>? names;
+
+  /// The `x-enum-descriptions`, one per value.
+  final List<String?>? descriptions;
+}
