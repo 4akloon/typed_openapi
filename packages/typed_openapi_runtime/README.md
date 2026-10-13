@@ -59,6 +59,22 @@ code depends on. Dependencies: `dio` and `meta`.
   reaches the listener as a stream error and the stream closes). Listen to
   the stream or cancel it: an unlistened stream keeps the connection open.
   Cancelling the subscription cancels the request.
+- Reconnection is off by default. A call turns it on with
+  `CallOptions(sse: SseOptions(reconnect: true))`; an operation can enable
+  it for every call (the `sse.reconnect` override or config key of the
+  generator), and then `reconnect: false` in the call turns it off. A GET
+  can reconnect when the call asks; any other method only when its operation
+  enables it, since repeating the request may not be safe. When a
+  connection ends, the stream emits `SseReconnecting` (the attempt, the
+  delay and why), waits, and opens the request again with the last event id
+  as `Last-Event-ID` (an id that is not printable ASCII is not sent). The
+  wait is the server's `retry`, else 1 s, doubling to a cap of 30 s (a
+  server `retry` over the cap is kept). After 5 attempts in a row that bring
+  no message the stream ends; a message on a new connection (an event, also
+  one that does not decode or that your decoder drops) starts the count
+  again. A 204 from the server, an error status and a cancel end the stream
+  at once; the last item is always `SseDisconnected`, with the last event id
+  and `retry`, so you can resume yourself.
 
 ## Your Dio is used as is
 

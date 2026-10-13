@@ -234,10 +234,33 @@ Findings and decisions of M10 that were deliberately deferred (plan:
 | What | Where |
 |---|---|
 | NDJSON / JSONL streams (R12.6) | later |
-| The `sse` override does not change a `$ref`'d (shared) response (TOA669 when it finds nothing else) | when needed |
+| WebSockets (a different protocol; the `sse` machinery does not apply) | later |
+| Webhooks and callbacks (`webhooks`, `callbacks`: TOA567 reports them; the M9 row above has the same item) | when needed |
+| The `sse` override does not change a `$ref`'d (shared) response: TOA669 names the one it left alone, and TOA654 says so when the event types then differ | when needed |
 | `sse.method: none` on an operation that is only an event stream leaves it out, and the TOA563 message counts it among the event streams the client cannot express | when needed |
 | A per-call `reconnect: true` on a POST is ignored at run time; the method's doc comment says so, and TOA665 when the config asks to reconnect | by design (spec decision 3) |
 | Event streams on the web need a fetch-based Dio adapter the user plugs in | by design (M7, spec decision 8) |
+
+## Parked from the M10 reviews
+
+Findings of the M10 reviews (`T<n>` is the review of task n, `T9a` and `T9b`
+those of the two hardening tasks, `9c` the last task's own notes) that the
+fix tasks 9a, 9b and 9c did not fix. Everything else those reviews found is
+fixed; the reviews are in `.superpowers/sdd/2026-10-13-m10-sse/`.
+
+| Finding | Review | Why it is parked |
+|---|---|---|
+| Event data whose whole `schema` is `format: date-time` or `format: binary` is decoded as JSON, so a bare `2026-01-01T00:00:00Z` data line is an `SseDecodeError` (the data would have to be a JSON string) | T4 observation | the reading is decision 1 of M10 (the `schema` of a stream is the JSON of `data`); text with a format needs a user decision |
+| An event named only with NUL (or other characters `DartCode` drops from a doc line) gets the doc "The `` event" | T5 M9 | cosmetic; the class name is right (TOA668) |
+| When an `itemSchema` has both `oneOf` and `anyOf`, `anyOf` is ignored without a diagnostic | T5 M9 | very rare; consistent with `oneOf` winning elsewhere |
+| A branch that fixes `event` through `allOf` is not read: it makes the data text with TOA666 at the branch | T5 M7 | the report names the branch and says to write the constant in it; reading `allOf` parts for `event` can be added when a spec needs it |
+| `EventStreams._reservedSuffix` strips every trailing underscore of a method name, not one | T7/8 nit | harmless: the stem is still a valid name, and the empty case falls back |
+| Inline event schemas copied into different files count as different event types (TOA654); so do two nested compositions written differently | T9a, 9c | a structural comparison of schemas across files is not worth its cost; write the type once and `$ref` it |
+| A `Accept: null` in `CallOptions.headers` does not remove the generated `Accept` | 9a note | `key: ?value` skips nulls for every header; unchanged behaviour |
+| JSON and SARIF reports keep U+200E, U+200F and U+061C raw in message text (valid JSON, escaped controls) | T9b M2 | machine formats; the text and GitHub reporters, where a person reads, neutralise them |
+| An event whose connection brings only a bare `id:` or `retry:` heartbeat is given up after 5 attempts | T9b M3 | by definition of a message (pinned by a test and documented in `SseOptions.maxAttempts`); a server that wants to keep the stream sends an event or a comment |
+| A server that sends one event per connection and closes is reconnected for ever at `retry` intervals | T1 note | by design: the attempt count restarts after a message |
+| The ledger subject of the `sse.events` test commit is `test(...)` | T9b M4 | nothing to fix: 9a had fixed the cause |
 
 ## Parked from the M9 reviews
 

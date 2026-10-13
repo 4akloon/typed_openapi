@@ -159,7 +159,9 @@ switch (await client.pets.getPet(petId: 1)) {
   `CallOptions(sse: SseOptions(reconnect: true))` або з `sse: {reconnect:
   true}` у конфігу, надсилає `Last-Event-ID` і сповіщає кожну спробу через
   `SseReconnecting`; затримка — `retry` сервера, інакше 1 с, подвоюється до
-  30 с, 5 спроб. POST не перепідключається. У вебі підключи до свого Dio
+  30 с (`retry` сервера понад 30 с зберігається), 5 спроб, які
+  лічаться заново після повідомлення. POST перепідключається лише тоді, коли
+  override `sse.reconnect` його операції це вмикає. У вебі підключи до свого Dio
   адаптер на fetch: стандартний не вміє потоків.
 - Події, типізовані поодинці (`itemSchema` OpenAPI 3.2, чиї гілки `oneOf`
   фіксують `event` константою), — sealed-union за назвою події:

@@ -159,8 +159,10 @@ switch (await client.pets.getPet(petId: 1)) {
   reconnects when you pass `CallOptions(sse: SseOptions(reconnect: true))`,
   or by default with `sse: {reconnect: true}` in the config, sending
   `Last-Event-ID` and announcing each attempt with `SseReconnecting`; the
-  delay is the server's `retry`, else 1 s, doubling to 30 s, 5 attempts. A
-  POST never reconnects. On the web, plug a fetch-based adapter into your
+  delay is the server's `retry`, else 1 s, doubling to 30 s (a server
+  `retry` over 30 s is kept), 5 attempts, counted again after a message. A
+  POST reconnects only when the operation's `sse.reconnect` override enables
+  it. On the web, plug a fetch-based adapter into your
   Dio: the default one cannot stream.
 - Events typed one by one (an OpenAPI 3.2 `itemSchema` whose `oneOf`
   branches fix `event` to a constant) are a sealed union by event name,
