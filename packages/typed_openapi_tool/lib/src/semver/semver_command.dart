@@ -48,34 +48,99 @@ final class SemverCommand extends Command<int> {
     final results = argResults!;
     final root = results.option('root')!;
     final base = results.option('base')!;
+    if (base.startsWith('-')) {
+      usageException('The base revision must not start with "-": $base');
+    }
+    try {
+      return await _check(root, base);
+    } on _GitFailure catch (e) {
+      _err.writeln(e.message);
+      return 1;
+    } on ProcessException catch (e) {
+      _err.writeln('git could not be run: ${e.message}');
+      return 1;
+    } on FileSystemException catch (e) {
+      _err.writeln('${e.message}: ${e.path}');
+      return 1;
+    }
+  }
+
+  Future<int> _check(String root, String base) async {
+    if (!Directory(root).existsSync()) {
+      throw _GitFailure('The root is not a directory: $root');
+    }
+    final pubspec = File('$root/$_pubspec').readAsStringSync();
+    final changelog = File('$root/$_changelog').readAsStringSync();
+    final sha = await _revision(root, base);
     // The lock is compared from the first base that has one (M11 adds it);
     // the goldens always are.
-    final lock = await _git(root, ['show', '$base:${outputs.first}']);
-    final changed = await _git(root, [
+    final hasLock = (await _git(root, ['show', '$sha:${outputs.first}'])).ok;
+    final changed = await _require(root, [
       'diff',
       '--name-only',
-      '$base...HEAD',
+      '$sha...HEAD',
       '--',
-      ...lock.isEmpty ? outputs.skip(1) : outputs,
+      ...hasLock ? outputs : outputs.skip(1),
     ]);
     final problems = const SemverRule().problems(
       outputChanged: changed.trim().isNotEmpty,
-      basePubspec: await _git(root, ['show', '$base:$_pubspec']),
-      pubspec: File('$root/$_pubspec').readAsStringSync(),
-      baseChangelog: await _git(root, ['show', '$base:$_changelog']),
-      changelog: File('$root/$_changelog').readAsStringSync(),
+      basePubspec: await _require(root, ['show', '$sha:$_pubspec']),
+      pubspec: pubspec,
+      baseChangelog: await _require(root, ['show', '$sha:$_changelog']),
+      changelog: changelog,
     );
     problems.forEach(_err.writeln);
-    _out.writeln(
-      changed.trim().isEmpty
-          ? 'The generated output did not change.'
-          : 'The generated output changed: ${problems.length} problems.',
-    );
+    _out.writeln(switch ((changed.trim().isEmpty, problems.length)) {
+      (true, _) => 'The generated output did not change.',
+      (false, 0) => 'The generated output changed and complies.',
+      (false, final n) => 'The generated output changed: $n problems.',
+    });
     return problems.isEmpty ? 0 : 1;
   }
 
-  static Future<String> _git(String root, List<String> arguments) async {
-    final result = await Process.run('git', ['-C', root, ...arguments]);
-    return result.exitCode == 0 ? '${result.stdout}' : '';
+  /// The full commit id of [base]; fails when it names no commit.
+  Future<String> _revision(String root, String base) async {
+    final result = await _git(root, [
+      'rev-parse',
+      '--verify',
+      '--quiet',
+      '$base^{commit}',
+    ]);
+    if (!result.ok) {
+      throw _GitFailure(
+        'The base revision "$base" is not a commit of the repository at '
+        '$root.',
+      );
+    }
+    return result.stdout.trim();
   }
+
+  static Future<String> _require(String root, List<String> arguments) async {
+    final result = await _git(root, arguments);
+    if (!result.ok) throw _GitFailure('git failed: ${result.stderr.trim()}');
+    return result.stdout;
+  }
+
+  static Future<_GitResult> _git(String root, List<String> arguments) async {
+    final result = await Process.run('git', ['-C', root, ...arguments]);
+    return _GitResult(
+      result.exitCode == 0,
+      '${result.stdout}',
+      '${result.stderr}',
+    );
+  }
+}
+
+final class _GitResult {
+  const _GitResult(this.ok, this.stdout, this.stderr);
+
+  final bool ok;
+  final String stdout;
+  final String stderr;
+}
+
+final class _GitFailure implements Exception {
+  const _GitFailure(this.message);
+
+  final String message;
 }

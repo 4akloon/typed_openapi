@@ -12,6 +12,12 @@ final class SemverRule {
     r'^version:\s*(\d+)\.(\d+)\.(\d+)',
     multiLine: true,
   );
+  static final _section = RegExp('^## ', multiLine: true);
+  static final _entries = RegExp(
+    r'^###[ \t]+Output changes[ \t]*\n\s*([-*] [\s\S]*?)'
+    r'(?=^### |^## |(?![\s\S]))',
+    multiLine: true,
+  );
 
   /// What the change must still add, one sentence each; empty when it
   /// complies. [outputChanged] says whether `corpus.lock` or a fixture's
@@ -27,9 +33,9 @@ final class SemverRule {
     if (!outputChanged) return const [];
     final base = _parse(basePubspec);
     final next = _parse(pubspec);
-    final top = _topSection(changelog);
+    final entries = _outputEntries(changelog);
     return [
-      if (changelog == baseChangelog || !top.contains('$heading\n- '))
+      if (entries == null || entries == _outputEntries(baseChangelog))
         'The generated output changed (corpus.lock or a golden file): add '
             'an entry under "$heading" in the top section of '
             'packages/typed_openapi/CHANGELOG.md that names the clients and '
@@ -58,11 +64,15 @@ final class SemverRule {
   static String _required(List<int> base) =>
       base.first == 0 ? '0.${base[1] + 1}.0' : '${base.first + 1}.0.0';
 
-  /// The text of the first `## ` section of [changelog].
+  /// The bullets under the heading in the top section, or null.
+  static String? _outputEntries(String changelog) =>
+      _entries.firstMatch(_topSection(changelog))?[1]?.trim();
+
+  /// The text of the first `## ` section of [changelog], line ends as `\n`.
   static String _topSection(String changelog) {
-    final start = changelog.indexOf('## ');
-    if (start < 0) return '';
-    final end = changelog.indexOf('\n## ', start + 3);
-    return changelog.substring(start, end < 0 ? changelog.length : end);
+    final text = changelog.replaceAll('\r\n', '\n');
+    final starts = _section.allMatches(text).map((m) => m.start).toList();
+    if (starts.isEmpty) return '';
+    return text.substring(starts.first, starts.length > 1 ? starts[1] : null);
   }
 }
