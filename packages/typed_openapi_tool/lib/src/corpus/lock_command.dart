@@ -74,12 +74,22 @@ final class LockCommand extends Command<int> {
   @override
   Future<int> run() async {
     final results = argResults!;
+    FetchCommand.checkNames(results, usage);
+    if (_writes && results.rest.isNotEmpty) {
+      throw UsageException(
+        'corpus update takes no names: a partial update would drop the other '
+        'clients from the lock. Run it without names.',
+        usage,
+      );
+    }
     final specs = FetchCommand.specsOf(results);
     final lockFile = File(results.option('lock')!);
     // A lock that cannot be read fails before the long run.
     final expected = _writes || !lockFile.existsSync()
         ? null
-        : CorpusLock.parse(lockFile.readAsStringSync());
+        : CorpusLock.parse(
+            lockFile.readAsStringSync(),
+          ).only(results.rest.toSet());
     final cache = SpecCache(results.option('cache')!, _download);
     final result =
         await CorpusRun(

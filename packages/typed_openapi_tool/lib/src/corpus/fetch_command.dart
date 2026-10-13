@@ -68,14 +68,20 @@ final class FetchCommand extends Command<int> {
     ];
   }
 
-  /// Throws a [UsageException] when a name in the rest arguments is neither
-  /// a spec nor a schema, so a typo never fetches nothing and succeeds.
-  void _checkNames(ArgResults results) {
+  /// Throws a [UsageException] when a name in the rest arguments of
+  /// [results] is not a spec (nor, with [includeSchemas], a schema), so a
+  /// typo never selects nothing and succeeds; [usage] is the command's.
+  static void checkNames(
+    ArgResults results,
+    String usage, {
+    bool includeSchemas = false,
+  }) {
     const reader = CorpusListReader();
     final text = File(results.option('corpus')!).readAsStringSync();
     final known = [
       for (final spec in reader.read(text)) spec.name,
-      for (final schema in reader.readSchemas(text)) schema.name,
+      if (includeSchemas)
+        for (final schema in reader.readSchemas(text)) schema.name,
     ];
     final unknown = results.rest.where((n) => !known.contains(n)).toList();
     if (unknown.isNotEmpty) {
@@ -89,7 +95,7 @@ final class FetchCommand extends Command<int> {
   @override
   Future<int> run() async {
     final results = argResults!;
-    _checkNames(results);
+    checkNames(results, usage, includeSchemas: true);
     final cache = SpecCache(results.option('cache')!, _download);
     try {
       for (final spec in specsOf(results)) {

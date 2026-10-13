@@ -46,6 +46,15 @@ final class CorpusLock {
   /// The record of each client, by `<union mode>/<name>`.
   final Map<String, ClientLock> clients;
 
+  /// The lock restricted to the clients of the specs [names]; all of it when
+  /// [names] is empty.
+  CorpusLock only(Set<String> names) => names.isEmpty
+      ? this
+      : CorpusLock({
+          for (final MapEntry(:key, :value) in clients.entries)
+            if (names.contains(key.split('/').last)) key: value,
+        });
+
   /// The text of the lock file.
   String format() {
     final keys = clients.keys.toList()..sort();
