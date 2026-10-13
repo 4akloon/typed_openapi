@@ -3,6 +3,7 @@ import '../model/spec_node.dart';
 import '../normalize/spec_edit.dart';
 import 'override_edit.dart';
 import 'override_edit_context.dart';
+import 'override_set.dart';
 import 'override_target.dart';
 import 'sse_override.dart';
 
@@ -14,8 +15,11 @@ import 'sse_override.dart';
 /// IR builder reads them in the override's order.
 ///
 /// Only responses written in the operation are changed: a `$ref`'d
-/// response is shared, so it is not. An `sse` field that finds no event
-/// stream to apply to is TOA669.
+/// response is shared, so it is not. A `data` or `events` that finds no
+/// event stream to write into is TOA669, naming that part; the other
+/// fields of `sse` are generation fields the IR builder applies to the
+/// operation whatever its responses are. A `data` or `events` the spec
+/// already has is TOA807.
 final class SseOverrideApplier {
   /// Creates an applier that works in [_context].
   const SseOverrideApplier(this._context);
@@ -23,35 +27,63 @@ final class SseOverrideApplier {
   final OverrideEditContext _context;
 
   /// The edits of the `sse` field of [target].
-  Iterable<OverrideEdit> edits(OperationTarget target) sync* {
+  List<OverrideEdit> edits(OperationTarget target) {
     final entry = target.entry;
     final sse = entry.sse;
-    if (sse == null) return;
+    final schema = sse == null ? null : _schemaOf(sse);
+    if (sse == null || schema == null) return const [];
+    final part = sse.data != null ? 'data' : 'events';
     final media = _eventStreams(target.node.location);
     if (media.isEmpty) {
       _context.report(
         .sseOverrideNotApplied,
         entry,
         'sse',
-        'The operation has no 2xx response written in it whose content is '
-            'text/event-stream, so "sse" changes nothing.',
+        'The "$part" of "sse" is not applied: it is written only into '
+            'text/event-stream media types that a 2xx response written in '
+            'the operation has, and this operation has none (a response '
+            'that is a reference is shared).',
         fix:
-            'Remove "sse", or override a shared response through its own '
+            'Remove "$part", or override a shared response through its own '
             'operation.',
       );
-      return;
+      return const [];
     }
-    final schema = _schemaOf(sse);
-    if (schema == null) return;
-    for (final (at, raw) in media) {
+    final edits = [
+      for (final (at, raw) in media) ..._edits(entry, at, raw, schema),
+    ];
+    if (edits.isEmpty) {
+      _context.report(
+        .overrideUnchanged,
+        entry,
+        'sse',
+        'The spec already has this "$part"; the override changes nothing and '
+            'can be removed.',
+        fix: 'Remove "$part" from "sse".',
+      );
+    }
+    return edits;
+  }
+
+  /// The edits that make the media type at [at] ([raw]) have [schema] and
+  /// no `itemSchema`.
+  Iterable<OverrideEdit> _edits(
+    OperationOverride entry,
+    SpecLocation at,
+    Map<String, Object?> raw,
+    Map<String, Object?> schema,
+  ) sync* {
+    final hasItemSchema = raw.containsKey('itemSchema');
+    if (hasItemSchema ||
+        !OverrideEditContext.equality.equals(raw['schema'], schema)) {
       yield OverrideEdit(SpecEdit.add(at.child('schema'), schema), [
         (entry, 'sse'),
       ]);
-      if (raw.containsKey('itemSchema')) {
-        yield OverrideEdit(SpecEdit.remove(at.child('itemSchema')), [
-          (entry, 'sse'),
-        ]);
-      }
+    }
+    if (hasItemSchema) {
+      yield OverrideEdit(SpecEdit.remove(at.child('itemSchema')), [
+        (entry, 'sse'),
+      ]);
     }
   }
 

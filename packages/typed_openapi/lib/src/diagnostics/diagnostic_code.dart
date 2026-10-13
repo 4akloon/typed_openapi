@@ -495,8 +495,12 @@ enum DiagnosticCode {
   /// variant is named by its place (`ChatEventEvent2`).
   eventNameUnrepresentable('TOA668', 'event-name-unrepresentable', .info),
 
-  /// The `sse` override of an operation finds no `text/event-stream` 2xx
-  /// response written in the operation, so it changes nothing.
+  /// A part of the `sse` override of an operation does not apply: `data` or
+  /// `events` find no `text/event-stream` 2xx response written in the
+  /// operation (a `$ref`'d one is shared), the operation has no event stream
+  /// for `reconnect`, `method` or `unknown`, `unknown` has no events by name
+  /// to apply to, or an event's data cannot be read. The message names the
+  /// part; the rest of `sse` applies.
   sseOverrideNotApplied('TOA669', 'sse-override-not-applied', .warning),
 
   /// A normalizer fix or an override was not applied: its file cannot be

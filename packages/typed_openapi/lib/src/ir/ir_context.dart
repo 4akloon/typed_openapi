@@ -2,6 +2,7 @@ import '../config/generation_config.dart';
 import '../config/project_config.dart';
 import '../diagnostics/diagnostic_bag.dart';
 import '../diagnostics/diagnostic_code.dart';
+import '../diagnostics/json_pointer.dart';
 import '../diagnostics/severity.dart';
 import '../model/spec_node.dart';
 import '../normalize/normalizer.dart';
@@ -189,10 +190,17 @@ final class IrContext {
     OverrideEntry entry,
     String field, {
     String? fix,
+  }) => reportAtPointer(code, message, entry.pointer.child(field), fix: fix);
+
+  /// Reports [code] at [pointer] of the overrides file.
+  void reportAtPointer(
+    DiagnosticCode code,
+    String message,
+    JsonPointer pointer, {
+    String? fix,
   }) {
     final set = spec.overrides;
     if (set == null) return;
-    final pointer = entry.pointer.child(field);
     diagnostics.report(
       code,
       message,

@@ -144,9 +144,18 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `SseOverrideApplier` writes `data`, or an object whose properties are
   the events with data, as the `schema` of every `text/event-stream`
   media type of the 2xx responses written in the operation and removes
-  their `itemSchema`; a `$ref`'d response is not changed, and an `sse`
-  that changes nothing is TOA669; `EventData` reads the events' union from
-  that object in the override's order; `unknown: ignore` makes the
+  their `itemSchema` (a `$ref`'d response is shared and not changed; the
+  same value as the spec has is TOA807); TOA669 names exactly the part
+  that does not apply: `data`/`events` with no written event stream (the
+  applier), `reconnect`/`method`/`unknown` on an operation with no event
+  stream, `unknown` on a stream with no events by name, an event the
+  reader dropped (`<<`, left out) - `reconnect`, `method` and `unknown`
+  otherwise apply to the operation whatever its responses are (`method:
+  none` on a stream-only operation leaves it out, as `exclude` does);
+  `OverrideEvents` reads the events' union from that object in the
+  override's order, only for a media type written in the operation
+  (`EventStreams._isWritten`), with one union for every event-stream
+  success; `unknown: ignore` makes the
   generated `fromEvent` throw `SseEventIgnored`, which `SseItemDecoder`
   drops; its id, like that of a block without data, still reaches
   `SseDisconnected.lastEventId` and so the `Last-Event-ID` of a

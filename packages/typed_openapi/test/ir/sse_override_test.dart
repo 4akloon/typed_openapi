@@ -154,7 +154,7 @@ operations:
         for (final d in fixture.diagnostics.all)
           if (d.code == DiagnosticCode.sseOverrideNotApplied) d.pointer?.value,
       ],
-      ['#/operations/plain/sse', '#/operations/shared/sse'],
+      unorderedEquals(['#/operations/plain/sse', '#/operations/shared/sse']),
     );
   });
 }
