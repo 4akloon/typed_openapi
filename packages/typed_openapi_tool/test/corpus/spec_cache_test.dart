@@ -7,6 +7,7 @@ import 'package:test/test.dart';
 import 'package:typed_openapi_tool/src/corpus/corpus_exception.dart';
 import 'package:typed_openapi_tool/src/corpus/corpus_spec.dart';
 import 'package:typed_openapi_tool/src/corpus/expectation.dart';
+import 'package:typed_openapi_tool/src/corpus/pinned_schema.dart';
 import 'package:typed_openapi_tool/src/corpus/spec_cache.dart';
 import 'package:typed_openapi_tool/src/corpus/spec_source.dart';
 import 'package:typed_openapi_tool/src/corpus/tree_hash.dart';
@@ -92,4 +93,36 @@ void main() {
       isFalse,
     );
   });
+
+  test(
+    'a pinned schema is downloaded once, checked and kept by name',
+    () async {
+      final temp = TempDir();
+      var downloads = 0;
+      final cache = SpecCache(temp.path, (url) async {
+        downloads++;
+        return utf8.encode(_text);
+      });
+      final schema = PinnedSchema(
+        name: 'sarif_schema',
+        url: Uri.parse('https://example.com/x/schema.json'),
+        sha256: pinned,
+        license: 'MIT',
+      );
+      final path = await cache.fetchSchema(schema);
+      expect(path, p.join(temp.path, 'sarif_schema', 'schema.json'));
+      await cache.fetchSchema(schema);
+      expect(downloads, 1);
+      final wrong = PinnedSchema(
+        name: 'other',
+        url: schema.url,
+        sha256: '0' * 64,
+        license: 'MIT',
+      );
+      await expectLater(
+        cache.fetchSchema(wrong),
+        throwsA(isA<CorpusException>()),
+      );
+    },
+  );
 }

@@ -6,10 +6,12 @@ import 'package:args/command_runner.dart';
 import 'corpus_exception.dart';
 import 'corpus_list_reader.dart';
 import 'corpus_spec.dart';
+import 'pinned_schema.dart';
 import 'spec_cache.dart';
 
 /// `corpus fetch`: downloads the specs of `corpus.yaml` that are not in the
-/// cache yet and verifies the hash of every one.
+/// cache yet, and the `schemas` the tests read, and verifies the hash of
+/// every one.
 final class FetchCommand extends Command<int> {
   /// Creates the command; lines go to [_out], failures to [_err].
   FetchCommand(this._out, this._err, this._download) {
@@ -53,6 +55,19 @@ final class FetchCommand extends Command<int> {
     ];
   }
 
+  /// The `schemas` of the corpus file of [results], restricted to the names
+  /// in its rest arguments when there are any.
+  static List<PinnedSchema> schemasOf(ArgResults results) {
+    final schemas = const CorpusListReader().readSchemas(
+      File(results.option('corpus')!).readAsStringSync(),
+    );
+    final only = results.rest.toSet();
+    return [
+      for (final schema in schemas)
+        if (only.isEmpty || only.contains(schema.name)) schema,
+    ];
+  }
+
   @override
   Future<int> run() async {
     final results = argResults!;
@@ -60,6 +75,9 @@ final class FetchCommand extends Command<int> {
     try {
       for (final spec in specsOf(results)) {
         _out.writeln('${spec.name}: ${await cache.fetch(spec)}');
+      }
+      for (final schema in schemasOf(results)) {
+        _out.writeln('${schema.name}: ${await cache.fetchSchema(schema)}');
       }
       return 0;
     } on CorpusException catch (e) {

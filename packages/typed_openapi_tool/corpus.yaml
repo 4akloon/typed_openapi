@@ -5,6 +5,8 @@
 # `generate` (the client is generated and passes the analyzer) or
 # `{check-errors: [...]}` (the client is skipped for exactly these errors of
 # the spec). Sources and licenses: docs/research/08-test-corpus.md.
+# `schemas` are single files that offline tests read from the same cache
+# (fetched and pinned by hash, never kept in the repository).
 specs:
   # The five R15.3 names.
   petstore:
@@ -123,3 +125,10 @@ specs:
     sha256: ea9018f5522148e3f635680556883b4e843a561550359581f360f4e5c4beb552
     license: MIT
     expect: generate
+schemas:
+  # SARIF 2.1.0 (OASIS Standard), checked against the SARIF reporter's output.
+  # The OASIS IPR Policy governs the file, so the repository only pins it.
+  sarif_schema:
+    url: https://raw.githubusercontent.com/oasis-tcs/sarif-spec/25eb7663ad3ac54338b4f6a00a7004995e32e6da/sarif-2.1/schema/sarif-schema-2.1.0.json
+    sha256: c3b4bb2d6093897483348925aaa73af03b3e3f4bd4ca38cef26dcb4212a2682e
+    license: OASIS IPR Policy (RF on RAND)

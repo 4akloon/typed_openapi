@@ -72,4 +72,29 @@ specs:
       throwsA(isA<FormatException>()),
     );
   });
+
+  test('reads the pinned schemas, and none when the file has no map', () {
+    final schemas = reader.readSchemas('''
+specs: {}
+schemas:
+  sarif_schema:
+    url: https://example.com/abc/sarif.json
+    sha256: $_hash
+    license: OASIS
+''');
+    expect(schemas.single.name, 'sarif_schema');
+    expect(schemas.single.url.pathSegments.last, 'sarif.json');
+    expect(schemas.single.license, 'OASIS');
+    expect(reader.readSchemas('specs: {}\n'), isEmpty);
+    expect(reader.read('specs: {}\nschemas: {a: 1}\n'), isEmpty);
+  });
+
+  test('a schema without a lowercase sha256 is a FormatException', () {
+    expect(
+      () => reader.readSchemas(
+        'schemas: {a: {url: u, sha256: x, license: MIT}}',
+      ),
+      throwsA(isA<FormatException>()),
+    );
+  });
 }
