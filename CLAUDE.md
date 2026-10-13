@@ -355,7 +355,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `naming.stream_suffix`, claimed after every other method of the group,
   TOA663, TOA551 on a collision). A method that returns events has
   `OperationIr.events` (`EventStreamIr`: the data type, null for text, and
-  `StreamReconnection` `off` for a non-GET with TOA665, `onRequest`, `on`
+  `StreamReconnection` `off` for a non-GET (TOA665 when the config asks to
+  reconnect), `onRequest`, `on`
   with `sse.reconnect`); its event-stream successes are `String` responses
   and it has no sealed success type. `EventData` reads the data type:
   `itemSchema.properties.data` with a JSON `contentMediaType` and a
@@ -476,7 +477,12 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   static decoder per operation (private names apart in their own scope),
   methods with named arguments only (`required` for required ones; enum
   arguments take the known values), `body`, then `CallOptions? call`,
-  returning `Future<Result<T, E>>` from `DioRequestSender.send`; the
+  returning `Future<Result<T, E>>` from `DioRequestSender.send` (a method
+  with `OperationIr.events` returns `Stream<SseItem<T>>` from `openEvents`
+  through `EventStreamWriter`: `streamStatuses` are its 2xx statuses, the
+  event decoder `(m) => ...` reads `m.json` or `m.data` for text, a
+  `reconnection:` argument unless `onRequest`, and its decoder has error
+  arms only); the
   decoder switches on the status: codes, then ranges, then `default`
   (every status but 2xx), `_` is `undocumented()`; Dio reads JSON unless
   every success with a body is text (`text`) or something else is

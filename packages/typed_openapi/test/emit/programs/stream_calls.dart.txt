@@ -1,0 +1,214 @@
+// A program that calls the event-stream methods of the client generated
+// from test/emit/fixtures/chat.yaml through a Dio whose adapter answers from
+// memory, and prints what was sent and every item each stream gave.
+// The test reads what the program prints, so it prints.
+// ignore_for_file: avoid_print
+import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:dio/dio.dart';
+import 'package:fixture/chat_raw/api_client.dart';
+import 'package:typed_openapi_runtime/typed_openapi_runtime.dart';
+
+/// Answers each request with the next of [answers]; the last one repeats.
+final class Adapter implements HttpClientAdapter {
+  Adapter(this.answers);
+
+  final List<ResponseBody Function(RequestOptions)> answers;
+  final List<RequestOptions> requests = [];
+  int _next = 0;
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    requests.add(options);
+    await requestStream?.drain<void>();
+    final answer = answers[_next];
+    if (_next < answers.length - 1) _next++;
+    return answer(options);
+  }
+
+  @override
+  void close({bool force = false}) {}
+}
+
+ResponseBody events(String text, [int status = 200]) => ResponseBody(
+  Stream.value(Uint8List.fromList(utf8.encode(text))),
+  status,
+  headers: {
+    Headers.contentTypeHeader: ['text/event-stream'],
+  },
+);
+
+ResponseBody json(int status, Object? body) => ResponseBody.fromString(
+  jsonEncode(body),
+  status,
+  headers: {
+    Headers.contentTypeHeader: ['application/json'],
+  },
+);
+
+ResponseBody refused(RequestOptions options) => throw DioException(
+  requestOptions: options,
+  type: DioExceptionType.connectionError,
+  message: 'refused',
+);
+
+String describe<T>(SseItem<T> item) => switch (item) {
+  SseEvent(:final data, :final event, :final id) => 'event $event #$id $data',
+  SseDecodeError(:final error) => 'decode error ${error.pointer}',
+  SseReconnecting(:final attempt, :final delay) =>
+    'reconnecting $attempt after ${delay.inMilliseconds}ms',
+  SseDisconnected(cause: DioException(:final type)) => 'end ${type.name}',
+  SseDisconnected(cause: HttpError(:final statusCode)) => 'end http $statusCode',
+  SseDisconnected(:final cause) => 'end ${cause ?? 'closed'}',
+};
+
+Future<void> printAll<T, E>(Result<Stream<SseItem<T>>, E> result) async {
+  switch (result) {
+    case Success(:final data, :final statusCode):
+      print('success $statusCode');
+      await for (final item in data) {
+        print('  ${describe(item)}');
+      }
+    case HttpError(:final statusCode, :final body):
+      print('error $statusCode $body');
+    case Failure():
+      print('failure $result');
+  }
+}
+
+ApiClient client(Adapter adapter) =>
+    ApiClient(Dio(BaseOptions(baseUrl: 'https://chat.example.com'))
+      ..httpClientAdapter = adapter);
+
+Future<void> main() async {
+  // Events of a JSON type, a decode error mid-stream, a disconnect.
+  var adapter = Adapter([
+    (_) => events(
+      'data: {"part": "Hel", "sessionToken": "s1"}\n\n'
+      'data: {"nope": 1}\n\n'
+      'event: delta\nid: 2\ndata: {"part": "lo"}\n\n',
+    ),
+  ]);
+  await printAll(
+    await client(adapter).chat.chatStream2(body: const Prompt(text: 'hi')),
+  );
+  final sent = adapter.requests.single;
+  print('${sent.method} ${sent.uri} accept ${sent.headers['Accept']}');
+
+  // A documented error before the stream opens.
+  adapter = Adapter([(_) => json(400, {'code': 'empty'})]);
+  await printAll(
+    await client(adapter).chat.chatStream2(body: const Prompt(text: '')),
+  );
+
+  // A POST does not reconnect even when the call asks.
+  adapter = Adapter([(_) => events('data: {"part": "a"}\n\n')]);
+  await printAll(
+    await client(adapter).chat.chatStream2(
+      body: const Prompt(text: 'a'),
+      call: const CallOptions(sse: SseOptions(reconnect: true)),
+    ),
+  );
+  print('requests ${adapter.requests.length}');
+
+  // A GET reconnects with Last-Event-ID and the server's retry, then the
+  // thread closes with 204.
+  final waits = <int>[];
+  adapter = Adapter([
+    (_) => events('retry: 1500\nid: 7\ndata: {"id": "t1", "replies": []}\n\n'),
+    (_) => events('data: {"id": "t2"}\n\n'),
+    (_) => events('', 204),
+  ]);
+  await printAll(
+    await client(adapter).threads.watchThread(
+      threadId: 'a/b',
+      call: CallOptions(
+        sse: SseOptions(
+          reconnect: true,
+          wait: (delay) async => waits.add(delay.inMilliseconds),
+        ),
+      ),
+    ),
+  );
+  print('waits $waits');
+  print('last event ids ${[
+    for (final r in adapter.requests) r.headers['Last-Event-ID'],
+  ]}');
+  print('path ${adapter.requests.first.uri.path}');
+
+  // Failed attempts back off up to the cap and stop at the limit.
+  waits.clear();
+  adapter = Adapter([(_) => events('data: {"id": "t1"}\n\n'), refused]);
+  await printAll(
+    await client(adapter).threads.watchThread(
+      threadId: 't',
+      call: CallOptions(
+        sse: SseOptions(
+          reconnect: true,
+          maxAttempts: 3,
+          maxDelay: const Duration(milliseconds: 1500),
+          wait: (delay) async => waits.add(delay.inMilliseconds),
+        ),
+      ),
+    ),
+  );
+  print('waits $waits');
+
+  // Cancelling during the wait before an attempt ends the stream.
+  final token = CancelToken();
+  adapter = Adapter([(_) => events('data: {"id": "t1"}\n\n')]);
+  final waiting = await client(adapter).threads.watchThread(
+    threadId: 't',
+    call: CallOptions(
+      cancelToken: token,
+      sse: SseOptions(reconnect: true, wait: (_) => Completer<void>().future),
+    ),
+  );
+  if (waiting case Success(:final data)) {
+    await for (final item in data) {
+      print('  ${describe(item)}');
+      if (item is SseReconnecting) token.cancel();
+    }
+  }
+  print('requests ${adapter.requests.length}');
+
+  // Cancelling while events arrive ends the stream without a reconnect.
+  final live = CancelToken();
+  final body = StreamController<Uint8List>();
+  adapter = Adapter([
+    (_) => ResponseBody(
+      body.stream,
+      200,
+      headers: {
+        Headers.contentTypeHeader: ['text/event-stream'],
+      },
+    ),
+  ]);
+  final open = await client(adapter).threads.watchThread(
+    threadId: 't',
+    call: CallOptions(
+      cancelToken: live,
+      sse: const SseOptions(reconnect: true),
+    ),
+  );
+  body.add(Uint8List.fromList(utf8.encode('data: {"id": "t1"}\n\n')));
+  if (open case Success(:final data)) {
+    await for (final item in data) {
+      print('  ${describe(item)}');
+      if (item is SseEvent) live.cancel();
+    }
+  }
+  await body.close();
+
+  // Text events and an undocumented status.
+  adapter = Adapter([(_) => events('data: line 1\ndata: line 2\n\n')]);
+  await printAll(await client(adapter).threads.tailLog());
+  adapter = Adapter([(_) => json(503, {'down': true})]);
+  await printAll(await client(adapter).threads.tailLog());
+}

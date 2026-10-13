@@ -19,6 +19,8 @@ final class DecoderWriter {
   /// binary error makes the whole operation bytes, since Dio would turn the
   /// bytes of a JSON operation into text.
   static String responseKind(OperationIr operation) {
+    // An event stream reads its body itself, and its error bodies parsed.
+    if (operation.events != null) return 'json';
     if (operation.responses.any((r) => r.isError && r.kind == .bytes)) {
       return 'bytes';
     }
@@ -33,10 +35,16 @@ final class DecoderWriter {
     return 'bytes';
   }
 
-  /// The success type `T` of [operation]: its sealed type, the one body
-  /// type, `void` without a body, `JsonValue` without a 2xx (TOA653).
+  /// The success type `T` of [operation]: its sealed type, the stream of
+  /// its events, the one body type, `void` without a body, `JsonValue`
+  /// without a 2xx (TOA653).
   String successType(OperationIr operation) {
     if (operation.successType case final sealed?) return sealed.name;
+    if (operation.events case final events?) {
+      _codec.imports.fromRuntime('SseItem');
+      final data = events.data;
+      return 'Stream<SseItem<${data == null ? 'String' : _codec.type(data)}>>';
+    }
     final successes = operation.successes;
     if (successes.isEmpty) {
       _codec.imports.fromRuntime('JsonValue');
@@ -66,7 +74,8 @@ final class DecoderWriter {
         out.line('switch (r.statusCode) {');
         out.indented(() {
           for (final arm in [
-            ..._successArms(operation, json),
+            // The stream opens for a success before this decoder is asked.
+            if (operation.events == null) ..._successArms(operation, json),
             ..._errorArms(operation, json),
           ]) {
             out.line(arm);
@@ -99,7 +108,7 @@ final class DecoderWriter {
       case NoErrors():
         return const [];
       case SingleError(:final type, :final statuses) when statuses.isEmpty:
-        return ['>= 400 && < 600 => r.error(${_decode(type, json)}),'];
+        return ['>= 400 && < 600 => r.error(${decode(type, json)}),'];
       case SingleError(:final type, :final statuses):
         return _singleErrorArms(operation, type, statuses, json);
       case ErrorsByStatus():
@@ -151,7 +160,7 @@ final class DecoderWriter {
     return switch (response?.kind) {
       .text || .eventStream => 'r.text',
       .bytes => 'r.bytes',
-      _ => _decode(type, json),
+      _ => decode(type, json),
     };
   }
 
@@ -202,11 +211,12 @@ final class DecoderWriter {
         response.envelopeKey!,
         json,
       ),
-      _ => _decode(type, json),
+      _ => decode(type, json),
     };
   }
 
-  String _decode(DartType type, String json) {
+  /// The code that decodes [json] as [type].
+  String decode(DartType type, String json) {
     final code = type.nullable
         ? 'JsonReader.nullable(${_codec.decoder(type.withNullable(false))})'
               '($json)'

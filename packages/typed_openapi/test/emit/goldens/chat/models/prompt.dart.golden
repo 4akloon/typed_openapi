@@ -1,0 +1,32 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND.
+// dart format off
+
+import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'
+    show DeepEquality, JsonReader, immutable;
+
+@immutable
+class Prompt {
+  /// Creates a [Prompt].
+  const Prompt({required this.text});
+
+  /// Decodes a [Prompt] from [json]; throws a `JsonDecodeException` when it
+  /// does not match the schema.
+  factory Prompt.fromJson(Map<String, Object?> json) {
+    final r = JsonReader(json, schema: 'Prompt');
+    return Prompt(text: r.required('text', JsonReader.asString));
+  }
+
+  final String text;
+
+  /// Encodes this [Prompt]; optional fields that are not set are not sent.
+  Map<String, Object?> toJson() => {'text': text};
+
+  @override
+  bool operator ==(Object other) => other is Prompt && other.text == text;
+
+  @override
+  int get hashCode => const DeepEquality().hash([text]);
+
+  @override
+  String toString() => 'Prompt(text: $text)';
+}

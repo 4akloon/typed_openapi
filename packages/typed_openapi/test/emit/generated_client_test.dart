@@ -63,7 +63,7 @@ linter:
             p.join('test', 'emit', 'programs', 'calls.dart.txt'),
           ).readAsStringSync(),
         );
-      for (final program in ['fake_dio', 'wire_calls']) {
+      for (final program in ['fake_dio', 'wire_calls', 'stream_calls']) {
         temp.write(
           'bin/$program.dart',
           File(
@@ -81,6 +81,7 @@ linter:
         'status_bodies',
         'hierarchy',
         'wire',
+        'chat',
       ]) {
         for (final mode in UnionMode.values) {
           final files = emitClient(
@@ -107,6 +108,12 @@ linter:
       expect(result.stdout, _calls);
     });
 
+    test('streams events, reconnects and cancels (R12)', () {
+      final result = dart(['run', 'bin/stream_calls.dart'], package);
+      expect(result.stderr, '');
+      expect(result.stdout, _streams);
+    });
+
     test('puts every value on the wire as the spec says (R10)', () {
       final result = dart(['run', 'bin/wire_calls.dart'], package);
       expect(result.stderr, '');
@@ -114,6 +121,48 @@ linter:
     });
   }, timeout: const Timeout(Duration(minutes: 3)));
 }
+
+/// What `bin/stream_calls.dart` prints.
+const _streams = '''
+success 200
+  event message # Delta(part: Hel, sessionToken: <redacted>)
+  decode error /part
+  event delta #2 Delta(part: lo, sessionToken: <redacted>)
+  end closed
+POST https://chat.example.com/chat accept text/event-stream
+error 400 Problem(code: empty)
+success 200
+  event message # Delta(part: a, sessionToken: <redacted>)
+  end closed
+requests 1
+success 200
+  event message #7 Thread(id: t1, replies: [])
+  reconnecting 1 after 1500ms
+  event message #7 Thread(id: t2, replies: null)
+  reconnecting 1 after 1500ms
+  end closed
+waits [1500, 1500]
+last event ids [null, 7, 7]
+path /threads/a%2Fb/events
+success 200
+  event message # Thread(id: t1, replies: null)
+  reconnecting 1 after 1000ms
+  reconnecting 2 after 1500ms
+  reconnecting 3 after 1500ms
+  end connectionError
+waits [1000, 1500, 1500]
+  event message # Thread(id: t1, replies: null)
+  reconnecting 1 after 1000ms
+  end cancel
+requests 1
+  event message # Thread(id: t1, replies: null)
+  end cancel
+success 200
+  event message # line 1
+line 2
+  end closed
+failure UndocumentedStatus(503)
+''';
 
 /// What `bin/wire_calls.dart` prints.
 const _wire = r'''

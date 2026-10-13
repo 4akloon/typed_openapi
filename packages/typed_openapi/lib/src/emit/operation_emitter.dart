@@ -4,6 +4,7 @@ import '../ir/names.dart';
 import 'dart_code.dart';
 import 'dart_writer.dart';
 import 'decoder_writer.dart';
+import 'event_stream_writer.dart';
 import 'parts_emitter.dart';
 import 'request_writer.dart';
 import 'status_type_emitter.dart';
@@ -23,11 +24,13 @@ final class OperationEmitter {
   /// Creates an emitter that writes with [_codec].
   OperationEmitter(this._codec)
     : _request = RequestWriter(_codec),
-      _decoder = DecoderWriter(_codec);
+      _decoder = DecoderWriter(_codec),
+      _events = EventStreamWriter(DecoderWriter(_codec));
 
   final TypeCodec _codec;
   final RequestWriter _request;
   final DecoderWriter _decoder;
+  final EventStreamWriter _events;
 
   static const _code = DartCode();
   static const _names = DartNames();
@@ -165,10 +168,12 @@ final class OperationEmitter {
     }
     out.list(
       'Future<Result<${_decoder.successType(operation)}, '
-          '${_decoder.errorType(operation)}>> '
-          '${operation.name}({',
+      '${_decoder.errorType(operation)}>> '
+      '${operation.name}({',
       _arguments(operation),
-      '}) => _sender.send(',
+      operation.events == null
+          ? '}) => _sender.send('
+          : '}) => _sender.openEvents(',
     );
     out.indented(() => _send(out, operation, info, decoder));
     out.line(');');
@@ -208,11 +213,16 @@ final class OperationEmitter {
       _request.body(out, operation);
       final kind = DecoderWriter.responseKind(operation);
       if (kind != 'json') out.line('responseKind: .$kind,');
+      if (operation.events != null) _events.statuses(out, operation);
     });
+    out.line('),');
+    if (operation.events case final events?) {
+      out.line('${_events.decoder(events)},');
+    }
     out
-      ..line('),')
       ..line('$decoder,')
       ..line('call: call,');
+    if (operation.events case final events?) _events.reconnection(out, events);
   }
 
   /// The declaration of a named argument of the Dart type [declared]:
@@ -241,6 +251,11 @@ final class OperationEmitter {
     out.doc(operation.description);
     if (operation.summary != null || operation.description != null) {
       out.line('///');
+    }
+    if (operation.events case final events?) {
+      out
+        ..prose(_events.doc(events))
+        ..line('///');
     }
     out.prose(
       '`${_code.docSpan('${operation.method} ${operation.path}')}`'

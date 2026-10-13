@@ -53,6 +53,29 @@ void main() {
     expect(error.exception.error, isA<UnsupportedError>());
   });
 
+  test(
+    'a reconnecting stream on the default adapter fails the same way',
+    () async {
+      var waits = 0;
+      final result = await DioRequestSender(Dio()).openEvents<String, Never>(
+        const OperationRequest(
+          getPet,
+          path: [PathParameter('petId', 7)],
+          streamStatuses: {200},
+        ),
+        (message) => message.data,
+        (response) => response.undocumented(),
+        call: CallOptions(
+          sse: SseOptions(reconnect: true, wait: (_) async => waits++),
+        ),
+        reconnection: SseReconnection.on,
+      );
+      final error = result as TransportError<Stream<SseItem<String>>, Never>;
+      expect(error.exception.message, DioRequestSender.webStreamingMessage);
+      expect(waits, 0);
+    },
+  );
+
   group('malformed JSON', () {
     // What Dio's JSON parser reports differs by compiler: dart2js gives the
     // browser's SyntaxError text with no source, dart2wasm the body bytes.

@@ -1,0 +1,117 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND.
+// dart format off
+
+import 'package:dio/dio.dart' show Dio;
+import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'
+    show
+        CallOptions,
+        DioRequestSender,
+        JsonReader,
+        OperationInfo,
+        OperationRequest,
+        RawResponse,
+        Result,
+        SseItem;
+
+import '../models/delta.dart';
+import '../models/problem.dart';
+import '../models/prompt.dart';
+import '../models/reply.dart';
+
+/// The operations of the `ChatApi` group.
+class ChatApi {
+  /// Sends the requests through [dio], which it uses as it is.
+  ChatApi(Dio dio) : _sender = DioRequestSender(dio);
+
+  final DioRequestSender _sender;
+
+  static const _chat = OperationInfo(
+    operationId: 'chat',
+    method: 'POST',
+    pathTemplate: '/chat',
+    tags: ['chat'],
+  );
+
+  static const _chatStream = OperationInfo(
+    operationId: 'chatStream',
+    method: 'GET',
+    pathTemplate: '/chat/stream',
+    tags: ['chat'],
+  );
+
+  static const _chatStream2 = OperationInfo(
+    operationId: 'chat',
+    method: 'POST',
+    pathTemplate: '/chat',
+    tags: ['chat'],
+  );
+
+  /// Answers a prompt, whole or as it is written.
+  ///
+  /// `POST /chat` (`chat`).
+  Future<Result<Reply, Problem>> chat({
+    required Prompt body,
+    CallOptions? call,
+  }) => _sender.send(
+    OperationRequest(
+      _chat,
+      body: body.toJson(),
+      contentType: 'application/json',
+    ),
+    _decodeChat,
+    call: call,
+  );
+
+  static Result<Reply, Problem> _decodeChat(RawResponse r) =>
+      switch (r.statusCode) {
+        200 => r.success(Reply.fromJson(JsonReader.asObject(r.json))),
+        400 => r.error(Problem.fromJson(JsonReader.asObject(r.json))),
+        _ => r.undocumented(),
+      };
+
+  /// Taken by an older method, so the stream of chat is chatStream2.
+  ///
+  /// `GET /chat/stream` (`chatStream`).
+  Future<Result<void, Never>> chatStream({CallOptions? call}) => _sender.send(
+    OperationRequest(
+      _chatStream,
+    ),
+    _decodeChatStream,
+    call: call,
+  );
+
+  static Result<void, Never> _decodeChatStream(RawResponse r) =>
+      switch (r.statusCode) {
+        204 => r.success(null),
+        _ => r.undocumented(),
+      };
+
+  /// Answers a prompt, whole or as it is written.
+  ///
+  /// Returns the events of `text/event-stream` as they arrive; the stream ends
+  /// with `SseDisconnected`. It does not reconnect unless the operation's
+  /// `sse.reconnect` override enables it.
+  ///
+  /// `POST /chat` (`chat`).
+  Future<Result<Stream<SseItem<Delta>>, Problem>> chatStream2({
+    required Prompt body,
+    CallOptions? call,
+  }) => _sender.openEvents(
+    OperationRequest(
+      _chatStream2,
+      body: body.toJson(),
+      contentType: 'application/json',
+      streamStatuses: {200},
+    ),
+    (m) => Delta.fromJson(JsonReader.asObject(m.json)),
+    _decodeChatStream2,
+    call: call,
+    reconnection: .off,
+  );
+
+  static Result<Stream<SseItem<Delta>>, Problem> _decodeChatStream2(RawResponse r) =>
+      switch (r.statusCode) {
+        400 => r.error(Problem.fromJson(JsonReader.asObject(r.json))),
+        _ => r.undocumented(),
+      };
+}
