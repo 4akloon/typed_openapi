@@ -250,10 +250,14 @@ fixed; the reviews are in `.superpowers/sdd/2026-10-13-m10-sse/`.
 
 | Finding | Review | Why it is parked |
 |---|---|---|
-| Event data whose whole `schema` is `format: date-time` or `format: binary` is decoded as JSON, so a bare `2026-01-01T00:00:00Z` data line is an `SseDecodeError` (the data would have to be a JSON string) | T4 observation | the reading is decision 1 of M10 (the `schema` of a stream is the JSON of `data`); text with a format needs a user decision |
+| Event data whose whole `schema` is `format: date-time`, `format: binary` or `format: byte` is decoded as JSON, so a bare `2026-01-01T00:00:00Z` data line is an `SseDecodeError` (the data would have to be a JSON string) | T4 observation | the reading is decision 1 of M10 (the `schema` of a stream is the JSON of `data`); text with a format needs a user decision |
 | An event named only with NUL (or other characters `DartCode` drops from a doc line) gets the doc "The `` event" | T5 M9 | cosmetic; the class name is right (TOA668) |
 | When an `itemSchema` has both `oneOf` and `anyOf`, `anyOf` is ignored without a diagnostic | T5 M9 | very rare; consistent with `oneOf` winning elsewhere |
 | A branch that fixes `event` through `allOf` is not read: it makes the data text with TOA666 at the branch | T5 M7 | the report names the branch and says to write the constant in it; reading `allOf` parts for `event` can be added when a spec needs it |
+| A string-enum event `schema` is typed `String`, not the enum | final fix round | typing text data as an enum needs a text mode in the IR; the values are still checked by nothing, as for plain text |
+| The TOA654 text lists several statuses with a singular verb ("status 200, 201 offers") | final re-review N1 | wording only |
+| An `sse` override on an operation whose stream method is not generated (TOA654) is unused with no TOA669 | final re-review N2 | TOA654 already says the stream method is left out; report TOA669 there with the next change to `EventStreams` |
+| `event_streams.dart` is at exactly 300 lines | final fix round | extract before the next change there |
 | `EventStreams._reservedSuffix` strips every trailing underscore of a method name, not one | T7/8 nit | harmless: the stem is still a valid name, and the empty case falls back |
 | Inline event schemas copied into different files count as different event types (TOA654); so do two nested compositions written differently | T9a, 9c | a structural comparison of schemas across files is not worth its cost; write the type once and `$ref` it |
 | A `Accept: null` in `CallOptions.headers` does not remove the generated `Accept` | 9a note | `key: ?value` skips nulls for every header; unchanged behaviour |
