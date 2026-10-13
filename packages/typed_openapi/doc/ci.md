@@ -56,7 +56,7 @@ The report is one run of the tool `typed_openapi`. It guarantees what code scann
 - **Locations.** Every result with a file has a physical location with a 1-based region. A file with no position (a missing baseline file) is located at its first line. A result without any file is located at the **config file**, so code scanning has somewhere to show it. The JSON pointer is the logical location. Files inside the working directory are relative URI references; outside it they are `file:` URIs.
 - **Fingerprint.** `partialFingerprints["typedOpenapi/v1"]` is the first 16 hex digits of a SHA-256 of the code, file, pointer and message. It does not include the line, so moving a problem within a file keeps its alert. (It is not the baseline fingerprint; the baseline is separate.)
 - **Related locations.** For example the override that introduced the problem, as `relatedLocations`.
-- **Baseline.** Accepted diagnostics are left out. With `--show-baselined` they are results with an external suppression, `Accepted in the baseline.`.
+- **Baseline.** Accepted diagnostics are left out. With `--show-baselined` they are results with an external suppression, `Accepted in the baseline.`
 
 The command exits `1` when there are errors, which would skip a later upload step: write the file with `|| true` and upload with `if: always()`, as the workflow below does.
 
