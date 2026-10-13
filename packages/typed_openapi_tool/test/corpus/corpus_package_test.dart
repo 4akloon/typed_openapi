@@ -45,7 +45,10 @@ void main() {
         isA<CorpusException>().having(
           (e) => e.message,
           'message',
-          contains('choose another --work directory'),
+          allOf(
+            contains('choose another --work directory'),
+            contains('delete it if this'),
+          ),
         ),
       ),
     );

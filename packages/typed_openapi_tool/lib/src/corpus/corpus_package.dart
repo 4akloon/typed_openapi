@@ -41,7 +41,9 @@ final class CorpusPackage {
         !File(p.join(directory, marker)).existsSync()) {
       throw CorpusException(
         '$directory is not empty and was not made by this tool (it has no '
-        '$marker): choose another --work directory.',
+        '$marker): choose another --work directory, or delete it if this '
+        'tool made it (e.g. a .dart_tool/corpus/out from before the marker '
+        'existed).',
       );
     }
     for (final folder in const ['lib', 'bin', 'roundtrip']) {
