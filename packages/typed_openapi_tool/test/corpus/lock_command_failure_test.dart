@@ -57,6 +57,7 @@ Future<({int code, String out, String err})> _run(
     out: out,
     err: err,
     download: (_) async => utf8.encode(_spec),
+    fetchesPackages: false,
   ).run([command, ...options]);
   return (code: code, out: '$out', err: '$err');
 }

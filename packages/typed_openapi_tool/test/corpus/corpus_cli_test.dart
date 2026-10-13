@@ -33,6 +33,7 @@ specs:
       out: out,
       err: err,
       download: download,
+      fetchesPackages: false,
     ).run(args);
     return (code: code, out: '$out', err: '$err');
   }
@@ -45,19 +46,25 @@ specs:
   ) async {
     final out = StringBuffer();
     final err = StringBuffer();
-    final code = await CorpusCli(out: out, err: err, download: download).run([
-      name,
-      '--corpus',
-      corpusFile,
-      '--cache',
-      p.join(temp.path, 'cache'),
-      if (name != 'fetch') ...[
-        '--lock',
-        p.join(temp.path, 'corpus.lock'),
-        '--work',
-        p.join(temp.path, 'work'),
-      ],
-    ]);
+    final code =
+        await CorpusCli(
+          out: out,
+          err: err,
+          download: download,
+          fetchesPackages: false,
+        ).run([
+          name,
+          '--corpus',
+          corpusFile,
+          '--cache',
+          p.join(temp.path, 'cache'),
+          if (name != 'fetch') ...[
+            '--lock',
+            p.join(temp.path, 'corpus.lock'),
+            '--work',
+            p.join(temp.path, 'work'),
+          ],
+        ]);
     return (code: code, out: '$out', err: '$err');
   }
 

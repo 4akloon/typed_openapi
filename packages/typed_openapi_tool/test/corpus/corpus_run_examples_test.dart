@@ -63,4 +63,26 @@ void main() {
     expect(result.defects, hasLength(2));
     expect(result.defects.first, startsWith('raw/pets: Pet: an example'));
   }, timeout: const Timeout(Duration(minutes: 3)));
+
+  test('a round trip that did not run is a failure of the run', () async {
+    final temp = TempDir();
+    final result =
+        await CorpusRun(
+          work: p.join(temp.path, 'work'),
+          runtime: runtimeDirectory(),
+          modes: const ['raw'],
+          fetchesPackages: false,
+          roundTripTimeout: const Duration(milliseconds: 1),
+        ).run(
+          [entry('pets', const Generates())],
+          {
+            'pets': temp.write('specs/pets.yaml', _spec),
+          },
+        );
+    expect(
+      result.failures.single,
+      startsWith('raw/pets: the round trip did not run'),
+    );
+    expect(result.roundTrips, isEmpty);
+  }, timeout: const Timeout(Duration(minutes: 3)));
 }

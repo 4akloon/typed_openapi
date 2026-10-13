@@ -38,7 +38,11 @@ final class FuzzRun {
     required this.runtime,
     required this.log,
     this.sampleEvery = 12,
+    this.fetchesPackages = true,
   });
+
+  /// Whether the gate may download packages when they are not cached.
+  final bool fetchesPackages;
 
   /// The directory of the sample package.
   final String work;
@@ -75,7 +79,9 @@ final class FuzzRun {
     }
     if (strings.isNotEmpty) {
       failures
-        ..addAll(await PackageGate(work).run())
+        ..addAll(
+          await PackageGate(work, fetchesPackages: fetchesPackages).run(),
+        )
         ..addAll(await LiteralCheck(work).run(strings));
     }
     return (

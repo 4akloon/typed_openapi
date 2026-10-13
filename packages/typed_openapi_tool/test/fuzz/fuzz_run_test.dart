@@ -28,6 +28,7 @@ void main() {
       runtime: p.normalize(p.absolute(p.join('..', 'typed_openapi_runtime'))),
       log: log,
       sampleEvery: 2,
+      fetchesPackages: false,
     ).run(from: 0, count: 4);
     expect(report.failures, isEmpty);
     expect(report.builds, greaterThan(0));

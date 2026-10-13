@@ -15,7 +15,9 @@ import 'synthetic_values.dart';
 /// values that decoded, the examples that do not (defects of the spec), and
 /// the failures (of the generator or of the tool), and how many examples
 /// and synthetic values could not be built (`skippedExamples`,
-/// `skippedSynthetic`).
+/// `skippedSynthetic`). `notRun` says why the program could not run (a
+/// crash or a timeout): that is a failure of the infrastructure, not a
+/// count.
 typedef RoundTripResult = ({
   int examples,
   int synthetic,
@@ -23,6 +25,7 @@ typedef RoundTripResult = ({
   int skippedSynthetic,
   List<String> defects,
   List<String> failures,
+  List<String> notRun,
 });
 
 /// Runs the runtime decoding test of one generated client (R15.3) in the
@@ -74,6 +77,7 @@ final class RoundTrip {
             '$client: ${s.type}: an example is not JSON a client can read '
                 '(NaN, infinity or a value JSON has no form for).',
       ],
+      notRun: ran.notRun,
       failures: [
         ...ran.failures,
         for (final s in samples)
@@ -132,7 +136,8 @@ final class RoundTrip {
     skippedExamples: 0,
     skippedSynthetic: 0,
     defects: const <String>[],
-    failures: ['$client: the round trip did not run: $reason'],
+    failures: const <String>[],
+    notRun: ['$client: the round trip did not run: $reason'],
   );
 
   /// The result the program printed as its last line.
@@ -152,6 +157,7 @@ final class RoundTrip {
       skippedSynthetic: 0,
       defects: texts('defects'),
       failures: texts('failures'),
+      notRun: const <String>[],
     );
   }
 }

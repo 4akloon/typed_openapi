@@ -13,19 +13,28 @@ import 'spec_cache.dart';
 /// `check` and `semver`.
 final class CorpusCli {
   /// Creates the command line; lines go to [out], failures and usage errors
-  /// to [err]; [download] fetches a spec (the network by default).
-  CorpusCli({StringSink? out, StringSink? err, Download? download})
-    : _err = err ?? stderr,
-      _runner = CommandRunner<int>(
-        'corpus',
-        'The public-spec corpus of typed_openapi.',
-      ) {
+  /// to [err]; [download] fetches a spec (the network by default); [fetchesPackages]
+  /// false keeps `pub get` offline (tests).
+  CorpusCli({
+    StringSink? out,
+    StringSink? err,
+    Download? download,
+    bool fetchesPackages = true,
+  }) : _err = err ?? stderr,
+       _runner = CommandRunner<int>(
+         'corpus',
+         'The public-spec corpus of typed_openapi.',
+       ) {
     final sink = out ?? stdout;
     final fetch = download ?? const HttpDownload().call;
     _runner
       ..addCommand(FetchCommand(sink, _err, fetch))
-      ..addCommand(LockCommand.update(sink, _err, fetch))
-      ..addCommand(LockCommand.check(sink, _err, fetch))
+      ..addCommand(
+        LockCommand.update(sink, _err, fetch, fetchesPackages: fetchesPackages),
+      )
+      ..addCommand(
+        LockCommand.check(sink, _err, fetch, fetchesPackages: fetchesPackages),
+      )
       ..addCommand(SemverCommand(sink, _err));
   }
 

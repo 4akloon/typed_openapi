@@ -49,6 +49,7 @@ specs:
       out: out,
       err: StringBuffer(),
       download: (_) async => utf8.encode(_spec),
+      fetchesPackages: false,
     ).run([command, ...options]);
 
     expect(await run('update', StringBuffer()), 0);

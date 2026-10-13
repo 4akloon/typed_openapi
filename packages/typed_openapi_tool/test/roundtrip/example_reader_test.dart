@@ -73,6 +73,11 @@ void main() {
       ],
     );
   });
+  test('an examples value of the wrong type is a skipped example', () {
+    final set = ExampleReader().of(clientIr(_notLists));
+    expect(set.samples, isEmpty);
+    expect(set.skipped, 2);
+  });
 }
 
 const _skipping = r'''
@@ -130,4 +135,27 @@ components:
       type: object
       properties:
         id: {type: string}
+''';
+
+const _notLists = r'''
+openapi: 3.1.0
+info: {title: Pets, version: "1"}
+paths:
+  /pets:
+    get:
+      operationId: getPet
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Pet"}
+              examples: just a string
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        id: {type: string}
+      examples: {id: not-a-list}
 ''';

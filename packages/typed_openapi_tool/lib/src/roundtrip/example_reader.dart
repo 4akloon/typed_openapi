@@ -60,8 +60,13 @@ final class ExampleReader {
     }
     final found = _Collector();
     if (schema.containsKey('example')) found.take(schema['example']);
-    if (schema['examples'] case final List<Object?> examples) {
-      examples.forEach(found.take);
+    switch (schema['examples']) {
+      case final List<Object?> examples:
+        examples.forEach(found.take);
+      case null when !schema.containsKey('examples'):
+        break;
+      case _:
+        found.skip();
     }
     return found.done;
   }
@@ -79,15 +84,20 @@ final class ExampleReader {
     }
     final found = _Collector();
     if (media.containsKey('example')) found.take(media['example']);
-    if (media['examples'] case final Map<String, Object?> examples) {
-      for (final example in examples.values) {
-        final resolved = _resolve(location.document, example);
-        if (resolved case {'value': final value}) {
-          found.take(value);
-        } else {
-          found.skip();
+    switch (media['examples']) {
+      case final Map<String, Object?> examples:
+        for (final example in examples.values) {
+          final resolved = _resolve(location.document, example);
+          if (resolved case {'value': final value}) {
+            found.take(value);
+          } else {
+            found.skip();
+          }
         }
-      }
+      case null when !media.containsKey('examples'):
+        break;
+      case _:
+        found.skip();
     }
     return _unwrapped(found.done, response.envelopeKey);
   }

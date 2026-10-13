@@ -34,6 +34,7 @@ final class CorpusRun {
     required this.runtime,
     this.modes = allModes,
     this.fetchesPackages = true,
+    this.roundTripTimeout = const Duration(minutes: 10),
   });
 
   /// The directory of the packages, one per mode.
@@ -47,6 +48,9 @@ final class CorpusRun {
 
   /// Whether the gate may download packages when they are not cached.
   final bool fetchesPackages;
+
+  /// How long the round-trip program of one client may run.
+  final Duration roundTripTimeout;
 
   /// Every `union` mode the corpus knows.
   static const List<String> allModes = ['raw', 'structural'];
@@ -103,7 +107,7 @@ final class CorpusRun {
       package.directory,
       fetchesPackages: fetchesPackages,
     ).run();
-    final trips = await _roundTrips(package, checks);
+    final trips = await _roundTrips(package, checks, roundTripTimeout);
     final clients = <String, ClientLock>{};
     final roundTrips = <String>[];
     final defects = <String>[];
@@ -111,7 +115,9 @@ final class CorpusRun {
       final key = '$mode/${spec.name}';
       final check = checks[spec.name];
       final trip = trips[spec.name];
-      failures.addAll(_failuresOf(key, spec, check, first, second));
+      failures
+        ..addAll(_failuresOf(key, spec, check, first, second))
+        ..addAll([for (final f in trip?.notRun ?? const []) '$mode/$f']);
       roundTrips.addAll([
         for (final f in trip?.failures ?? const []) '$mode/$f',
       ]);
@@ -186,9 +192,14 @@ final class CorpusRun {
   static Future<Map<String, RoundTripResult>> _roundTrips(
     CorpusPackage package,
     Map<String, ClientCheck> checks,
+    Duration timeout,
   ) async {
     final examples = ExampleReader();
-    final trip = RoundTrip(package.directory, package.name);
+    final trip = RoundTrip(
+      package.directory,
+      package.name,
+      timeout: timeout,
+    );
     return {
       for (final MapEntry(key: name, value: check) in checks.entries)
         if (check.ir case final ir? when !_isSkipped(check))

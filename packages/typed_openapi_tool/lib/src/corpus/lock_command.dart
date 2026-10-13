@@ -15,21 +15,32 @@ import 'timed_process.dart';
 /// difference from the lock and lists the changed files and codes.
 final class LockCommand extends Command<int> {
   /// Creates `corpus update`, which rewrites the lock.
-  LockCommand.update(this._out, this._err, this._download)
-    : name = 'update',
-      _writes = true {
+  LockCommand.update(
+    this._out,
+    this._err,
+    this._download, {
+    this.fetchesPackages = true,
+  }) : name = 'update',
+       _writes = true {
     _addOptions();
   }
 
   /// Creates `corpus check`, which compares the run with the lock.
-  LockCommand.check(this._out, this._err, this._download)
-    : name = 'check',
-      _writes = false {
+  LockCommand.check(
+    this._out,
+    this._err,
+    this._download, {
+    this.fetchesPackages = true,
+  }) : name = 'check',
+       _writes = false {
     _addOptions();
   }
 
   @override
   final String name;
+
+  /// Whether the gate may download packages when they are not cached.
+  final bool fetchesPackages;
 
   /// How many spec defects a run prints.
   static const int maxDefectsPrinted = 50;
@@ -74,6 +85,7 @@ final class LockCommand extends Command<int> {
         await CorpusRun(
           work: p.normalize(p.absolute(results.option('work')!)),
           runtime: p.normalize(p.absolute(results.option('runtime')!)),
+          fetchesPackages: fetchesPackages,
         ).run(specs, {
           for (final spec in specs)
             spec.name: p.normalize(p.absolute(await cache.fetch(spec))),
