@@ -199,7 +199,10 @@ final class SpecChecker {
   }) {
     // A run is a file with a preset, a set of disabled rules, overrides and
     // generation settings.
-    final runs = <(String, Preset?, String, String?, String), ClientCheck>{};
+    // The root client is named after the client unless naming.client
+    // names it, so the name is part of the run.
+    final runs =
+        <(String, Preset?, String, String?, String, String?), ClientCheck>{};
     return [
       for (final client in config.clients)
         if (only.isEmpty || only.contains(client.name))
@@ -211,6 +214,7 @@ final class SpecChecker {
               (client.disabledRules.toList()..sort()).join(','),
               client.overrides,
               client.generation.key,
+              client.generation.clientClass == null ? client.name : null,
             )] ??= _run(
               client,
             ),

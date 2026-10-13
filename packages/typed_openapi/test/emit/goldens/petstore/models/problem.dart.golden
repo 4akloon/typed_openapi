@@ -1,0 +1,40 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND.
+// dart format off
+
+import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'
+    show DeepEquality, JsonReader, immutable;
+
+@immutable
+class Problem {
+  /// Creates a [Problem].
+  const Problem({required this.code, this.password});
+
+  /// Decodes a [Problem] from [json]; throws a `JsonDecodeException` when it
+  /// does not match the schema.
+  factory Problem.fromJson(Map<String, Object?> json) {
+    final r = JsonReader(json, schema: 'Problem');
+    return Problem(
+      code: r.required('code', JsonReader.asString),
+      password: r.optional('password', JsonReader.asString),
+    );
+  }
+
+  final String code;
+
+  final String? password;
+
+  /// Encodes this [Problem]; optional fields that are not set are not sent.
+  Map<String, Object?> toJson() => {'code': code, 'password': ?password};
+
+  @override
+  bool operator ==(Object other) =>
+      other is Problem &&
+      other.code == code &&
+      other.password == password;
+
+  @override
+  int get hashCode => const DeepEquality().hash([code, password]);
+
+  @override
+  String toString() => 'Problem(code: $code, password: <redacted>)';
+}

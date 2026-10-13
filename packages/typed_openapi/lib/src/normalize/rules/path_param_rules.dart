@@ -1,5 +1,6 @@
 import '../../diagnostics/diagnostic_code.dart';
 import '../../model/operation.dart';
+import '../../model/path_template.dart';
 import '../../model/spec_node.dart';
 import '../normalizer_rule.dart';
 import '../spec_edit.dart';
@@ -11,8 +12,6 @@ final class _PathTemplates {
 
   final RuleContext context;
 
-  static final _variable = RegExp(r'\{([^{}]+)\}');
-
   /// Every templated path with its resolved path item, in document order.
   Iterable<(String, PathItem)> get paths sync* {
     for (final MapEntry(key: template, value: item)
@@ -22,9 +21,13 @@ final class _PathTemplates {
     }
   }
 
-  /// The variables of [template], in order, each once.
+  /// The variables of [template], in order, each once; `{}` has none, as no
+  /// parameter can have an empty name.
   static List<String> variablesOf(String template) => [
-    ...{for (final m in _variable.allMatches(template)) m.group(1)!},
+    ...{
+      for (final m in PathTemplate(template).variables)
+        if (m.group(1)!.isNotEmpty) m.group(1)!,
+    },
   ];
 
   /// The path parameters among [parameters], with where each is written.

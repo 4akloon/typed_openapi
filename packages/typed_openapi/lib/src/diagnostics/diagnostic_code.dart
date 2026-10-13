@@ -352,21 +352,6 @@ enum DiagnosticCode {
   /// (`pet-store`) is not reported: it is used as `PetStore`.
   overrideNameInvalid('TOA560', 'override-name-invalid', .warning),
 
-  /// A request or response body has a media type that is not JSON, a form,
-  /// `multipart/form-data`, `text/*` or `text/event-stream`: it is sent or
-  /// read as bytes and its schema is not used. Also reported when an
-  /// operation offers several media types of a body and the others are
-  /// dropped; the message names the chosen one and the dropped ones.
-  mediaTypeAsBytes('TOA561', 'media-type-as-bytes', .info),
-
-  /// `errors.default_schema` names a key that is not in
-  /// `components.schemas`; the setting is ignored.
-  defaultErrorSchemaMissing(
-    'TOA562',
-    'default-error-schema-missing',
-    .warning,
-  ),
-
   /// No operation of a client is generated: all are filtered out, all are
   /// written as a `$ref` (TOA107), or all have an unbound path variable
   /// (TOA556). The message says why.
@@ -374,14 +359,110 @@ enum DiagnosticCode {
 
   /// A parameter's `style` is not allowed for its `in` (path takes `simple`,
   /// `label` or `matrix`; query `form`, `spaceDelimited`, `pipeDelimited` or
-  /// `deepObject`; header `simple`; cookie `form` or `cookie`), so the
-  /// default style of the placement is used. Also reported for an `in: querystring`
-  /// parameter (OpenAPI 3.2), which the client cannot send: the parameter
-  /// is not generated.
+  /// `deepObject`; header `simple`; cookie `form` or `cookie`), or the
+  /// `style` of the `encoding` of a form property is not one a query takes,
+  /// so the default style is used.
   parameterStyleInvalid('TOA564', 'parameter-style-invalid', .warning),
+
+  /// A parameter is `in: querystring` (OpenAPI 3.2), which the client cannot
+  /// send yet: the parameter is not generated (TOA564 until M9).
+  querystringNotGenerated('TOA565', 'querystring-not-generated', .warning),
+
+  /// A path item or an operation has its own `servers`; the client sends
+  /// every request to the base URL of the user's Dio.
+  operationServersIgnored('TOA566', 'operation-servers-ignored', .warning),
+
+  /// An operation has `callbacks`, or the document has `webhooks`: requests
+  /// the server makes, which the client does not generate.
+  callbacksNotGenerated('TOA567', 'callbacks-not-generated', .info),
+
+  /// A security requirement names a scheme that `components.securitySchemes`
+  /// does not have (or defines without a valid type), or is not an object
+  /// (a string, `null`; also TOA111): the alternative is left out of the
+  /// operation's metadata when another one can be described, else it stays
+  /// with a scheme of the kind unknown.
+  securitySchemeUnknown('TOA568', 'security-scheme-unknown', .warning),
 
   /// `*/*` is used as a media type.
   wildcardMediaType('TOA601', 'wildcard-media-type', .warning),
+
+  /// A request or response body has a media type that is not JSON, a form,
+  /// `multipart/form-data`, `text/*` or `text/event-stream` (or is a form or
+  /// multipart response): it is sent or read as bytes and its schema is not
+  /// used (TOA561 until M9).
+  mediaTypeAsBytes('TOA650', 'media-type-as-bytes', .info),
+
+  /// A request body, a response or a parameter offers several media types;
+  /// the client uses one and the message names the ones it drops (TOA561
+  /// until M9).
+  mediaTypesDropped('TOA651', 'media-types-dropped', .info),
+
+  /// `errors.default_schema` names a key that is not in
+  /// `components.schemas`; the setting is ignored (TOA562 until M9).
+  defaultErrorSchemaMissing(
+    'TOA652',
+    'default-error-schema-missing',
+    .warning,
+  ),
+
+  /// An operation documents no 2xx response: any 2xx is a success whose
+  /// value is the body as `JsonValue`.
+  successUndocumented('TOA653', 'success-undocumented', .warning),
+
+  /// A success of an operation is `text/event-stream`; the operation is not
+  /// generated until M10 generates event streams.
+  eventStreamNotGenerated('TOA654', 'event-stream-not-generated', .warning),
+
+  /// The schema of a multipart body is not an object with properties (a
+  /// union, an `allOf`, a map): there is no class of parts, the body is the
+  /// schema's type, each property of its JSON is a part, and a binary
+  /// string is sent as base64 text, not as a file.
+  multipartNotObject('TOA655', 'multipart-not-object', .warning),
+
+  /// An `encoding` entry of a multipart part or of a form property has
+  /// `headers`, which the client does not send.
+  encodingHeadersIgnored('TOA656', 'encoding-headers-ignored', .info),
+
+  /// A key of an operation's `responses` is not an HTTP status: OpenAPI
+  /// allows a code from 100 to 599, a range (`1XX` to `5XX`, in either case)
+  /// and `default`. The response is not generated, so a key written by a
+  /// tool or by hand can never reach a name or an expression of the client.
+  /// A key that repeats another one in a different case (`2xx` and `2XX`)
+  /// is reported the same way.
+  responseStatusInvalid('TOA657', 'response-status-invalid', .warning),
+
+  /// A response documents a 1xx or 3xx status. The client has no result for
+  /// them (Dio follows redirects and the interim statuses are not
+  /// responses), so the response is not generated; at run time the status is
+  /// an undocumented one, or handled by the `default` response when the
+  /// operation has one.
+  responseStatusNotGenerated(
+    'TOA658',
+    'response-status-not-generated',
+    .info,
+  ),
+
+  /// An `encoding` key of a form or multipart body names no property of the
+  /// body's schema (a misspelled name, a property the schema does not have):
+  /// the entry is ignored.
+  encodingKeyUnknown('TOA659', 'encoding-key-unknown', .warning),
+
+  /// The `default` of a parameter does not match the parameter's `enum` or
+  /// `format` (`default: other` for `enum: [a, b]`, a `format: date` default
+  /// that is not a date): it is not documented as the default.
+  defaultValueInvalid('TOA660', 'default-value-invalid', .warning),
+
+  /// The `contentType` of an `encoding` entry of a multipart part is a list
+  /// (`image/png, image/jpeg`), a wildcard (`image/*`) or no media type: the
+  /// part is sent with one concrete type, the file's own when it has one,
+  /// else the first concrete type of the list, else `application/octet-stream`
+  /// for a file and no media type for text.
+  partMediaTypeChosen('TOA661', 'part-media-type-chosen', .info),
+
+  /// An object part of a multipart body has a `contentType` that is not
+  /// JSON (`application/xml`). The client writes JSON only, so the part is
+  /// a `String` the caller supplies, sent with that media type.
+  partMediaTypeNotJson('TOA662', 'part-media-type-not-json', .warning),
 
   /// A normalizer fix or an override was not applied: its file cannot be
   /// read, its target is gone, the spec kept changing after the last pass, or

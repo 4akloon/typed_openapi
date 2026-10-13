@@ -16,18 +16,22 @@ import '../helpers/size_limits.dart';
 /// Files over their limit, with the number of lines (`wc -l`) they had when
 /// they were listed. Keep the entries sorted.
 const Map<String, int> _fileAllowlist = {
-  'lib/src/config/config_loader.dart': 780,
+  // M9: naming.client is read with the other naming keys.
+  'lib/src/config/config_loader.dart': 798,
   'lib/src/emit/model_emitter.dart': 379,
   'lib/src/emit/union_emitter.dart': 416,
   'lib/src/generate/output_writer.dart': 896,
-  'lib/src/ir/ir.dart': 733,
-  'lib/src/ir/ir_builder.dart': 534,
-  'lib/src/ir/operation_builder.dart': 565,
-  'lib/src/ir/schema_mapper.dart': 2196,
-  'lib/src/ir/schema_shapes.dart': 446,
+  // M9: the fields the API emitter reads on the operation IR classes, and
+  // whether a response body is a secret.
+  'lib/src/ir/ir.dart': 824,
+  // M9: event streams in the empty-client report; webhooks checked.
+  'lib/src/ir/ir_builder.dart': 538,
+  'lib/src/ir/operation_builder.dart': 509,
+  'lib/src/ir/schema_mapper.dart': 2194,
+  'lib/src/ir/schema_shapes.dart': 433,
   'test/check/spec_checker_test.dart': 705,
   'test/cli/cli_test.dart': 793,
-  'test/cli/generate_command_test.dart': 772,
+  'test/cli/generate_command_test.dart': 771,
   'test/emit/model_library_test.dart': 891,
   'test/generate/output_writer_test.dart': 734,
   'test/ir/emitter_contract_test.dart': 576,
@@ -68,12 +72,13 @@ const Map<String, int> _methodAllowlist = {
   'lib/src/generate/output_writer.dart#OutputWriter.write': 111,
   'lib/src/ir/ir_builder.dart#IrBuilder._group': 112,
   'lib/src/ir/ir_builder.dart#IrBuilder._methodName': 50,
-  'lib/src/ir/ir_builder.dart#IrBuilder._reportEmpty': 50,
-  'lib/src/ir/ir_builder.dart#IrBuilder.build': 95,
-  'lib/src/ir/operation_builder.dart#OperationBuilder._parameter': 99,
+  // M9: event streams are a reason a client is empty.
+  'lib/src/ir/ir_builder.dart#IrBuilder._reportEmpty': 55,
+  'lib/src/ir/ir_builder.dart#IrBuilder.build': 94,
+  // M9: a parameter keeps its schema's default.
+  'lib/src/ir/operation_builder.dart#OperationBuilder._parameter': 100,
   'lib/src/ir/operation_builder.dart#OperationBuilder._parameters': 74,
-  'lib/src/ir/operation_builder.dart#OperationBuilder._pick': 58,
-  'lib/src/ir/operation_builder.dart#OperationBuilder._responses': 57,
+  'lib/src/ir/operation_builder.dart#OperationBuilder._responses': 42,
   'lib/src/ir/operation_selector.dart#OperationSelector.select': 42,
   'lib/src/ir/schema_mapper.dart#SchemaMapper._claim': 66,
   'lib/src/ir/schema_mapper.dart#SchemaMapper._component': 76,

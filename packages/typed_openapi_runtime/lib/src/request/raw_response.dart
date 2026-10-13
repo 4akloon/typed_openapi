@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import '../json/json_decode_exception.dart';
 import '../json/json_reader.dart';
 import '../result/result.dart';
+import 'media_type_text.dart';
 
 /// A response before decoding, independent of how it was received: what a
 /// generated decoder switches on.
@@ -45,10 +46,29 @@ final class RawResponse {
   /// The body as a JSON object; anything else throws [JsonDecodeException].
   Map<String, Object?> get jsonObject => JsonReader.asObject(json);
 
-  /// The body of a text operation; no body is `''`.
+  /// The body as JSON when the HTTP client read it as text or bytes (an
+  /// operation whose success is text or binary): parsed when [headers] name
+  /// a JSON content type, else as it is. Nesting deeper than
+  /// [JsonReader.maxDepth] throws [JsonDecodeException].
+  Object? get parsedJson {
+    final value = switch (body) {
+      final Uint8List bytes => parse(bytes, headers),
+      final String text when isJson(headers) => parse(
+        utf8.encode(text),
+        headers,
+      ),
+      final other => other,
+    };
+    JsonReader.checkDepth(value);
+    return value;
+  }
+
+  /// The body of a text operation; no body is `''`, bytes are read as
+  /// UTF-8 (invalid UTF-8 throws [FormatException]).
   String get text => switch (body) {
     null => '',
     final String text => text,
+    final Uint8List bytes => utf8.decode(bytes),
     final other => throw JsonDecodeException(
       expected: 'a text body',
       actual: JsonDecodeException.describe(other),
@@ -82,14 +102,17 @@ final class RawResponse {
 
   /// Parses a body the HTTP client did not parse (an error body of a
   /// streaming operation): JSON when [headers] name a JSON content type,
-  /// UTF-8 text otherwise, `null` when empty. Text that is not JSON throws
+  /// UTF-8 text otherwise, `null` when empty. Text that is not JSON, or
+  /// JSON nested deeper than [JsonReader.maxDepth], throws
   /// [JsonDecodeException].
   static Object? parse(Uint8List bytes, Map<String, List<String>> headers) {
     if (bytes.isEmpty) return null;
     final text = utf8.decode(bytes, allowMalformed: true);
     if (!isJson(headers)) return text;
     try {
-      return jsonDecode(text);
+      final value = jsonDecode(text);
+      JsonReader.checkDepth(value);
+      return value;
     } on FormatException {
       throw JsonDecodeException(
         expected: 'a JSON body',
@@ -100,15 +123,9 @@ final class RawResponse {
 
   /// Whether [headers] name a JSON content type (`application/json`,
   /// `text/json`, `*/*+json`), as Dio decides.
-  static bool isJson(Map<String, List<String>> headers) {
-    final type = headers['content-type']?.firstOrNull
-        ?.split(';')
-        .first
-        .trim()
-        .toLowerCase();
-    return type != null &&
-        (type == 'application/json' ||
-            type == 'text/json' ||
-            type.endsWith('+json'));
-  }
+  static bool isJson(Map<String, List<String>> headers) =>
+      switch (headers['content-type']?.firstOrNull) {
+        final type? => MediaTypeText(type).isJson,
+        null => false,
+      };
 }

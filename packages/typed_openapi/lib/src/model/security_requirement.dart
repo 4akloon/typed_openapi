@@ -5,8 +5,18 @@ import 'spec_node.dart';
 /// An empty requirement (`{}`) makes security optional.
 final class SecurityRequirement extends SpecNode {
   /// Creates a requirement.
-  const SecurityRequirement({required super.location, this.schemes = const {}});
+  const SecurityRequirement({
+    required super.location,
+    this.schemes = const {},
+    this.isMalformed = false,
+  });
 
   /// Scopes by security scheme name, in document order.
   final Map<String, List<String>> schemes;
+
+  /// Whether the entry was not an object (a string, a number, `null`): it
+  /// was reported, and it still stands for a requirement the spec made but
+  /// this tool cannot read, so no operation reads as open. A string entry
+  /// is kept as the one name in [schemes].
+  final bool isMalformed;
 }

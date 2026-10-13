@@ -205,7 +205,7 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   their defaults). `operation_prefix` applies only where its match starts at
   index 0 and is not empty. `GenerationConfig.key` is the run key: custom
   types are sorted, and a client with a filter or an `errors.default_schema`
-  is keyed by where the config has it, so TOA557, TOA558, TOA562 and TOA563
+  is keyed by where the config has it, so TOA557, TOA558, TOA652 and TOA563
   are reported at its own place, not at that of a client with equal
   settings.
 - `ir/` - the semantic IR (M6): `ir.dart` (`ClientIr`, sealed `Declaration`
@@ -218,12 +218,18 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `CustomType.json` never names one), `names.dart` (`DartNames`: word
   splitting, case, reserved sets and the name check `NameKind`, `isValid`,
   `sanitize`, `dropsLetters`; `NameScope` gives a name, a suffix for
-  reserved names and `2`, `3`... for collisions), `IrContext`/`IrOverrides`
+  reserved names and `2`, `3`... for collisions; the arguments of a method
+  and the fields of a parts class, and the methods of a group class
+  (`DartNames.methodNames`, which adds `int`, `bool`, `double` and `num`,
+  types the class's other methods use), reserve `DartNames.helperFunctions`,
+  `jsonEncode` and `base64Encode`, which the generated bodies call without
+  a prefix, so `jsonEncode(jsonEncode)` is never written: the argument is
+  `jsonEncode_`), `IrContext`/`IrOverrides`
   (generation fields of applied overrides by node location;
   `checkedOverrideName` validates an override name, TOA560, and
   `checkLossyName` reports letters a name lost, TOA559; `defaultErrorSchema`
   is `errors.default_schema` if `components.schemas` has the key, else
-  TOA562), `SchemaShapes` (shape questions the mapper and `DirectionIndex`
+  TOA652), `SchemaShapes` (shape questions the mapper and `DirectionIndex`
   share: null-only, enum values, the one schema a wrapper stands for; an
   `allOf` part with no structure, only annotations and `nullable`, is not a
   merge part and is set aside next to the one `$ref`),
@@ -251,24 +257,93 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   (parameters in location order and then spec order, the names overrides give
   claimed first; a body is JSON first, then multipart, form, text, event
   stream; any other media type is bytes (`Uint8List`) without its schema and
-  the media types that are dropped are named, TOA561, except variants of the
-  chosen type and other JSON types; envelopes; errors, with
-  `errors.default_schema` for statuses without a body; header parameters
+  the media types that are dropped are named, TOA651, except variants of the
+  chosen type and other JSON types; `MediaTypeName.isJson` (`model/`) is
+  the one definition of a JSON media type, `text/json` included, as Dio
+  and the runtime read it; a form or multipart response is bytes,
+  TOA650; a text request body is `String`; the `encoding` of a form or
+  multipart body (`EncodingIr`, a key that names no property of the body
+  schema (also through `$ref`, `allOf`, `oneOf` and `anyOf`; not when the
+  schema has `additionalProperties`) is TOA659 and ignored, a style a query
+  does not allow is TOA564, headers TOA656, worded for a form property or a
+  part; a media type that is an unresolved `$ref` is
+  reported by the resolver and leaves the body without schema, encoding and
+  parts); a parameter keeps its schema's `default`
+  (`ParameterIr.defaultValue`, documented only) by the rule of a model
+  field (`SchemaDefaults`: the schema's own, then the schema it stands for
+  through an `allOf` of one part or a nullable `anyOf`/`oneOf`, then the
+  `$ref` target; a `default` beside a `$ref` counts from 3.1; one that does
+  not fit the `enum` or the `format` (`date`, `date-time`, `uuid`, `int32`)
+  of those schemas is TOA660 and not kept: `DefaultMatcher`); envelopes; errors, with
+  `errors.default_schema` for statuses without a body; the status goes into
+  an inline body's name only when several responses of a kind declare one
+  (`ResponseStatuses.bodyCounts`: a form, multipart, text or bytes response
+  declares none); a required parameter's `default` is not documented; a `responses` key is
+  generated only when it is a code 200-299 or 400-599, a range `2XX`, `4XX`
+  or `5XX` (either case, kept upper case) or `default`
+  (`ResponseStatuses`): any other key is TOA657 and its response is
+  skipped (also a key that repeats another in a different case), a 1xx or
+  3xx one is TOA658 (info) and skipped, and the name part a status gives
+  an inline type goes through `DartNames.pascal`, so no key reaches an
+  identifier raw; header parameters
   `Accept`, `Content-Type` and `Authorization` are dropped as OpenAPI says;
-  a parameter style its `in` does not allow falls back to the default, and
-  an `in: querystring` parameter is skipped, TOA564) and `IrBuilder`
+  a parameter style its `in` does not allow falls back to the default,
+  TOA564, and an `in: querystring` parameter is skipped, TOA565; path
+  variables are `PathTemplate.variable` in `model/path_template.dart`, the
+  runtime's `OperationRequest.pathVariable`, which a test keeps equal) and
+  `IrBuilder`
   (operations written as a `$ref` are skipped (TOA107); groups by tag, path
   or one class, with an override `group` (UpperCamelCase, or a value that
   differs only by case or separators) and TOA553-TOA555; the names of custom
   types are taken in the type scope first, so a declaration named like one
-  gets a suffix, TOA551; method names,
+  gets a suffix, TOA551; `ApiNames` names, after the declarations, groups
+  and M8 helper types, the root client (`ClientIr.root`: `naming.client`
+  or the client name with `Client`, so `SpecChecker` keys a run by the
+  client name when `naming.client` is unset; group fields and servers are
+  its members), the sealed `StatusTypeIr`s of successes with different
+  bodies and of `ErrorsByStatus` (variants by reason phrase, `ApiNames.
+  variantOf`; the plural only when the operation's own inline response
+  body has the name (`ResponseBodyNames`), any other taker of the name gives
+  the suffix, TOA551) and the class of
+  multipart parts (`RequestBodyIr.parts`, TOA655 when the schema is not an
+  object; `PartMediaType` makes each part's `encoding.contentType` one
+  concrete type, TOA661, and an object part that is not JSON a `String` the
+  caller supplies, TOA662); `OperationBuilder` keeps security requirements
+  (an alternative that names a scheme `components.securitySchemes` does not
+  define, or is not an object (`SecurityRequirement.isMalformed`, also
+  TOA111), is TOA568 and left out as a whole when another alternative can be described;
+  when none can, all stay with the scheme of kind `SecurityKind.unknown`
+  (the runtime's `SecuritySchemeType.unknown`), so the metadata never says
+  less than the spec: no operation reads as open or as optional), skips event-stream operations (TOA654) and reports
+  operation servers (TOA566), callbacks and webhooks (TOA567) and a missing
+  2xx (TOA653) through collaborators (`SecurityBuilder`, `PartsBuilder`,
+  `BodyEncoding`, `OperationChecks`, `MediaTypePicker`, which picks the media
+  type of a body, response or parameter and tells its `BodyKind`); `ApiNames.client` assembles the
+  `ClientIr`; `RootNames` names the root client (a client name that loses
+  letters is TOA559, one with no letters TOA552 and `ApiClient`, one that
+  starts with a digit gets `Api` in front, never `$1`, with TOA559), the group
+  fields and the servers with their variables, and reports a member that is renamed (TOA550, TOA551); the
+  fields of a multipart parts class and the variables of a server are reported
+  like arguments (TOA550, TOA551, TOA552, TOA559); `TypeClaims` claims the library's type names; a
+  security scheme that is defined without a usable type has its own TOA568
+  text; the responses of an operation are picked (`MediaTypePicker`) and
+  checked for an event stream before any type is mapped, so a skipped
+  operation declares nothing; the IR types only the API emitter reads are in `api_ir.dart`,
+  which `ir.dart` exports; method names,
   override names first, then
   `operationId` without the `operation_prefix`, then the path; TOA563 when
   no operation is generated, at the config client if filters left some
-  out, else at `#/paths`; then everything above). `IrJson` dumps an IR; the
+  out, else at `#/paths`; then everything above). `IrJson` dumps an IR, the operations through `IrOperationJson`: every
+  field of the operation IR (encoding, parts, security, servers, status
+  types, `sensitive`, defaults), except the locations of parameters, bodies
+  and responses and a response's text and media type; `ir_json_test.dart`
+  reads the fields of the IR classes with `dart:mirrors` and fails when one
+  is missing from the dump; the
   hidden `typed_openapi ir` command prints it. Naming and mapping codes use
   the second half of each area's hundred: TOA250-TOA256, TOA350-TOA351,
-  TOA450-TOA456, TOA550-TOA564; `generate` has TOA830 (output not owned),
+  TOA450-TOA456, TOA550-TOA565, and media types and errors TOA650-TOA662
+  (TOA561 became TOA650 and TOA651, TOA562 TOA652, the querystring half of
+  TOA564 TOA565); `generate` has TOA830 (output not owned),
   TOA831 (output not written, or its lock held) and TOA832 (an interrupted
   run recovered, or a lock taken over; info). TOA552 on an enum value is an info (an override cannot name enum
   values; `x-enum-varnames` in the spec does), and `unknown` is reserved in
@@ -278,7 +353,9 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   including U+0085, U+2028 and U+2029, controls, bidirectional controls and
   lone surrogates are escaped; one-line code spans `docSpan`/`jsonSpan`;
   `docLines` for spec text: `[`, `]`, `<`, `>`, `\` and `{@` escaped outside
-  code spans, controls dropped, wrapped at the width, fenced blocks kept;
+  code spans, controls dropped, wrapped at the width (a span is never
+  broken), fenced blocks kept but for `{@`, which dartdoc expands there
+  too;
   `proseLines` for the generator's own sentences, which never breaks a code
   span), `DartWriter` (own layout: indentation, `doc`, `prose`,
   one-line-or-one-item-a-line lists, `&&` chains; `line` asserts that the
@@ -355,6 +432,47 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   over every branch it keeps); `UnionDecl.unknownSensitive` (a secret
   anywhere in any branch) and a secret variant make the unknown variant
   print `<redacted>`.
+- `emit/` for operations (M9): `ApiLibrary` writes the whole client: the
+  files of `ModelLibrary`, a file per group in `api/` (snake case of the
+  class, its own name scope, so model files never move), the barrel
+  `api.dart` and the root `<client>.dart` (`_client` added when that is a
+  barrel's name), which exports both barrels and holds the root class
+  (`ClientIr.root`: a field per group, servers as `static const` or a
+  `static String` method of the URL variables; it never sets a base URL).
+  `OperationEmitter` (with `RequestWriter` for parameters and bodies,
+  `DecoderWriter` for the status `switch`, `StatusTypeEmitter` and
+  `PartsEmitter` for the types after the class) writes a group: a plain `class` with
+  `{Group}(Dio dio)`, a private `OperationInfo` (tags, security) and a
+  static decoder per operation (private names apart in their own scope),
+  methods with named arguments only (`required` for required ones; enum
+  arguments take the known values), `body`, then `CallOptions? call`,
+  returning `Future<Result<T, E>>` from `DioRequestSender.send`; the
+  decoder switches on the status: codes, then ranges, then `default`
+  (every status but 2xx), `_` is `undocumented()`; Dio reads JSON unless
+  every success with a body is text (`text`) or something else is
+  (`bytes`), and then JSON bodies go through `RawResponse.parsedJson`; a
+  documented binary error (`application/octet-stream`, XML, any media type
+  that is not JSON or `text/*`) also makes the operation `bytes`, since Dio
+  would turn its bytes into text. An error body is decoded by the media
+  type of its response, as a success is: `r.bytes` for bytes, `r.text` for
+  text (an empty one is `''`), the type's decoder for JSON; errors that
+  share one body type but not a media type (`text/plain` and JSON strings)
+  get an arm each. In such an operation `UndocumentedStatus.rawBody` is the
+  raw bytes, not parsed JSON. `text/json` is JSON everywhere.
+  Bodies: JSON (`toJson`), `FormBody` with `FormEncoding`s, the parts class
+  (`toParts()`, `FileUpload` for binary strings and lists of them,
+  `encoding` media types) or `MultipartBody.fromJson` (TOA655),
+  `FileUpload` for binary, `String` for text; a wildcard media type is sent
+  as a concrete one. It writes the sealed status types (variants extend the
+  base and wrap `body`, equal by value, with a `toString` that prints the
+  body, `<redacted>` for a secret body (`ResponseIr.sensitive`, from
+  `ResponseSecrets`) and `Uint8List(<length>)` for bytes) and the parts
+  classes after the group class. Only `Dio` is imported from `package:dio`.
+  `test/emit/generated_client_test.dart` builds a package of the clients
+  of the fixtures (both `union` modes), runs `dart analyze --fatal-infos`
+  on it and runs `test/emit/programs/calls.dart.txt` (`bin/calls.dart`
+  there), which calls the petstore client through a fake Dio adapter and
+  prints every request and result.
 - `generate/` - `OutputWriter` (atomic per run: the whole tree and the
   manifest `.typed_openapi.json` (generator, `format` 2, hash of the inputs,
   every file with its hash) are built in a staging directory next to the
@@ -437,7 +555,7 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `BaselineCommand` (`baseline_command.dart`, subcommands `create` and
   `prune`), `GenerateCommand` (`generate_command.dart`: checks like
   `check`, skips a client with errors (`ClientCheck.errors`) or an output
-  that overlaps another's, writes the models with `ModelLibrary` and
+  that overlaps another's, writes the whole client with `ApiLibrary` and
   `OutputWriter`, the inputs hash from `ClientCheck.sources` and the
   client's settings; text report, then a line per client; exit code as
   `check`) and the hidden `IrCommand` (`ir_command.dart`, prints the IR of
@@ -451,7 +569,10 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `ClientConfig`, `Preset`, `ProjectConfig`, `GenerationConfig`, `GroupBy`,
   `TriStateRule`, `OperationFilter`, `FilterPattern`, `ModelLibrary`,
   `OutputWriter`, `OutputChanges`, the IR (`IrBuilder`,
-  `IrJson`, `ClientIr` and its node classes, `DartType` and its
+  `IrJson`, `ClientIr` and its node classes, among them the M9 ones
+  (`RootIr`, `ServerIr`, `ServerVariableIr`, `StatusTypeIr`, `StatusCaseIr`,
+  `PartIr`, `EncodingIr`, `SecurityUseIr`, `SecuritySchemeIr`,
+  `SecurityKind`), `DartType` and its
   subclasses, `DeclId`, `DeclVariant`, `UnionDispatch`, `UnionKind`,
   `UnionVariantIr`), the diagnostics (`Diagnostic`,
   `RelatedLocation`, `DiagnosticBag`, `DiagnosticCode`, `DisplayPaths`,
@@ -468,7 +589,10 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `DartTypeOverride`, `UnionMode`). Not exported: `CheckCommand`,
   `BaselineCommand`, `GenerateCommand`, `RealPaths`, the emitters
   (`DartCode`, `DartWriter`, `Imports`, `TypeCodec`, `ModelEmitter`,
-  `EnumEmitter`, `UnionEmitter`), the
+  `EnumEmitter`, `UnionEmitter`, and the API emitters `ApiLibrary`,
+  `OperationEmitter`, `RequestWriter`, `DecoderWriter`, `PartsEmitter`,
+  `StatusTypeEmitter`: `generate` runs them, there is no public entry
+  point yet), the
   internals of `parse/` (`OpenApiParser`, `OperationParser`, `SchemaParser`,
   `ObjectReader`, `ParseContext`, `SpecIndex`, `DialectChecker`), `resolve/`
   (`RefTarget`, `RefResolver`), `normalize/` (`TreeEditor`, the rule
@@ -477,7 +601,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `SchemaMapper`, `SchemaShapes`, `RefFollower`, `Decimal`, `NameHint`,
   `DirectionIndex`,
   `OperationSelector`, `OperationBuilder`, `SpecOperation`, `DartNames`,
-  `NameScope`), `IrCommand`, `YamlComposer` and `load/yaml/`.
+  `NameScope`, `MediaTypePicker`, `RootNames`, `TypeClaims`, `PartsBuilder`,
+  `BodyEncoding`, `SchemaDefaults`, `DefaultMatcher`), `IrCommand`, `YamlComposer` and `load/yaml/`.
 
 Data flows loader -> parser -> resolver -> overrides -> normalizer -> IR
 builder -> checker, every stage writing problems into one `DiagnosticBag`;
@@ -532,10 +657,33 @@ that the API composes, including an `implements` fake of a tag class.
   percent-encoding; a path expansion that is empty, `.` or `..` throws
   `ArgumentError`, as does a `.`/`..` value); internal `ParameterValue`,
   `PercentEncoder`.
-- `request/` - `OperationInfo` (put into `RequestOptions.extra`),
-  `OperationRequest` (resolves the path and the query itself;
-  `streamStatuses` for event streams), `RawResponse` (what a generated
-  decoder switches on).
+- `request/` - `OperationInfo` (put into `RequestOptions.extra`; its
+  `security` lists alternatives of `SecurityUse`s of `SecurityScheme`s,
+  metadata only; `SecuritySchemeType.unknown` is a scheme the spec names
+  but does not define), `OperationRequest` (resolves the path and the query
+  itself; `pathVariable` is the one pattern of a path variable, which the
+  generator copies; `streamStatuses` for event streams), `RawResponse` (what
+  a generated decoder switches on; `parsedJson` parses a JSON body that Dio
+  read as text or bytes), and the bodies `FileUpload` (bytes or a stream),
+  `FormBody`/`FormEncoding` and `MultipartBody`/`MultipartPart`, which
+  `DioBody` (`dio/`) turns into form text, `FormData` and bytes or a
+  stream for `DioRequestSender`. A body sent as `application/json` or
+  `+json` is encoded by `DioBody` only where Dio gets it wrong: a `String`
+  (Dio sends it unquoted) and a `null` (Dio sends no body) become JSON
+  text; a map, list, number or boolean stays Dio's data, so an interceptor
+  sees the object. A `null` body with a JSON `contentType` is the JSON
+  `null` of a required nullable body; a `null` body with any other
+  `contentType` sends no `Content-Type`, and a generated method passes no
+  `contentType` for an absent optional body. A file's own `contentType` is
+  checked as a media type (`FormatException`, also on a binary body).
+  `MediaTypeText` (`request/`) is the one definition of a JSON media type
+  (`application/json`, `text/json`, `+json`), also for `RawResponse.isJson`.
+  `MultipartForm` (`dio/`) builds the `FormData` in the order of the parts
+  (Dio writes fields before files, so a text part stays a field only while
+  no file or typed part precedes it; later text parts go as `text/plain`
+  parts); a value that is not a finite JSON scalar, a list in a list, a
+  non-JSON value in a JSON part, or an object with a media type that is not
+  JSON is `ArgumentError`, never stringified.
 - `dio/` - `DioRequestSender(dio, {isWeb})` (`send`, `openEvents`; requests
   only through `dio.request`, never mutates the user's Dio, never retries;
   decoding catches only `DioException`, `JsonDecodeException` and, from the

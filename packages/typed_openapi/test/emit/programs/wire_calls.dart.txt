@@ -1,0 +1,133 @@
+// A program that calls the client generated from test/emit/fixtures/wire.yaml
+// through a Dio whose adapter answers from memory, and prints what went on
+// the wire and what each call returned.
+// The test reads what the program prints, so it prints.
+// ignore_for_file: avoid_print
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:dio/dio.dart';
+import 'package:fixture/wire_raw/api_client.dart';
+import 'package:typed_openapi_runtime/typed_openapi_runtime.dart';
+
+import 'fake_dio.dart';
+
+String show(Result<Object?, Object?> result) => switch (result) {
+  Success(:final data, :final statusCode) => 'success $statusCode ${describe(data)}',
+  HttpError(:final body, :final statusCode) => 'error $statusCode ${describe(body)}',
+  UndocumentedStatus(:final statusCode) => 'undocumented $statusCode',
+  DecodeError(:final error) => 'decode ${error.pointer} ${error.expected}',
+  TransportError() => 'transport',
+  Cancelled() => 'cancelled',
+};
+
+String describe(Object? value) => switch (value) {
+  null => 'null',
+  final Uint8List data => 'bytes ${data.join(',')}',
+  final Report report => 'Report ${report.id}',
+  GetReportErrorNotFound(:final body) => 'NotFound ${describe(body)}',
+  GetReportErrorConflict(:final body) => 'Conflict ${describe(body)}',
+  GetReportErrorUnprocessableEntity(:final body) => 'Unprocessable ${describe(body)}',
+  final String text => 'text "$text"',
+  _ => 'json ${jsonEncode(value)}',
+};
+
+Future<void> main() async {
+  final adapter = Adapter();
+  final dio = Dio(BaseOptions(baseUrl: 'https://wire.example.com'))
+    ..httpClientAdapter = adapter;
+  final wire = ApiClient(dio).wire;
+
+  // A parameter or a part named like a function the code calls is renamed.
+  adapter.answers.add(() => empty(204));
+  print(show(await wire.helpers(
+    jsonEncode_: 'a"b',
+    base64Encode_: Uint8List.fromList([1, 2, 3]),
+    body: HelpersRequest(
+      jsonEncode_: const HelpersRequestJsonEncode(a: 'x'),
+      base64Encode_: Uint8List.fromList([4, 5, 6]),
+    ),
+  )));
+  print(adapter.requests.last.uri);
+  final multipart = adapter.bodies.last;
+  print('multipart ${[
+    multipart.contains('name="jsonEncode"'),
+    multipart.contains('{"a":"x"}'),
+    multipart.contains('name="base64Encode"\r\ncontent-type: text/plain; charset=utf-8\r\n\r\nBAUG'),
+  ]}');
+
+  // A part whose encoding names several media types, a wildcard or XML is
+  // sent with one concrete type, and the call returns a result.
+  adapter.answers
+    ..add(() => empty(204))
+    ..add(() => empty(204));
+  for (final scan in [
+    FileUpload.bytes(Uint8List.fromList([1]), filename: 's.gif'),
+    FileUpload.bytes(Uint8List.fromList([2]),
+        filename: 's.webp', contentType: 'image/webp'),
+  ]) {
+    print(show(await wire.sendProfile(
+      body: SendProfileRequest(
+        avatar: FileUpload.bytes(Uint8List.fromList([3]), filename: 'a.png'),
+        scan: scan,
+        meta: const SendProfileRequestMeta(a: 'm'),
+        history: '<b>h</b>',
+        rows: 'a,b',
+        note: 'n',
+      ),
+    )));
+    final parts = RegExp(r'name="(\w+)"[^\r\n]*\r\n(?:content-type: ([^\r\n]*)\r\n)?\r\n')
+        .allMatches(adapter.bodies.last);
+    print([for (final m in parts) '${m[1]}: ${m[2]}'].join(' | '));
+  }
+
+  // A JSON body is JSON text, also a string, an enum and a null.
+  for (final send in <Future<Object?> Function()>[
+    () => wire.sendString(body: 'hello "q"'),
+    () => wire.sendEnum(body: Color.red),
+    () => wire.sendAny(body: const JsonValue('x"y')),
+    () => wire.sendAny(body: const JsonValue(null)),
+    () => wire.sendNullable(body: 'n'),
+    () => wire.sendNullable(body: null),
+    () => wire.sendOptional(body: 'o'),
+    () => wire.sendOptional(),
+    () => wire.sendOptionalText(body: 'plain "t"'),
+    () => wire.sendOptionalText(),
+    () => wire.sendOptionalBytes(),
+  ]) {
+    adapter.answers.add(() => empty(204));
+    await send();
+    print('${adapter.requests.last.method} ${adapter.requests.last.path} '
+        '${adapter.requests.last.contentType} <${adapter.bodies.last}>');
+  }
+
+  // An error body is read by its own media type.
+  for (final answer in <ResponseBody Function()>[
+    () => json(200, {'id': 'r1'}),
+    () => bytes(404, [1, 2, 3, 250], 'application/octet-stream'),
+    () => text(409, 'taken "x"'),
+    () => text(409, ''),
+    () => bytes(422, utf8.encode('<e/>'), 'application/xml'),
+  ]) {
+    adapter.answers.add(answer);
+    print(show(await wire.getReport()));
+  }
+  for (final answer in <ResponseBody Function()>[
+    () => json(200, {'id': 'r2'}),
+    () => text(400, 'bad "x"'),
+    () => json(500, 'boom'),
+    () => text(400, ''),
+  ]) {
+    adapter.answers.add(answer);
+    print(show(await wire.getSingle()));
+  }
+
+  // A `text/json` error is JSON, as Dio reads it.
+  for (final answer in <ResponseBody Function()>[
+    () => json(200, {'id': 'r3'}),
+    () => bytes(400, utf8.encode('{"id":"e1"}'), 'text/json'),
+  ]) {
+    adapter.answers.add(answer);
+    print(show(await wire.getTextJson()));
+  }
+}

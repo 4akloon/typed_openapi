@@ -70,12 +70,61 @@ void main() {
       expect(code.docLines('a\x01b', 80), ['ab']);
     });
 
+    test('never breaks a code span when it wraps (corpus: ditto)', () {
+      expect(code.docLines('Both `{{ thing-json:<json-pointer> }}` work', 24), [
+        'Both',
+        '`{{ thing-json:<json-pointer> }}`',
+        'work',
+      ]);
+    });
+
+    test('wraps a paragraph with a stray backtick (corpus: stripe)', () {
+      // The second run of backticks is two long, so it closes no span and
+      // the spans after it are not the odd-numbered ones.
+      const text =
+          'The amount when the `rate_type`` is `flat_amount`. Tax rates with '
+          '`rate_type` `percentage` can vary based on the transaction, '
+          'resulting in this field being `null`.';
+      final lines = code.docLines(text, 80);
+      expect(lines.length, greaterThan(1));
+      expect([for (final l in lines) l.length], everyElement(lessThan(81)));
+      expect(lines.join(' '), text);
+    });
+
+    test('keeps a span of a longer run of backticks on one line', () {
+      expect(code.docLines('Say hello there ``do it`` ok', 20), [
+        'Say hello there',
+        '``do it`` ok',
+      ]);
+    });
+
     test('neutralises doc directives', () {
       expect(code.docLines('See {@link Foo} and {@template t}', 80), [
         r'See \{@link Foo} and \{@template t}',
       ]);
       expect(code.docLines('{ not @a directive }', 80), [
         '{ not @a directive }',
+      ]);
+    });
+
+    test('neutralises doc directives inside a fenced block', () {
+      expect(
+        code.docLines(
+          '```\n{@youtube 560 315 https://x.example/v}\n{@macro m} <raw>\n```',
+          80,
+        ),
+        [
+          '```',
+          r'\{@youtube 560 315 https://x.example/v}',
+          r'\{@macro m} <raw>',
+          '```',
+        ],
+      );
+      // An unclosed fence is closed, and its directives are neutralised too.
+      expect(code.docLines('```\n{@template t}', 80), [
+        '```',
+        r'\{@template t}',
+        '```',
       ]);
     });
 

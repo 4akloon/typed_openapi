@@ -49,8 +49,10 @@ final class DartNames {
   };
 
   /// Type names a generated library sees without importing them: those of
-  /// `dart:core`, `Uint8List` of `dart:typed_data`, and the names of
-  /// `typed_openapi_runtime` that generated code uses.
+  /// `dart:core`, `Uint8List` of `dart:typed_data`, the names of
+  /// `typed_openapi_runtime` that generated code uses, and `Dio`, the one
+  /// name the API files import from `package:dio` (so its other exports,
+  /// such as `Response`, `Options` and `Headers`, stay free for schemas).
   static const takenTypeNames = {
     // dart:core
     'ArgumentError', 'AssertionError', 'BigInt', 'BidirectionalIterator',
@@ -68,13 +70,18 @@ final class DartNames {
     // typed_openapi_runtime
     'CallOptions', 'Cancelled', 'CookieParameter', 'Date', 'DecodeError',
     'DeepEquality',
-    'DioRequestSender', 'Failure', 'HeaderParameter', 'HttpError',
-    'JsonDecodeException', 'JsonReader', 'JsonValue', 'OperationInfo',
+    'DioRequestSender', 'Failure', 'FileUpload', 'FormBody', 'FormEncoding',
+    'HeaderParameter', 'HttpError',
+    'JsonDecodeException', 'JsonReader', 'JsonValue', 'MultipartBody',
+    'MultipartPart', 'OperationInfo',
     'OperationRequest', 'Patch', 'PatchNull', 'PatchValue', 'PathParameter',
     'PathStyle', 'QueryParameter', 'QueryStyle', 'RawResponse',
-    'ResponseKind', 'Result', 'SseDecoder', 'SseDecodeError',
+    'ResponseKind', 'Result', 'SecurityLocation', 'SecurityScheme',
+    'SecuritySchemeType', 'SecurityUse', 'SseDecoder', 'SseDecodeError',
     'SseDisconnected', 'SseEvent', 'SseItem', 'SseItemDecoder', 'SseMessage',
     'Success', 'TransportError', 'UndocumentedStatus',
+    // package:dio, which the API files import with `show Dio` only.
+    'Dio',
   };
 
   /// Members every Dart object has.
@@ -105,9 +112,25 @@ final class DartNames {
     'toJson', 'unknown', 'value', 'values',
   };
 
+  /// The top-level functions of `dart:convert` that generated method bodies
+  /// and parts classes call without a prefix: an argument or a field with
+  /// the name would hide the function (`jsonEncode(jsonEncode)`).
+  static const helperFunctions = {'base64Encode', 'jsonEncode'};
+
+  /// Names a method of a group class must not have: the members of every
+  /// object, the [helperFunctions] the other methods call without a prefix
+  /// and the [lowercaseTypes] they use as types, which a method of the same
+  /// name hides inside the class.
+  static const methodNames = {
+    ...objectMembers,
+    ...helperFunctions,
+    ...lowercaseTypes,
+  };
+
   /// Names of a method's arguments that generated code uses itself: the
-  /// request body and the per-call options of the runtime.
-  static const argumentNames = {'body', 'call'};
+  /// request body and the per-call options of the runtime, and the
+  /// [helperFunctions].
+  static const argumentNames = {'body', 'call', ...helperFunctions};
 
   /// The words of [text], in order; empty when it has no ASCII letter or
   /// digit.

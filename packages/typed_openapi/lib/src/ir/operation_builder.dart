@@ -1,11 +1,20 @@
 import '../model/operation.dart';
+import '../model/path_template.dart';
 import '../model/schema.dart';
-import '../model/spec_node.dart';
+import 'body_encoding.dart';
 import 'dart_type.dart';
 import 'ir.dart';
 import 'ir_context.dart';
+import 'media_type_picker.dart';
 import 'names.dart';
+import 'operation_checks.dart';
+import 'parameter_styles.dart';
+import 'parts_builder.dart';
+import 'response_secrets.dart';
+import 'response_statuses.dart';
+import 'schema_defaults.dart';
 import 'schema_mapper.dart';
+import 'security_builder.dart';
 
 /// An operation of the spec with its method and path.
 final class SpecOperation {
@@ -35,45 +44,61 @@ final class SpecOperation {
 /// (R10.3, R10.4, R10.6, R11.4); types come from a [SchemaMapper].
 final class OperationBuilder {
   /// Creates a builder that maps types with [_mapper].
-  OperationBuilder(this._context, this._mapper);
+  OperationBuilder(this._context, this._mapper)
+    : _checks = OperationChecks(_context),
+      _security = SecurityBuilder(_context),
+      _parts = PartsBuilder(_context, _mapper),
+      _encoding = BodyEncoding(_context),
+      _defaults = SchemaDefaults(_context),
+      _secrets = ResponseSecrets(_context),
+      _statuses = ResponseStatuses(_context),
+      _picker = MediaTypePicker(_context);
 
   static const _names = DartNames();
-  static final _variable = RegExp(r'\{([^}]*)\}');
 
   /// The header parameters OpenAPI says to ignore: the request's own
   /// `Accept`, `Content-Type` and `Authorization` (compared in lower case).
   static const _ignoredHeaders = {'accept', 'content-type', 'authorization'};
 
-  /// The styles OpenAPI allows for each placement, the default style
-  /// first (`style: cookie` is OpenAPI 3.2's second style for cookies); a
-  /// `querystring` parameter has none.
-  static const _allowedStyles = {
-    ParameterLocation.path: [
-      ParameterStyle.simple,
-      ParameterStyle.label,
-      ParameterStyle.matrix,
-    ],
-    ParameterLocation.query: [
-      ParameterStyle.form,
-      ParameterStyle.spaceDelimited,
-      ParameterStyle.pipeDelimited,
-      ParameterStyle.deepObject,
-    ],
-    ParameterLocation.header: [ParameterStyle.simple],
-    ParameterLocation.cookie: [ParameterStyle.form, ParameterStyle.cookie],
-  };
-
   final IrContext _context;
   final SchemaMapper _mapper;
+  final ResponseSecrets _secrets;
+  final ResponseStatuses _statuses;
+  final OperationChecks _checks;
+  final SecurityBuilder _security;
+  final PartsBuilder _parts;
+  final BodyEncoding _encoding;
+  final SchemaDefaults _defaults;
+  final MediaTypePicker _picker;
+
+  /// How many operations [build] left out because a success is an event
+  /// stream (TOA654).
+  int streams = 0;
+
+  /// How many operations [build] left out because a path variable has no
+  /// parameter (TOA556).
+  int unbound = 0;
 
   /// The IR of [entry], named [name]; null when its path template cannot
-  /// be filled.
+  /// be filled, or when a success is an event stream (counted in
+  /// [streams]).
   OperationIr? build(SpecOperation entry, String name) {
     final operation = entry.operation;
     final prefix = _names.pascal(name) ?? name;
     final parameters = _parameters(entry, prefix);
-    if (parameters == null) return null;
-    final responses = _responses(operation, prefix);
+    if (parameters == null) {
+      unbound++;
+      return null;
+    }
+    final picked = _pickResponses(operation);
+    if (_checks.isEventStream(picked)) {
+      streams++;
+      return null;
+    }
+    final responses = _responses(picked, prefix);
+    _checks.successes(operation);
+    _checks.servers(entry);
+    _checks.callbacks(operation);
     return OperationIr(
       location: operation.location,
       name: name,
@@ -88,6 +113,7 @@ final class OperationBuilder {
       body: _body(operation, entry.method, prefix),
       responses: responses,
       errors: _errors(responses),
+      security: _security.of(operation),
     );
   }
 
@@ -114,7 +140,7 @@ final class OperationBuilder {
       byKey[(placement, parameter.name)] = (placement, parameter);
     }
     final variables = [
-      for (final match in _variable.allMatches(entry.path)) match[1]!,
+      for (final match in PathTemplate(entry.path).variables) match[1]!,
     ];
     var bound = true;
     for (final variable in variables) {
@@ -167,7 +193,7 @@ final class OperationBuilder {
   }
 
   /// Whether a parameter of [placement] can be sent; a `querystring`
-  /// parameter cannot, and is reported (TOA564).
+  /// parameter cannot, and is reported (TOA565).
   bool _isSendable(
     ParameterLocation placement,
     Parameter parameter,
@@ -175,7 +201,7 @@ final class OperationBuilder {
   ) {
     if (placement != .querystring) return true;
     _context.report(
-      .parameterStyleInvalid,
+      .querystringNotGenerated,
       'Parameter "$wire" is in: querystring (OpenAPI 3.2), which the client '
       'cannot send; the parameter is not generated.',
       parameter.location,
@@ -193,7 +219,7 @@ final class OperationBuilder {
     String wire,
   ) {
     final style = parameter.style;
-    final allowed = _allowedStyles[placement];
+    final allowed = ParameterStyles.allowed[placement];
     if (style == null || allowed == null || allowed.contains(style)) {
       return style;
     }
@@ -275,7 +301,7 @@ final class OperationBuilder {
     }
     final (schema, contentType) = switch (parameter.schema) {
       final schema? => (schema, null),
-      null => _content(parameter.content, parameter.location),
+      null => _picker.content(parameter.content, parameter.location),
     };
     final mapped = schema == null
         ? const CoreType(.json)
@@ -307,6 +333,7 @@ final class OperationBuilder {
       contentType: contentType,
       description: parameter.description,
       deprecated: parameter.deprecated,
+      defaultValue: _defaults.of(schema),
     );
   }
 
@@ -315,16 +342,41 @@ final class OperationBuilder {
     if (written == null) return null;
     final body = _context.model.resolve(written);
     if (body == null) return null;
-    final (contentType, media) = _pick(
+    final (contentType, media) = _picker.pick(
       body.content,
       body.location,
       'request body',
     );
-    final kind = contentType == null ? BodyKind.none : _kind(contentType);
+    final kind = contentType == null
+        ? BodyKind.none
+        : MediaTypePicker.kindOf(contentType);
     final schema = media?.schema;
-    // Raw bytes have no model, as in responses.
-    final DartType? type = switch ((schema, kind)) {
+    final parts = kind == .multipart ? _parts.of(media, prefix) : null;
+    // Parts are a class of their own.
+    final type = parts == null ? _bodyType(schema, kind, prefix, method) : null;
+    return RequestBodyIr(
+      kind: kind,
+      location: body.location,
+      contentType: contentType,
+      type: type,
+      required: body.required,
+      description: body.description,
+      encoding: _encoding.of(media, kind),
+      parts: parts,
+    );
+  }
+
+  /// The type of a request body of [kind]: raw bytes have no model, as in
+  /// responses, and text is a string.
+  DartType? _bodyType(
+    Schema? schema,
+    BodyKind kind,
+    String prefix,
+    String method,
+  ) {
+    return switch ((schema, kind)) {
       (_, .bytes) => const CoreType(.binary),
+      (_, .text || .eventStream) => const CoreType(.string),
       (null, _) => null,
       (final schema?, _) => _mapper.typeOf(
         schema,
@@ -333,43 +385,31 @@ final class OperationBuilder {
         patchBody: method.toLowerCase() == 'patch',
       ),
     };
-    return RequestBodyIr(
-      kind: kind,
-      location: body.location,
-      contentType: contentType,
-      type: type,
-      required: body.required,
-      description: body.description,
-    );
   }
 
-  List<ResponseIr> _responses(Operation operation, String prefix) {
-    final responses = [
-      for (final MapEntry(key: status, value: written)
-          in operation.responses.entries)
-        if (_context.model.resolve(written) case final response?)
-          (
-            status,
-            response,
-            _pick(response.content, response.location, 'response'),
-          ),
-    ];
-    // Inline names carry the status only when several responses of the
-    // same kind (success or error) have a body.
-    final withBody = <String, int>{};
-    for (final (status, _, (_, media)) in responses) {
-      if (media?.schema == null && media?.itemSchema == null) continue;
-      final base = _nameBase(status);
-      withBody[base] = (withBody[base] ?? 0) + 1;
-    }
+  /// The generated responses of [operation] with the media type used for
+  /// each, before any type is mapped.
+  List<PickedResponse> _pickResponses(Operation operation) => [
+    for (final (status, written) in _statuses.of(operation))
+      if (_context.model.resolve(written) case final response?)
+        (
+          status,
+          response,
+          _picker.pick(response.content, response.location, 'response'),
+        ),
+  ];
+
+  List<ResponseIr> _responses(List<PickedResponse> responses, String prefix) {
+    final withBody = ResponseStatuses.bodyCounts(responses);
     final result = <ResponseIr>[];
     for (final (status, response, (contentType, media)) in responses) {
-      final kind = contentType == null ? BodyKind.none : _kind(contentType);
+      final kind = _responseKind(contentType, response);
       final success = status.startsWith('2');
-      final base = _nameBase(status);
-      final suffix = (withBody[base] ?? 0) > 1
-          ? '$base${status == 'default' ? 'Default' : status.toUpperCase()}'
-          : base;
+      final base = ResponseStatuses.nameOf(status, shared: false);
+      final suffix = ResponseStatuses.nameOf(
+        status,
+        shared: (withBody[base] ?? 0) > 1,
+      );
       final schema = kind == .eventStream
           ? media?.itemSchema ?? media?.schema
           : media?.schema;
@@ -395,20 +435,28 @@ final class OperationBuilder {
           type: type,
           envelopeKey: envelope == null ? null : 'data',
           description: response.description,
+          sensitive: _secrets.isSecret(envelope ?? schema, type),
         ),
       );
     }
     return result;
   }
 
-  /// How inline types of a response with [status] are named: `Response`
-  /// for 2xx, `Error` for 4xx, 5xx and `default`, `Response` with the status
-  /// for the rest.
-  static String _nameBase(String status) {
-    if (status.startsWith('2')) return 'Response';
-    if (status.startsWith('4') || status.startsWith('5')) return 'Error';
-    if (status == 'default') return 'Error';
-    return 'Response${status.toUpperCase()}';
+  /// How the body of [response] in [contentType] is read: a form or a
+  /// multipart response is bytes (TOA650), since a client does not read
+  /// forms.
+  BodyKind _responseKind(String? contentType, Response response) {
+    if (contentType == null) return .none;
+    final kind = MediaTypePicker.kindOf(contentType);
+    if (kind != .form && kind != .multipart) return kind;
+    _context.report(
+      .mediaTypeAsBytes,
+      'The response is "$contentType", which the client reads as bytes; its '
+      'schema is not used.',
+      response.location.child('content').child(contentType),
+      fix: 'Use a JSON media type at the source if the schema matters.',
+    );
+    return .bytes;
   }
 
   /// The schema of `data` when [schema] is an envelope `{data: T}`: an
@@ -445,7 +493,10 @@ final class OperationBuilder {
     if (types.length == 1 && types.single != null) {
       return SingleError(types.single!, [for (final (s, _) in cases) s]);
     }
-    return ErrorsByStatus(cases);
+    return ErrorsByStatus(
+      cases,
+      sensitive: _secrets.errorStatuses(responses, fallback),
+    );
   }
 
   DartType? _defaultErrorType() {
@@ -454,112 +505,5 @@ final class OperationBuilder {
     final schema = _context.model.document.components?.schemas[key];
     if (schema == null) return null;
     return _mapper.typeOfComponent(schema, direction: .response);
-  }
-
-  /// The media type the client uses: JSON first, then forms, text, event
-  /// streams and anything else, each in document order. [location] is the
-  /// object that has [content] and [what] says what it is. The media types
-  /// that are dropped are reported, and so is a chosen one that becomes
-  /// bytes and takes its schema with it (TOA561).
-  (String?, MediaType?) _pick(
-    Map<String, RefOr<MediaType>> content,
-    SpecLocation location,
-    String what,
-  ) {
-    if (content.isEmpty) return (null, null);
-    const preference = [
-      BodyKind.json,
-      BodyKind.multipart,
-      BodyKind.form,
-      BodyKind.text,
-      BodyKind.eventStream,
-      BodyKind.bytes,
-    ];
-    for (final kind in preference) {
-      for (final MapEntry(key: type, value: written) in content.entries) {
-        if (_kind(type) != kind) continue;
-        final media = _context.model.resolve(written);
-        // A variant of the chosen type (`application/json; profile=...`) or
-        // another JSON type (also `text/json`) has the same use: nothing is
-        // lost.
-        final dropped = [
-          for (final other in content.keys)
-            if (other != type &&
-                _baseType(other) != _baseType(type) &&
-                !(kind == .json && _isJson(other)))
-              other,
-        ];
-        if (dropped.isNotEmpty) {
-          _context.report(
-            .mediaTypeAsBytes,
-            'The $what offers ${content.length} media types; "$type" is '
-            'used and ${_quoted(dropped)} '
-            '${dropped.length == 1 ? 'is' : 'are'} dropped.',
-            location.child('content'),
-            fix:
-                'Offer one media type at the source if the client should '
-                'use another.',
-          );
-        }
-        final schema = media?.schema;
-        if (kind == .bytes && schema != null && !_isPlain(schema)) {
-          _context.report(
-            .mediaTypeAsBytes,
-            'The media type "$type" of the $what is not JSON, a form, text '
-            'or an event stream, so it is sent as bytes and its schema is '
-            'not used.',
-            location.child('content').child(type),
-            fix:
-                'Use a JSON media type at the source if the schema '
-                'matters.',
-          );
-        }
-        return (type, media);
-      }
-    }
-    return (null, null);
-  }
-
-  static String _quoted(List<String> types) =>
-      [for (final type in types) '"$type"'].join(', ');
-
-  /// Whether [schema] says no more than "bytes": nothing, a boolean or a
-  /// string of any format.
-  bool _isPlain(Schema schema) {
-    final resolved = _context.model.resolveSchema(schema);
-    if (resolved is! SchemaObject) return true;
-    return resolved.types.every((t) => t == .string || t == .nullType) &&
-        resolved.properties.isEmpty &&
-        resolved.allOf.isEmpty &&
-        resolved.oneOf.isEmpty &&
-        resolved.anyOf.isEmpty &&
-        resolved.items == null;
-  }
-
-  (Schema?, String?) _content(
-    Map<String, RefOr<MediaType>> content,
-    SpecLocation location,
-  ) {
-    final (type, media) = _pick(content, location, 'parameter');
-    return (media?.schema, type);
-  }
-
-  /// [contentType] without its parameters, in lower case.
-  static String _baseType(String contentType) =>
-      contentType.split(';').first.trim().toLowerCase();
-
-  /// Whether [contentType] is JSON, also as `text/json`, which is a text
-  /// type for [_kind] but is read as JSON by every server that sends it.
-  static bool _isJson(String contentType) =>
-      _kind(contentType) == .json || _baseType(contentType) == 'text/json';
-
-  static BodyKind _kind(String contentType) {
-    final type = _baseType(contentType);
-    if (type == 'application/json' || type.endsWith('+json')) return .json;
-    if (type == 'multipart/form-data') return .multipart;
-    if (type == 'application/x-www-form-urlencoded') return .form;
-    if (type == 'text/event-stream') return .eventStream;
-    if (type.startsWith('text/')) return .text;
-    return .bytes;
   }
 }

@@ -31,7 +31,7 @@ dart run typed_openapi check core_api   # one client
 dart run typed_openapi check --format json   # also: sarif, github-actions
 ```
 
-Generate the models of the clients whose check has no errors (a client with
+Generate the clients whose check has no errors (a client with
 errors is skipped, and the exit code is the one `check` gives):
 
 ```sh
@@ -43,10 +43,21 @@ dart run typed_openapi generate --break-lock  # take over a lock of unknown owne
 
 ### What `generate` writes
 
-Each client gets `models.dart` (it exports every model) and
-`models/<name>.dart`, one file per class, with the header
-`// GENERATED CODE - DO NOT MODIFY BY HAND.` and `// dart format off` on the
-second line. The code is clean under `package:lints/recommended` and the
+Each client gets this tree in its `output` directory:
+
+```text
+<output>/
+  petstore.dart          the root class; exports models.dart and api.dart
+                         (api_client.dart for a client named api or models)
+  api.dart               exports the group files
+  api/pets_api.dart      one plain class per group (tag)
+  models.dart            exports every model
+  models/pet.dart        one file per class
+  .typed_openapi.json    the manifest
+```
+
+Every Dart file has the header `// GENERATED CODE - DO NOT MODIFY BY HAND.`
+and `// dart format off` on the second line. The code is clean under `package:lints/recommended` and the
 `flutter_lints` rules without `ignore_for_file`, and the same spec and
 config give the same bytes. The classes are plain `class`es (not `final`, so
 you can extend them); a union base is `sealed`.
@@ -94,11 +105,70 @@ you can extend them); a union base is `sealed`.
   its schema could carry a secret: any model or union variant it may hold,
   at any depth, has a secret property.
 
+### Operations
+
+The operations of a client are in `api/<group>.dart`, one plain class per
+group (`PetsApi`), exported by `api.dart`; the root `<client>.dart`
+(`petstore.dart`, `api_client.dart` for a client named `api` or `models`)
+exports the models and the API and holds the root class:
+
+```dart
+final client = PetstoreClient(dio); // naming.client renames it
+switch (await client.pets.getPet(petId: 1)) {
+  case Success(:final data):
+    print(data.name);
+  case HttpError(:final body):
+    print(body.code);
+  case Failure():
+    print('another failure');
+}
+```
+
+- Every argument is named, required ones are `required`, the request body is
+  `body` and the last argument is `CallOptions? call` (cancel token, extra
+  headers, progress, `extra` for interceptors). A method returns
+  `Future<Result<T, E>>` and never throws for a response: a documented error
+  is `HttpError` with the decoded body, any other status
+  `UndocumentedStatus`, a body that does not decode `DecodeError`, a network
+  failure `TransportError`, a cancelled call `Cancelled`.
+- `T` is the one success body (`void` without one, `JsonValue` when no 2xx
+  is documented, TOA653), or a sealed type when 2xx responses differ
+  (`CreatePetResponseOk`, `...Created`). `E` is `Never` without documented
+  errors, the one error body, or a sealed type by status
+  (`CreatePetErrorNotFound`, `...ClientError` for `4XX`, `...Other` for
+  `default`). Text successes are `String`, binary ones `Uint8List`; their
+  JSON error bodies are decoded too.
+- Bodies: JSON models; forms with the spec's `encoding`; multipart parts as a
+  class (`UploadPhotoRequest`) whose binary properties are `FileUpload`s
+  (`FileUpload.bytes`, which works on the web, or `FileUpload.stream`, which
+  Dio's browser adapter buffers); the parts are sent in the order of the
+  schema, so a text part after a file or a typed part carries
+  `Content-Type: text/plain; charset=utf-8` (a text part before them has
+  none); a part whose `encoding` names a list or a wildcard of media types is
+  sent with one concrete type (TOA661), and an object part that is not JSON
+  is a `String` you supply (TOA662); a binary body is a `FileUpload`. Event
+  streams come with M10 (TOA654).
+- The client never changes your Dio: set the base URL there, from the root
+  class's server constants (`PetstoreClient.server`, or a method such as
+  `PetstoreClient.server1(region: 'eu')` for a URL with variables). When the
+  query holds `//` (an `allowReserved` value) and the base URL is absolute,
+  the runtime joins them itself, because Dio would collapse the `//`; a
+  relative base URL is left to Dio, which then collapses it.
+- Every request carries an `OperationInfo` in `RequestOptions.extra`
+  (`OperationInfo.of(options)`): the `operationId`, tags and the security
+  requirements with their schemes, for an interceptor that adds credentials.
+
 `generate` writes each output directory as a whole. It builds the new tree and
 a manifest (`.typed_openapi.json`: the generator, the manifest format, a hash
 of the inputs and the hash of every file) next to the output and swaps it in,
 so a failed run leaves the previous output (or nothing) and never a half tree.
 A run that would change nothing does not touch the directory.
+
+An output written by the models-only generator (before operations) upgrades
+in place: the next run writes the API files and keeps the models, with no
+`--force`. A file of your own in it whose name the full client now uses
+(`api.dart`, `<client>.dart`, in any letter case) is refused with `TOA830`
+like any other foreign file.
 
 **It replaces only what it wrote.** A file that the previous manifest lists
 and whose hash still matches is replaced or deleted. Any other file in the
@@ -189,6 +259,7 @@ generate and how in `defaults` or per client:
 ```yaml
 defaults:
   naming:
+    client: PetstoreClient       # root client class; default: client name + Client
     group: '{Tag}Api'            # class per tag; group_by: tag|path|single
     patch_suffix: Patch          # PetPatch: PATCH body of a schema used elsewhere too
     operation_prefix: '^v1_'     # removed from operationIds (nestjs: XController_)
@@ -224,13 +295,13 @@ Other things `check` tells you instead of guessing: a client that generates
 no operation (everything filtered out, written as `$ref`, or with a path
 variable without a parameter) is a warning `TOA563` that says why; a body
 with a media type that is not JSON, a form, text or an event stream is sent
-and read as bytes without its schema (info `TOA561`, which also names the
-other media types of an operation that are dropped); an
+and read as bytes without its schema (info `TOA650`; the other media types
+of an operation that are dropped are info `TOA651`); an
 `errors.default_schema` that is not a key of `components.schemas` is a
-warning `TOA562` and is ignored; a parameter `style` that its `in` does not
+warning `TOA652` and is ignored; a parameter `style` that its `in` does not
 allow (path `form`, query `matrix`, ...) is a warning `TOA564` and the default
-style is used, and an `in: querystring` parameter (OpenAPI 3.2) is `TOA564`
-too and is not generated. Header parameters named `Accept`, `Content-Type`
+style is used, and an `in: querystring` parameter (OpenAPI 3.2) is a warning
+`TOA565` and is not generated. Header parameters named `Accept`, `Content-Type`
 or `Authorization` are not generated, as OpenAPI says to ignore them.
 
 Every finding has a stable code (`TOA011`), a JSON pointer into the spec and,

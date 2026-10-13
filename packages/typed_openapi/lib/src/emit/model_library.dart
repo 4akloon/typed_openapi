@@ -55,12 +55,12 @@ final class ModelLibrary {
           UnionEmitter(codec).write(decl, body);
       }
       final out = DartWriter(width);
-      _writeHeader(out);
+      writeHeader(out);
       imports.write(out);
       files['$directory/$file'] = '${out.text}${body.text}';
     }
     final exports = DartWriter(width);
-    _writeHeader(exports);
+    writeHeader(exports);
     final paths = files.keys.toList()..sort();
     for (final path in paths) {
       exports.line('export ${_code.string(path)};');
@@ -74,13 +74,13 @@ final class ModelLibrary {
     final scope = NameScope(reserved: const {}, reservedSuffix: '');
     return {
       for (final declaration in ir.declarations)
-        declaration.id: '${scope.claim(_snake(declaration.name)).$1}.dart',
+        declaration.id: '${scope.claim(snake(declaration.name)).$1}.dart',
     };
   }
 
   /// [name] in lower snake case; a name that does not start with a letter
   /// gets `type_` in front, as Dart file names must.
-  static String _snake(String name) {
+  static String snake(String name) {
     final snake = _names.words(name).map((w) => w.toLowerCase()).join('_');
     return snake.startsWith(RegExp('[a-z]')) ? snake : 'type_$snake';
   }
@@ -88,7 +88,7 @@ final class ModelLibrary {
   static const _code = DartCode();
 
   /// Writes [header] and an empty line.
-  static void _writeHeader(DartWriter out) {
+  static void writeHeader(DartWriter out) {
     header.trimRight().split('\n').forEach(out.line);
     out.line();
   }

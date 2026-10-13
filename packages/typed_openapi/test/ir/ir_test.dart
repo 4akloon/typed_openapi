@@ -166,6 +166,7 @@ void main() {
   "groups": [
     {
       "name": "PetsApi",
+      "field": "api",
       "operations": [
         {
           "name": "getPet",
@@ -193,7 +194,11 @@ void main() {
         }
       ]
     }
-  ]
+  ],
+  "root": {
+    "name": "ApiClient",
+    "servers": []
+  }
 }''');
   });
 }

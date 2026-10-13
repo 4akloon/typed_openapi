@@ -609,18 +609,15 @@ paths:
       'typed_openapi.yaml',
       'clients:\n  api: {input: api.yaml, output: lib/api}\n',
     );
-    final (code, out, _) = await run([
-      'ir',
-      '-c',
-      path,
-    ], workingDirectory: dir.path);
-    expect(code, 0);
-    expect(jsonDecode(out), {
+    final ir = await run(['ir', '-c', path], workingDirectory: dir.path);
+    expect(ir.$1, 0);
+    expect(jsonDecode(ir.$2), {
       'api': {
         'declarations': <Object?>[],
         'groups': [
           {
             'name': 'PetsApi',
+            'field': 'pets',
             'operations': [
               {
                 'name': 'listPets',
@@ -632,10 +629,13 @@ paths:
                   {'status': '204', 'kind': 'none'},
                 ],
                 'errors': 'Never',
+                'operationId': 'listPets',
+                'tags': ['pets'],
               },
             ],
           },
         ],
+        'root': {'name': 'ApiClient', 'servers': <Object?>[]},
       },
     });
     final (_, help, _) = await run(['help']);

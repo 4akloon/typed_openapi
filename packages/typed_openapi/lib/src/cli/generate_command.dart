@@ -11,14 +11,15 @@ import '../config/project_config.dart';
 import '../diagnostics/diagnostic_bag.dart';
 import '../diagnostics/display_paths.dart';
 import '../diagnostics/reporters.dart';
-import '../emit/model_library.dart';
+import '../emit/api_library.dart';
 import '../generate/output_writer.dart';
 import '../generate/real_paths.dart';
+import '../ir/ir.dart';
 import 'check_command.dart';
 
 /// `typed_openapi generate`: checks every client as `check` does and
-/// writes the models of each client without errors into its output
-/// directory (M8; operations come with M9).
+/// writes each client without errors into its output directory: the
+/// models, the API classes and the root client (M8, M9).
 ///
 /// A client whose check reports an error, including an overrides file that
 /// cannot be used, is skipped; so is one whose output directory the
@@ -63,7 +64,7 @@ final class GenerateCommand extends Command<int> {
 
   @override
   String get description =>
-      'Check specs and generate the models of clients without errors.';
+      'Check specs and generate the clients without errors.';
 
   @override
   String get invocation =>
@@ -115,7 +116,7 @@ final class GenerateCommand extends Command<int> {
           );
           continue;
         }
-        final files = ModelLibrary(width: client.lineWidth).files(ir);
+        final files = _files(client, ir);
         final changes = writer.write(
           client,
           files,
@@ -143,6 +144,10 @@ final class GenerateCommand extends Command<int> {
         ? CheckCommand.exitHasErrors
         : ExitCode.success.code;
   }
+
+  /// The files of the whole client [client] with the IR [ir].
+  static Map<String, String> _files(ClientConfig client, ClientIr ir) =>
+      ApiLibrary(width: client.lineWidth).files(ir, client: client.name);
 
   /// The names of the clients whose output directory is, or is inside, that
   /// of another client, also through symbolic links or a different case.

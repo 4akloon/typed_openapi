@@ -421,7 +421,7 @@ paths:
         [for (final p in ir.groups.single.operations.single.parameters) p.name],
         ['q'],
       );
-      final found = reported(fixture, .parameterStyleInvalid).single;
+      final found = reported(fixture, .querystringNotGenerated).single;
       expect(found.pointer?.value, '#/paths/~1a/get/parameters/0');
       expect(found.message, contains('querystring'));
       expect(found.message, contains('not generated'));
@@ -542,7 +542,7 @@ operations:
     });
   });
 
-  group('media types (TOA561)', () {
+  group('media types (TOA650, TOA651)', () {
     const xml = r'''
 openapi: 3.1.0
 info: {title: t, version: "1"}
@@ -629,7 +629,7 @@ paths:
         ir.groups.single.operations.single.body?.contentType,
         'application/json',
       );
-      final found = reported(fixture, .mediaTypeAsBytes);
+      final found = reported(fixture, .mediaTypesDropped);
       expect(
         found.single.pointer?.value,
         '#/paths/~1a/post/requestBody/content',
@@ -667,7 +667,7 @@ paths:
             application/json; profile="Pascal": {schema: {type: object}}
 ''');
       build(fixture);
-      final found = reported(fixture, .mediaTypeAsBytes);
+      final found = reported(fixture, .mediaTypesDropped);
       // The 200 response has only JSON variants (`text/json` too): nothing
       // is dropped. The 201 response drops the XML.
       expect(found.map((d) => d.pointer?.value), [
@@ -705,7 +705,7 @@ paths:
           .child('default_schema'),
     );
 
-    test('a key that is not in components.schemas is TOA562, ignored', () {
+    test('a key that is not in components.schemas is TOA652, ignored', () {
       final fixture = IrFixture(
         '''
 openapi: 3.1.0

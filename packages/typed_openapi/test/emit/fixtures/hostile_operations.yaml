@@ -1,0 +1,165 @@
+openapi: 3.1.0
+info: {title: "t */ injected", version: "1"}
+servers:
+  - url: "https://x.example.com/'; injected(); '/{v}/{missing}"
+    description: "*/ injected() /* {@macro x}"
+    variables:
+      v: {default: "'$x\n injected", enum: ["a'b", "‮"]}
+      class: {description: "Line\ninjected();"}
+security: [{"k'ey": ["scope'\n injected"]}]
+paths:
+  "/a/{id}/'$x":
+    get:
+      operationId: "get\ninjected(); //"
+      summary: "Line one\n*/ injected() /* {@macro x} ‮"
+      description: "[link] <b> $dollar \\ `code` ``` fence"
+      tags: ["Pets\n injected", other]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+        - {name: class, in: query, schema: {type: string, default: "*/ injected"}, description: "*/ injected()"}
+        - {name: body, in: query, schema: {type: string}}
+        - {name: call, in: header, schema: {type: string}}
+        - {name: "X-'$y\ninjected", in: header, schema: {type: string}}
+        - {name: e, in: query, schema: {type: string, enum: []}}
+        - {name: jsonEncode, in: query, required: true, content: {application/json: {schema: {type: string}}}}
+        - {name: base64Encode, in: query, schema: {type: string, format: byte}}
+        - {name: needed, in: query, required: true, schema: {type: integer, default: 7}, description: "```\n{@youtube 560 315 https://x.example/v}\n```"}
+        - {name: big, in: cookie, schema: {type: integer, enum: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]}}
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Response'}}}}
+        "4XX": {description: bad, content: {application/json: {schema: {$ref: '#/components/schemas/Options'}}}}
+        "5XX": {description: down, content: {application/json: {schema: {$ref: '#/components/schemas/Headers'}}}}
+        "200'; injected(); '": {description: x, content: {application/json: {schema: {type: object, properties: {h: {type: string}}}}}}
+        "3XX": {description: moved, content: {application/json: {schema: {type: object, properties: {m: {type: string}}}}}}
+  /b:
+    post:
+      operationId: "$dollar"
+      tags: [class]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/Node'}}}
+      responses:
+        "201": {description: x, content: {application/json: {schema: {oneOf: [{type: string}, {type: integer}]}}}}
+        "202": {description: y, content: {application/json: {schema: {$ref: '#/components/schemas/Node'}}}}
+        "404": {description: z, content: {application/json: {schema: {$ref: '#/components/schemas/Dio'}}}}
+        "500": {description: "*/ injected"}
+        "4'; injected(); '": {description: x, content: {application/json: {schema: {type: object, properties: {e: {type: string}}}}}}
+  /c:
+    put:
+      operationId: toString
+      tags: [class]
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                "*/ injected": {type: string, format: binary}
+                toParts: {type: string}
+                hashCode: {type: integer}
+                any: {}
+                jsonEncode: {type: object, properties: {a: {type: string}}}
+                base64Encode: {type: string, format: byte}
+                list: {type: array, items: {$ref: '#/components/schemas/Node'}}
+                blob: {type: string, format: byte}
+      responses:
+        "204": {description: ok}
+  /d:
+    get:
+      operationId: anonymous
+      tags: [anon]
+      security: [{}]
+      parameters:
+        - {name: j, in: query, content: {application/json: {schema: {type: object, properties: {a: {type: string}}}}}}
+        - {name: jv, in: query, content: {application/json: {schema: {}}}}
+        - {name: jr, in: query, required: true, content: {application/json: {schema: {$ref: '#/components/schemas/Node'}}}}
+        - {name: f, in: header, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Node'}}}}}
+        - {name: g, in: cookie, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Node'}}}}}
+      responses:
+        "200": {description: ok, content: {application/json: {schema: {$ref: '#/components/schemas/Maybe'}}}}
+    post:
+      operationId: optionalBodies
+      tags: [anon]
+      security: [{}]
+      requestBody:
+        content:
+          multipart/form-data:
+            schema: {oneOf: [{$ref: '#/components/schemas/Node'}, {type: string}]}
+      responses: {"204": {description: ok}}
+    put:
+      operationId: optionalForm
+      tags: [anon]
+      security: [{}]
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema: {type: [object, 'null'], properties: {a: {type: string}}}
+      responses: {"204": {description: ok}}
+  /undefined-security:
+    get:
+      operationId: undefinedSecurity
+      tags: [other]
+      security: [{missing: [read]}]
+      responses: {"204": {description: ok}}
+  /names/jsonEncode:
+    get:
+      operationId: jsonEncode
+      description: A method named like a function or a type the group's other methods use.
+      tags: ["Pets\n injected"]
+      responses:
+        "204": {description: ok}
+  /names/base64Encode:
+    get:
+      operationId: base64Encode
+      description: A method named like a function or a type the group's other methods use.
+      tags: ["Pets\n injected"]
+      responses:
+        "204": {description: ok}
+  /names/int:
+    get:
+      operationId: int
+      description: A method named like a function or a type the group's other methods use.
+      tags: ["Pets\n injected"]
+      responses:
+        "204": {description: ok}
+  /names/bool:
+    get:
+      operationId: bool
+      description: A method named like a function or a type the group's other methods use.
+      tags: ["Pets\n injected"]
+      responses:
+        "204": {description: ok}
+  /names/double:
+    get:
+      operationId: double
+      description: A method named like a function or a type the group's other methods use.
+      tags: ["Pets\n injected"]
+      responses:
+        "204": {description: ok}
+  /names/num:
+    get:
+      operationId: num
+      description: A method named like a function or a type the group's other methods use.
+      tags: ["Pets\n injected"]
+      responses:
+        "204": {description: ok}
+components:
+  securitySchemes:
+    "k'ey": {type: apiKey, name: "X-'$k", in: header}
+  schemas:
+    Response: {type: object, properties: {a: {type: string}}}
+    Options: {type: object, properties: {b: {type: string}}}
+    Headers: {type: object, properties: {c: {type: string}}}
+    Dio: {type: object, properties: {d: {type: string}}}
+    Maybe:
+      oneOf:
+        - $ref: '#/components/schemas/NullableNode'
+        - {type: string}
+    NullableNode:
+      type: [object, 'null']
+      properties: {a: {type: string}}
+    Node:
+      type: object
+      properties:
+        next: {$ref: '#/components/schemas/Node'}
+        value: {type: string}

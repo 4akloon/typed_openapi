@@ -1,6 +1,20 @@
 ## 0.0.1 - Unreleased
 
 ### Added
+- Operations (M9): an API class per group in `api/` (`PetsApi(Dio dio)`, a
+  plain class that `implements` can mock), the barrel `api.dart` and the
+  root client in `<client>.dart` (`PetstoreClient(Dio dio)` with a field per
+  group, the servers as constants or methods of their variables), which
+  exports the models and the API. Methods take named arguments, `body` and
+  `CallOptions? call`, and return `Future<Result<T, E>>`: JSON, text and
+  binary successes, sealed types for several successes or errors with
+  different bodies, envelopes, typed errors, `UndocumentedStatus`; bodies
+  are JSON, forms with their `encoding`, multipart parts with `FileUpload`
+  files, binary `FileUpload`s and text. A multipart text part sent after a
+  file or a typed part now has `Content-Type: text/plain; charset=utf-8`
+  (before, such a part could be sent before the files, out of the schema's
+  order). Every request carries its
+  `OperationInfo` with tags and security metadata.
 - Models (M8): `generate` writes the models of every client without check
   errors into its `output` directory: a file per model, enum and union in
   `models/` and the barrel `models.dart`. Every file starts with
@@ -158,20 +172,83 @@
   - TOA560 override-name-invalid (warning): an override `name` or `group` is
     not a valid Dart name; the name made from it is used, or the override is
     ignored when nothing is left.
-  - TOA561 media-type-as-bytes (info): a body whose media type is not JSON, a
-    form, `multipart/form-data`, `text/*` or `text/event-stream` is bytes
-    and its schema is not used; also names the media types of an operation
-    that are dropped for the chosen one (variants of the chosen media type
-    and other JSON types are not reported).
-  - TOA562 default-error-schema-missing (warning): `errors.default_schema` is
-    not a key of `components.schemas`; the setting is ignored.
   - TOA563 client-empty (warning): no operation of the client is generated
     (filtered out, written as `$ref`, or an unbound path variable).
   - TOA564 parameter-style-invalid (warning): a parameter `style` that its
     `in` does not allow (path: `simple`, `label`, `matrix`; query: `form`,
     `spaceDelimited`, `pipeDelimited`, `deepObject`; header: `simple`;
-    cookie: `form`, `cookie`) falls back to the default style of the placement; an
-    `in: querystring` parameter (OpenAPI 3.2) is not generated.
+    cookie: `form`, `cookie`) falls back to the default style of the
+    placement; also a form property's `encoding` style.
+  - TOA565 querystring-not-generated (warning): an `in: querystring`
+    parameter (OpenAPI 3.2) is not generated (TOA564 before M9).
+  - TOA566 operation-servers-ignored (warning): a path item or operation has
+    its own `servers`; requests go to the Dio base URL.
+  - TOA567 callbacks-not-generated (info): `callbacks` of an operation and
+    the document's `webhooks` are not generated.
+  - TOA568 security-scheme-unknown (warning): a security requirement names
+    a scheme `components.securitySchemes` does not have or defines without a
+    usable type; its alternative is
+    left out of the metadata when another one can be described, else the
+    scheme has the kind `unknown`, so no operation reads as open. A
+    requirement that is not an object (`security: ["bearer"]`, `[null]`) is
+    the same, next to its TOA111.
+  - TOA650 media-type-as-bytes (info): a body whose media type is not JSON, a
+    form, `multipart/form-data`, `text/*` or `text/event-stream`, or a form
+    or multipart response, is bytes and its schema is not used (TOA561
+    before M9).
+  - TOA651 media-types-dropped (info): the media types of a body, response
+    or parameter that are dropped for the chosen one (variants of the chosen
+    media type and other JSON types are not reported; TOA561 before M9).
+  - TOA652 default-error-schema-missing (warning): `errors.default_schema` is
+    not a key of `components.schemas`; the setting is ignored (TOA562 before
+    M9).
+  - TOA653 success-undocumented (warning): no 2xx response; any 2xx is a
+    success with the body as `JsonValue`.
+  - TOA654 event-stream-not-generated (warning): an operation whose success
+    is `text/event-stream` is not generated until M10.
+  - TOA655 multipart-not-object (warning): a multipart body that is not an
+    object with properties has no class of parts.
+  - TOA656 encoding-headers-ignored (info): the `headers` of the `encoding`
+    of a multipart part or a form property are not sent.
+  - TOA657 response-status-invalid (warning): a key of `responses` that is
+    not an HTTP status (a code 100-599, a range `1XX`-`5XX` or `default`), or
+    repeats another key in a different case; the response is not generated.
+  - TOA658 response-status-not-generated (info): a documented 1xx or 3xx
+    response is not generated; at run time the status is undocumented, or
+    handled by the `default` response when the operation has one.
+  - TOA659 encoding-key-unknown (warning): an `encoding` key of a form or
+    multipart body names no property of its schema; the entry is ignored. A
+    schema that lists no properties is free-form and is not checked.
+  - TOA660 default-value-invalid (warning): a parameter's `default` does not
+    fit its `enum` or `format` (`date`, `date-time`, `uuid`, `int32`); it is
+    not documented as the default (a lower-case `t` or `z` of a `date-time`
+    is valid, as RFC 3339 says).
+  - TOA661 part-media-type-chosen (info): the `contentType` of the `encoding`
+    of a multipart part is a list (`image/png, image/jpeg`), a wildcard
+    (`image/*`) or no media type; the part is sent with one concrete type
+    (the file's own when it has one, else the first concrete type, else
+    `application/octet-stream` for a file and none for text).
+  - TOA662 part-media-type-not-json (warning): an object part whose
+    `contentType` is not JSON (`application/xml`) is a `String` the caller
+    supplies, sent with that media type; it used to make every call throw.
+  - Renamed parts, group fields, server members, server variables and root
+    client names (also one that gets the `Api` prefix because it starts with
+    a digit) are reported (TOA550, TOA551, TOA552, TOA559); a method named `jsonEncode`,
+    `base64Encode`, `int`, `bool`, `double` or `num` gets a suffix (TOA550).
+- The IR names what the API emitter declares, after the models (which never
+  move): the root client (`naming.client`, else the client name with
+  `Client`), the sealed types of successes and errors with variants named by
+  the HTTP reason phrase (`CreatePetErrorNotFound`, `…ClientError` for
+  `4XX`, `…Other` for `default`, `…Status499`; the plural `GetPetErrors`
+  when the operation's own inline body is `GetPetError`, any other name
+  taken gets a suffix, TOA551), the classes of multipart parts
+  (`UploadRequest`), the group fields and the servers of the root client;
+  and it keeps security requirements with their schemes.
+- An `apiKey` security scheme without `in` is TOA112, as one without `name`.
+- Schemas named `Dio` or like the runtime's new names (`FileUpload`,
+  `FormBody`, `MultipartBody`, `SecurityScheme`, ...) get the `Model` suffix
+  (TOA550); `Response`, `Options` and `Headers` keep their names, because the
+  API files import only `Dio` from `package:dio`.
 - An `allOf` parent that an override excludes is still merged into the flat
   child: the exclude only removes the parent's own declaration, and TOA254
   (info) says so.

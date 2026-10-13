@@ -1,0 +1,43 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND.
+// dart format off
+
+import 'package:dio/dio.dart' show Dio;
+
+import 'api/default_api.dart';
+import 'api/pets_api.dart';
+import 'api/store_api.dart';
+
+export 'api.dart';
+export 'models.dart';
+
+/// The client of the API: a field for each group of operations, and the servers
+/// of the spec. Set the base URL on your Dio.
+class ApiClient {
+  /// Creates the client: every group sends through [dio], which it uses as it
+  /// is.
+  ApiClient(Dio dio)
+    : defaultApi = DefaultApi(dio),
+      pets = PetsApi(dio),
+      store = StoreApi(dio);
+
+  /// The operations of [DefaultApi].
+  final DefaultApi defaultApi;
+
+  /// The operations of [PetsApi].
+  final PetsApi pets;
+
+  /// The operations of [StoreApi].
+  final StoreApi store;
+
+  /// `https://{region}.pets.example.com/v1`.
+  ///
+  /// Production.
+  ///
+  /// [region], one of `"eu"`, `"us"`:
+  /// The region.
+  static String server1({String region = 'eu'}) =>
+      ['https://', region, '.pets.example.com/v1'].join();
+
+  /// `http://localhost:8080`.
+  static const server2 = 'http://localhost:8080';
+}

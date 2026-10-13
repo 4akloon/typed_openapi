@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../model/spec_node.dart';
 import 'dart_type.dart';
 import 'ir.dart';
+import 'ir_operation_json.dart';
 
 /// Writes a [ClientIr] as JSON, to inspect what the generator will emit.
 ///
@@ -22,6 +23,7 @@ final class IrJson {
   /// [ir] as plain JSON values.
   Map<String, Object?> toJson(ClientIr ir) {
     String type(DartType t) => t.code(ir.nameOf);
+    final operations = IrOperationJson(_at, type);
     return {
       'declarations': [
         for (final d in ir.declarations) _declaration(d, type),
@@ -30,12 +32,14 @@ final class IrJson {
         for (final group in ir.groups)
           {
             'name': group.name,
+            'field': group.field,
             'operations': [
               for (final operation in group.operations)
-                _operation(operation, type),
+                operations.operation(operation),
             ],
           },
       ],
+      'root': operations.root(ir.root),
     };
   }
 
@@ -64,10 +68,12 @@ final class IrJson {
               if (f.triState) 'triState': true,
               if (f.readOnly) 'readOnly': true,
               if (f.writeOnly) 'writeOnly': true,
+              if (f.sensitive) 'sensitive': true,
             },
         ],
         if (d.additionalProperties case final extra?)
           'additionalProperties': type(extra),
+        if (d.additionalSensitive) 'additionalSensitive': true,
       },
       EnumDecl() => {
         'kind': 'enum',
@@ -85,52 +91,11 @@ final class IrJson {
               'type': type(v.type),
               if (v.discriminatorValues.isNotEmpty)
                 'values': v.discriminatorValues,
+              if (v.sensitive) 'sensitive': true,
             },
         ],
         if (d.defaultVariant case final variant?) 'default': type(variant),
-      },
-    },
-  };
-
-  Map<String, Object?> _operation(
-    OperationIr o,
-    String Function(DartType) type,
-  ) => {
-    'name': o.name,
-    'method': o.method,
-    'path': o.path,
-    'at': _at(o.location),
-    'parameters': [
-      for (final p in o.parameters)
-        {
-          'name': p.name,
-          'in': p.placement.name,
-          'wire': p.wireName,
-          'type': type(p.type),
-          if (p.required) 'required': true,
-        },
-    ],
-    if (o.body case final body?)
-      'body': {
-        'kind': body.kind.name,
-        'contentType': ?body.contentType,
-        if (body.type case final t?) 'type': type(t),
-        if (body.required) 'required': true,
-      },
-    'responses': [
-      for (final r in o.responses)
-        {
-          'status': r.status,
-          'kind': r.kind.name,
-          if (r.type case final t?) 'type': type(t),
-          'envelope': ?r.envelopeKey,
-        },
-    ],
-    'errors': switch (o.errors) {
-      NoErrors() => 'Never',
-      SingleError(type: final t) => type(t),
-      ErrorsByStatus(:final cases) => {
-        for (final (status, t) in cases) status: t == null ? null : type(t),
+        if (d.unknownSensitive) 'unknownSensitive': true,
       },
     },
   };

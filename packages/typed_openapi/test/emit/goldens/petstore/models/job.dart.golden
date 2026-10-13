@@ -1,0 +1,32 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND.
+// dart format off
+
+import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'
+    show DeepEquality, JsonReader, immutable;
+
+@immutable
+class Job {
+  /// Creates a [Job].
+  const Job({this.id});
+
+  /// Decodes a [Job] from [json]; throws a `JsonDecodeException` when it does
+  /// not match the schema.
+  factory Job.fromJson(Map<String, Object?> json) {
+    final r = JsonReader(json, schema: 'Job');
+    return Job(id: r.optional('id', JsonReader.asString));
+  }
+
+  final String? id;
+
+  /// Encodes this [Job]; optional fields that are not set are not sent.
+  Map<String, Object?> toJson() => {'id': ?id};
+
+  @override
+  bool operator ==(Object other) => other is Job && other.id == id;
+
+  @override
+  int get hashCode => const DeepEquality().hash([id]);
+
+  @override
+  String toString() => 'Job(id: $id)';
+}

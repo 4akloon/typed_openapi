@@ -1,0 +1,150 @@
+openapi: 3.1.0
+info: {title: Wire, version: "1"}
+paths:
+  /helpers:
+    post:
+      operationId: helpers
+      tags: [wire]
+      description: Parameters and parts named like the functions the generated code calls.
+      parameters:
+        - {name: jsonEncode, in: query, required: true, content: {application/json: {schema: {type: string}}}}
+        - {name: base64Encode, in: query, schema: {type: string, format: byte}}
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                jsonEncode: {type: object, properties: {a: {type: string}}}
+                base64Encode: {type: string, format: byte}
+      responses:
+        "204": {description: ok}
+  /profile:
+    post:
+      operationId: sendProfile
+      tags: [wire]
+      description: Parts whose encoding names several media types, a wildcard or XML.
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [history]
+              properties:
+                avatar: {type: string, format: binary}
+                scan: {type: string, format: binary}
+                meta: {type: object, properties: {a: {type: string}}}
+                history: {type: object, properties: {b: {type: string}}}
+                rows: {type: string}
+                note: {type: string}
+            encoding:
+              avatar: {contentType: "image/png, image/jpeg"}
+              scan: {contentType: "image/*"}
+              meta: {contentType: "application/xml, application/json"}
+              history: {contentType: "application/xml; charset=utf-8"}
+              rows: {contentType: "text/csv, text/plain"}
+              note: {contentType: "text/*"}
+      responses:
+        "204": {description: ok}
+  /strings:
+    post:
+      operationId: sendString
+      tags: [wire]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: string}}}
+      responses:
+        "204": {description: ok}
+    put:
+      operationId: sendEnum
+      tags: [wire]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/Color'}}}
+      responses:
+        "204": {description: ok}
+    patch:
+      operationId: sendAny
+      tags: [wire]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {}}}
+      responses:
+        "204": {description: ok}
+  /nullable:
+    post:
+      operationId: sendNullable
+      tags: [wire]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: [string, 'null']}}}
+      responses:
+        "204": {description: ok}
+  /optional:
+    post:
+      operationId: sendOptional
+      tags: [wire]
+      requestBody:
+        content: {application/json: {schema: {type: string}}}
+      responses:
+        "204": {description: ok}
+    put:
+      operationId: sendOptionalText
+      tags: [wire]
+      requestBody:
+        content: {text/plain: {schema: {type: string}}}
+      responses:
+        "204": {description: ok}
+    patch:
+      operationId: sendOptionalBytes
+      tags: [wire]
+      requestBody:
+        content: {application/octet-stream: {schema: {type: string, format: binary}}}
+      responses:
+        "204": {description: ok}
+  /report:
+    get:
+      operationId: getReport
+      tags: [wire]
+      responses:
+        "200":
+          description: ok
+          content: {application/json: {schema: {$ref: '#/components/schemas/Report'}}}
+        "404":
+          description: A file.
+          content: {application/octet-stream: {schema: {type: string, format: binary}}}
+        "409":
+          description: A sentence.
+          content: {text/plain: {schema: {type: string}}}
+        "422":
+          description: A document.
+          content: {application/xml: {schema: {type: string}}}
+  /single:
+    get:
+      operationId: getSingle
+      tags: [wire]
+      responses:
+        "200":
+          description: ok
+          content: {application/json: {schema: {$ref: '#/components/schemas/Report'}}}
+        "400":
+          description: A sentence.
+          content: {text/plain: {schema: {type: string}}}
+        "500":
+          description: A JSON string.
+          content: {application/json: {schema: {type: string}}}
+  /textjson:
+    get:
+      operationId: getTextJson
+      tags: [wire]
+      responses:
+        "200":
+          description: ok
+          content: {application/json: {schema: {$ref: '#/components/schemas/Report'}}}
+        "400":
+          description: A model sent as text/json.
+          content: {text/json: {schema: {$ref: '#/components/schemas/Report'}}}
+components:
+  schemas:
+    Report: {type: object, properties: {id: {type: string}}}
+    Color: {type: string, enum: [red, green]}

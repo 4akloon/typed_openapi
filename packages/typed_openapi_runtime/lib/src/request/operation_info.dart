@@ -1,5 +1,7 @@
 import 'package:dio/dio.dart';
 
+import 'security.dart';
+
 /// What a request is: the operation of the spec it calls.
 ///
 /// The request sender puts it into `RequestOptions.extra` under
@@ -12,6 +14,7 @@ final class OperationInfo {
     required this.method,
     required this.pathTemplate,
     this.tags = const [],
+    this.security = const [],
   });
 
   /// The key of this object in the `extra` map of a request.
@@ -29,6 +32,13 @@ final class OperationInfo {
 
   /// The tags of the operation in spec order.
   final List<String> tags;
+
+  /// The security requirements of the operation (its own `security`, else
+  /// the document's): any one of the alternatives is enough, and every
+  /// scheme of an alternative is needed. An empty alternative makes
+  /// security optional; no alternatives mean no security. The client only
+  /// describes them: interceptors add the credentials.
+  final List<List<SecurityUse>> security;
 
   /// The operation of a request, or `null` for a request a generated
   /// client did not send.

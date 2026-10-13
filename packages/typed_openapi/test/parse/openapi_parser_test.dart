@@ -87,7 +87,9 @@ components:
 ''');
     expect(doc.info!.title, 'Pets');
     expect(doc.tags.single.description, 'No name.');
+    // An apiKey scheme needs `name` and `in`.
     expect(fixture.codes, [
+      DiagnosticCode.missingRequiredField,
       DiagnosticCode.missingRequiredField,
       DiagnosticCode.missingRequiredField,
       DiagnosticCode.missingRequiredField,
@@ -95,6 +97,7 @@ components:
     ]);
     expect(fixture.pointers, [
       '#/info',
+      '#/components/securitySchemes/key',
       '#/components/securitySchemes/key',
       '#/tags/0',
       '#/host',

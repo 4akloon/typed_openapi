@@ -1,4 +1,7 @@
 import '../params/parameters.dart';
+import 'file_upload.dart';
+import 'form_body.dart';
+import 'multipart_body.dart';
 import 'operation_info.dart';
 
 /// How the response body is read, by the content type of the spec.
@@ -44,11 +47,17 @@ final class OperationRequest {
   /// The cookie parameters, sent in one `Cookie` header in this order.
   final List<CookieParameter> cookies;
 
-  /// The body as the HTTP client sends it: a JSON value (`toJson()`), form
-  /// text, bytes; `null` for no body.
+  /// The body: a JSON value (`toJson()`, also a string, a number or a
+  /// boolean), text, a [FormBody], a [MultipartBody] or a [FileUpload];
+  /// `null` for no body. The request sender writes a string or `null` as
+  /// JSON text (the HTTP client would get them wrong), leaves a map, list,
+  /// number or boolean to the HTTP client's JSON encoding and turns the
+  /// other bodies into what the HTTP client sends.
   final Object? body;
 
-  /// The `Content-Type` of [body].
+  /// The `Content-Type` of [body]; `null` for no body. A `null` [body] with
+  /// a JSON content type is the JSON value `null`; with another content
+  /// type no `Content-Type` is sent.
   final String? contentType;
 
   /// How the response body is read.
@@ -67,7 +76,7 @@ final class OperationRequest {
   String resolvePath() {
     final values = {for (final p in path) p.name: p};
     final resolved = operation.pathTemplate.replaceAllMapped(
-      _placeholder,
+      pathVariable,
       (match) {
         final name = match[1]!;
         final parameter = values[name];
@@ -99,5 +108,8 @@ final class OperationRequest {
     };
   }
 
-  static final RegExp _placeholder = RegExp(r'\{([^{}]+)\}');
+  /// A variable of a path template: `{name}`, where the name has no brace.
+  /// The generator reads templates with the same pattern, so an operation
+  /// it generates has a parameter for every variable this finds.
+  static final RegExp pathVariable = RegExp(r'\{([^{}]*)\}');
 }

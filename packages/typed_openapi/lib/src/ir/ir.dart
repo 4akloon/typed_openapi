@@ -1,6 +1,9 @@
 import '../model/operation.dart';
 import '../model/spec_node.dart';
+import 'api_ir.dart';
 import 'dart_type.dart';
+
+export 'api_ir.dart';
 
 /// The semantic IR of one client: what the emitters print, with Dart names
 /// and types already chosen.
@@ -11,6 +14,7 @@ final class ClientIr {
   ClientIr({
     required List<Declaration> declarations,
     required List<GroupIr> groups,
+    this.root = const RootIr('ApiClient'),
   }) : declarations = List.unmodifiable(
          declarations.toList()..sort((a, b) => a.name.compareTo(b.name)),
        ),
@@ -23,6 +27,9 @@ final class ClientIr {
 
   /// The API classes, by name.
   final List<GroupIr> groups;
+
+  /// The root client class.
+  final RootIr root;
 
   late final Map<DeclId, Declaration> _byId = {
     for (final declaration in declarations) declaration.id: declaration,
@@ -466,13 +473,17 @@ final class UnionVariantIr {
 /// (R5.3).
 final class GroupIr {
   /// Creates a group; [operations] are sorted by name.
-  GroupIr(this.name, List<OperationIr> operations)
+  GroupIr(this.name, List<OperationIr> operations, {this.field = 'api'})
     : operations = List.unmodifiable(
         operations.toList()..sort((a, b) => a.name.compareTo(b.name)),
       );
 
   /// The Dart name of the class.
   final String name;
+
+  /// The name of the group's field in the root client (`pets` for
+  /// `PetsApi`).
+  final String field;
 
   /// The operations, by method name.
   final List<OperationIr> operations;
@@ -495,7 +506,37 @@ final class OperationIr {
     this.summary,
     this.description,
     this.deprecated = false,
+    this.security = const [],
+    this.successType,
+    this.errorType,
+    this.partsName,
   });
+
+  /// This operation with the names of the types the API emitter declares
+  /// for it, given after the declarations.
+  OperationIr withTypes({
+    StatusTypeIr? successType,
+    StatusTypeIr? errorType,
+    String? partsName,
+  }) => OperationIr(
+    location: location,
+    name: name,
+    method: method,
+    path: path,
+    parameters: parameters,
+    responses: responses,
+    errors: errors,
+    operationId: operationId,
+    tags: tags,
+    body: body,
+    summary: summary,
+    description: description,
+    deprecated: deprecated,
+    security: security,
+    successType: successType,
+    errorType: errorType,
+    partsName: partsName,
+  );
 
   /// Where the Operation Object is.
   final SpecLocation location;
@@ -537,6 +578,27 @@ final class OperationIr {
   /// `deprecated`.
   final bool deprecated;
 
+  /// The security requirements (R10.8): the operation's `security`, else
+  /// the document's. Any one alternative is enough; every scheme of an
+  /// alternative is needed; an empty alternative makes security optional.
+  final List<List<SecurityUseIr>> security;
+
+  /// The sealed type of the successes, when 2xx responses have different
+  /// bodies (decision 18 of M8). Without it the success type is the one
+  /// body type, `void` without a body, and `JsonValue` when no 2xx is
+  /// documented (TOA653).
+  final StatusTypeIr? successType;
+
+  /// The sealed type of the errors, for [ErrorsByStatus].
+  final StatusTypeIr? errorType;
+
+  /// The class of the parts of a multipart body ([RequestBodyIr.parts]).
+  final String? partsName;
+
+  /// The key of the operation in the overrides file: its `operationId`,
+  /// or `METHOD /path`.
+  String get overrideKey => operationId ?? '$method $path';
+
   /// The responses with a 2xx status.
   List<ResponseIr> get successes => [
     for (final response in responses)
@@ -560,6 +622,7 @@ final class ParameterIr {
     this.contentType,
     this.description,
     this.deprecated = false,
+    this.defaultValue,
   });
 
   /// The Dart name of the argument.
@@ -598,6 +661,11 @@ final class ParameterIr {
 
   /// `deprecated`.
   final bool deprecated;
+
+  /// `default` of the parameter's schema, as a one-element record: the
+  /// value the server uses when the argument is not sent. It is documented,
+  /// not sent.
+  final (Object?,)? defaultValue;
 }
 
 /// How a body is encoded.
@@ -634,6 +702,8 @@ final class RequestBodyIr {
     this.type,
     this.required = false,
     this.description,
+    this.encoding = const [],
+    this.parts,
   });
 
   /// How the body is encoded.
@@ -653,6 +723,17 @@ final class RequestBodyIr {
 
   /// `description`.
   final String? description;
+
+  /// The `encoding` of the properties of a form or multipart body, by
+  /// property name.
+  final List<EncodingIr> encoding;
+
+  /// The parts of a multipart body whose schema is an object: the
+  /// properties, each a field of a class of its own
+  /// ([OperationIr.partsName]) whose files are `FileUpload`s. Null for
+  /// other bodies and for a multipart body of another schema, whose [type]
+  /// is sent part by part from its JSON (TOA655).
+  final List<PartIr>? parts;
 }
 
 /// A response of an operation.
@@ -666,6 +747,7 @@ final class ResponseIr {
     this.type,
     this.envelopeKey,
     this.description,
+    this.sensitive = false,
   });
 
   /// The status as in the spec: a code, a range such as `4XX`, or
@@ -690,6 +772,11 @@ final class ResponseIr {
 
   /// `description`.
   final String? description;
+
+  /// Whether the body is a secret that must not be printed: `toString` of
+  /// the variant of a status type that holds it writes `<redacted>` (see
+  /// [FieldIr.sensitive]).
+  final bool sensitive;
 
   /// Whether the status is 2xx.
   bool get isSuccess => status.startsWith('2');
@@ -719,15 +806,19 @@ final class SingleError extends ErrorsIr {
   /// The body type of every error.
   final DartType type;
 
-  /// The documented error statuses.
+  /// The documented error statuses; empty means every 4xx and 5xx one.
   final List<String> statuses;
 }
 
 /// Errors with different body types: `E` is a sealed type by status.
 final class ErrorsByStatus extends ErrorsIr {
   /// Creates the errors.
-  const ErrorsByStatus(this.cases);
+  const ErrorsByStatus(this.cases, {this.sensitive = const {}});
 
   /// The body type of each status; null for a body-less status.
   final List<(String, DartType?)> cases;
+
+  /// The statuses of [cases] whose body is a secret (see
+  /// [ResponseIr.sensitive]).
+  final Set<String> sensitive;
 }

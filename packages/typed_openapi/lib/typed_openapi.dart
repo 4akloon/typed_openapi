@@ -42,6 +42,18 @@ export 'src/diagnostics/severity.dart' show Severity;
 export 'src/diagnostics/severity_levels.dart' show SeverityLevels;
 export 'src/emit/model_library.dart' show ModelLibrary;
 export 'src/generate/output_writer.dart' show OutputChanges, OutputWriter;
+export 'src/ir/api_ir.dart'
+    show
+        EncodingIr,
+        PartIr,
+        RootIr,
+        SecurityKind,
+        SecuritySchemeIr,
+        SecurityUseIr,
+        ServerIr,
+        ServerVariableIr,
+        StatusCaseIr,
+        StatusTypeIr;
 export 'src/ir/dart_type.dart'
     show
         CoreKind,

@@ -14,7 +14,7 @@ Date: 2026-10-11. Each stage is a separate plan in `superpowers/plans/`, and eac
 | M6 | Semantic IR and Dart mapping | Naming and collisions, inline schemas; filters and tree-shaking; required × nullable matrix; types and formats; `allOf`; envelopes; custom types and converters; tri-state rule | R4, R5, R6.1–R6.4, R6.8, R7.2 | M3, M4 |
 | M7 | Runtime | `ApiResult` and errors, `Patch<T>`, `JsonReader` with pointer, `JsonValue`, parameter style codecs, `sendRequest` on Dio, SSE decoder per WHATWG | R6.5, R7.1, R10.1–R10.3, R10.5, R11.2, R11.3, R11.7, R12.3 | — (in parallel with M2–M6) |
 | M8 | Model emitter | Classes (not `final`) with `fromJson`/`toJson`, deep `==`/`hashCode`, `toString` without secrets; open enum, union with unknown (discriminator, JSON type, `union: structural`), polymorphism via `allOf`, tri-state, constraints and values as doc comments, own code layout without `dart_style` (`// dart format off`), determinism, the `generate` command for models: atomic swap of the output directory and a file manifest. No `copyWith` | R6.5–R6.8, R7, R8, R9, R13 | M6, M7 |
-| M9 | Operation emitter and `generate` | Groups by tag, root client, parameters and bodies (JSON, multipart, form, binary), responses, typed errors, security metadata, servers; `generate` (which already writes models from M8) adds the operations | R5.3, R10.4, R10.6–R10.9, R11.1, R11.4–R11.6 | M8 |
+| M9 | Operation emitter and `generate` | Groups by tag, root client, parameters and bodies (JSON, multipart, form, binary), responses, typed errors, security metadata, servers; `generate` (which already writes models from M8) adds the operations. Plan: [2026-10-13-m9-operations.md](superpowers/plans/2026-10-13-m9-operations.md) | R5.3, R10.4, R10.6–R10.9, R11.1, R11.4–R11.6 | M8 |
 | M10 | SSE | Methods returning a `Stream` of events, schemas with `itemSchema`, `x-` or override, reconnection with `Last-Event-ID` | R12.1, R12.2, R12.4, R12.5 (R12.6 later) | M9, M7 |
 | M11 | Corpus and golden tests | Public specifications (Petstore, Stripe, GitHub, OpenAI, Kubernetes) compile and pass the analyzer; runtime decoding tests; matrix of SDK and formatter versions; fuzz of string escaping | R15.3, R15.4, R2.6 | M9 |
 | M12 | Evolution | `diff` between regenerations with change categories (including source-breaking for an exhaustive `switch`), lock file | R14 | M9 |
@@ -60,13 +60,13 @@ M2 review findings that were deliberately deferred:
 
 | What | Where |
 |---|---|
-| A `$ref` to `file:///` reads any local file without a directory or size limit | before `generate` (M9) and `diff` (M12); the size limit together with it |
-| Sibling keys next to `$ref` in a Path Item (allowed in OAS) are not merged with the target | M9 (operation emitter): M6 does not do this, because the M2 parser puts them into `Ref.unknownKeys` (TOA110) and merging requires a change to the parser |
+| A `$ref` to `file:///` reads any local file without a directory or size limit | after M9: `diff` (M12) or before 1.0; `generate` writes only into its own output and never deletes an input, and a `$ref` reads a file the user's own spec names (M9 plan, "Carried over") |
+| Sibling keys next to `$ref` in a Path Item (allowed in OAS) are not merged with the target | when needed: OAS leaves a conflict undefined and TOA110 reports every sibling, so nothing is lost silently; merging needs a change to the parser (M9 plan) |
 | Case-insensitive file systems: `A.yaml` and `a.yaml` are two documents | when needed (diagnostic or URI normalization) |
 | The YAML merge key `<<` gives no hint that OpenAPI tools often do not support it | M3 (a normalizer rule or a hint) |
 | The model is immutable only on the surface: lists and maps inside nodes are read-only, but not deeply | M3, when the normalizer starts building new nodes |
-| `$ref` in `callbacks` and `links` does not resolve | before the operation emitter (M9) |
-| `in` in an `apiKey` security scheme is not required when reading | before the security metadata (M9) |
+| `$ref` in `callbacks` and `links` does not resolve | with the generation of callbacks: M9 does not generate them and reports callbacks and webhooks (TOA567); links are never read (M9 plan) |
+| `in` in an `apiKey` security scheme is not required when reading | done in M9 (task 2: TOA112, as for `name`) |
 | Positions in diagnostics for files reached through `$ref` are relative paths, not absolute URIs | M5 (`sarif`, `github-actions` formats) |
 | A place read as nodes of two different types silently returns `null` for the second | M3 (diagnostic for a type conflict) |
 | A diagnostic on a node obtained through a YAML alias points to the anchor's position | when needed (a rare case) |
@@ -98,7 +98,7 @@ M4 review findings that were deliberately deferred:
 
 | What | Where |
 |---|---|
-| `NormalizedSpec.overrides` contains also entries that were not applied (TOA804/805/806), with their generation fields; `generate` does not distinguish "the overrides file is unusable" from "there are no overrides" | M9 (skipping a client in `generate`); the IR already takes only the entries that were applied (`IrOverrides`), and `check` checks the specification without the unusable file |
+| `NormalizedSpec.overrides` contains also entries that were not applied (TOA804/805/806), with their generation fields; `generate` does not distinguish "the overrides file is unusable" from "there are no overrides" | done: `generate` skips a client with errors, which an unusable overrides file always gives (TOA801-TOA803, TOA805, TOA806), and the IR reads only applied entries (`IrOverrides`); checked again in M9 |
 | Problems introduced by the override itself are reported at the specification's pointer, not at the override | M5 |
 | `_content`: with a `null` media object the value of another media type is taken | when needed (defective specifications only) |
 | 3.0: after expanding a nullable `$ref`, the sibling fields of `$ref` remain, but 3.0 ignores them; a schema with `anyOf` and `oneOf` containing null expands only `anyOf`; `type: 'null'` + override `type: null` → TOA807 unchanged | when needed |
@@ -127,15 +127,15 @@ M6 review findings and items deferred in the plan, which were deliberately left.
 
 | What | Where |
 |---|---|
-| Request body: the media type's `encoding` (for forms — `style`/`explode` of each property, for multipart — `contentType` and part headers, file name) is parsed, but the IR has none of it, and there is no diagnostic. In the corpus: 312 of 611 Stripe `x-www-form-urlencoded` bodies have `encoding` (deepObject/explode); file parts are `Uint8List` without a name or type (R10.4) | M9: add to `RequestBodyIr` or read explicitly from the specification by `location` |
-| Names of types that the emitter creates are not named in the IR: the sealed error type `ErrorsByStatus` and its variants (1047 operations of the corpus), the variant classes of a union and the unknown variant (R9.1), the success type when the 2xx bodies differ (31 operations, e.g. Discord `guildSearch`: 200 `GuildSearchResponse` / 202 `SearchIndexNotReadyResponse`). The natural names are already taken: for `getPet` with an inline 404 and a 500 without a body the inline model is `GetPetError`, so the sealed `GetPetError` would clash with it. `NameScope` is internal and `ClientIr` keeps only the final names, so the emitter would have to rebuild the namespace, the reserved sets and TOA550/551 itself | M8/M9: decide in the M8 plan — either name them in the IR (after the declarations, with diagnostics), or give the emitters the library's namespace |
-| Constraints (R6.7) are missing from `FieldIr`, `default` is in `ParameterIr`; the plan said "on the nodes", but that is inaccurate: M8 would have to derive them from the specification by `location`. The `description`, `deprecated`, `defaultValue` fields are there (3.1+: own ones next to `$ref` take precedence over the target's) | M8 (R6.7, doc comments, constructor default values); a parameter's `default` — M9 |
-| `in: querystring` parameter (OpenAPI 3.2) is skipped with TOA564, because the runtime has no "whole query string" parameter; `style` is checked against `in` (fixed in M6: TOA564, fallback — default style) | M9: support `querystring` when the runtime gets it |
-| `SingleError(type, const [])` — what an empty `statuses` list means: "all 4xx/5xx" (yes, when `errors.default_schema` is set and the operation has no described errors); `ir.dart` says only "documented statuses" | M9: describe it in the doc comment and read it as "all" |
-| An operation whose only response is `default` with a body has no success type (`default` is always an error); there is no such operation in the corpus | M9 |
-| The generated API library imports `package:dio`, and `Response`, `Options`, `Headers` are common schema names; `DartNames.takenTypeNames` does not reserve them | M9: either add `Dio` and fix the contract "import dio and `dart:typed_data` via `show`", or reserve the dio exports; record the choice |
-| The path variable pattern in the IR (`\{([^}]*)\}`, `ir_builder.dart`, `operation_builder.dart`) differs from the runtime (`\{([^{}]+)\}`): `/c/{}` is TOA556 in the IR, while the runtime reads `{}` as text | M9: one definition |
-| TOA561 `media-type-as-bytes` covers two findings (the body becomes bytes; alternative media types were dropped); all 57 corpus cases are the second, so `severity: {media-type-as-bytes: off}` also silences the first. Numbering: decision 3 of the plan put media types and errors in 6xx, while TOA561/TOA562 are in 5xx | M9: split the code and align the numbering, while the codes are not yet published (catalog — M13) |
+| Request body: the media type's `encoding` (for forms — `style`/`explode` of each property, for multipart — `contentType` and part headers, file name) was parsed, but the IR had none of it, and there was no diagnostic. In the corpus: 312 of 611 Stripe `x-www-form-urlencoded` bodies have `encoding` (deepObject/explode); file parts are `Uint8List` without a name or type (R10.4) | done in M9 (tasks 2-4: `EncodingIr`, `FormEncoding`, multipart part media types, `FileUpload` with a file name; part headers are TOA656) |
+| Names of types that the emitter creates are not named in the IR: the sealed error type `ErrorsByStatus` and its variants (1047 operations of the corpus), the variant classes of a union and the unknown variant (R9.1), the success type when the 2xx bodies differ (31 operations, e.g. Discord `guildSearch`: 200 `GuildSearchResponse` / 202 `SearchIndexNotReadyResponse`). The natural names are already taken: for `getPet` with an inline 404 and a 500 without a body the inline model is `GetPetError`, so the sealed `GetPetError` would clash with it. `NameScope` is internal and `ClientIr` keeps only the final names, so the emitter would have to rebuild the namespace, the reserved sets and TOA550/551 itself | done: M8 names the union and enum helpers; M9 names the status types, parts classes and the root client after them (task 3, `ApiNames`) |
+| Constraints (R6.7) are missing from `FieldIr`, `default` is in `ParameterIr`; the plan said "on the nodes", but that is inaccurate: M8 would have to derive them from the specification by `location`. The `description`, `deprecated`, `defaultValue` fields are there (3.1+: own ones next to `$ref` take precedence over the target's) | done (M8: constraints; M9 task 2: `ParameterIr.defaultValue`, in the method's doc comment) |
+| `in: querystring` parameter (OpenAPI 3.2) is skipped (TOA565, split from TOA564 in M9), because the runtime has no "whole query string" parameter; `style` is checked against `in` (fixed in M6: TOA564, fallback — default style) | when needed; no corpus spec has one |
+| `SingleError(type, const [])` — what an empty `statuses` list means: "all 4xx/5xx" (yes, when `errors.default_schema` is set and the operation has no described errors); `ir.dart` says only "documented statuses" | done in M9 (task 6: the doc comment says every 4xx and 5xx; the decoder reads it so) |
+| An operation whose only response is `default` with a body has no success type (`default` is always an error); there is no such operation in the corpus | done in M9 (task 3: TOA653; any 2xx is a success with the body as `JsonValue`) |
+| The generated API library imports `package:dio`, and `Response`, `Options`, `Headers` are common schema names; `DartNames.takenTypeNames` does not reserve them | done in M9 (task 2: the API files import only `Dio` with `show`; `Dio` and the new runtime names are reserved, `Response`, `Options` and `Headers` stay free) |
+| The path variable pattern in the IR (`\{([^}]*)\}`, `ir_builder.dart`, `operation_builder.dart`) differed from the runtime (`\{([^{}]+)\}`): `/c/{}` is TOA556 in the IR, while the runtime read `{}` as text | done in M9 (task 2, 10c: one `PathTemplate.variable` for the IR, the emitter and the path rules; a test keeps it equal to `OperationRequest.pathVariable`) |
+| TOA561 `media-type-as-bytes` covered two findings (the body becomes bytes; alternative media types were dropped); all 57 corpus cases are the second, so `severity: {media-type-as-bytes: off}` also silences the first. Numbering: decision 3 of the plan put media types and errors in 6xx, while TOA561/TOA562 are in 5xx | done in M9 (task 2: TOA650 and TOA651; TOA562 became TOA652) |
 | Duplicate types of union variants remain silently: `anyOf: [string, {string, uuid}, $ref A, $ref A]` gives `String \| String \| A \| A`; without a discriminator the emitter cannot tell the variants apart | M8 (together with `oneOf` without a discriminator, R9.2) |
 | `{}` in a PATCH body is never tri-state (`JsonValue` is not nullable, and the `.patch` rule requires a nullable value): an explicit `null` for an arbitrary JSON field cannot be sent (R7.1) | M8 |
 | TOA450 on inline variants does not suggest a value that could be derived: when the variant's discriminator property is the only `const`/enum (OpenAI ×3) | M8 (R9) |
@@ -144,10 +144,10 @@ M6 review findings and items deferred in the plan, which were deliberately left.
 | Polymorphism through `allOf` (discriminator on the base, descendants — `allOf: [$ref: Base, …]`): the base stays a model, TOA452 | M8 (the hierarchy together with the unions, R9) |
 | `oneOf` without a discriminator (R9.2): the IR node exists, but there is no behavior or diagnostic yet | M8 |
 | The title of an enum value from a `const` branch (`title`/`description`, Discord `NO_BOT`) is not taken as the value's name | M8 |
-| The envelope mode "generic wrapper" and its config key | M9 |
-| Webhooks, `callbacks`, security metadata, `servers` | M9 (SSE events — M10) |
+| The envelope mode "generic wrapper" and its config key | when needed (M9 design, decision 11: envelopes are only unwrapped) |
+| Webhooks, `callbacks`, security metadata, `servers` | done in M9 (security metadata and servers, tasks 1, 3, 4); callbacks and webhooks are reported, not generated (TOA567); SSE events — M10 |
 | SSE: the IR takes `itemSchema` (or `schema`) for `text/event-stream` as the content type; in OAS 3.2 `itemSchema` describes the event as a whole (`data`/`event`/`id`), so the type may be an event envelope rather than the data; the 4 corpus streams have not been reviewed | M10 |
-| R5.3: "descriptive" tags (`Pet operations controller`) are not recognized (a warning only for tags without ASCII); renaming a tag with an override (`tags: {pet-controller: Pets}`) requires a `tags` section in the overrides file | M9 (group emitter) |
+| R5.3: "descriptive" tags (`Pet operations controller`) are not recognized (a warning only for tags without ASCII); renaming a tag with an override (`tags: {pet-controller: Pets}`) requires a `tags` section in the overrides file | when needed: a tag override needs a `tags` section in the overrides file, a format decision (M9 plan, open questions) |
 | Validation of `import`/`type` of custom types (R6.8); escaping in the emitter | M8 |
 | A path parameter with `required: false` is forcibly made required (the normalizer's territory, M3) | when needed |
 | `prefixItems` (tuples), `patternProperties`, `if/then/else`, `not` are not mapped (an array without `items` — `List<JsonValue>`) | when needed |
@@ -157,12 +157,12 @@ M6 review findings and items deferred in the plan, which were deliberately left.
 | A numeric property name is read as a list index in `_tokensName` (`SchemaMapper`) | when needed |
 | A very long `$ref` chain (~1300) — stack depth and O(N²); unrealistic | when needed |
 | `NameScope.claim('')`, gaps in the `dart:core` list in `takenTypeNames` (`RuneIterator`, `UriData`, …) | when needed |
-| IR hygiene: nested lists are not `unmodifiable` (const constructors), `PatchType(String?)` is not enforced, a duplicate `DeclId` — the last one wins, `IrJson` does not print `statuses`, `import` and default values | when needed |
+| IR hygiene: nested lists are not `unmodifiable` (const constructors), `PatchType(String?)` is not enforced, a duplicate `DeclId` — the last one wins, `IrJson` does not print `import` | when needed (statuses and default values are printed since M9, 10c) |
 | An invalid value in a client falls back to the built-in default value, not to `defaults` | M13 (config documentation) |
 | `DirectionIndex` cached "not directional" inside a loop depending on the order of queries | done in M6 (10a): the answer depends only on the set of reachable schemas |
 | `deprecated: false` next to `$ref` does not cancel the target's mark (in the model it is a plain `bool`); a description of the target written in its own annotations-only `allOf` part does not reach the field | when needed (doc comments only) |
 | `IrJson` does not print descriptions, so the effect of annotations next to `$ref` is visible only in tests | M8 (if the dump is needed for doc comments) |
-| TOA561 and TOA564 each cover two different findings (dropped alternatives / bytes; invalid `style` / `querystring`) and sit in 5xx, although the plan allotted media types 6xx | before 1.0 (code catalog, M13) |
+| TOA561 and TOA564 each covered two different findings (dropped alternatives / bytes; invalid `style` / `querystring`) and sat in 5xx, although the plan allotted media types 6xx | done in M9 (task 2: TOA650/TOA651, and TOA565 for `querystring`) |
 
 Fixed in M6 following the final review: an `allOf` with one `$ref` and annotation-only parts — a reference to the target (nullable if a part says so); `description`, `default`, `deprecated` next to `$ref` in 3.1+ take precedence over the target's; TOA564; the `Accept`, `Content-Type`, `Authorization` headers are not generated; custom type names are reserved (TOA551); TOA552 for enum values is info with the hint `x-enum-varnames`; `unknown` is reserved among enum values (`unknown_`).
 
@@ -172,13 +172,13 @@ M8 findings and decisions that were deliberately deferred (plan: [2026-10-12-m8-
 
 | What | Where |
 |---|---|
-| Sealed types of operation statuses (`CreatePetError`, `CreatePetResponse`) and their variants | M9: names are allocated in the IR library's namespace after the M8 names, so no model name will change |
+| Sealed types of operation statuses (`CreatePetError`, `CreatePetResponse`) and their variants | done in M9 (tasks 3-4) |
 | Override address for inline type names (R5.4); the idea is a `typeName` field in a property entry (`schemas.Pet.properties.status.typeName: PetState`), with no address for array elements, map values, and union variants | when needed (the user's decision: deferred) |
 | The enum value name from a `const` branch's `title` (Discord `NO_BOT`) as `x-enum-varnames` | when needed (the user's decision: deferred) |
 | ~~Stripe: 390 fields `anyOf: [string, {enum: ['']}]`~~ | resolved in M8: the enum branch is dropped by TOA455 (info), the field is `String`, the dropped values go into the "Known values" doc comment; for `oneOf` the type also accepts a value that `oneOf` would reject — deliberately |
 | Subtypes of a polymorphic base are not counted in `DirectionIndex` (the split into `Pet`/`PetInput` is not done for them) | when needed |
 | `IrJson` does not print constants, constraints, helper type names | when needed |
-| `generate --format` (json, sarif) | M9, together with the operations |
+| `generate --format` (json, sarif) | after M9: where the per-client lines go next to a machine report is a user decision (M9 plan, open questions) |
 | The input hash does not account for the Dart SDK version and `dart_style` (not used) | when needed |
 | `union` keys on a property that an override cannot apply silently produce no diagnostic (TOA807 only for schemas) | when needed |
 | `IrJson` does not print the union variant selection method (`dispatch`) and the variant names | when needed |
@@ -189,8 +189,8 @@ M8 findings and decisions that were deliberately deferred (plan: [2026-10-12-m8-
 | "Known values" are not documented for a union that is an array element or a component alias (there is no field with a description there); long "Known values" lines wrap unevenly | when needed |
 | Long `toJson` lines in generated code are not wrapped (safe under `// dart format off`) | when needed |
 | A subtype of a polymorphic base that is only in a file nothing refers to is not found (the file is not read) | behavior by design; documented |
-| `generate`: `--dry-run`, a generator version constant (guarded by a test) | M9 or when needed |
-| Model file names (`ModelLibrary.fileNames`) are allocated in one scope in the order of `ir.declarations`, sorted by name. If M9 adds operation types to the same list or directory, a new type that sorts earlier and yields the same snake name will move an existing model to `x2.dart`: its file's `import` breaks, and the output changes | M9: operation files take names in their own directory and in their own scope (or after the models), so model files do not move |
+| `generate`: `--dry-run`, a generator version constant (guarded by a test) | when needed |
+| Model file names (`ModelLibrary.fileNames`) are allocated in one scope in the order of `ir.declarations`, sorted by name. If M9 adds operation types to the same list or directory, a new type that sorts earlier and yields the same snake name will move an existing model to `x2.dart`: its file's `import` breaks, and the output changes | done in M9 (task 4: group files in `api/`, named in their own scope) |
 | Swapping the output directory does not carry over the owner, ACLs and extended attributes of the old directory (the access mode is carried over) | when needed |
 | Case and hard-link tests have been checked only on macOS (APFS); Linux and Windows — in the M11 matrix | M11 |
 
@@ -201,8 +201,52 @@ M7 review findings that were deliberately deferred:
 | What | Where |
 |---|---|
 | `openEvents`: an error body with invalid UTF-8 is decoded leniently (`allowMalformed`), while `send` gives `DecodeError`; a response from a stream status without `ResponseBody` — `UndocumentedStatus` with an empty body; the size of the error body is not limited (as in `send`) | M10 (SSE) |
-| An operation with a binary/text success response and JSON errors has no direct decoding means; `RawResponse.parse` bypasses the depth check | M9 |
+| An operation with a binary/text success response and JSON errors has no direct decoding means; `RawResponse.parse` bypasses the depth check | done in M9 (task 1: `RawResponse.parsedJson` with the depth check, also in `RawResponse.parse`) |
 | A `double` `1.0` in a parameter: `x=1.0` on VM and Wasm, `x=1` on dart2js | M11 (platform matrix) |
 | The `whenCancel` chain leaves a closure on a long-lived user token for each `openEvents` call (of the same order as Dio itself) | when needed |
-| The README does not describe the `//` guard in the query for a relative `baseUrl` | M9 (`generate` documentation) |
+| The README does not describe the `//` guard in the query for a relative `baseUrl` | done in M9 (task 6: README, "Operations") |
 | The browser does not send the `Cookie` header (cookie parameters do not work on the web) — a claim from the documentation, not verified in a browser | M11 |
+
+## Moved from M9
+
+Findings and decisions of M9 that were deliberately deferred (plan:
+[2026-10-13-m9-operations.md](superpowers/plans/2026-10-13-m9-operations.md),
+"Deferred"):
+
+| What | Where |
+|---|---|
+| Event-stream operations are not generated (TOA654) | M10 |
+| `in: querystring` parameters are not generated (TOA565) | when needed |
+| The headers of a multipart part's `encoding` are not sent (TOA656) | when needed |
+| A form property nested deeper than its style allows (an object in an object for `form`) makes `FormBody.encode` throw `ArgumentError` at run time; the generator does not warn | when needed (a diagnostic, or the deepObject convention of Rails and Stripe) |
+| `style: cookie` (OpenAPI 3.2) is sent percent-encoded, like `form` | M11 (with the platform matrix) |
+| A documented 1xx or 3xx response is `UndocumentedStatus` (or the `default` response's type when there is one); `default` never catches a 2xx | when needed |
+| `callbacks`, `links` and `webhooks` are not generated (TOA567 reports callbacks and webhooks) | when needed |
+| `generate --format` and the per-client lines next to a machine report | after a user decision |
+| Files over the size limits that M9 grew (see the allowlist comments in `test/quality/size_limits_test.dart`) | the code-quality plan |
+
+## Parked from the M9 reviews
+
+Findings of the M9 reviews that the fix tasks (10a, 10b, 10c) did not fix, with the review and the finding (`T<n>` is the review of task n; `T10b` the review of Task 10b). Everything else those reviews found is fixed.
+
+| Finding | Review | Why it is parked |
+|---|---|---|
+| A client with no operations gets a root class whose `dio` is unused and a header-only `api.dart` | T6 M7 | harmless, analyzer clean; `TOA563` already warns |
+| A tag or schema name of about 245 characters or more makes a file name over 255 and a `FileSystemException` at write (`api_library.dart`, `ModelLibrary.snake`, also models) | T4 minor 6 | no real spec has such a name; the writer should report TOA831 for it when it is met |
+| `api_client.dart` does not re-export the runtime types the API uses (`Result`, `Success`, `CallOptions`, `FileUpload`, `Date`), so a caller needs a second import | T4 minor 8 | a design decision (a re-export would make the runtime part of the client's own API) |
+| An explicit JSON `null` cannot be told from an absent value for a `JsonValue` parameter or part (an extension type over `Object?` erases): `JsonValue(null)` is "absent" for a required JSON-content parameter too | T7 minor 3 | the type cannot carry the difference; consistent with `QueryParameter('h', h)`; a wrapper type would change every signature |
+| No runtime or calls test sends an omitted optional `JsonValue` in a JSON-content or form/multipart body position | T7 minor 3 | the analyzer gate covers the shape; add with the next change there |
+| The `toString` of a status variant prints a raw JSON body with no secret in its schema in full (a free-form object may hold a token at run time) | T9 minor 1 | same rule as the model fields (M8); confirm the intent before changing it |
+| Tests for secret shapes of status bodies: a `$ref` secret, a nullable `anyOf`, a map of secrets, an envelope (all work, nothing pins them) | T9 minor 5 | test gap only |
+| A default of an array or object whose items do not fit their schema is not checked (only the `enum` and the `format` of the parameter's own schema: TOA660) | T2 minor 3 | needs a validator of values against schemas; the type mismatch is TOA211 |
+| `EncodingIr.explode` and `allowReserved` are kept for multipart although only `contentType` is used there | T2 minor 7 | harmless; the emitter reads what it needs |
+| A reserved-name test does not assert that `Response`, `Options` and `Headers` get no TOA550; tests for a default on a header, cookie or `content` parameter | T2 minor 7, 2b | test gaps; the behaviour is covered by the analyzer gate |
+| Test gaps of the naming and security work: apiKey in a query or cookie, `http basic`, `mutualTLS`, `openIdConnect`; a variant and a parts-class collision (`UploadRequest2`); a lower-case `4xx`; two servers with one URL; the `naming.client` run key | T3 M5 | tests only; the reviewer verified the behaviour |
+| The collision cases of the client name (`api`, `models`) are tested only on `ApiLibrary`, not through `generate` | T6 M5 | the layout is verified by the reviewer on 13 outputs |
+| TOA568 for a scheme without a type is reported twice, with TOA111 or TOA112 at the same place | T10a M4 | each says something else (the spec is wrong; the metadata is `unknown`) |
+| `UndocumentedStatus.rawBody` is raw bytes, not parsed JSON, in an operation with a binary error (the operation reads bytes) | T10b M1 | stated in the decoder rules of `CLAUDE.md`; a parse by `Content-Type` can be added to `RawResponse.undocumented` |
+| `body(String schema)` in `response_status_test.dart` reads like an unused parameter | T10b M5 | style only |
+| The new emitter code uses `!` where a pattern or an early return could promote the value (`decoder_writer.dart`, `request_writer.dart`, `operation_emitter.dart`, `api_library.dart`) | final review minor 9 | the values are IR-contract invariants and 54,000 fuzzed builds found no crash; style only |
+| A multipart `encoding.contentType` with a control character inside a quoted parameter or a line break between parameters (`text/plain; x="a\nb"`) passes the generator's check (`ir/part_media_type.dart`) and Dio's `DioMediaType.parse` throws at call time | final re-review R1 | the media type is invalid per RFC 9110; tighten the pattern to RFC 9110 tokens and quoted strings and report TOA661 with the fallback; first item of the next change there |
+| A `security` field that is not a list (`security: {bearer: []}`) is dropped with TOA111 only, so the metadata reads as open unless the document has its own requirement (`parse/operation_parser.dart`, `parse/openapi_parser.dart`) | final re-review R2 | an invalid spec that is already a warning; map it to one alternative of kind `unknown` with TOA568, like a malformed entry |
+| `default: "2020-13-01T00:00:00Z"` on a `date-time` parameter gets no TOA660, because `DateTime.tryParse` normalises the month | final re-review R3 | check the RFC 3339 fields by range instead of `tryParse` |
