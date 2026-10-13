@@ -9,12 +9,12 @@ void main() {
   const paths = DisplayPaths(r'C:\work');
 
   test('a file on the drive of the working directory is relative', () {
-    expect(paths.of(r'C:\work\specs\pets.yaml'), r'specs\pets.yaml');
-    expect(paths.of(r'specs\pets.yaml'), r'specs\pets.yaml');
+    expect(paths.of(r'C:\work\specs\pets.yaml'), 'specs/pets.yaml');
+    expect(paths.of(r'specs\pets.yaml'), 'specs/pets.yaml');
   });
 
   test('a file on another drive is absolute, with its drive letter', () {
-    expect(paths.of(r'D:\specs\pets.yaml'), r'D:\specs\pets.yaml');
+    expect(paths.of(r'D:\specs\pets.yaml'), 'D:/specs/pets.yaml');
   });
 
   test('a drive letter in another case is the same drive', () {
