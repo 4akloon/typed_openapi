@@ -51,7 +51,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   serious; level comparison uses its order), `SeverityLevels` (a client's
   `severity` config), `JsonPointer`, `DiagnosticBag` (baselined diagnostics kept
   apart), `DisplayPaths` (files relative to the working directory, absolute
-  outside it), `MessageText` (spec text in a message: `quote` writes
+  outside it, always with `/` separators, also on Windows, where an absolute
+  path keeps its drive letter: `C:/work/api.yaml`), `MessageText` (spec text in a message: `quote` writes
   `"`, `\`, controls, bidirectional marks and lone surrogates as escapes
   (a lone surrogate as its code point, `\u{d800}`), as the event
   names of TOA551/TOA559/TOA667/TOA668 are; `neutralise` is what the text
