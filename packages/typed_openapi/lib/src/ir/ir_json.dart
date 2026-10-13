@@ -54,49 +54,54 @@ final class IrJson {
     'at': _at(d.location),
     if (d.deprecated) 'deprecated': true,
     ...switch (d) {
-      ModelDecl() => {
-        'kind': 'model',
-        if (d.id.variant != .base) 'variant': d.id.variant.name,
-        if (d.direction != .both) 'direction': d.direction.name,
-        'fields': [
-          for (final f in d.fields)
-            {
-              'name': f.name,
-              'json': f.jsonKey,
-              'type': type(f.type),
-              if (f.required) 'required': true,
-              if (f.triState) 'triState': true,
-              if (f.readOnly) 'readOnly': true,
-              if (f.writeOnly) 'writeOnly': true,
-              if (f.sensitive) 'sensitive': true,
-            },
-        ],
-        if (d.additionalProperties case final extra?)
-          'additionalProperties': type(extra),
-        if (d.additionalSensitive) 'additionalSensitive': true,
-      },
-      EnumDecl() => {
-        'kind': 'enum',
-        'values': d.kind.name,
-        if (!d.exhaustive) 'exhaustive': false,
-        'cases': {for (final v in d.values) v.name: v.value},
-      },
-      UnionDecl() => {
-        'kind': d.kind.name,
-        'discriminator': ?d.discriminator,
-        if (!d.exhaustive) 'exhaustive': false,
-        'variants': [
-          for (final v in d.variants)
-            {
-              'type': type(v.type),
-              if (v.discriminatorValues.isNotEmpty)
-                'values': v.discriminatorValues,
-              if (v.sensitive) 'sensitive': true,
-            },
-        ],
-        if (d.defaultVariant case final variant?) 'default': type(variant),
-        if (d.unknownSensitive) 'unknownSensitive': true,
-      },
+      ModelDecl() => _model(d, type),
+      EnumDecl() => _enum(d),
+      UnionDecl() => _union(d, type),
     },
+  };
+
+  Map<String, Object?> _model(ModelDecl d, String Function(DartType) type) => {
+    'kind': 'model',
+    if (d.id.variant != .base) 'variant': d.id.variant.name,
+    if (d.direction != .both) 'direction': d.direction.name,
+    'fields': [
+      for (final f in d.fields)
+        {
+          'name': f.name,
+          'json': f.jsonKey,
+          'type': type(f.type),
+          if (f.required) 'required': true,
+          if (f.triState) 'triState': true,
+          if (f.readOnly) 'readOnly': true,
+          if (f.writeOnly) 'writeOnly': true,
+          if (f.sensitive) 'sensitive': true,
+        },
+    ],
+    if (d.additionalProperties case final extra?)
+      'additionalProperties': type(extra),
+    if (d.additionalSensitive) 'additionalSensitive': true,
+  };
+
+  Map<String, Object?> _enum(EnumDecl d) => {
+    'kind': 'enum',
+    'values': d.kind.name,
+    if (!d.exhaustive) 'exhaustive': false,
+    'cases': {for (final v in d.values) v.name: v.value},
+  };
+
+  Map<String, Object?> _union(UnionDecl d, String Function(DartType) type) => {
+    'kind': d.kind.name,
+    'discriminator': ?d.discriminator,
+    if (!d.exhaustive) 'exhaustive': false,
+    'variants': [
+      for (final v in d.variants)
+        {
+          'type': type(v.type),
+          if (v.discriminatorValues.isNotEmpty) 'values': v.discriminatorValues,
+          if (v.sensitive) 'sensitive': true,
+        },
+    ],
+    if (d.defaultVariant case final variant?) 'default': type(variant),
+    if (d.unknownSensitive) 'unknownSensitive': true,
   };
 }

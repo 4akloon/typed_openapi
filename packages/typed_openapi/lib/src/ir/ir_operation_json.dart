@@ -48,22 +48,7 @@ final class IrOperationJson {
     'parameters': [for (final p in o.parameters) _parameter(p)],
     if (o.body case final body?) 'body': _body(body),
     'responses': [for (final r in o.responses) _response(r)],
-    'errors': switch (o.errors) {
-      NoErrors() => 'Never',
-      SingleError(:final type) => _type(type),
-      ErrorsByStatus(:final cases) => {
-        for (final (status, t) in cases) status: t == null ? null : _type(t),
-      },
-    },
-    'errorStatuses': ?switch (o.errors) {
-      SingleError(:final statuses) when statuses.isNotEmpty => statuses,
-      _ => null,
-    },
-    'sensitiveErrors': ?switch (o.errors) {
-      ErrorsByStatus(:final sensitive) when sensitive.isNotEmpty =>
-        sensitive.toList()..sort(),
-      _ => null,
-    },
+    ..._errors(o.errors),
     'operationId': ?o.operationId,
     if (o.tags.isNotEmpty) 'tags': o.tags,
     'summary': ?o.summary,
@@ -78,12 +63,33 @@ final class IrOperationJson {
     if (o.errorType case final type?) 'errorType': _statusType(type),
     'partsName': ?o.partsName,
     'accept': ?o.accept,
-    if (o.events case final events?)
-      'events': {
-        if (events.data case final data?) 'data': _type(data),
-        if (events.union case final union?) 'union': _union(union),
-        'reconnection': events.reconnection.name,
+    if (o.events case final events?) 'events': _events(events),
+  };
+
+  Map<String, Object?> _events(EventStreamIr events) => {
+    if (events.data case final data?) 'data': _type(data),
+    if (events.union case final union?) 'union': _union(union),
+    'reconnection': events.reconnection.name,
+  };
+
+  /// The `errors` entry of an operation and the keys that go with it.
+  Map<String, Object?> _errors(ErrorsIr errors) => {
+    'errors': switch (errors) {
+      NoErrors() => 'Never',
+      SingleError(:final type) => _type(type),
+      ErrorsByStatus(:final cases) => {
+        for (final (status, t) in cases) status: t == null ? null : _type(t),
       },
+    },
+    'errorStatuses': ?switch (errors) {
+      SingleError(:final statuses) when statuses.isNotEmpty => statuses,
+      _ => null,
+    },
+    'sensitiveErrors': ?switch (errors) {
+      ErrorsByStatus(:final sensitive) when sensitive.isNotEmpty =>
+        sensitive.toList()..sort(),
+      _ => null,
+    },
   };
 
   Map<String, Object?> _union(EventUnionIr union) => {
