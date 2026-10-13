@@ -4,6 +4,7 @@ import 'declaration_names.dart';
 import 'ir.dart';
 import 'ir_context.dart';
 import 'mapping_state.dart';
+import 'mapping_tools.dart';
 import 'names.dart';
 import 'override_notices.dart';
 import 'pending_declaration.dart';
@@ -11,8 +12,11 @@ import 'pending_declaration.dart';
 /// Turns an enum schema into an [EnumDecl]: its kind, the labels the spec
 /// gives its values, and the names of its values (R6.2).
 final class EnumMapper {
-  /// An enum mapper for the client of [_context].
-  EnumMapper(this._context, this._declNames, this._notices);
+  /// An enum mapper that reports through [tools].
+  EnumMapper(MappingTools tools)
+    : _context = tools.context,
+      _declNames = tools.names,
+      _notices = tools.notices;
 
   static const _names = DartNames();
   static final _numberText = RegExp(r'^-?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?$');

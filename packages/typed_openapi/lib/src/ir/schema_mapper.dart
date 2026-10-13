@@ -4,6 +4,7 @@ import '../diagnostics/json_pointer.dart';
 import '../model/schema.dart';
 import '../model/spec_node.dart';
 import '../overrides/override_set.dart';
+import 'custom_types.dart';
 import 'dart_type.dart';
 import 'declaration_names.dart';
 import 'direction_index.dart';
@@ -12,12 +13,15 @@ import 'ir.dart';
 import 'ir_context.dart';
 import 'mapping_scope.dart';
 import 'mapping_state.dart';
+import 'mapping_tools.dart';
+import 'model_mapper.dart';
 import 'names.dart';
 import 'override_notices.dart';
 import 'pending_declaration.dart';
 import 'ref_follower.dart';
 import 'schema_queries.dart';
 import 'schema_shapes.dart';
+import 'type_recursion.dart';
 
 export 'pending_declaration.dart' show NameHint;
 
@@ -48,17 +52,22 @@ final class SchemaMapper {
 
   /// The extension that makes a property tri-state with
   /// `tri_state: extension` (R7.2).
-  static const triStateExtension = 'x-typed-tri-state';
+  static const triStateExtension = ModelMapper.triStateExtension;
 
   final IrContext _context;
   final DirectionIndex _directions;
 
   // The collaborators are lazy because a field initializer cannot read the
   // other fields.
-  late final SchemaQueries _queries = SchemaQueries(_context);
-  late final DeclarationNames _declNames = DeclarationNames(_context);
-  late final OverrideNotices _notices = OverrideNotices(_context);
-  late final EnumMapper _enums = EnumMapper(_context, _declNames, _notices);
+  late final MappingTools _tools = MappingTools(_context, _directions);
+  late final SchemaQueries _queries = _tools.queries;
+  late final DeclarationNames _declNames = _tools.names;
+  late final OverrideNotices _notices = _tools.notices;
+  late final EnumMapper _enums = EnumMapper(_tools);
+  late final ModelMapper _models = ModelMapper(
+    _tools,
+    TypeRecursion(map: _map, component: _component, replaced: _replaced),
+  );
 
   // The four fields below are shared mutable state: every call during one
   // mapping reads and writes the same collections, so they cannot be passed
@@ -447,7 +456,7 @@ final class SchemaMapper {
                 'in a oneOf.',
           );
         }
-        _model(schema, pending, scope);
+        _models.declare(schema, pending, scope);
       }
     } finally {
       _aliases
@@ -586,473 +595,6 @@ final class SchemaMapper {
             ? .object
             : null,
     };
-  }
-
-  /// Maps the fields of the model [schema], and sets how [pending] is built
-  /// once it is named.
-  void _model(
-    SchemaObject schema,
-    PendingDeclaration pending,
-    MappingScope scope,
-  ) {
-    final parts = _merged(schema);
-    _reportIneffectiveOverrides(schema);
-    final site = ModelSite(
-      schema,
-      pending,
-      _modelDirection(schema, pending),
-      scope,
-    );
-    final fields = _fields(site, parts);
-    final additionalSchema = parts.additional;
-    final draft = ModelDraft(
-      site: site,
-      fields: fields,
-      additionalSchema: additionalSchema,
-      additional: additionalSchema == null || additionalSchema is BooleanSchema
-          ? null
-          : _map(additionalSchema, NameHint.under(pending, 'Value'), scope),
-    );
-    pending.build = (name, types) => _buildModel(draft, name, types);
-  }
-
-  /// Reports what the schema of a model says that is ignored: branches
-  /// beside the model, and the overrides that only a union or an enum has.
-  void _reportIneffectiveOverrides(SchemaObject schema) {
-    _reportBranchesBesideModel(schema);
-    _notices.unionHasNoEffect(schema, 'the schema is a model, not a union');
-    _notices.exhaustiveOnModel(schema);
-  }
-
-  /// Where the model of [schema] is used, which leaves out the `readOnly` or
-  /// `writeOnly` properties.
-  ModelDirection _modelDirection(
-    SchemaObject schema,
-    PendingDeclaration pending,
-  ) => pending.id.variant != .base
-      ? .request
-      : _directions.splits(schema)
-      ? .response
-      : _directions.onlyDirection(schema) ?? .both;
-
-  /// The fields of the model at [site], one for each property of [parts]
-  /// that the direction and the overrides do not leave out.
-  List<FieldDraft> _fields(ModelSite site, ModelParts parts) => [
-    for (final MapEntry(key: json, value: property) in parts.properties.entries)
-      ?_field(site, json, property, isRequired: parts.required.contains(json)),
-  ];
-
-  /// The field of [property], or null when the model leaves it out.
-  FieldDraft? _field(
-    ModelSite site,
-    String json,
-    Schema property, {
-    required bool isRequired,
-  }) {
-    final override = _context.overrides.propertyAt(property.location);
-    if (override?.exclude ?? false) return null;
-    _reportTriStateOverride(site, override);
-    final notes = _notesOf(property);
-    if (site.direction == .request && notes.readOnly) return null;
-    if (site.direction == .response && notes.writeOnly) return null;
-    final custom = override?.dartType;
-    final hint = NameHint.under(site.pending, _names.pascal(json) ?? 'Field');
-    final (mapped, constant) = _fieldType(property, custom, hint, site.scope);
-    return FieldDraft(
-      json: json,
-      override: override,
-      location: property.location,
-      valueType: custom == null ? mapped : _custom(custom, mapped),
-      constValue: constant?.$1,
-      notes: notes,
-      // A union that stays `JsonValue` accepts anything, and no TOA455
-      // says a branch was dropped: it lists no values.
-      knownValues: mapped is CoreType && mapped.kind == .json
-          ? const []
-          : notes.knownValues,
-      sensitive:
-          notes.writeOnly ||
-          notes.secret ||
-          _rawSecret(property, custom == null ? mapped : null),
-      required: isRequired,
-      marked:
-          property is SchemaObject &&
-          property.extensions[triStateExtension] == true,
-    );
-  }
-
-  /// Reports the `triState` of the override of a property of a model used
-  /// in responses only.
-  void _reportTriStateOverride(ModelSite site, PropertyOverride? override) {
-    if (override != null &&
-        override.triState != null &&
-        site.direction == .response &&
-        !_directions.splits(site.schema)) {
-      _notices.triStateOnResponseModel(override);
-    }
-  }
-
-  /// The type of a property in [scope] (the JSON side of it when a custom
-  /// type [custom] replaces it), and its constant, if it has one.
-  (DartType, (Object, DartType)?) _fieldType(
-    Schema property,
-    DartTypeOverride? custom,
-    NameHint hint,
-    MappingScope scope,
-  ) {
-    final constant = custom == null ? _constantOf(property, scope) : null;
-    final mapped = constant != null
-        ? constant.$2
-        : custom == null
-        ? _map(property, hint, scope)
-        : _replaced(property, hint, scope);
-    return (mapped, constant);
-  }
-
-  /// The declaration of the model [draft], with the fields and the
-  /// `additionalProperties` field named in [types].
-  ModelDecl _buildModel(ModelDraft draft, String name, NameScope types) {
-    final site = draft.site;
-    final scope = _memberScope(types);
-    final named = [
-      for (final field in draft.fields)
-        (
-          field,
-          _declNames.memberName(
-            scope,
-            field.json,
-            field.override,
-            field.location,
-            owner: name,
-          ),
-        ),
-    ];
-    final extraName = draft.additional == null
-        ? null
-        : _declNames.additionalName(scope, name, site.schema.location);
-    return ModelDecl(
-      id: site.pending.id,
-      name: name,
-      description: site.schema.description,
-      deprecated: site.schema.deprecated,
-      additionalProperties: draft.additional,
-      additionalPropertiesName: extraName ?? 'additionalProperties',
-      additionalSensitive: _additionalIsSecret(draft),
-      direction: site.direction,
-      fields: [
-        for (final (field, fieldName) in named)
-          _fieldIr(field, fieldName, site),
-      ],
-    );
-  }
-
-  /// The names of the members of a model, where the types of the library
-  /// [types] are reserved: a field named like one would hide the type inside
-  /// the class (`other is $2Fa`), and only a name that starts with `$` is
-  /// both.
-  NameScope _memberScope(NameScope types) => NameScope(
-    reserved: {
-      ...DartNames.reservedWords,
-      ...DartNames.modelMembers,
-      ...types.taken,
-    },
-    reservedSuffix: '_',
-  );
-
-  /// Whether the values of `additionalProperties` are secrets.
-  bool _additionalIsSecret(ModelDraft draft) {
-    final schema = draft.additionalSchema;
-    return schema != null &&
-        (SchemaShapes.carriesSecret(schema, refs: _refs) ||
-            _rawSecret(schema, draft.additional));
-  }
-
-  /// The field [name] of [field] in the model at [site].
-  FieldIr _fieldIr(FieldDraft field, String name, ModelSite site) {
-    final notes = field.notes;
-    return FieldIr(
-      name: name,
-      jsonKey: field.json,
-      valueType: field.valueType,
-      location: field.location,
-      required: field.required,
-      // A constant is not a parameter, so it is never tri-state, whatever
-      // the rule or the override says.
-      triState:
-          site.direction != .response &&
-          field.constValue == null &&
-          (field.override?.triState ?? _isTriState(field, site.pending)),
-      readOnly: notes.readOnly,
-      writeOnly: notes.writeOnly,
-      defaultValue: notes.defaultValue,
-      description: notes.description,
-      deprecated: notes.deprecated,
-      constValue: field.constValue,
-      constraints: notes.constraints,
-      knownValues: field.knownValues,
-      sensitive: field.sensitive,
-    );
-  }
-
-  /// The one value of a property that can hold no other, with the type of
-  /// the value: a `const` or a one-value enum written inline, not nullable,
-  /// of one JSON type (decision 8 of M8). Its field is a constant.
-  (Object, DartType)? _constantOf(Schema property, MappingScope scope) {
-    if (property is! SchemaObject || property.ref != null || scope.replacing) {
-      return null;
-    }
-    if (_isNullable(property)) return null;
-    final values = SchemaShapes.enumValues(property);
-    if (values == null || values.length != 1) return null;
-    final value = values.single!;
-    return switch (EnumMapper.kindOf(property, values)) {
-      .string => (value, const CoreType(.string)),
-      .integer => (value, const CoreType(.integer)),
-      .number => (value, const CoreType(.number)),
-      .boolean => (value, const CoreType(.boolean)),
-      null => null,
-    };
-  }
-
-  /// What the schema of a property says about its field.
-  ///
-  /// The sources are the property's own keywords, the annotation-only
-  /// `allOf` parts next to the one part it stands for
-  /// (`allOf: [{$ref: Pet}, {description: ...}]`), and the schema it refers
-  /// to, in this order: the first `description` and `default` win, and the
-  /// field is deprecated, `readOnly` or `writeOnly` when any source says so.
-  /// In OpenAPI 3.0 a `$ref` has no siblings, so only the target gives the
-  /// description, default and deprecation; 3.1 and 3.2 take the property's
-  /// own keywords before the target's (a written `deprecated: false` cannot
-  /// be told from a missing one, so it does not override a deprecated
-  /// target).
-  FieldNotes _notesOf(Schema property) {
-    if (property is! SchemaObject) return const FieldNotes();
-    final parts = property.ref == null
-        ? SchemaShapes.annotationParts(property)
-        : const <SchemaObject>[];
-    final target = switch (property.ref) {
-      null => switch (SchemaShapes.singleOf(property)) {
-        final single? when property.allOf.contains(single) => _resolved(
-          single,
-        ),
-        _ => null,
-      },
-      _ => _resolved(property),
-    };
-    final siblings =
-        property.ref == null || _context.model.document.version != .v30;
-    final written = [if (siblings) property, ...parts, ?target];
-    final sources = SchemaShapes.annotationSources(
-      property,
-      refs: _refs,
-    );
-    final known = <Object?>[];
-    for (final schema in sources) {
-      for (final branch in SchemaShapes.subsumedBranches(
-        schema,
-        refs: _refs,
-      ).keys) {
-        for (final value in SchemaShapes.enumValues(branch) ?? const []) {
-          if (!known.contains(value)) known.add(value);
-        }
-      }
-    }
-    return FieldNotes(
-      knownValues: known,
-      constraints: _constraintsOf(written),
-      description: written
-          .map((s) => s.description)
-          .firstWhere((d) => d != null, orElse: () => null),
-      defaultValue: written
-          .map((s) => s.defaultValue)
-          .firstWhere((d) => d != null, orElse: () => null),
-      deprecated: written.any((s) => s.deprecated),
-      readOnly: sources.any((s) => s.readOnly),
-      writeOnly: sources.any((s) => s.writeOnly),
-      secret: SchemaShapes.carriesSecret(property, refs: _refs),
-    );
-  }
-
-  /// The constraints of a field from the schemas [written] for it, the first
-  /// that sets each one winning (R6.7). A 3.0 boolean `exclusiveMinimum`
-  /// makes `minimum` exclusive, and the same for the maximum.
-  static ConstraintsIr _constraintsOf(List<SchemaObject> written) {
-    T? first<T extends Object>(T? Function(SchemaObject s) read) {
-      for (final schema in written) {
-        if (read(schema) case final value?) return value;
-      }
-      return null;
-    }
-
-    final minimum = first((s) => s.minimum);
-    final maximum = first((s) => s.maximum);
-    final minExclusive = first((s) => s.exclusiveMinimumFlag) ?? false;
-    final maxExclusive = first((s) => s.exclusiveMaximumFlag) ?? false;
-    return ConstraintsIr(
-      minLength: first((s) => s.minLength),
-      maxLength: first((s) => s.maxLength),
-      pattern: first((s) => s.pattern),
-      minimum: minExclusive ? null : minimum,
-      maximum: maxExclusive ? null : maximum,
-      exclusiveMinimum:
-          first((s) => s.exclusiveMinimum) ?? (minExclusive ? minimum : null),
-      exclusiveMaximum:
-          first((s) => s.exclusiveMaximum) ?? (maxExclusive ? maximum : null),
-      multipleOf: first((s) => s.multipleOf),
-      minItems: first((s) => s.minItems),
-      maxItems: first((s) => s.maxItems),
-      uniqueItems: written.any((s) => s.uniqueItems),
-      minProperties: first((s) => s.minProperties),
-      maxProperties: first((s) => s.maxProperties),
-    );
-  }
-
-  /// Whether [field] tells "absent" from `null` by the config's rule (R7.2).
-  /// A field of any JSON value (`JsonValue`) allows `null` too.
-  bool _isTriState(FieldDraft field, PendingDeclaration pending) =>
-      switch (_context.config.triState) {
-        .patch =>
-          pending.patchBody &&
-              !field.required &&
-              (field.valueType.nullable ||
-                  field.valueType == const CoreType(.json)),
-        .optional => pending.patchBody && !field.required,
-        .extension => field.marked,
-      };
-
-  /// The properties, required names and `additionalProperties` of [schema]
-  /// with its `allOf` parts merged in, parts first and in order (R6.3). A
-  /// property, or `additionalProperties`, that a later part defines again
-  /// with another schema is reported; the later one is used. A part an
-  /// override excludes is merged all the same, because the model is flat and
-  /// the exclude only removes the part's own declaration (TOA254 says so).
-  /// A discriminator on a part does not matter here: the part's subtypes
-  /// are picked where the part is used as a type.
-  ModelParts _merged(SchemaObject schema) {
-    final properties = <String, Schema>{};
-    final required = <String>{};
-    final seen = <SpecLocation>{};
-    Schema? additional;
-    void add(SchemaObject part) {
-      if (!seen.add(part.location)) return;
-      for (final written in part.allOf) {
-        // A part that only annotates adds no property: its `nullable` and
-        // its description belong to the schema that has the `allOf`.
-        if (SchemaShapes.isAnnotationOnly(written)) continue;
-        final resolved = _resolved(written);
-        if (resolved == null) continue;
-        if (_context.overrides.schemaAt(resolved.location)?.exclude ?? false) {
-          _context.report(
-            .excludedSchemaReferenced,
-            'This allOf part is excluded by an override, which only leaves '
-            'out its own declaration; its properties are merged into this '
-            'model, which does not refer to the part.',
-            written.location,
-            fix:
-                'Exclude the properties that should not be here, or remove '
-                'the exclude of the schema.',
-          );
-        }
-        if (resolved.properties.isEmpty &&
-            resolved.allOf.isEmpty &&
-            (SchemaShapes.enumValues(resolved) != null ||
-                _branches(resolved) != null ||
-                resolved.types.any((t) => t != .object && t != .nullType))) {
-          _context.report(
-            .allOfPartIgnored,
-            'This allOf part is not an object, so it cannot be merged into a '
-            'model; it is ignored.',
-            written.location,
-            fix: 'Make every allOf part an object schema at the source.',
-          );
-          continue;
-        }
-        add(resolved);
-        _reportBranchesBesideModel(resolved);
-      }
-      for (final MapEntry(key: name, value: property)
-          in part.properties.entries) {
-        final earlier = properties[name];
-        if (earlier != null && !_same(earlier, property)) {
-          _context.report(
-            .allOfPropertyConflict,
-            'Property "$name" is defined again by another allOf part; this '
-            'definition is used.',
-            property.location,
-            fix: 'Define each property in one allOf part at the source.',
-          );
-        }
-        properties[name] = property;
-      }
-      if (part.additionalProperties case final later?) {
-        final earlier = additional;
-        if (earlier != null && !_same(earlier, later)) {
-          _context.report(
-            .allOfPropertyConflict,
-            'additionalProperties is defined again by another allOf part; '
-            'this definition is used.',
-            later.location,
-            fix:
-                'Define additionalProperties in one allOf part at the '
-                'source.',
-          );
-        }
-        additional = later;
-      }
-      required.addAll(part.required);
-    }
-
-    add(schema);
-    return ModelParts(properties, required, additional);
-  }
-
-  /// Reports the `oneOf` and `anyOf` of [schema], which is generated as a
-  /// model: branches that only add constraints are TOA255, others TOA256.
-  void _reportBranchesBesideModel(SchemaObject schema) {
-    for (final (key, branches) in [
-      ('oneOf', schema.oneOf),
-      ('anyOf', schema.anyOf),
-    ]) {
-      final real = [
-        for (final branch in branches)
-          if (!SchemaShapes.isNullOnly(branch)) branch,
-      ];
-      if (real.isEmpty) continue;
-      if (real.every(_addsOnlyConstraints)) {
-        _context.report(
-          .oneOfConstraintsIgnored,
-          'The $key of this schema only adds constraints to its properties; '
-          'it is generated as a model and the branches are ignored.',
-          schema.location.child(key),
-          fix: 'Nothing to do; the constraints are not checked by the client.',
-        );
-      } else {
-        _context.report(
-          .compositionPartsIgnored,
-          'The $key branches of this schema are ignored: it is generated as '
-          'a model of its properties and allOf parts.',
-          schema.location.child(key),
-          fix:
-              'Move the properties into the branches, or make the schema a '
-              'plain union at the source.',
-        );
-      }
-    }
-  }
-
-  /// Whether two property schemas are the same: one schema through
-  /// `$ref`s, or equal as written.
-  bool _same(Schema a, Schema b) {
-    final x = _context.model.resolveSchema(a)?.location;
-    final y = _context.model.resolveSchema(b)?.location;
-    if (x == y) return true;
-    if (x == null || y == null) return false;
-    final raw = _context.documents[x.document]?.valueAt(x.pointer);
-    final other = _context.documents[y.document]?.valueAt(y.pointer);
-    return raw != null &&
-        other != null &&
-        jsonEncode(raw.$1) == jsonEncode(other.$1);
   }
 
   /// The union [schema] of [branches]: a `oneOf`/`anyOf`, or, with
@@ -1592,7 +1134,7 @@ final class SchemaMapper {
     };
     final format = schema.format;
     final custom = format == null ? null : _context.config.formats[format];
-    final mapped = custom == null ? base : _custom(custom, base);
+    final mapped = custom == null ? base : CustomTypes.of(custom, base);
     return mapped.withNullable(nullable);
   }
 
@@ -1619,20 +1161,11 @@ final class SchemaMapper {
         NameHint(_names.pascal(key ?? '') ?? DeclarationNames.fallbackName, ''),
         scope,
       );
-      return _custom(custom, json).withNullable(_isNullable(schema));
+      return CustomTypes.of(custom, json).withNullable(_isNullable(schema));
     } finally {
       _aliases.remove(schema.location);
     }
   }
-
-  static CustomType _custom(DartTypeOverride custom, DartType json) =>
-      CustomType(
-        type: custom.type,
-        import: custom.import,
-        converter: custom.converter,
-        json: json.withNullable(false),
-        nullable: json.nullable,
-      );
 
   // Forwards to [SchemaQueries], until the code that asks moves out too.
   RefFollower get _refs => _queries.refs;
@@ -1644,9 +1177,6 @@ final class SchemaMapper {
 
   (UnionKind, List<Schema>)? _branches(SchemaObject schema) =>
       _queries.branches(schema);
-
-  static bool _addsOnlyConstraints(Schema schema) =>
-      SchemaQueries.addsOnlyConstraints(schema);
 
   bool _rawSecret(Schema schema, DartType? type) =>
       _queries.holdsRawSecret(schema, type);
