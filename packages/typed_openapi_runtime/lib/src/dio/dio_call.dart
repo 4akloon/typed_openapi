@@ -19,7 +19,7 @@ final class DioCall {
   /// stream with `Accept: text/event-stream`, else read as
   /// [OperationRequest.responseKind] says. [cancelToken] wins over the
   /// call's. A reconnection of an event stream sends [lastEventId] as
-  /// `Last-Event-ID` when it is not empty.
+  /// `Last-Event-ID` when it is not empty and a valid header value.
   Future<Response<Object?>> send(
     OperationRequest request,
     CallOptions? call, {
@@ -63,7 +63,7 @@ final class DioCall {
       ...request.resolveHeaders(),
       for (final MapEntry(:key, :value) in call?.headers.entries ?? const [])
         key: ?value,
-      if (lastEventId.isNotEmpty) 'Last-Event-ID': lastEventId,
+      if (_isHeaderValue(lastEventId)) 'Last-Event-ID': lastEventId,
       ...const DioBody().headers(request.body),
     },
     extra: {...?call?.extra, OperationInfo.extraKey: request.operation},
@@ -76,6 +76,15 @@ final class DioCall {
             .bytes => .bytes,
           },
   );
+
+  /// Whether [id] is a non-empty header value that every HTTP client sends:
+  /// printable ASCII, spaces and tabs. The VM's `HttpClient` throws on any
+  /// other character, which would fail every reconnection; a browser sends
+  /// UTF-8, so the id is dropped on both and the stream reconnects without
+  /// `Last-Event-ID`.
+  static bool _isHeaderValue(String id) =>
+      id.isNotEmpty &&
+      id.codeUnits.every((c) => c == 0x09 || (c >= 0x20 && c <= 0x7E));
 
   /// Dio joins the base URL and a relative path and then collapses every
   /// `//` of the whole string, query included (`RequestOptions.uri`), which

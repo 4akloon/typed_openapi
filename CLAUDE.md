@@ -794,7 +794,13 @@ that the API composes, including an `implements` fake of a tag class.
   in a row without an event, all in `SseOptions` with an injectable `wait`;
   `SseReconnection` is the operation's policy: `off` (a POST that does not
   enable it; the call cannot), `onRequest` (GET), `on`; cancel, an error
-  status (the `Failure` is the cause) and 204 end the stream). Use
+  status (the `Failure` is the cause) and 204 end the stream; a pause of
+  the listener, also during a wait or a reopen, holds the next connection;
+  an exception or `Error` thrown on an attempt, by a `wait` or an
+  interceptor, is the stream's one error, never the zone's; an event id
+  that is not printable ASCII, space or tab is not sent as `Last-Event-ID`,
+  since the VM's `HttpClient` rejects it, and the reconnection goes on
+  without it). Use
   `transformer.bind(stream)`, not `stream.transform`: Dio gives a
   `Stream<Uint8List>`.
 

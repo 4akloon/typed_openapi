@@ -1,0 +1,3 @@
+operations:
+  submit:
+    sse: {reconnect: true}

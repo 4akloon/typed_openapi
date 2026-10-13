@@ -71,16 +71,21 @@ final class _Reconnection<T> {
   }
 
   void _listen(Stream<SseItem<T>> stream) {
-    _current = stream.listen(
-      _onItem,
-      onError: (Object error, StackTrace stackTrace) {
-        // An Error of the event decoder: a bug, forwarded as M7 does.
-        _closed = true;
-        _out
-          ..addError(error, stackTrace)
-          ..close();
-      },
-    );
+    // An Error of the event decoder: a bug, forwarded as M7 does.
+    _current = stream.listen(_onItem, onError: _fail);
+    // The listener may have paused during a wait or a reopen, when there
+    // was no connection to pause.
+    if (_out.isPaused) _current?.pause();
+  }
+
+  /// Ends the stream with [error], which user code threw: the one error a
+  /// stream gives.
+  void _fail(Object error, StackTrace stackTrace) {
+    if (_closed) return;
+    _closed = true;
+    _out
+      ..addError(error, stackTrace)
+      ..close();
   }
 
   void _onItem(SseItem<T> item) {
@@ -111,6 +116,18 @@ final class _Reconnection<T> {
   }
 
   Future<void> _reconnect(Object? cause, StackTrace? stackTrace) async {
+    try {
+      await _nextConnection(cause, stackTrace);
+    } on Object catch (error, trace) {
+      // Not awaited by anyone: an escaping error would hang the stream and
+      // reach the zone. It comes from user code (a `wait` or an interceptor)
+      // or from the Dio adapter, and is a bug as an Error in a decoder is.
+      _fail(error, trace);
+    }
+  }
+
+  /// Waits and opens the next connection after the end of one for [cause].
+  Future<void> _nextConnection(Object? cause, StackTrace? stackTrace) async {
     final options = _owner.options;
     if (_attempt >= options.maxAttempts) {
       return _end(SseDisconnected(cause: cause, stackTrace: stackTrace));

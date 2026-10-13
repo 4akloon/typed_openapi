@@ -6,6 +6,8 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
+import 'package:typed_openapi/src/config/generation_config.dart';
+
 import '../helpers/emit_fixture.dart';
 
 void main() {
@@ -131,5 +133,42 @@ void main() {
     expect(accept, greaterThan(json));
     expect(accept, lessThan(stream));
     expect(threads, isNot(contains('accept:')));
+  });
+
+  test('a 2xx range opens the stream for every success status', () {
+    final ranges = emitClient('event_ranges.yaml')['api/ranges_api.dart']!;
+    expect(
+      ranges,
+      contains('streamStatuses: {for (var s = 200; s < 300; s++) s},'),
+    );
+  });
+
+  group('an operation that reconnects', () {
+    const sentence =
+        'It reconnects with `Last-Event-ID` unless `call.sse` says no.';
+    // The doc comment wraps, so compare its words.
+    String words(String code) => code.replaceAll(RegExp(r'\n\s*/// ?'), ' ');
+
+    test('by the config is a GET with reconnection on', () {
+      final files = emitClient(
+        'chat.yaml',
+        generation: const GenerationConfig(streamReconnect: true),
+      );
+      final threads = files['api/threads_api.dart']!;
+      expect(threads, contains('reconnection: .on,'));
+      expect(words(threads), contains(sentence));
+      final chat = files['api/chat_api.dart']!;
+      expect(chat, contains('reconnection: .off,'));
+    });
+
+    test('by its sse.reconnect override is a POST with reconnection on', () {
+      final ranges = emitClient(
+        'event_ranges.yaml',
+        overrides: 'event_ranges.overrides.yaml',
+      )['api/ranges_api.dart']!;
+      expect(ranges, contains('reconnection: .on,'));
+      expect(words(ranges), contains(sentence));
+      expect(ranges, isNot(contains('reconnection: .off,')));
+    });
   });
 }
