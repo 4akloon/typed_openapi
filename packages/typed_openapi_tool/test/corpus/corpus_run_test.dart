@@ -34,7 +34,12 @@ paths:
               schema: {type: array, items: {$ref: "#/components/schemas/Pet"}}
 components:
   schemas:
-    Pet: {type: object, required: [id], properties: {id: {type: string}}}
+    Pet:
+      type: object
+      required: [id]
+      properties: {id: {type: string}}
+      example: {id: 1}
+      examples: [{id: a}]
 ''';
 
 const _broken = '''
@@ -73,7 +78,14 @@ void main() {
     final pets = result.lock.clients['raw/pets']!;
     expect(pets.files.keys, containsAll(['api.dart', 'models/pet.dart']));
     expect(pets.files.keys, isNot(contains(CorpusRun.manifest)));
+    expect(pets.values, {
+      'examples': 1,
+      'failures': 0,
+      'spec_defects': 1,
+      'synthetic': 2,
+    });
     expect(result.lock.clients['raw/broken']!.files, isEmpty);
+    expect(result.lock.clients['raw/broken']!.values, isNull);
     expect(result.lock.clients['raw/broken']!.diagnostics['TOA009'], 1);
   }, timeout: const Timeout(Duration(minutes: 3)));
 }

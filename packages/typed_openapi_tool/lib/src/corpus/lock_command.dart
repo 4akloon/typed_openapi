@@ -87,6 +87,9 @@ final class LockCommand extends Command<int> {
       differences.add('${lockFile.path} does not exist: run corpus update.');
     }
     result.failures.forEach(_err.writeln);
+    for (final failure in result.roundTrips) {
+      _err.writeln('round trip: $failure');
+    }
     differences.forEach(_out.writeln);
     _out.writeln(_summary(result.lock, differences));
     return result.failures.isEmpty && differences.isEmpty ? 0 : 1;

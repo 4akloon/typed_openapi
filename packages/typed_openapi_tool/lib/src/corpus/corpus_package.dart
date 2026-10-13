@@ -15,11 +15,23 @@ final class CorpusPackage {
   /// The `union` mode of the clients: `raw` or `structural`.
   final String mode;
 
+  /// The name of the package, for `package:` imports.
+  String get name => 'corpus_$mode';
+
   /// The generator config of the package.
   String get config => p.join(directory, 'typed_openapi.yaml');
 
   /// The output directory of the client [name].
   String outputOf(String name) => p.join(directory, 'lib', name);
+
+  /// Deletes what an earlier run generated: the code, the round-trip
+  /// programs and their data.
+  void clean() {
+    for (final folder in const ['lib', 'bin', 'roundtrip']) {
+      final directory = Directory(p.join(this.directory, folder));
+      if (directory.existsSync()) directory.deleteSync(recursive: true);
+    }
+  }
 
   /// Writes the package for the clients [inputs] (a name and the absolute
   /// path of its spec); [runtime] is the directory of
@@ -46,7 +58,7 @@ final class CorpusPackage {
 
   String _pubspec(String runtime) =>
       '''
-name: corpus_$mode
+name: $name
 publish_to: none
 environment:
   sdk: ">=3.10.0 <4.0.0"
