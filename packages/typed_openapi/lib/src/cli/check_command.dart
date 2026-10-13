@@ -6,6 +6,7 @@ import '../config/config_loader.dart';
 import '../diagnostics/diagnostic_bag.dart';
 import '../diagnostics/display_paths.dart';
 import '../diagnostics/reporters.dart';
+import '../diagnostics/sarif_reporter.dart';
 
 /// `typed_openapi check`: analyzes specs without generating code.
 final class CheckCommand extends Command<int> {
@@ -80,8 +81,13 @@ final class CheckCommand extends Command<int> {
       );
     }
     final format = ReportFormat.byOption(results.option('format')!);
+    // Code scanning needs a file for every result: a problem without one
+    // (a missing config) is located at the config.
+    final reporter = format == .sarif
+        ? SarifReporter(defaultFile: _paths.of(results.option('config')!))
+        : format.reporter;
     _out.writeln(
-      format.reporter.format(
+      reporter.format(
         diagnostics,
         showBaselined: results.flag('show-baselined'),
       ),

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:source_span/source_span.dart';
 
@@ -21,9 +22,23 @@ import 'severity.dart';
 /// introduced the problem) is a `relatedLocations` item. With
 /// `showBaselined`, accepted diagnostics are results with an external
 /// suppression.
+///
+/// GitHub code scanning needs more than the schema (M11): every rule has a
+/// short and a full description and help, every result a partial
+/// fingerprint (of its code, file, pointer and message) and a physical
+/// location with a region. A file without a position is located at its
+/// first line; a result without a file at [defaultFile] (`check` passes the
+/// config file), or without a physical location when there is none.
 final class SarifReporter implements DiagnosticReporter {
-  /// Creates a SARIF reporter.
-  const SarifReporter();
+  /// Creates a SARIF reporter that locates a result without a file at
+  /// [defaultFile].
+  const SarifReporter({this.defaultFile});
+
+  /// The file a result without one is located at.
+  final String? defaultFile;
+
+  /// The key of the partial fingerprint of a result.
+  static const fingerprintKey = 'typedOpenapi/v1';
 
   /// The SARIF version written.
   static const version = '2.1.0';
@@ -64,10 +79,21 @@ final class SarifReporter implements DiagnosticReporter {
   static Map<String, Object?> _rule(DiagnosticCode code) => {
     'id': code.id,
     'name': code.slug,
+    'shortDescription': {'text': code.slug},
+    'fullDescription': {
+      'text':
+          '${code.id} ${code.slug}, a diagnostic of typed_openapi '
+          '(${_level(code.defaultSeverity)} by default).',
+    },
+    'help': {
+      'text':
+          'See ${code.id} in the catalog of diagnostic codes; set its level '
+          'with `severity: {${code.slug}: off}` in typed_openapi.yaml.',
+    },
     'defaultConfiguration': {'level': _level(code.defaultSeverity)},
   };
 
-  static Map<String, Object?> _result(
+  Map<String, Object?> _result(
     Diagnostic d,
     int ruleIndex, {
     required bool accepted,
@@ -78,7 +104,8 @@ final class SarifReporter implements DiagnosticReporter {
       'ruleIndex': ruleIndex,
       'level': _level(d.severity),
       'message': {'text': fix == null ? d.message : '${d.message}\nFix: $fix'},
-      'locations': [?_location(d.file, d.pointer, d.span)],
+      'partialFingerprints': {fingerprintKey: _fingerprint(d)},
+      'locations': [?_location(d.file ?? defaultFile, d.pointer, d.span)],
       if (d.related.isNotEmpty)
         'relatedLocations': [
           for (final (i, r) in d.related.indexed)
@@ -105,13 +132,12 @@ final class SarifReporter implements DiagnosticReporter {
       if (file != null)
         'physicalLocation': {
           'artifactLocation': {'uri': _uri(file)},
-          if (span != null)
-            'region': {
-              'startLine': span.start.line + 1,
-              'startColumn': span.start.column + 1,
-              'endLine': span.end.line + 1,
-              'endColumn': span.end.column + 1,
-            },
+          'region': {
+            'startLine': (span?.start.line ?? 0) + 1,
+            'startColumn': (span?.start.column ?? 0) + 1,
+            'endLine': (span?.end.line ?? 0) + 1,
+            'endColumn': (span?.end.column ?? 0) + 1,
+          },
         },
       if (pointer != null)
         'logicalLocations': [
@@ -119,6 +145,14 @@ final class SarifReporter implements DiagnosticReporter {
         ],
     };
   }
+
+  /// The partial fingerprint of [d]: the first 16 hexadecimal digits of the
+  /// SHA-256 of its code, file, pointer and message.
+  static String _fingerprint(Diagnostic d) =>
+      '${sha256.convert(
+            utf8.encode(jsonEncode([d.code.id, d.file, d.pointer?.value, d.message])),
+          )}'
+          .substring(0, 16);
 
   /// [file] as a URI reference: relative paths keep `/` separators and are
   /// percent-encoded; absolute paths become `file:` URIs.

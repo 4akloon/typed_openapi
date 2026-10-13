@@ -52,7 +52,12 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   such; the GitHub reporter also escapes `%`, CR and LF as the
   runner expects, and JSON and SARIF keep the text as it is), and the
   reporters (`DiagnosticReporter`, `TextReporter`, `JsonReporter`,
-  `SarifReporter`, `GitHubActionsReporter`, `ReportFormat`).
+  `SarifReporter` (valid against the SARIF 2.1.0 schema (fetched and
+  pinned by hash with `corpus fetch`, not vendored) and GitHub code
+  scanning's required properties, both checked by the tool package: rule descriptions and help, a partial fingerprint per
+  result, a region for every physical location, line 1 for a file without
+  a position, and `defaultFile`, the config `check` passes, for a result
+  without a file), `GitHubActionsReporter`, `ReportFormat`).
 - `load/` - `SpecLoader` reads JSON/YAML into a `SpecDocument` (plain tree,
   absolute file URI, source spans by JSON pointer, `valueAt(pointer)`,
   `withRoot`) through `YamlComposer`, which `ConfigLoader` uses too.

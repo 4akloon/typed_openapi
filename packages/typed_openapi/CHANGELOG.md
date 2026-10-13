@@ -21,6 +21,13 @@
   payloads (`{"type": "function"}` is a `FunctionTool`); in the corpus the
   `openai` client's union files change (M11).
 
+### Fixed
+- SARIF reports have what GitHub code scanning requires (M11): every rule a
+  short and a full description and help, every result a partial
+  fingerprint (`typedOpenapi/v1`) and a region (line 1 for a file without a
+  position); `check --format sarif` locates a result without a file (a
+  missing config) at the config file. `SarifReporter` takes `defaultFile`.
+
 ### Added
 - Event streams (M10): an operation whose success is `text/event-stream` is
   generated. A stream method returns `Future<Result<Stream<SseItem<T>>, E>>`
