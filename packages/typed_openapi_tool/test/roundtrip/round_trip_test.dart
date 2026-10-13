@@ -1,6 +1,8 @@
 @TestOn('vm')
 library;
 
+import 'dart:io';
+
 import 'package:test/test.dart';
 import 'package:typed_openapi_tool/src/roundtrip/example_reader.dart';
 import 'package:typed_openapi_tool/src/roundtrip/round_trip.dart';
@@ -28,6 +30,13 @@ components:
 ''';
 
 void main() {
+  test('output that is not a result did not run', () {
+    for (final stdout in ['not json at all', '[1, 2]', '{"examples": "x"}']) {
+      final result = RoundTrip.readOutput('c', ProcessResult(0, 0, stdout, ''));
+      expect(result.notRun, [contains('c: the round trip did not run')]);
+    }
+  });
+
   test(
     'a program that outlives the timeout did not run, nothing else',
     () async {

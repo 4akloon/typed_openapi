@@ -127,7 +127,7 @@ final class RoundTrip {
     } on CorpusException catch (e) {
       return _failed(client, e.message);
     }
-    return _read(client, result);
+    return readOutput(client, result);
   }
 
   static RoundTripResult _failed(String client, String reason) => (
@@ -140,13 +140,26 @@ final class RoundTrip {
     notRun: ['$client: the round trip did not run: $reason'],
   );
 
-  /// The result the program printed as its last line.
-  static RoundTripResult _read(String client, ProcessResult result) {
+  /// The result the program printed as its last line; output that is no
+  /// result (a crash, other text, a wrong shape) is a run that did not run.
+  static RoundTripResult readOutput(String client, ProcessResult result) {
     final lines = '${result.stdout}'.trim().split('\n');
     if (result.exitCode != 0 || lines.last.isEmpty) {
       return _failed(client, TimedProcess.excerpt(result.stderr));
     }
-    final json = jsonDecode(lines.last) as Map<String, Object?>;
+    try {
+      return _parse(client, jsonDecode(lines.last) as Map<String, Object?>);
+    } on FormatException {
+      return _failed(client, 'the program printed no result.');
+    } on TypeError {
+      return _failed(
+        client,
+        'the program printed a result of the wrong shape.',
+      );
+    }
+  }
+
+  static RoundTripResult _parse(String client, Map<String, Object?> json) {
     List<String> texts(String key) => [
       for (final text in json[key] as List<Object?>) '$client: $text',
     ];
