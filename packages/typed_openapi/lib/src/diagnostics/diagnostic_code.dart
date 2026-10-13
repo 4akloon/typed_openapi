@@ -561,7 +561,9 @@ enum DiagnosticCode {
   /// Two overrides change the same node; neither is applied.
   overrideConflict('TOA806', 'override-conflict', .error),
 
-  /// An override sets a value the spec already has; it can be removed.
+  /// An override sets a value the spec already has, or a generation field
+  /// has no effect (a `name` or `exhaustive` on an alias, a `name` on a
+  /// schema that only a multipart body uses); it can be removed.
   overrideUnchanged('TOA807', 'override-unchanged', .info),
 
   /// An override addressed through an operation changes a node other
