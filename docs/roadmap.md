@@ -112,7 +112,7 @@ M5 review findings that were deliberately deferred:
 
 | What | Where |
 |---|---|
-| Windows: paths with a drive letter (`_fileName`, a dead `PathException` branch), `int` semantics on the web (dart2js) | M11: the Windows job runs every suite; `display_paths_windows_test.dart` pins drive letters (the `PathException` branch of `Fingerprints` is reached only with the baseline on another drive); `int` on the web is pinned by the runtime's `platform_semantics_test.dart` |
+| Windows: paths with a drive letter (`_fileName`, a dead `PathException` branch), `int` semantics on the web (dart2js) | M11: the Windows job runs every suite; `display_paths_windows_test.dart` pins drive letters (the `PathException` branch of `Fingerprints` can be reached with the baseline on another drive); `int` on the web is pinned by the runtime's `platform_semantics_test.dart` |
 | SARIF: results with a file but without a position (`region`), and without a file — check `upload-sarif` in GitHub code scanning | M11: validated offline against the SARIF 2.1.0 schema (fetched and pinned by hash, not vendored; the test skips locally without the cache and fails in CI) and GitHub code scanning's required properties; the reporter now writes rule descriptions and help, partial fingerprints, a region on line 1 for a file without a position, and the config file for a result without one |
 | Path display: a file reached through `$ref` is absolute when the specification itself is outside the working directory; a symlinked directory (macOS `/tmp`) shows files as absolute | when needed (baseline matching is not affected) |
 | Anchor: the first alias / the first shared Path Item wins; a parameter's anchor through `$ref` is by index | when needed |
@@ -245,18 +245,19 @@ Findings and decisions of M10 that were deliberately deferred (plan:
 
 Findings and decisions of M11 that were deliberately deferred (plan:
 [2026-10-13-m11-corpus.md](superpowers/plans/2026-10-13-m11-corpus.md),
-"Deferred"). The round-trip failures are counted in `corpus.lock`
-(`values.failures`, 0 for every client), so a new one changes the lock.
+"Deferred"). The round-trip counts are in `corpus.lock`
+(`values`; `failures` is 0 for every client), and `corpus check` compares
+them with the lock, so a new failure or any other changed count fails it. A
+skipped client has no counts.
 
 | What | Where |
 |---|---|
 | `style: cookie` (OpenAPI 3.2) is sent percent-encoded, like `form` | a user decision |
 | The Windows and macOS jobs, and the 3.10.0 SDK, are verified only in CI | first CI run of M11 |
 
-After M11: no row of the two "Parked" tables below is about the corpus, the
-platform matrix or escaping; each stays parked with its reason. The fuzz
-checks the text report for raw controls, not the JSON and SARIF reports of
-the M10 row on U+200E, U+200F and U+061C.
+After M11: no Parked row is about the corpus or the platform matrix; the one
+escaping row (U+200E, U+200F, U+061C in the JSON and SARIF reports) stays
+parked because the fuzz covers the text report only.
 
 ## Parked from the M10 reviews
 

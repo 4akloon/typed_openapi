@@ -45,6 +45,7 @@ dart format packages
 
 cd packages/typed_openapi && dart test
 cd packages/typed_openapi_runtime && dart test
+cd packages/typed_openapi_tool && dart test
 
 # Before publishing a package:
 cd packages/<package> && dart pub publish --dry-run

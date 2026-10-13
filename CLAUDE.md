@@ -28,6 +28,7 @@ cd packages/typed_openapi_runtime && dart test -p chrome --compiler dart2wasm   
 cd packages/typed_openapi && dart format lib test bin   # a second run must change 0 files
 cd packages/typed_openapi_runtime && dart format lib test # the same
 cd packages/<package> && dart pub publish --dry-run # before publishing
+cd packages/typed_openapi_tool && dart test
 cd packages/typed_openapi_tool && dart format lib test bin # the same
 cd packages/typed_openapi_tool && dart run bin/corpus.dart check  # network on first fetch
 cd packages/typed_openapi_tool && dart run bin/corpus.dart update # rewrites corpus.lock
@@ -818,8 +819,9 @@ Rules of the pipeline:
 ## Tools (`packages/typed_openapi_tool/`)
 
 The corpus, golden tests and fuzz of M11 (R15.3, R15.4); the tool uses the
-generator's public API only and is the only package with network access
-(`fetch`, never a test).
+generator's public API only. Its network use is the `SpecCache` download
+(`corpus fetch`, and `update`/`check` for what the cache lacks) and the
+`dart pub get` of `PackageGate`; no test touches the network.
 
 - `corpus.yaml` pins each public spec (a URL fixed to a commit, a tag or a
   release; `url` for one file, `archive` + `root` + `entry` for a GitHub
@@ -843,8 +845,12 @@ generator's public API only and is the only package with network access
   `CorpusLock`/`ClientLock`, and the commands `fetch` (a name that is
   neither a spec nor a schema is a usage error, exit 64), `update` and
   `check`, which `CorpusCli` runs with `semver`.
-  A round-trip failure does not fail `check` by itself: its count is in
-  the lock (0 for every client), so a new one is a difference.
+  A round-trip failure is counted, not fatal by itself: the counts are in
+  the lock (`failures` is 0 for every client) and `check` compares them
+  like files and diagnostics, so a count that differs from the lock is a
+  difference and `check` exits 1, naming the client and the count. A client
+  that is skipped (artemis) has no counts, and gaining or losing them is a
+  difference too.
 - `lib/src/roundtrip/` - `ExampleReader` (the `example`/`examples` of each
   declaration's schema and of JSON responses, at the locations the IR
   names), `SyntheticValues` (from the IR: required fields, all fields,
