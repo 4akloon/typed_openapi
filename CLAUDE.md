@@ -371,7 +371,9 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   its media type as without the event stream (bytes for `application/octet-stream`
   or `application/xml`, text, JSON: `MediaTypePicker` `chooseEvents: false`
   never chooses a success's event stream for it, with `sse.method: none`
-  too). A method that returns events has
+  too), and it has `OperationIr.accept` (`application/json`, else the base
+  media type it picked), which the emitter writes as `accept:` of the
+  `OperationRequest` so the server does not answer it with the stream. A method that returns events has
   `OperationIr.events` (`EventStreamIr`: the data type, null for text, and
   `StreamReconnection` `off` for a non-GET (TOA665 when the config asks to
   reconnect), `onRequest`, `on`
@@ -746,7 +748,9 @@ that the API composes, including an `implements` fake of a tag class.
   metadata only; `SecuritySchemeType.unknown` is a scheme the spec names
   but does not define), `OperationRequest` (resolves the path and the query
   itself; `pathVariable` is the one pattern of a path variable, which the
-  generator copies; `streamStatuses` for event streams), `RawResponse` (what
+  generator copies; `streamStatuses` for event streams; `accept` is the
+  `Accept` of the JSON method of an operation that also has an event-stream
+  method, and a call's own `Accept` wins), `RawResponse` (what
   a generated decoder switches on; `parsedJson` parses a JSON body that Dio
   read as text or bytes), and the bodies `FileUpload` (bytes or a stream),
   `FormBody`/`FormEncoding` and `MultipartBody`/`MultipartPart`, which

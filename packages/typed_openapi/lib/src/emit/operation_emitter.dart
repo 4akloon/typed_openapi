@@ -218,6 +218,9 @@ final class OperationEmitter {
       _request.body(out, operation);
       final kind = DecoderWriter.responseKind(operation);
       if (kind != 'json') out.line('responseKind: .$kind,');
+      if (operation.accept case final accept?) {
+        out.line('accept: ${_code.string(accept)},');
+      }
       if (operation.events != null) _events.statuses(out, operation);
     });
     out.line('),');

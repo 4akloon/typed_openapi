@@ -102,6 +102,19 @@ Future<void> main() async {
   final sent = adapter.requests.single;
   print('${sent.method} ${sent.uri} accept ${sent.headers['Accept']}');
 
+  // The JSON method of the same operation asks for JSON; the call's own
+  // Accept wins.
+  adapter = Adapter([(_) => json(200, {'text': 'hello'})]);
+  final reply = await client(adapter).chat.chat(body: const Prompt(text: 'hi'));
+  print('JSON method accept ${adapter.requests.single.headers['Accept']}');
+  if (reply case Success(:final data)) print('  reply ${data.text}');
+  adapter = Adapter([(_) => json(200, {'text': 'again'})]);
+  await client(adapter).chat.chat(
+    body: const Prompt(text: 'hi'),
+    call: const CallOptions(headers: {'accept': 'text/plain'}),
+  );
+  print('JSON method with an Accept of the call ${adapter.requests.single.headers['Accept']}');
+
   // A documented error before the stream opens.
   adapter = Adapter([(_) => json(400, {'code': 'empty'})]);
   await printAll(

@@ -96,4 +96,22 @@ void main() {
     expect(_kind(download), BodyKind.bytes);
     expect(none.reportedOf(.mediaTypesDropped), hasLength(1));
   });
+
+  test('the method that returns the body asks for it with Accept', () {
+    expect(
+      {
+        for (final MapEntry(:key, :value) in methods.entries) key: value.accept,
+      },
+      {
+        'download': 'application/octet-stream',
+        'downloadStream': null,
+        'note': 'text/plain',
+        'noteStream': null,
+        'report': 'application/xml',
+        'reportStream': null,
+        'status': 'application/json',
+        'statusStream': null,
+      },
+    );
+  });
 }

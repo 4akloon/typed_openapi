@@ -1,3 +1,4 @@
+import '../model/media_type_name.dart';
 import 'event_streams.dart';
 import 'ir.dart';
 import 'ir_context.dart';
@@ -42,12 +43,13 @@ final class MethodBuilder {
   ) {
     final shape = _streams.shapeOf(entry.operation);
     final main = switch (shape) {
-      .none || .both => _operation(
+      .none => _operation(
         entry,
         name,
         parameters,
-        _responses.pick(entry.operation, hasStreamMethod: shape == .both),
+        _responses.pick(entry.operation),
       ),
+      .both => _bodyOperation(entry, name, parameters),
       .only || .mixed || .excluded => null,
     };
     final stream = switch (shape) {
@@ -56,6 +58,29 @@ final class MethodBuilder {
       .none || .mixed || .excluded => null,
     };
     return [?main, ?stream];
+  }
+
+  /// The method of [entry] that returns its body, next to the one that
+  /// returns its events: it asks for the body's media type with `Accept`.
+  OperationIr _bodyOperation(
+    SpecOperation entry,
+    String name,
+    List<ParameterIr> parameters,
+  ) {
+    final picked = _responses.pick(entry.operation, hasStreamMethod: true);
+    return _operation(entry, name, parameters, picked, accept: _accept(picked));
+  }
+
+  /// The `Accept` of a method that returns the body of [picked]: JSON, or
+  /// the media type of its first success with a body.
+  static String? _accept(List<PickedResponse> picked) {
+    for (final (status, _, (contentType, _)) in picked) {
+      if (!status.startsWith('2') || contentType == null) continue;
+      return MediaTypePicker.kindOf(contentType) == .json
+          ? 'application/json'
+          : MediaTypeName(contentType).base;
+    }
+    return null;
   }
 
   /// The method of [entry] that returns its events, or null (TOA654), which
@@ -86,6 +111,7 @@ final class MethodBuilder {
     List<ParameterIr> parameters,
     List<PickedResponse> picked, {
     EventStreamIr? events,
+    String? accept,
   }) {
     final operation = entry.operation;
     final prefix = _names.pascal(name) ?? name;
@@ -109,6 +135,7 @@ final class MethodBuilder {
       errors: _responses.errors(responses),
       security: _security.of(operation),
       events: events,
+      accept: accept,
     );
   }
 }

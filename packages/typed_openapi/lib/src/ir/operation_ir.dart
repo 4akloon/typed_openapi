@@ -25,6 +25,7 @@ final class OperationIr {
     this.errorType,
     this.partsName,
     this.events,
+    this.accept,
   });
 
   /// This operation with the names of the types the API emitter declares
@@ -53,6 +54,7 @@ final class OperationIr {
     errorType: errorType,
     partsName: partsName,
     events: events ?? this.events,
+    accept: accept,
   );
 
   /// Where the Operation Object is.
@@ -116,6 +118,11 @@ final class OperationIr {
   /// with a body are `text/event-stream` and their type is the type of
   /// each event's data.
   final EventStreamIr? events;
+
+  /// The media type the method asks for with `Accept`: set on the method that
+  /// returns the body of an operation that also has an event-stream method
+  /// (decision 5 of M10), so the server does not answer with the stream.
+  final String? accept;
 
   /// The key of the operation in the overrides file: its `operationId`,
   /// or `METHOD /path`.

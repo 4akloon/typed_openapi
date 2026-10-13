@@ -142,6 +142,9 @@ success 200
   event delta #2 Delta(part: lo, sessionToken: <redacted>)
   end closed
 POST https://chat.example.com/chat accept text/event-stream
+JSON method accept application/json
+  reply hello
+JSON method with an Accept of the call text/plain
 error 400 Problem(code: empty)
 success 200
   event message # Delta(part: a, sessionToken: <redacted>)

@@ -59,7 +59,7 @@ final class DioCall {
   }) => Options(
     method: request.operation.method,
     headers: {
-      if (events) 'Accept': 'text/event-stream',
+      'Accept': ?(events ? 'text/event-stream' : request.accept),
       ...request.resolveHeaders(),
       for (final MapEntry(:key, :value) in call?.headers.entries ?? const [])
         key: ?value,

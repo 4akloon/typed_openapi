@@ -122,4 +122,14 @@ void main() {
       }
     },
   );
+
+  test('only the JSON method of a JSON and events operation sends Accept', () {
+    expect("accept: 'application/json',".allMatches(chat), hasLength(1));
+    final json = chat.indexOf('Future<Result<Reply, Problem>> chat({');
+    final accept = chat.indexOf("accept: 'application/json',");
+    final stream = chat.indexOf('chatStream2({');
+    expect(accept, greaterThan(json));
+    expect(accept, lessThan(stream));
+    expect(threads, isNot(contains('accept:')));
+  });
 }

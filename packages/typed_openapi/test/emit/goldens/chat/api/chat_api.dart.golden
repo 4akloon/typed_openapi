@@ -68,6 +68,7 @@ class ChatApi {
       _chat,
       body: body.toJson(),
       contentType: 'application/json',
+      accept: 'application/json',
     ),
     _decodeChat,
     call: call,
