@@ -22,10 +22,9 @@ const Map<String, int> _fileAllowlist = {
   'lib/src/emit/union_emitter.dart': 416,
   // M9: the fields the API emitter reads on the operation IR classes, and
   // whether a response body is a secret.
-  'lib/src/ir/ir.dart': 824,
+  'lib/src/ir/ir.dart': 709,
   // M9: event streams in the empty-client report; webhooks checked.
   'lib/src/ir/ir_builder.dart': 538,
-  'lib/src/ir/operation_builder.dart': 509,
   'test/cli/generate_command_test.dart': 771,
   'test/emit/model_library_test.dart': 891,
   'test/ir/emitter_contract_test.dart': 576,
@@ -65,7 +64,6 @@ const Map<String, int> _methodAllowlist = {
   // M9: a parameter keeps its schema's default.
   'lib/src/ir/operation_builder.dart#OperationBuilder._parameter': 100,
   'lib/src/ir/operation_builder.dart#OperationBuilder._parameters': 74,
-  'lib/src/ir/operation_builder.dart#OperationBuilder._responses': 42,
   'lib/src/ir/operation_selector.dart#OperationSelector.select': 42,
   'lib/src/load/openapi_version.dart#OpenApiVersionDetector.detect': 47,
   'lib/src/normalize/normalizer.dart#Normalizer.normalize': 43,
