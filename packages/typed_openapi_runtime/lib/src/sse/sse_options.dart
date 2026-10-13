@@ -6,7 +6,7 @@
 /// the last event id as `Last-Event-ID`. The first delay is the server's
 /// `retry`, else [delay]; each further delay doubles up to [maxDelay] (a
 /// server `retry` longer than [maxDelay] is kept as it is). After
-/// [maxAttempts] attempts in a row without an event, the stream ends with
+/// [maxAttempts] attempts in a row without a message, the stream ends with
 /// `SseDisconnected`.
 final class SseOptions {
   /// Creates the options of one call.
@@ -30,8 +30,9 @@ final class SseOptions {
   /// The longest delay a doubling reaches.
   final Duration maxDelay;
 
-  /// How many attempts in a row may fail before the stream ends; an event
-  /// on a new connection starts the count again.
+  /// How many attempts in a row may fail before the stream ends; a message
+  /// on a new connection (an event, also one that does not decode or that
+  /// the program drops) starts the count again.
   final int maxAttempts;
 
   /// Waits [delay] before an attempt; `Future.delayed` when null. Tests

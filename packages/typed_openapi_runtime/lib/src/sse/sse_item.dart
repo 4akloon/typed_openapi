@@ -98,6 +98,7 @@ final class SseDisconnected<T> extends SseItem<T> {
     this.stackTrace,
     this.lastEventId,
     this.retry,
+    this.receivedMessage = false,
   });
 
   /// Why the stream ended, or `null` when the server closed it.
@@ -114,6 +115,13 @@ final class SseDisconnected<T> extends SseItem<T> {
 
   /// The last reconnection time of the connection when it ended, or null.
   final Duration? retry;
+
+  /// Whether the connection delivered at least one message: an event, an
+  /// event that did not decode, or one the decoder dropped. A reconnecting
+  /// stream starts its count of failed attempts again after such a
+  /// connection, so a stream that only carries events the program ignores
+  /// (heartbeats) is not given up.
+  final bool receivedMessage;
 
   @override
   String toString() => 'SseDisconnected(${cause ?? 'closed by server'})';

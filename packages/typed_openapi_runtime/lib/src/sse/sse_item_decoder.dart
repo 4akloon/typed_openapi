@@ -84,6 +84,7 @@ final class _Decoding<T> {
   // What the last item carries: also the id of a dropped event.
   String _lastId;
   Duration? _lastRetry;
+  bool _receivedMessage = false;
 
   Stream<SseItem<T>> start(Stream<List<int>> stream) {
     _items = StreamController<SseItem<T>>(
@@ -113,6 +114,7 @@ final class _Decoding<T> {
   void _onMessage(SseMessage message) {
     _lastId = message.id;
     _lastRetry = message.retry;
+    _receivedMessage = true;
     final SseItem<T>? item;
     try {
       item = _owner._item(message);
@@ -137,6 +139,7 @@ final class _Decoding<T> {
           stackTrace: stackTrace,
           lastEventId: _lastId,
           retry: _lastRetry,
+          receivedMessage: _receivedMessage,
         ),
       )
       ..close();

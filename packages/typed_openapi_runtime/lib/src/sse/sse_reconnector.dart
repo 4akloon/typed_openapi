@@ -17,7 +17,7 @@ typedef SseResume = ({String lastEventId, Duration? retry});
 /// and calls [reopen] with the last event id. A new connection's items
 /// follow; a failed attempt (a [TransportError]) is the next attempt. The
 /// stream ends with [SseDisconnected] when [SseOptions.maxAttempts]
-/// attempts in a row bring no event, when the request is cancelled (the
+/// attempts in a row bring no message, when the request is cancelled (the
 /// listener cancels, or [cancelled] completes, also during a wait), when
 /// the server answers an attempt with a status that is not a stream (the
 /// `Failure` is the cause), or with 204 No Content, which tells a client
@@ -101,9 +101,11 @@ final class _Reconnection<T> {
       case SseDisconnected(cause: DioException(type: .cancel)):
         _end(item);
       case SseDisconnected(:final cause, :final stackTrace):
-        // A dropped event (SseEventIgnored) still moves the id.
+        // A dropped event (SseEventIgnored) still moves the id and counts as
+        // progress: the connection worked.
         if (item.lastEventId case final id?) _lastEventId = id;
         if (item.retry case final retry?) _retry = retry;
+        if (item.receivedMessage) _attempt = 0;
         _current = null;
         unawaited(_reconnect(cause, stackTrace));
     }

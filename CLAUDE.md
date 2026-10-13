@@ -791,7 +791,10 @@ that the API composes, including an `implements` fake of a tag class.
   from the user's decoder is the only stream error), `SseReconnector`
   (R12.5: `SseReconnecting(attempt, delay, cause)` before each attempt,
   `Last-Event-ID`, the server's `retry` or 1 s doubling to 30 s, 5 attempts
-  in a row without an event, all in `SseOptions` with an injectable `wait`;
+  in a row without a message (an event, a decode error or an event the
+  decoder drops: `SseDisconnected.receivedMessage` tells the reconnector
+  that the connection delivered one, so a stream of ignored heartbeats is
+  not given up), all in `SseOptions` with an injectable `wait`;
   `SseReconnection` is the operation's policy: `off` (a POST that does not
   enable it; the call cannot), `onRequest` (GET), `on`; cancel, an error
   status (the `Failure` is the cause) and 204 end the stream; a pause of
