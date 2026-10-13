@@ -1,3 +1,4 @@
+import '../diagnostics/message_text.dart';
 import '../model/media_type.dart';
 import '../model/media_type_name.dart';
 import '../model/schema.dart';
@@ -126,7 +127,8 @@ final class EventData {
       if (!seen.add(event)) {
         _context.report(
           .eventNameDuplicate,
-          'Another branch of the itemSchema is the event "$event" already; '
+          'Another branch of the itemSchema is the event '
+          '${MessageText.quote(event)} already; '
           'this branch is left out.',
           at,
           fix: 'Give each event its own name at the source.',

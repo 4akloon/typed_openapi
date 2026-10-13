@@ -43,8 +43,15 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   serious; level comparison uses its order), `SeverityLevels` (a client's
   `severity` config), `JsonPointer`, `DiagnosticBag` (baselined diagnostics kept
   apart), `DisplayPaths` (files relative to the working directory, absolute
-  outside it), and the reporters (`DiagnosticReporter`, `TextReporter`,
-  `JsonReporter`, `SarifReporter`, `GitHubActionsReporter`, `ReportFormat`).
+  outside it), `MessageText` (spec text in a message: `quote` writes
+  `"`, `\`, controls and bidirectional marks as escapes, as the event
+  names of TOA551/TOA559/TOA667/TOA668 are; `neutralise` is what the text
+  and GitHub reporters apply to every message, fix and related message, so
+  an ESC byte or a `::error::` line from a spec never reaches a terminal or
+  a CI log as such; the GitHub reporter also escapes `%`, CR and LF as the
+  runner expects, and JSON and SARIF keep the text as it is), and the
+  reporters (`DiagnosticReporter`, `TextReporter`, `JsonReporter`,
+  `SarifReporter`, `GitHubActionsReporter`, `ReportFormat`).
 - `load/` - `SpecLoader` reads JSON/YAML into a `SpecDocument` (plain tree,
   absolute file URI, source spans by JSON pointer, `valueAt(pointer)`,
   `withRoot`) through `YamlComposer`, which `ConfigLoader` uses too.
@@ -426,7 +433,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   the enum value scope (`unknown_`).
 - `emit/` - the model emitter (M8), whose only input is the IR (it never
   reads the spec): `DartCode` (string literals: `\`, `'`, `$`, line breaks
-  including U+0085, U+2028 and U+2029, controls, bidirectional controls and
+  including U+0085, U+2028 and U+2029, controls, bidirectional controls (also
+  U+200E, U+200F and U+061C) and
   lone surrogates are escaped; one-line code spans `docSpan`/`jsonSpan`;
   `docLines` for spec text: `[`, `]`, `<`, `>`, `\` and `{@` escaped outside
   code spans, controls dropped, wrapped at the width (a span is never

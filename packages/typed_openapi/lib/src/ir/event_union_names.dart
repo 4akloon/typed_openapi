@@ -1,3 +1,4 @@
+import '../diagnostics/message_text.dart';
 import 'ir.dart';
 import 'ir_context.dart';
 import 'names.dart';
@@ -59,8 +60,8 @@ final class EventUnionNames {
     if (words == null) {
       _context.report(
         .eventNameUnrepresentable,
-        'Event "${variant.event}" has no ASCII letter or digit; its class is '
-        'named after its place.',
+        'Event ${MessageText.quote(variant.event)} has no ASCII letter or '
+        'digit; its class is named after its place.',
         ir.location,
         fix: 'Name the event with letters at the source.',
       );
@@ -74,7 +75,7 @@ final class EventUnionNames {
     }
     return _claims.claim(
       candidate,
-      'the class of the event "${variant.event}"',
+      'the class of the event ${MessageText.quote(variant.event)}',
       operation.location,
       override: operation,
     );

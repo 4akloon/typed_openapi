@@ -3,6 +3,7 @@ import '../config/project_config.dart';
 import '../diagnostics/diagnostic_bag.dart';
 import '../diagnostics/diagnostic_code.dart';
 import '../diagnostics/json_pointer.dart';
+import '../diagnostics/message_text.dart';
 import '../diagnostics/severity.dart';
 import '../model/spec_node.dart';
 import '../normalize/normalizer.dart';
@@ -258,7 +259,8 @@ final class IrContext {
     if (!_names.dropsLetters(source)) return;
     report(
       .nameLossy,
-      '$what "$source" lost characters when it became the Dart name '
+      '$what ${MessageText.quote(source)} lost characters when it became the '
+      'Dart name '
       '"$name": letters outside ASCII are dropped.',
       at,
       fix: fix,

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'diagnostic_bag.dart';
 import 'github_actions_reporter.dart';
+import 'message_text.dart';
 import 'sarif_reporter.dart';
 import 'severity.dart';
 
@@ -30,7 +31,8 @@ final class TextReporter implements DiagnosticReporter {
     for (final (d, accepted) in listed) {
       final mark = accepted ? ' [baselined]' : '';
       out.writeln(
-        '${d.severity.name} ${d.code.id} ${d.code.slug}$mark: ${d.message}',
+        '${d.severity.name} ${d.code.id} ${d.code.slug}$mark: '
+        '${MessageText.neutralise(d.message)}',
       );
       final location = d.location;
       if (location != null) out.writeln('  --> $location');
@@ -38,9 +40,12 @@ final class TextReporter implements DiagnosticReporter {
       if (pointer != null) out.writeln('  at ${pointer.value}');
       final fix = d.fix;
       // A fix may end with an override snippet on several lines.
-      if (fix != null) out.writeln('  fix: ${fix.replaceAll('\n', '\n    ')}');
+      if (fix != null) {
+        final text = MessageText.neutralise(fix, keepLineFeeds: true);
+        out.writeln('  fix: ${text.replaceAll('\n', '\n    ')}');
+      }
       for (final related in d.related) {
-        out.writeln('  related: ${related.message}');
+        out.writeln('  related: ${MessageText.neutralise(related.message)}');
         final location = related.location;
         if (location != null) out.writeln('    --> $location');
         final pointer = related.pointer;

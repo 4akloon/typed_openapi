@@ -2,6 +2,7 @@ import 'package:source_span/source_span.dart';
 
 import 'diagnostic_bag.dart';
 import 'json_pointer.dart';
+import 'message_text.dart';
 import 'reporters.dart';
 import 'severity.dart';
 
@@ -35,9 +36,9 @@ final class GitHubActionsReporter implements DiagnosticReporter {
           d.file,
           d.span,
           [
-            d.message,
+            _text(d.message),
             if (d.pointer case final pointer?) 'at ${pointer.value}',
-            if (d.fix case final fix?) 'fix: $fix',
+            if (d.fix case final fix?) 'fix: ${_text(fix)}',
           ],
         ),
       );
@@ -49,7 +50,7 @@ final class GitHubActionsReporter implements DiagnosticReporter {
             related.file,
             related.span,
             [
-              related.message,
+              _text(related.message),
               if (related.pointer case final JsonPointer pointer)
                 'at ${pointer.value}',
             ],
@@ -86,6 +87,11 @@ final class GitHubActionsReporter implements DiagnosticReporter {
     .warning => 'warning',
     .info => 'notice',
   };
+
+  /// [text] without the control characters the runner would print as they
+  /// are; line breaks stay, `_data` escapes them.
+  static String _text(String text) =>
+      MessageText.neutralise(text, keepLineFeeds: true);
 
   static String _data(String value) => value
       .replaceAll('%', '%25')
