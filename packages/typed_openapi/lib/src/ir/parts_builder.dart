@@ -6,6 +6,7 @@ import 'dart_type.dart';
 import 'ir.dart';
 import 'ir_context.dart';
 import 'names.dart';
+import 'override_notices.dart';
 import 'part_media_type.dart';
 import 'schema_mapper.dart';
 
@@ -34,6 +35,7 @@ final class PartsBuilder {
       _reportNotObject(schema);
       return null;
     }
+    OverrideNotices(_context).nameOnMultipartBody(resolved);
     final scope = NameScope(
       reserved: {
         ...DartNames.reservedWords,

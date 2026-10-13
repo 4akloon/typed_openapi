@@ -101,6 +101,7 @@ await client.pets.uploadPhoto(
 - Binary strings and lists of them are `FileUpload`; text and numbers are plain values; an object part is JSON (`application/json`).
 - Parts are sent in schema order. Dio writes fields before files, so a text part stays a plain field only while no file or typed part precedes it; later text parts carry `Content-Type: text/plain; charset=utf-8`.
 - A part `contentType` that is a list or a wildcard is sent as one concrete type: the file's own, else the first concrete one, else `application/octet-stream` (`TOA661` info). An object part with a non-JSON type is a `String` you supply (`TOA662` warning).
+- The parts class is named after the operation (`UploadPhotoRequest`), never after the body's schema. A `name` override of that schema does not rename it (`TOA807`, info); name the operation instead.
 - A multipart schema that is not an object with properties (a union, a map) has no parts class: the body is the schema's type and each property is a part, a binary string as base64 text (`TOA655`).
 - A value that is not a finite JSON scalar, or a list in a list, throws `ArgumentError` rather than being stringified.
 
