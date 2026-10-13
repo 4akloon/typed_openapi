@@ -147,30 +147,35 @@ final class RoundTrip {
     if (result.exitCode != 0 || lines.last.isEmpty) {
       return _failed(client, TimedProcess.excerpt(result.stderr));
     }
+    final Object? json;
     try {
-      return _parse(client, jsonDecode(lines.last) as Map<String, Object?>);
+      json = jsonDecode(lines.last);
     } on FormatException {
       return _failed(client, 'the program printed no result.');
-    } on TypeError {
-      return _failed(
-        client,
-        'the program printed a result of the wrong shape.',
-      );
     }
+    return _parse(client, json) ??
+        _failed(client, 'the program printed a result of the wrong shape.');
   }
 
-  static RoundTripResult _parse(String client, Map<String, Object?> json) {
-    List<String> texts(String key) => [
-      for (final text in json[key] as List<Object?>) '$client: $text',
-    ];
-    return (
-      examples: json['examples'] as int,
-      synthetic: json['synthetic'] as int,
-      skippedExamples: 0,
-      skippedSynthetic: 0,
-      defects: texts('defects'),
-      failures: texts('failures'),
-      notRun: const <String>[],
-    );
+  /// The result in [json], or null when it has not the shape the program
+  /// prints.
+  static RoundTripResult? _parse(String client, Object? json) {
+    if (json case {
+      'examples': final int examples,
+      'synthetic': final int synthetic,
+      'defects': final List<Object?> defects,
+      'failures': final List<Object?> failures,
+    }) {
+      return (
+        examples: examples,
+        synthetic: synthetic,
+        skippedExamples: 0,
+        skippedSynthetic: 0,
+        defects: [for (final text in defects) '$client: $text'],
+        failures: [for (final text in failures) '$client: $text'],
+        notRun: const <String>[],
+      );
+    }
+    return null;
   }
 }

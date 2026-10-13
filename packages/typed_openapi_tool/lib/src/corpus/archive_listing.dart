@@ -1,6 +1,5 @@
-import 'dart:io';
-
 import 'corpus_exception.dart';
+import 'tar_runner.dart';
 
 /// The entries of a `.tar.gz` archive, read with the system `tar` before
 /// anything is extracted, and the checks that keep an extraction inside its
@@ -11,10 +10,10 @@ final class ArchiveListing {
   /// `h` hard link).
   const ArchiveListing._(this.names, this._types);
 
-  /// Lists the archive file [archive].
-  static Future<ArchiveListing> of(String archive) async {
-    final names = _lines(await _tar(['-tzf', archive]));
-    final verbose = _lines(await _tar(['-tvzf', archive]));
+  /// Lists the archive file [archive] with [tar].
+  static Future<ArchiveListing> of(String archive, TarRunner tar) async {
+    final names = _lines(await tar.run(['-tzf', archive]));
+    final verbose = _lines(await tar.run(['-tvzf', archive]));
     if (names.length != verbose.length) {
       throw const CorpusException(
         'The archive has entry names that tar cannot list reliably.',
@@ -82,12 +81,4 @@ final class ArchiveListing {
     for (final line in text.split('\n'))
       if (line.trim().isNotEmpty) line.trimRight(),
   ];
-
-  static Future<String> _tar(List<String> arguments) async {
-    final result = await Process.run('tar', arguments);
-    if (result.exitCode != 0) {
-      throw CorpusException('tar ${arguments.first} failed: ${result.stderr}');
-    }
-    return '${result.stdout}';
-  }
 }

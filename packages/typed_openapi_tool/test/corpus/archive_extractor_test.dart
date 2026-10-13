@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:typed_openapi_tool/src/corpus/archive_extractor.dart';
 import 'package:typed_openapi_tool/src/corpus/corpus_exception.dart';
+import 'package:typed_openapi_tool/src/corpus/tar_runner.dart';
 import 'package:typed_openapi_tool/src/corpus/tree_hash.dart';
 
 import '../helpers/tar_archive.dart';
@@ -36,6 +37,21 @@ void main() {
     expect(cache.existsSync() ? cache.listSync() : const [], isEmpty);
     expect(Directory(p.join(temp.path, 'escaped')).existsSync(), isFalse);
   }
+
+  test('a tar that outlives its time limit fails and leaves nothing', () async {
+    final temp = TempDir();
+    await expectLater(
+      const ArchiveExtractor(
+        tar: TarRunner(timeout: Duration.zero),
+      ).extract(
+        const TarArchive(_repo).toTarGz(),
+        'specs',
+        p.join(temp.path, 'cache', 'pets'),
+      ),
+      _rejects('did not finish within'),
+    );
+    expectNothingLeft(temp);
+  });
 
   test('extracts the root of a hand-made archive', () async {
     final temp = TempDir();

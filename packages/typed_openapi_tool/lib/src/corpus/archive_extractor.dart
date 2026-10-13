@@ -3,13 +3,16 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import 'archive_listing.dart';
-import 'corpus_exception.dart';
+import 'tar_runner.dart';
 
 /// Extracts one directory of a `.tar.gz` archive with the system `tar`
 /// (GNU tar on Linux, bsdtar on macOS and Windows).
 final class ArchiveExtractor {
-  /// Creates the extractor.
-  const ArchiveExtractor();
+  /// Creates the extractor; each `tar` it runs gets [tar]'s time limit.
+  const ArchiveExtractor({this.tar = const TarRunner()});
+
+  /// Runs the system `tar`.
+  final TarRunner tar;
 
   /// Writes the directory [root] of the archive [bytes], which sits below
   /// the archive's one top directory (as in a GitHub tarball), into
@@ -21,24 +24,16 @@ final class ArchiveExtractor {
     try {
       final archive = p.join(temp.path, 'archive.tar.gz');
       File(archive).writeAsBytesSync(bytes);
-      final listing = await ArchiveListing.of(archive);
+      final listing = await ArchiveListing.of(archive, tar);
       final top = listing.top;
       final kept = '$top/$root';
       listing.check(kept);
-      await _tar(['-xzf', archive, '-C', temp.path, kept]);
+      await tar.run(['-xzf', archive, '-C', temp.path, kept]);
       Directory(p.joinAll([temp.path, top, ...root.split('/')])).renameSync(
         target,
       );
     } finally {
       temp.deleteSync(recursive: true);
     }
-  }
-
-  static Future<String> _tar(List<String> arguments) async {
-    final result = await Process.run('tar', arguments);
-    if (result.exitCode != 0) {
-      throw CorpusException('tar ${arguments.first} failed: ${result.stderr}');
-    }
-    return '${result.stdout}';
   }
 }
