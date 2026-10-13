@@ -339,7 +339,10 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   through an `allOf` of one part or a nullable `anyOf`/`oneOf`, then the
   `$ref` target; a `default` beside a `$ref` counts from 3.1; one that does
   not fit the `enum` or the `format` (`date`, `date-time`, `uuid`, `int32`)
-  of those schemas is TOA660 and not kept: `DefaultMatcher`); envelopes; errors, with
+  of those schemas is TOA660 and not kept: `DefaultMatcher`, which checks
+  the RFC 3339 fields of `date` and `date-time` by range, a leap year and a
+  leap second (60) included, never through `DateTime.tryParse`, which rolls
+  a month 13 over); envelopes; errors, with
   `errors.default_schema` for statuses without a body; the status goes into
   an inline body's name only when several responses of a kind declare one
   (`ResponseStatuses.bodyCounts`: a form, multipart, text or bytes response
