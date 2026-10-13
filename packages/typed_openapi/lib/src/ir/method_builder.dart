@@ -32,7 +32,7 @@ final class MethodBuilder {
   final EventStreams _streams;
 
   /// The methods of [entry] with [parameters]: the one named [name], and
-  /// for an operation that returns JSON or an event stream also one that
+  /// for an operation that returns a body or an event stream also one that
   /// returns the events, named in the group's [methods] (TOA663). Empty when
   /// its event streams cannot be expressed (TOA654).
   List<OperationIr> of(
@@ -42,6 +42,12 @@ final class MethodBuilder {
     NameScope methods,
   ) {
     final shape = _streams.shapeOf(entry.operation);
+    final streamPicked = switch (shape) {
+      .only || .both => _responses.pick(entry.operation, events: true),
+      .none || .mixed || .excluded => const <PickedResponse>[],
+    };
+    final hasStream =
+        streamPicked.isNotEmpty && _streams.agree(entry, streamPicked, shape);
     final main = switch (shape) {
       .none => _operation(
         entry,
@@ -49,51 +55,61 @@ final class MethodBuilder {
         parameters,
         _responses.pick(entry.operation),
       ),
-      .both => _bodyOperation(entry, name, parameters),
+      .both => _bodyOperation(entry, name, parameters, hasStream: hasStream),
       .only || .mixed || .excluded => null,
     };
-    final stream = switch (shape) {
-      .only => _streamOperation(entry, name, parameters),
-      .both => _streamOperation(entry, name, parameters, methods: methods),
-      .none || .mixed || .excluded => null,
-    };
+    final stream = !hasStream
+        ? null
+        : _streamOperation(
+            entry,
+            name,
+            parameters,
+            streamPicked,
+            methods: shape == .both ? methods : null,
+          );
     return [?main, ?stream];
   }
 
   /// The method of [entry] that returns its body, next to the one that
-  /// returns its events: it asks for the body's media type with `Accept`.
+  /// returns its events when [hasStream]: it asks for the body's media
+  /// types with `Accept`.
   OperationIr _bodyOperation(
     SpecOperation entry,
     String name,
-    List<ParameterIr> parameters,
-  ) {
+    List<ParameterIr> parameters, {
+    required bool hasStream,
+  }) {
     final picked = _responses.pick(entry.operation, hasStreamMethod: true);
-    return _operation(entry, name, parameters, picked, accept: _accept(picked));
+    return _operation(
+      entry,
+      name,
+      parameters,
+      picked,
+      accept: hasStream ? _accept(picked) : null,
+    );
   }
 
-  /// The `Accept` of a method that returns the body of [picked]: JSON, or
-  /// the media type of its first success with a body.
+  /// The `Accept` of a method that returns the bodies of [picked]: the media
+  /// types of its 2xx successes with a body, each once, in order.
   static String? _accept(List<PickedResponse> picked) {
-    for (final (status, _, (contentType, _)) in picked) {
-      if (!status.startsWith('2') || contentType == null) continue;
-      return MediaTypePicker.kindOf(contentType) == .json
-          ? 'application/json'
-          : MediaTypeName(contentType).base;
-    }
-    return null;
+    final types = {
+      for (final (status, _, (contentType, _)) in picked)
+        if (status.startsWith('2') && contentType != null)
+          MediaTypeName(contentType).base,
+    };
+    return types.isEmpty ? null : types.join(', ');
   }
 
-  /// The method of [entry] that returns its events, or null (TOA654), which
-  /// claims no name and maps no type. With the group's [methods] it is a
-  /// second method, named after [name] in them (TOA663).
-  OperationIr? _streamOperation(
+  /// The method of [entry] that returns its events, from the [picked]
+  /// responses that agree. With the group's [methods] it is a second method,
+  /// named after [name] in them (TOA663).
+  OperationIr _streamOperation(
     SpecOperation entry,
     String name,
-    List<ParameterIr> parameters, {
+    List<ParameterIr> parameters,
+    List<PickedResponse> picked, {
     NameScope? methods,
   }) {
-    final picked = _responses.pick(entry.operation, events: true);
-    if (!_streams.agree(entry, picked)) return null;
     final named = methods == null
         ? name
         : _streams.methodName(entry, name, methods);

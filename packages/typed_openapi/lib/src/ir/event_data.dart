@@ -76,13 +76,22 @@ final class EventData {
   /// `contentSchema`, else text, reported when `data` says neither.
   EventShape _fromItem(Schema item, SpecLocation location, String prefix) {
     final resolved = _context.model.resolveSchema(item);
+    // A reference that cannot be followed has its own error (TOA101).
+    if (resolved == null) return (data: null, union: null);
     if (resolved is SchemaObject) {
       if (_unions.union(resolved, location, prefix) case final union?) {
         return (data: null, union: union);
       }
-      final data = resolved.properties['data'];
+      final data = _data.dataOf(resolved);
       if (_data.read(data, NameHint(prefix, 'Event')) case (final type,)) {
         return (data: type, union: null);
+      }
+      // A union's branches are reported one by one, and a broken reference
+      // is reported where it is written.
+      final hasBranches =
+          resolved.oneOf.isNotEmpty || resolved.anyOf.isNotEmpty;
+      if (data == null ? hasBranches : _data.isBroken(data)) {
+        return (data: null, union: null);
       }
     }
     _data.unread(location);

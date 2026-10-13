@@ -69,6 +69,9 @@ final class ResponseBuilder {
     for (final (status, response, (contentType, media)) in responses) {
       final kind = _responseKind(contentType, response);
       final success = status.startsWith('2');
+      if (kind == .eventStream && !success) {
+        _reportErrorStream(contentType!, response);
+      }
       final base = ResponseStatuses.nameOf(status, shared: false);
       final suffix = ResponseStatuses.nameOf(
         status,
@@ -130,6 +133,19 @@ final class ResponseBuilder {
     );
     return .bytes;
   }
+
+  /// Reports that an error response in [contentType] is read as text
+  /// (TOA671): only a success is an event stream.
+  void _reportErrorStream(String contentType, Response response) =>
+      _context.report(
+        .eventStreamErrorAsText,
+        'The error response is "$contentType", but only a success is an event '
+        'stream: its body is read as text.',
+        response.location.child('content').child(contentType),
+        fix:
+            'Use a JSON media type for errors at the source if the schema '
+            'matters.',
+      );
 
   /// The schema of `data` when [schema] is an envelope `{data: T}`: an
   /// object whose only property is the required `data` (R6.4).

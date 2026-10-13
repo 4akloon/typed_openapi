@@ -10,6 +10,19 @@ paths:
           description: Events, whatever the success status is.
           content:
             text/event-stream: {schema: {type: string}}
+  /both:
+    get:
+      operationId: both
+      tags: [ranges]
+      responses:
+        "200":
+          description: Events.
+          content:
+            text/event-stream: {schema: {type: string}}
+        "2XX":
+          description: Events of the other successes.
+          content:
+            text/event-stream: {schema: {type: string}}
   /submit:
     post:
       operationId: submit

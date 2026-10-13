@@ -18,14 +18,11 @@ final class EventStreamWriter {
       for (final response in operation.successes)
         if (int.tryParse(response.status) case final code?) '$code',
     ];
-    final ranges = [
-      for (final response in operation.successes)
-        if (int.tryParse(response.status) == null) response.status,
-    ];
-    final elements = [
-      ...codes,
-      if (ranges.isNotEmpty) 'for (var s = 200; s < 300; s++) s',
-    ];
+    final hasRange = operation.successes.any(
+      (response) => int.tryParse(response.status) == null,
+    );
+    // A range holds every code of it, so the codes are not listed again.
+    final elements = hasRange ? ['for (var s = 200; s < 300; s++) s'] : codes;
     out.line('streamStatuses: {${elements.join(', ')}},');
   }
 

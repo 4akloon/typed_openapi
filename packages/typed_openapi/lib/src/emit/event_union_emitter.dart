@@ -35,8 +35,7 @@ final class EventUnionEmitter {
       out
         ..line()
         ..prose(
-          '${variant.event.isEmpty ? 'The event with an empty name' : 'The '
-                    '`${_code.docSpan(variant.event)}` event'} of [$method]'
+          'The `${_code.docSpan(variant.event)}` event of [$method]'
           '${variant.hasData ? '.' : ', which has no data.'}',
         )
         ..block('class ${variant.name} extends ${union.name}', () {

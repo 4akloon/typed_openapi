@@ -87,14 +87,14 @@ void main() {
   test('hostile event names are escaped literals and safe names', () {
     final feed = emitClient('events_hostile.yaml')['api/default_api.dart']!;
     for (final pattern in [
-      "    '' => const FeedEventEvent1(),",
+      "    '-' => const FeedEventEvent1(),",
       "    '*/' => FeedEventEvent2(message.data),",
       r"    '\$cost' => FeedEventCost(message.data),",
-      r"    'a\nb' => FeedEventAB(message.data),",
+      "    'a b' => FeedEventAB(message.data),",
       r"    '\u{202e}evil' => FeedEventEvil(message.data),",
       "    'unknown' => FeedEventUnknown2(message.data),",
       "    'delta' => FeedEventDelta2(message.data),",
-      '/// The event with an empty name of [DefaultApi.feed], which has no data.',
+      '/// The `-` event of [DefaultApi.feed], which has no data.',
       "  String toString() => 'FeedEventSecret(<redacted>)';",
       r"  String toString() => 'FeedEventUnknown($event, <redacted>)';",
     ]) {
@@ -140,6 +140,15 @@ void main() {
     expect(
       ranges,
       contains('streamStatuses: {for (var s = 200; s < 300; s++) s},'),
+    );
+  });
+
+  test('a code and a range together list the range once', () {
+    final ranges = emitClient('event_ranges.yaml')['api/ranges_api.dart']!;
+    expect(ranges, isNot(contains('{200, for')));
+    expect(
+      'streamStatuses: {for (var s = 200; s < 300; s++) s},'.allMatches(ranges),
+      hasLength(2),
     );
   });
 

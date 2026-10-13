@@ -3,6 +3,7 @@ import '../model/schema.dart';
 import '../model/spec_node.dart';
 import '../overrides/sse_override.dart';
 import 'dart_type.dart';
+import 'event_names.dart';
 import 'ir.dart';
 import 'ir_context.dart';
 import 'names.dart';
@@ -40,22 +41,25 @@ final class OverrideEvents {
         : _context.model.resolveSchema(schema);
     if (events == null || resolved is! SchemaObject) return null;
     final properties = resolved.properties;
+    final at = location.child('schema');
     final variants = <EventVariantIr>[];
     for (final (index, MapEntry(key: event, :value))
         in events.entries.indexed) {
       final data = properties[event];
-      if (value == null) {
-        variants.add(EventVariantIr(event, hasData: false));
+      if (EventNames.unreachable(event) case final reason?) {
+        _reportUnreachable(sse, event, reason);
+      } else if (value == null) {
+        variants.add(EventVariantIr(event, location: at, hasData: false));
       } else if (data == null) {
         _reportLeftOut(sse, event);
       } else {
-        variants.add(_variant(event, data, index, prefix));
+        variants.add(_variant(event, data, at, index, prefix));
       }
     }
     if (variants.isEmpty) return null;
     return EventUnionIr(
       variants,
-      location: location.child('schema'),
+      location: at,
       unknownSensitive: properties.values.any(_secrets.carriesSecret),
     );
   }
@@ -63,6 +67,7 @@ final class OverrideEvents {
   EventVariantIr _variant(
     String event,
     Schema data,
+    SpecLocation at,
     int index,
     String prefix,
   ) {
@@ -75,10 +80,19 @@ final class OverrideEvents {
     final type = mapped == const CoreType(.string) ? null : mapped;
     return EventVariantIr(
       event,
+      location: at,
       data: type,
       sensitive: _secrets.isSecret(data, type ?? const CoreType(.string)),
     );
   }
+
+  void _reportUnreachable(SseOverride sse, String event, String reason) =>
+      _context.reportAtPointer(
+        .eventNameUnreachable,
+        EventNames.message(reason),
+        sse.pointer.child('events').child(event),
+        fix: EventNames.fix,
+      );
 
   void _reportLeftOut(SseOverride sse, String event) {
     _context.reportAtPointer(

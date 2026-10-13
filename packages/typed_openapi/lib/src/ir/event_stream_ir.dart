@@ -103,6 +103,7 @@ final class EventVariantIr {
   /// Creates the variant of the event named [event].
   const EventVariantIr(
     this.event, {
+    required this.location,
     this.name = '',
     this.hasData = true,
     this.data,
@@ -111,6 +112,10 @@ final class EventVariantIr {
 
   /// The event name as the spec writes it (the SSE `event` field).
   final String event;
+
+  /// Where the variant is described: its branch of the `itemSchema`, or the
+  /// override's schema.
+  final SpecLocation location;
 
   /// The Dart name of the variant's class, given after the declarations.
   final String name;
@@ -128,6 +133,7 @@ final class EventVariantIr {
   /// This variant named [name].
   EventVariantIr named(String name) => EventVariantIr(
     event,
+    location: location,
     name: name,
     hasData: hasData,
     data: data,

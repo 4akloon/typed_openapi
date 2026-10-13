@@ -503,6 +503,16 @@ enum DiagnosticCode {
   /// part; the rest of `sse` applies.
   sseOverrideNotApplied('TOA669', 'sse-override-not-applied', .warning),
 
+  /// An event name that no `event:` line can carry: an empty one (the wire
+  /// reads it as `message`) or one with a line break. Its variant could
+  /// never be selected, so it is left out.
+  eventNameUnreachable('TOA670', 'event-name-unreachable', .warning),
+
+  /// A `text/event-stream` response with an error status (or `default`) of
+  /// an operation whose method does not return events: its body is read as
+  /// text, like any other error body that is not JSON.
+  eventStreamErrorAsText('TOA671', 'event-stream-error-as-text', .info),
+
   /// A normalizer fix or an override was not applied: its file cannot be
   /// read, its target is gone, the spec kept changing after the last pass, or
   /// the change would have no effect in the spec's dialect.

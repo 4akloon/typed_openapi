@@ -39,13 +39,26 @@ bool _hasHidden(String text) => text.runes.any(
 void main() {
   final hostile =
       '\\e[31mRED\\n::error::x%0A${String.fromCharCodes([0x202e, 0x200f])}';
-  final marked = '\\e\\n${String.fromCharCode(0x202e)}';
+  final marked = '\\e${String.fromCharCode(0x202e)}';
+  final oneLine =
+      '\\e[31mRED::error::x%0A${String.fromCharCodes([0x202e, 0x200f])}';
 
   test('a repeated event name is quoted in TOA667', () {
-    final fixture = IrFixture(_spec('ok', hostile))..build();
+    final fixture = IrFixture(_spec('ok', oneLine))..build();
     final message = fixture
         .reportedOf(DiagnosticCode.eventNameDuplicate)
         .single
+        .message;
+    expect(_hasHidden(message), isFalse);
+    expect(message, contains('::error::x%0A'));
+    expect(message, contains(r'\u{1b}[31mRED'));
+  });
+
+  test('a name with a line break is quoted in TOA670', () {
+    final fixture = IrFixture(_spec('ok', hostile))..build();
+    final message = fixture
+        .reportedOf(DiagnosticCode.eventNameUnreachable)
+        .first
         .message;
     expect(_hasHidden(message), isFalse);
     expect(message, contains(r'\n::error::x%0A'));
@@ -58,7 +71,7 @@ void main() {
     expect(reports, isNotEmpty);
     for (final report in reports) {
       expect(_hasHidden(report.message), isFalse);
-      expect(report.message, contains(r'"\u{1b}\n\u{202e}"'));
+      expect(report.message, contains(r'"\u{1b}\u{202e}"'));
     }
   });
 

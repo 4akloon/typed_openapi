@@ -43,7 +43,7 @@ final class EventUnionNames {
     return events.withUnion(
       union.named(name, unknown, [
         for (final (index, variant) in union.variants.indexed)
-          variant.named(_variantName(name, variant, index, operation, union)),
+          variant.named(_variantName(name, variant, index, operation)),
       ]),
     );
   }
@@ -53,7 +53,6 @@ final class EventUnionNames {
     EventVariantIr variant,
     int index,
     OperationIr operation,
-    EventUnionIr ir,
   ) {
     final words = _names.pascal(variant.event);
     final candidate = '$union${words ?? 'Event${index + 1}'}';
@@ -62,14 +61,14 @@ final class EventUnionNames {
         .eventNameUnrepresentable,
         'Event ${MessageText.quote(variant.event)} has no ASCII letter or '
         'digit; its class is named after its place.',
-        ir.location,
+        variant.location,
         fix: 'Name the event with letters at the source.',
       );
     } else {
       _context.checkLossyName(
         variant.event,
         words,
-        ir.location,
+        variant.location,
         what: 'Event name',
       );
     }

@@ -132,15 +132,15 @@ void main() {
 
   test('hostile event names get safe, distinct class names', () {
     final fixture = IrFixture(
-      _spec(r'''
+      _spec('''
                 oneOf:
-                  - {properties: {event: {const: ""}}}
+                  - {properties: {event: {const: "-"}}}
                   - {properties: {event: {const: "*/"}}}
                   - {properties: {event: {const: unknown}}}
                   - {properties: {event: {const: Delta}}}
                   - {properties: {event: {const: delta}}}
                   - {properties: {event: {const: class}}}
-                  - {properties: {event: {const: "a\nb"}}}'''),
+                  - {properties: {event: {const: "a b"}}}'''),
     );
     final ir = fixture.build();
     expect(

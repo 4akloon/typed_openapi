@@ -11,10 +11,10 @@ paths:
             text/event-stream:
               itemSchema:
                 oneOf:
-                  - {properties: {event: {const: ""}}}
+                  - {properties: {event: {const: "-"}}}
                   - {properties: {event: {const: "*/"}, data: {type: string}}}
                   - {properties: {event: {const: "{@inject x}"}, data: {type: string}}}
-                  - {properties: {event: {const: "a\nb"}, data: {type: string}}}
+                  - {properties: {event: {const: "a b"}, data: {type: string}}}
                   - {properties: {event: {const: "‮evil"}, data: {type: string}}}
                   - {properties: {event: {const: "$cost"}, data: {type: string}}}
                   - {properties: {event: {const: "it's \"quoted\""}, data: {type: string}}}
