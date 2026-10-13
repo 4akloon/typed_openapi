@@ -57,8 +57,6 @@ Eighteen rules run in this order. Turn one off with `rules: {<name>: false}` in 
 
 Four rules produce edits: `bool-required-to-array`, `drop-invalid-default`, `dedupe-enum-values` and `declare-missing-path-params`. The others only report, and give an override snippet where one helps (see [Overrides](overrides.md)). `array-without-items` is skipped on 3.1 documents. `bool-required-to-array` leaves a parent whose `required` is not a list alone and reports TOA201 without an edit. TOA401 is not reported when the discriminator holder itself requires the property.
 
-> **Note:** A rule that is off is silent, but the mapper still copes with the construct. Turning `dedupe-enum-values` off does not produce a duplicate Dart enum case.
-
 ## Passes
 
 The normalizer runs at most three passes: read the spec, run the rules, apply their edits, read again. Edits go to a copy of the tree, so the files stay as they are. An edit equal to one already applied is skipped. An edit that touches the same node as an applied one waits for the next pass, where its rule proposes it again if it is still needed. An edit still proposed after three passes, or whose file cannot be read, or whose target has gone, is TOA800 (`fix-not-applied`).
