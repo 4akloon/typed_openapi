@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import 'archive_listing.dart';
 import 'corpus_exception.dart';
 
 /// Extracts one directory of a `.tar.gz` archive with the system `tar`
@@ -20,8 +21,10 @@ final class ArchiveExtractor {
     try {
       final archive = p.join(temp.path, 'archive.tar.gz');
       File(archive).writeAsBytesSync(bytes);
-      final top = await _topDirectory(archive);
+      final listing = await ArchiveListing.of(archive);
+      final top = listing.top;
       final kept = '$top/$root';
+      listing.check(kept);
       await _tar(['-xzf', archive, '-C', temp.path, kept]);
       Directory(p.joinAll([temp.path, top, ...root.split('/')])).renameSync(
         target,
@@ -29,13 +32,6 @@ final class ArchiveExtractor {
     } finally {
       temp.deleteSync(recursive: true);
     }
-  }
-
-  static Future<String> _topDirectory(String archive) async {
-    final listing = await _tar(['-tzf', archive]);
-    final first = listing.split('\n').first.trim();
-    if (first.isEmpty) throw const CorpusException('The archive is empty.');
-    return first.split('/').first;
   }
 
   static Future<String> _tar(List<String> arguments) async {

@@ -75,8 +75,17 @@ final class SpecCache {
           sha256.convert(file.readAsBytesSync()).toString(),
         _ => null,
       },
-      ArchiveSource() => const TreeHash().of(folder),
+      // A link in the cache is no pinned tree: the spec is fetched again.
+      ArchiveSource() => _treeHash(folder),
     };
+  }
+
+  static String? _treeHash(String folder) {
+    try {
+      return const TreeHash().of(folder);
+    } on CorpusException {
+      return null;
+    }
   }
 
   static void _delete(String folder) {

@@ -1,0 +1,79 @@
+import 'dart:io';
+
+import 'corpus_exception.dart';
+
+/// The entries of a `.tar.gz` archive, read with the system `tar` before
+/// anything is extracted, and the checks that keep an extraction inside its
+/// target.
+final class ArchiveListing {
+  /// Creates the listing of [names]; `_types` holds the first character of
+  /// each entry's verbose line (`-` file, `d` directory, `l` symbolic link,
+  /// `h` hard link).
+  const ArchiveListing._(this.names, this._types);
+
+  /// Lists the archive file [archive].
+  static Future<ArchiveListing> of(String archive) async {
+    final names = _lines(await _tar(['-tzf', archive]));
+    final verbose = _lines(await _tar(['-tvzf', archive]));
+    if (names.length != verbose.length) {
+      throw const CorpusException(
+        'The archive has entry names that tar cannot list reliably.',
+      );
+    }
+    return ArchiveListing._(names, [for (final line in verbose) line[0]]);
+  }
+
+  /// The names of the entries, in archive order.
+  final List<String> names;
+
+  final List<String> _types;
+
+  /// The one top directory of the archive, as in a GitHub tarball.
+  String get top {
+    if (names.isEmpty) throw const CorpusException('The archive is empty.');
+    return names.first.split('/').first;
+  }
+
+  /// Throws a [CorpusException] for an entry that would be written outside
+  /// the target (an absolute name or a `..` segment, anywhere in the
+  /// archive), and for a link that is [kept] or lies on the way to it or in
+  /// it, which could lead a later write or a later read out of the target.
+  void check(String kept) {
+    for (final (index, name) in names.indexed) {
+      final segments = name.split('/');
+      if (name.startsWith('/') ||
+          name.contains(r'\') ||
+          segments.contains('..') ||
+          RegExp('^[A-Za-z]:').hasMatch(name)) {
+        throw CorpusException('The archive has the unsafe entry "$name".');
+      }
+      final isLink = _types[index] == 'l' || _types[index] == 'h';
+      final path = name.endsWith('/')
+          ? name.substring(0, name.length - 1)
+          : name;
+      if (isLink && (_isWithin(kept, path) || _isWithin(path, kept))) {
+        throw CorpusException(
+          'The archive has the link "$name" in or on the way to "$kept"; '
+          'links are not extracted.',
+        );
+      }
+    }
+  }
+
+  /// Whether [path] is [directory] or lies below it.
+  static bool _isWithin(String directory, String path) =>
+      path == directory || path.startsWith('$directory/');
+
+  static List<String> _lines(String text) => [
+    for (final line in text.split('\n'))
+      if (line.trim().isNotEmpty) line.trimRight(),
+  ];
+
+  static Future<String> _tar(List<String> arguments) async {
+    final result = await Process.run('tar', arguments);
+    if (result.exitCode != 0) {
+      throw CorpusException('tar ${arguments.first} failed: ${result.stderr}');
+    }
+    return '${result.stdout}';
+  }
+}

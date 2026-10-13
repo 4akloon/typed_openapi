@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
+import 'corpus_exception.dart';
+
 /// The SHA-256 of a directory tree: of the lines `<path>` and `<sha256>` of
 /// every file, sorted by path, with `/` between segments on every system.
 ///
@@ -16,15 +18,21 @@ final class TreeHash {
   /// The hash of the files under [directory].
   String of(String directory) => combine(files(directory));
 
-  /// The hash of each file under [directory], by its path relative to it
+  /// The hash of each file under [directory] (a symbolic link in it is a
+  /// [CorpusException]: a pinned tree has none), by its path relative to it
   /// with `/` separators, sorted by path.
   Map<String, String> files(String directory) {
     final paths = <String, String>{};
-    for (final entity in Directory(directory).listSync(recursive: true)) {
-      if (entity is! File) continue;
+    for (final entity in Directory(
+      directory,
+    ).listSync(recursive: true, followLinks: false)) {
       final relative = p
           .relative(entity.path, from: directory)
           .replaceAll(r'\', '/');
+      if (entity is Link) {
+        throw CorpusException('The tree has the link "$relative"; not hashed.');
+      }
+      if (entity is! File) continue;
       paths[relative] = sha256.convert(entity.readAsBytesSync()).toString();
     }
     return Map.fromEntries(

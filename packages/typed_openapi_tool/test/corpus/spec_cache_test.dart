@@ -12,6 +12,7 @@ import 'package:typed_openapi_tool/src/corpus/spec_cache.dart';
 import 'package:typed_openapi_tool/src/corpus/spec_source.dart';
 import 'package:typed_openapi_tool/src/corpus/tree_hash.dart';
 
+import '../helpers/tar_archive.dart';
 import '../helpers/temp_dir.dart';
 
 const _text = 'openapi: 3.1.0\n';
@@ -123,6 +124,123 @@ void main() {
         cache.fetchSchema(wrong),
         throwsA(isA<CorpusException>()),
       );
+    },
+  );
+
+  group('an archive', () {
+    final tree = {
+      'openapi.yaml': pinned,
+      'paths/a.yaml': sha256.convert(utf8.encode('a: 1\n')).toString(),
+    };
+    final source = ArchiveSource(
+      Uri.parse('https://example.com/repo.tar.gz'),
+      root: 'specs',
+      entry: 'openapi.yaml',
+    );
+    final bytes = const TarArchive([
+      TarEntry.directory('repo/'),
+      TarEntry.directory('repo/specs/'),
+      TarEntry.directory('repo/specs/paths/'),
+      TarEntry.file('repo/specs/openapi.yaml', _text),
+      TarEntry.file('repo/specs/paths/a.yaml', 'a: 1\n'),
+    ]).toTarGz();
+
+    test('with another tree hash is an error and leaves nothing', () async {
+      final temp = TempDir();
+      final cache = SpecCache(temp.path, (url) async => bytes);
+      await expectLater(
+        cache.fetch(spec(source, '0' * 64)),
+        throwsA(isA<CorpusException>()),
+      );
+      expect(Directory(temp.path).listSync(), isEmpty);
+    });
+
+    test('is fetched again when a cached file was tampered with', () async {
+      final temp = TempDir();
+      var downloads = 0;
+      final cache = SpecCache(temp.path, (url) async {
+        downloads++;
+        return bytes;
+      });
+      final pin = const TreeHash().combine(tree);
+      await cache.fetch(spec(source, pin));
+      File(p.join(temp.path, 'pets', 'paths', 'a.yaml')).writeAsStringSync('x');
+      await cache.fetch(spec(source, pin));
+      expect(downloads, 2);
+      expect(
+        File(p.join(temp.path, 'pets', 'paths', 'a.yaml')).readAsStringSync(),
+        'a: 1\n',
+      );
+    });
+
+    test('is fetched again when a link was added to the cache', () async {
+      final temp = TempDir();
+      var downloads = 0;
+      final cache = SpecCache(temp.path, (url) async {
+        downloads++;
+        return bytes;
+      });
+      final pin = const TreeHash().combine(tree);
+      await cache.fetch(spec(source, pin));
+      temp.link('pets/evil', 'pets/openapi.yaml');
+      await cache.fetch(spec(source, pin));
+      expect(downloads, 2);
+      expect(Link(p.join(temp.path, 'pets', 'evil')).existsSync(), isFalse);
+    });
+
+    test('with a link entry is an error and leaves nothing', () async {
+      final temp = TempDir();
+      final linked = const TarArchive([
+        TarEntry.directory('repo/'),
+        TarEntry.file('repo/specs/openapi.yaml', _text),
+        TarEntry.symlink('repo/specs/evil', '/etc/passwd'),
+      ]).toTarGz();
+      final cache = SpecCache(temp.path, (url) async => linked);
+      await expectLater(
+        cache.fetch(spec(source, pinned)),
+        throwsA(
+          isA<CorpusException>().having(
+            (e) => e.message,
+            'message',
+            contains('repo/specs/evil'),
+          ),
+        ),
+      );
+      expect(Directory(temp.path).listSync(), isEmpty);
+    });
+  });
+
+  test(
+    'a file whose cached copy was tampered with is downloaded again',
+    () async {
+      final temp = TempDir();
+      var downloads = 0;
+      final cache = SpecCache(temp.path, (url) async {
+        downloads++;
+        return utf8.encode(_text);
+      });
+      final path = await cache.fetch(spec(file, pinned));
+      File(path).writeAsStringSync('tampered');
+      expect(await cache.fetch(spec(file, pinned)), path);
+      expect(downloads, 2);
+      expect(File(path).readAsStringSync(), _text);
+    },
+  );
+
+  test(
+    'a file download with another hash replaces a good cached copy',
+    () async {
+      final temp = TempDir();
+      final cache = SpecCache(temp.path, (url) async => utf8.encode('changed'));
+      final path = p.join(temp.path, 'pets', 'openapi.yaml');
+      File(path)
+        ..createSync(recursive: true)
+        ..writeAsStringSync('tampered');
+      await expectLater(
+        cache.fetch(spec(file, pinned)),
+        throwsA(isA<CorpusException>()),
+      );
+      expect(Directory(p.join(temp.path, 'pets')).existsSync(), isFalse);
     },
   );
 }
