@@ -114,6 +114,21 @@ item:
     expect(fixture.index.nodes, hasLength(3));
   });
 
+  test('a security field that is not a list is one malformed requirement', () {
+    final (item, fixture) = parse('''
+item:
+  get:
+    responses: {}
+    security: {bearer: []}
+''');
+    final requirement = inline(item).operations['get']!.security!.single;
+    expect(requirement.isMalformed, isTrue);
+    expect(requirement.isNotList, isTrue);
+    expect(requirement.location.pointer.value, '#/item/get/security');
+    expect(fixture.codes, [DiagnosticCode.invalidValue]);
+    expect(fixture.pointers, ['#/item/get/security']);
+  });
+
   test('security stays null when an operation does not set it', () {
     final (item, _) = parse('item: {get: {responses: {}}}\n');
     expect(inline(item).operations['get']!.security, isNull);

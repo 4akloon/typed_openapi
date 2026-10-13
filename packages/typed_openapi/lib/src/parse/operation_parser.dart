@@ -5,6 +5,7 @@ import '../model/spec_node.dart';
 import 'object_reader.dart';
 import 'parse_context.dart';
 import 'schema_parser.dart';
+import 'security_parser.dart';
 import 'server_parser.dart';
 
 /// Reads path items, operations and everything they contain: parameters,
@@ -14,11 +15,13 @@ final class OperationParser {
   /// Creates a parser that reads from [_context] and reads schemas with
   /// [_schemas].
   OperationParser(this._context, this._schemas)
-    : _servers = ServerParser(_context);
+    : _servers = ServerParser(_context),
+      _security = SecurityParser(_context);
 
   final ParseContext _context;
   final SchemaParser _schemas;
   final ServerParser _servers;
+  final SecurityParser _security;
 
   /// Reads the path item [raw] at [pointer].
   RefOr<PathItem>? pathItem(Object? raw, JsonPointer pointer) =>
@@ -52,26 +55,9 @@ final class OperationParser {
   Server? server(Object? raw, JsonPointer pointer) =>
       _servers.server(raw, pointer);
 
-  /// Reads the security requirement [raw] at [pointer]; an entry that is not
-  /// an object is reported and kept as a malformed requirement.
-  SecurityRequirement securityRequirement(Object? raw, JsonPointer pointer) =>
-      _context.node(raw, pointer, 'A security requirement', _requirement) ??
-      _context.register(
-        SecurityRequirement(
-          location: _context.locate(pointer),
-          schemes: {if (raw is String) raw: const []},
-          isMalformed: true,
-        ),
-      );
-
-  SecurityRequirement _requirement(ObjectReader r) => _context.register(
-    SecurityRequirement(
-      location: r.location,
-      schemes: Map.unmodifiable({
-        for (final name in r.keys.toList()) name: r.strings(name) ?? const [],
-      }),
-    ),
-  );
+  /// Reads the `security` field of [reader].
+  List<SecurityRequirement>? securityRequirements(ObjectReader reader) =>
+      _security.requirements(reader);
 
   PathItem _pathItem(ObjectReader r) {
     final operations = <String, Operation>{};
@@ -125,7 +111,7 @@ final class OperationParser {
         responses:
             r.map('responses', response, skipExtensions: true) ?? const {},
         deprecated: r.boolean('deprecated') ?? false,
-        security: r.list('security', securityRequirement),
+        security: securityRequirements(r),
         servers: r.list('servers', server) ?? const [],
         extensions: r.extensions,
         unknownKeys: r.unknownKeys(),

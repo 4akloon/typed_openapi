@@ -115,7 +115,9 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   parent) gets the first node and reports nothing again;
   `DialectChecker` turns the constructs into TOA020-TOA022. `ObjectReader`
   reports `$ref` objects, commented-out `$ref`s and merge keys through
-  `BundlerConstructs`; `OperationParser` reads servers through `ServerParser`.
+  `BundlerConstructs`; `OperationParser` reads servers through `ServerParser` and the `security` field
+  through `SecurityParser` (a field that is not a list is one malformed
+  requirement, `SecurityRequirement.isNotList`, with TOA111 kept).
 - `resolve/` - `RefTarget` reads a `$ref` value (a query, a bad fragment or a
   file name that is not UTF-8 after percent-decoding -> TOA100, a host ->
   TOA102), `SpecDocuments` loads other local files once by
@@ -353,7 +355,10 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   through an `allOf` of one part or a nullable `anyOf`/`oneOf`, then the
   `$ref` target; a `default` beside a `$ref` counts from 3.1; one that does
   not fit the `enum` or the `format` (`date`, `date-time`, `uuid`, `int32`)
-  of those schemas is TOA660 and not kept: `DefaultMatcher`); envelopes; errors, with
+  of those schemas is TOA660 and not kept: `DefaultMatcher`, which checks
+  the RFC 3339 fields of `date` and `date-time` by range, a leap year and a
+  leap second (60) included, never through `DateTime.tryParse`, which rolls
+  a month 13 over); envelopes; errors, with
   `errors.default_schema` for statuses without a body; the status goes into
   an inline body's name only when several responses of a kind declare one
   (`ResponseStatuses.bodyCounts`: a form, multipart, text or bytes response
@@ -386,11 +391,14 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   the suffix, TOA551) and the class of
   multipart parts (`RequestBodyIr.parts`, TOA655 when the schema is not an
   object; `PartMediaType` makes each part's `encoding.contentType` one
-  concrete type, TOA661, and an object part that is not JSON a `String` the
-  caller supplies, TOA662); `OperationBuilder` keeps security requirements
+  concrete type, TOA661 (a type is concrete when it is an RFC 9110 media
+  type whose quoted strings hold no control character, a tab included:
+  Dio's `DioMediaType.parse` would throw at call time), and an object part
+  that is not JSON a `String` the caller supplies, TOA662); `OperationBuilder` keeps security requirements
   (an alternative that names a scheme `components.securitySchemes` does not
   define, or is not an object (`SecurityRequirement.isMalformed`, also
-  TOA111), is TOA568 and left out as a whole when another alternative can be described;
+  TOA111; a `security` field that is not a list is one such requirement at
+  the field), is TOA568 and left out as a whole when another alternative can be described;
   when none can, all stay with the scheme of kind `SecurityKind.unknown`
   (the runtime's `SecuritySchemeType.unknown`), so the metadata never says
   less than the spec: no operation reads as open or as optional), skips

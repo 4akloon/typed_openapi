@@ -8,14 +8,18 @@ final class DefaultMatcher {
   /// Creates the matcher.
   const DefaultMatcher();
 
-  static final _date = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+  static const _date = r'(\d{4})-(\d{2})-(\d{2})';
+  static final _dateOnly = RegExp('^$_date\$');
   static final _dateTime = RegExp(
-    r'^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(\.\d+)?([Zz]|[+-]\d{2}:\d{2})$',
+    '^$_date[Tt]'
+    r'(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?'
+    r'(?:[Zz]|[+-](\d{2}):(\d{2}))$',
   );
   static final _uuid = RegExp(
     r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
     caseSensitive: false,
   );
+  static const _monthDays = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   static const _int32Min = -2147483648;
   static const _int32Max = 2147483647;
 
@@ -45,15 +49,37 @@ final class DefaultMatcher {
   };
 
   static bool _isDate(String text) {
-    if (!_date.hasMatch(text)) return false;
-    final parsed = DateTime.tryParse(text);
-    return parsed != null && parsed.toIso8601String().startsWith(text);
+    final match = _dateOnly.firstMatch(text);
+    return match != null && _isCalendarDate(match);
   }
 
-  /// RFC 3339 allows a lower-case `t` and `z`, which [DateTime.tryParse]
-  /// does not.
-  static bool _isDateTime(String text) =>
-      _dateTime.hasMatch(text) && DateTime.tryParse(text.toUpperCase()) != null;
+  /// An RFC 3339 `date-time`, checked by the range of each field:
+  /// [DateTime.tryParse] rolls an out-of-range month or day over.
+  static bool _isDateTime(String text) {
+    final match = _dateTime.firstMatch(text);
+    if (match == null || !_isCalendarDate(match)) return false;
+    final hour = _number(match, 4);
+    final minute = _number(match, 5);
+    final second = _number(match, 6);
+    // The second may be 60, a leap second.
+    final isTime = hour <= 23 && minute <= 59 && second <= 60;
+    // `Z` has no offset groups.
+    return isTime && _number(match, 7) <= 23 && _number(match, 8) <= 59;
+  }
+
+  /// Whether the year, month and day in groups 1 to 3 of [match] are a day
+  /// of the Gregorian calendar.
+  static bool _isCalendarDate(RegExpMatch match) {
+    final year = _number(match, 1);
+    final month = _number(match, 2);
+    final day = _number(match, 3);
+    if (month < 1 || month > 12 || day < 1) return false;
+    final isLeap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    return day <= (month == 2 && isLeap ? 29 : _monthDays[month - 1]);
+  }
+
+  static int _number(RegExpMatch match, int group) =>
+      int.parse(match[group] ?? '0');
 
   static bool _isInt32(num value) =>
       value == value.truncate() && value >= _int32Min && value <= _int32Max;

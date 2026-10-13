@@ -31,9 +31,15 @@ final class PartMediaType {
 
   /// A token as RFC 9110 writes it, which never holds `*`.
   static const _token = r"[0-9A-Za-z!#$%&'+.^_`|~-]+";
+
+  /// A quoted string of RFC 9110 without a tab or any control character:
+  /// `qdtext` and `quoted-pair` allow a tab there, but Dio's parser does not,
+  /// and a line break in a header is never sent.
+  static const _quotedString =
+      r'"(?:[\x20\x21\x23-\x5B\x5D-\x7E\x80-\xFF]|\\[\x20-\x7E\x80-\xFF])*"';
   static final _concrete = RegExp(
     '^$_token/$_token'
-    '(\\s*;\\s*$_token=(?:$_token|"(?:[^"\\\\]|\\\\.)*"))*\\s*\$',
+    '(?:[ \\t]*;[ \\t]*$_token=(?:$_token|$_quotedString))*\$',
   );
   static final _comma = RegExp(r',(?=(?:[^"]*"[^"]*")*[^"]*$)');
 

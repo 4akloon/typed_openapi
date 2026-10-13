@@ -176,6 +176,46 @@ void main() {
     });
   });
 
+  group('a security field that is not a list', () {
+    for (final (value, name) in [
+      ('{bearer: []}', ''),
+      ('"bearer"', 'bearer'),
+      ('7', ''),
+    ]) {
+      for (final (level, pointer) in [
+        ('operation', '#/paths/~1a/get/security'),
+        ('document', '#/security'),
+      ]) {
+        test('$value at the $level is an unknown scheme, not an open call', () {
+          final fixture = level == 'operation'
+              ? specOf(security: value)
+              : specOf(global: value);
+          expect(requirements(fixture), [
+            ['$name:unknown:'],
+          ]);
+          final report = unknown(fixture).single;
+          expect(report.pointer?.value, pointer);
+          expect(report.message, contains('not a list'));
+          expect(
+            [
+              for (final d in fixture.diagnostics.all)
+                if (d.code == DiagnosticCode.invalidValue) d.pointer?.value,
+            ],
+            [pointer],
+          );
+        });
+      }
+    }
+
+    test('in an operation replaces the security of the document', () {
+      final fixture = specOf(security: '7', global: '[{bearer: []}]');
+      expect(requirements(fixture), [
+        [':unknown:'],
+      ]);
+      expect(unknown(fixture), hasLength(1));
+    });
+  });
+
   group('security that the spec defines', () {
     test('an optional alternative stays optional, without a report', () {
       final fixture = specOf(security: '[{}]');

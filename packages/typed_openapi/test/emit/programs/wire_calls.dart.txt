@@ -74,6 +74,7 @@ Future<void> main() async {
         history: '<b>h</b>',
         rows: 'a,b',
         note: 'n',
+        broken: 'b',
       ),
     )));
     final parts = RegExp(r'name="(\w+)"[^\r\n]*\r\n(?:content-type: ([^\r\n]*)\r\n)?\r\n')

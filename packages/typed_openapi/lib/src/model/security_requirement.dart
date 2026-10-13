@@ -9,6 +9,7 @@ final class SecurityRequirement extends SpecNode {
     required super.location,
     this.schemes = const {},
     this.isMalformed = false,
+    this.isNotList = false,
   });
 
   /// Scopes by security scheme name, in document order.
@@ -19,4 +20,9 @@ final class SecurityRequirement extends SpecNode {
   /// this tool cannot read, so no operation reads as open. A string entry
   /// is kept as the one name in [schemes].
   final bool isMalformed;
+
+  /// Whether this stands for a whole `security` field that was not a list
+  /// (a map, a string, a number, `null`), not for one entry of it. It is
+  /// always [isMalformed].
+  final bool isNotList;
 }

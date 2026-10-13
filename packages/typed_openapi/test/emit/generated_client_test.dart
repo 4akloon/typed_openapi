@@ -268,9 +268,9 @@ success 204 null
 https://wire.example.com/helpers?jsonEncode=%22a%5C%22b%22&base64Encode=AQID
 multipart [true, true, true]
 success 204 null
-avatar: image/png | scan: application/octet-stream | meta: application/json; charset=utf-8 | history: application/xml; charset=utf-8 | rows: text/csv; charset=utf-8 | note: text/plain; charset=utf-8
+avatar: image/png | scan: application/octet-stream | meta: application/json; charset=utf-8 | history: application/xml; charset=utf-8 | rows: text/csv; charset=utf-8 | note: text/plain; charset=utf-8 | broken: text/plain; charset=utf-8
 success 204 null
-avatar: image/png | scan: image/webp | meta: application/json; charset=utf-8 | history: application/xml; charset=utf-8 | rows: text/csv; charset=utf-8 | note: text/plain; charset=utf-8
+avatar: image/png | scan: image/webp | meta: application/json; charset=utf-8 | history: application/xml; charset=utf-8 | rows: text/csv; charset=utf-8 | note: text/plain; charset=utf-8 | broken: text/plain; charset=utf-8
 POST /strings application/json <"hello \"q\"">
 PUT /strings application/json <"red">
 PATCH /strings application/json <"x\"y">
