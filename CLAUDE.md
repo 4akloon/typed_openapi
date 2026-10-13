@@ -814,7 +814,10 @@ The only package generated clients depend on (dependencies: `dio`, `meta`, floor
 Pure Dart, works on the web (compiled to JS and to Wasm); SSE needs a
 streaming adapter there (Dio's default browser adapter delivers the body
 only when the connection closes), and cookie parameters do not work (browsers
-drop the `Cookie` header).
+drop the `Cookie` header: `test/dio/cookie_browser_test.dart` checks it in
+Chrome against a loopback server, `cookie_server.dart`, started by
+`spawnHybridUri`; its `hybridMain` is the one top-level function a test
+helper has, as `package:test` requires).
 Generated code is expected to look like `test/helpers/pets_api.dart`
 (illustrative, not a contract); `test/generated_client_test.dart` checks
 that the API composes, including an `implements` fake of a tag class.
