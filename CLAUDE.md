@@ -522,8 +522,9 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   an optional constant keeps the keys of those the decoded JSON lacked in
   a private `_absent` list, which `toJson` leaves out and `==` compares, so
   a decoded value is written back as it came, while a model made in code
-  writes every constant),
-  `EnumEmitter`, `UnionEmitter` and `ModelLibrary` (`models/<snake>.dart`
+  writes every constant, so the two are not equal when a constant was
+  absent; the generated `fromJson` needs a runtime whose
+  `JsonReader.constant` returns a bool), `EnumEmitter`, `UnionEmitter` and `ModelLibrary` (`models/<snake>.dart`
   per declaration, names that clash get `2`, `3`...; the barrel
   `models.dart`; the header is `// GENERATED CODE - DO NOT MODIFY BY HAND.`
   and, on the second line, `// dart format off`). Generated classes are

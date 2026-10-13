@@ -7,7 +7,12 @@
   a decoded value is written back as it came (Medusa's `union: structural`
   `oneOf` of search facets no longer decodes its own JSON as unknown). A
   model made in code still writes every constant. These models gain a
-  private constructor `_`, and `==`/`hashCode` compare `_absent`. No golden
+  private constructor `_`, and `==`/`hashCode` compare `_absent`, so a
+  decoded model is not equal to a model made in code with the same getters
+  when an optional constant was absent from the JSON. The generated
+  `fromJson` calls `JsonReader.constant`, which now returns whether the
+  constant was present, so generated code needs the matching
+  `typed_openapi_runtime`: release the two packages together. No golden
   file changes; in the corpus the models with optional constants of
   `stripe`, `openai`, `github`, `discord` and `medusa` change (M11).
 - In a union with a discriminator, a variant that is not an object and has
