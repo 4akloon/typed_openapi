@@ -11,11 +11,24 @@ import 'package:typed_openapi_runtime/typed_openapi_runtime.dart';
 
 void main() {
   late Dio dio;
+
+  /// The `Cookie` header of each request as the interceptors saw it, before
+  /// the browser dropped it.
+  final cookiesSet = <Object?>[];
+  setUp(cookiesSet.clear);
   setUpAll(() async {
     final channel = spawnHybridUri('cookie_server.dart');
     // The port crosses as JSON: dart2wasm reads the number as a double.
     final port = (await channel.stream.first as num).toInt();
-    dio = Dio(BaseOptions(baseUrl: 'http://localhost:$port'));
+    dio = Dio(BaseOptions(baseUrl: 'http://127.0.0.1:$port'))
+      ..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            cookiesSet.add(options.headers['Cookie']);
+            handler.next(options);
+          },
+        ),
+      );
   });
 
   const probe = OperationInfo(
@@ -38,6 +51,8 @@ void main() {
       ),
       decode,
     );
+    // The sender produced the header; only the browser dropped it.
+    expect(cookiesSet, ['session=abc']);
     final received = (result as Success<Object?, Never>).data! as Map;
     expect(received['probe'], 'sent');
     // `Cookie` is a forbidden request header: XMLHttpRequest and fetch

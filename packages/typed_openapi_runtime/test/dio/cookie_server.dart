@@ -8,7 +8,8 @@ import 'dart:io';
 
 import 'package:stream_channel/stream_channel.dart';
 
-/// Starts the server and sends its port on [channel].
+/// Starts the server and sends its port on [channel]; the server closes
+/// when the channel does.
 Future<void> hybridMain(StreamChannel<Object?> channel) async {
   final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
   server.listen((request) {
@@ -18,7 +19,6 @@ Future<void> hybridMain(StreamChannel<Object?> channel) async {
         'Access-Control-Allow-Origin',
         request.headers.value('origin') ?? '*',
       )
-      ..set('Access-Control-Allow-Credentials', 'true')
       ..set(
         'Access-Control-Allow-Headers',
         request.headers.value('access-control-request-headers') ?? '*',
@@ -38,4 +38,6 @@ Future<void> hybridMain(StreamChannel<Object?> channel) async {
       ..close();
   });
   channel.sink.add(server.port);
+  await channel.stream.drain<void>();
+  await server.close(force: true);
 }
