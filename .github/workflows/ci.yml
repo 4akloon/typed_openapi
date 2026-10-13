@@ -20,6 +20,7 @@ permissions:
 jobs:
   analyze-test:
     name: Test (${{ matrix.os }}, ${{ matrix.sdk }})
+    timeout-minutes: 45
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -75,6 +76,7 @@ jobs:
 
   web:
     name: Runtime on the web (${{ matrix.compiler }})
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -154,6 +156,7 @@ jobs:
 
   semver:
     name: Output changes are versioned
+    timeout-minutes: 10
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -174,6 +177,7 @@ jobs:
 
   publish-dry-run:
     name: Publish dry-run
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

@@ -25,6 +25,21 @@ List<String> runsOf(String name, String job) => [
 ];
 
 void main() {
+  test('every job of every workflow has a timeout', () {
+    final folder = Directory(p.join('..', '..', '.github', 'workflows'));
+    for (final file in folder.listSync().whereType<File>()) {
+      final name = p.basename(file.path);
+      final jobs = at(name, ['jobs']) as Map<Object?, Object?>;
+      for (final job in jobs.keys) {
+        expect(
+          at(name, ['jobs', job as Object, 'timeout-minutes']),
+          isA<int>(),
+          reason: '$name: job $job',
+        );
+      }
+    }
+  });
+
   test('every PR tests ubuntu with 3.10.0 and stable, macOS and Windows', () {
     const matrix = ['jobs', 'analyze-test', 'strategy', 'matrix'];
     expect(at('ci.yml', [...matrix, 'sdk']), ['3.10.0', 'stable']);
