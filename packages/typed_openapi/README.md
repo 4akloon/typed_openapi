@@ -14,7 +14,7 @@
 
 ```yaml
 dependencies:
-  dio: ^5.7.0
+  dio: ^5.11.1
   typed_openapi_runtime:
     git:
       url: https://github.com/4akloon/typed_openapi.git
@@ -157,6 +157,7 @@ Exit code `0` means no errors, `1` errors, `64` a usage error and `78` a config 
 | [Operations](doc/generated/operations.md), [Request bodies](doc/generated/request_bodies.md), [Responses and errors](doc/generated/responses_and_errors.md) | Generated methods. |
 | [Event streams](doc/generated/event_streams.md), [Security](doc/generated/security.md) | SSE and security metadata. |
 | [NestJS](doc/frameworks/nestjs.md), [FastAPI](doc/frameworks/fastapi.md), [Spring](doc/frameworks/spring.md), [ASP.NET](doc/frameworks/aspnet.md) | What each framework's spec needs. |
+| [Programmatic API](doc/programmatic_api.md) | Running the checker and the writer from Dart code. |
 | [Troubleshooting](doc/troubleshooting.md) | Common problems and what to do. |
 
 The runtime that generated code depends on has its own guides: [typed_openapi_runtime](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_runtime/README.md).

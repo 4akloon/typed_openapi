@@ -37,7 +37,7 @@ Five minutes, one spec. Add the packages (they are not on pub.dev yet; pin a `re
 
 ```yaml
 dependencies:
-  dio: ^5.9.0
+  dio: ^5.11.1
   typed_openapi_runtime:
     git:
       url: https://github.com/4akloon/typed_openapi.git
@@ -165,6 +165,7 @@ Every guide of both packages. Package READMEs: [typed_openapi](https://github.co
 | [Baseline](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi/doc/baseline.md) | Accepting existing problems. |
 | [Generated output](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi/doc/generate_output.md) | Ownership, manifest, locks, determinism. |
 | [CI](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi/doc/ci.md) | Pipelines, annotations, SARIF. |
+| [Programmatic API](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi/doc/programmatic_api.md) | Checker and writer as a library. |
 | [Troubleshooting](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi/doc/troubleshooting.md) | Symptoms, causes, fixes, how to report a bug. |
 
 **What gets generated**

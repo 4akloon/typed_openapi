@@ -8,7 +8,7 @@ This guide takes one NestJS-style spec from file to a working call: install, con
 
 ```yaml
 dependencies:
-  dio: ^5.9.0
+  dio: ^5.11.1
   typed_openapi_runtime:
     path: ../typed_openapi/packages/typed_openapi_runtime
 dev_dependencies:
