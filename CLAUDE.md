@@ -1079,6 +1079,9 @@ are not, so follow them by hand:
   over the size limits, and the refactoring order.
 - `docs/research/` - competitor research (`README.md` summary, `01`-`07`
   detailed reports).
+- `docs/superpowers/HANDOFF.md` - current state and how to continue; read it
+  first in a new session. `docs/superpowers/briefs/` - briefs for the next
+  plans and the SDD implementer rules.
 - `docs/superpowers/plans/` - step-by-step implementation plan per milestone
   (M1: `2026-10-11-m1-check-cli.md`).
 - `CONTRIBUTING.md` - setup, conventions, commit rules.
