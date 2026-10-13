@@ -82,7 +82,7 @@ The last argument of every method:
 | Field | Use |
 | --- | --- |
 | `cancelToken` | Dio `CancelToken`; a cancelled call is `Cancelled` |
-| `headers` | extra headers for this call (they win over `Accept` set by the method) |
+| `headers` | extra headers for this call |
 | `extra` | values for your interceptors in `RequestOptions.extra` |
 | `onSendProgress`, `onReceiveProgress` | Dio progress callbacks |
 | `sse` | `SseOptions` for [event streams](event_streams.md) |
@@ -126,7 +126,7 @@ clients:
 | Case | Diagnostic |
 | --- | --- |
 | Operation written as a `$ref` | `TOA107` |
-| Path variable with no parameter | `TOA556` (error when the template has it and the spec declares none the normalizer cannot add) |
+| Path variable with no parameter | `TOA556` (error) |
 | Event stream with conflicting shapes | `TOA654` |
 | Callbacks, webhooks | `TOA567` (info) |
 | Operation-level `servers` | `TOA566` (ignored) |
