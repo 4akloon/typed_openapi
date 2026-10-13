@@ -1,7 +1,8 @@
 import 'dart:async';
 
 import '../json/json_decode_exception.dart';
-import 'sse_decoder.dart';
+import 'sse_block.dart';
+import 'sse_block_decoder.dart';
 import 'sse_event_ignored.dart';
 import 'sse_item.dart';
 import 'sse_message.dart';
@@ -79,9 +80,10 @@ final class _Decoding<T> {
   final SseItemDecoder<T> _owner;
   // Set in start, before anything can listen.
   late final StreamController<SseItem<T>> _items;
-  StreamSubscription<SseMessage>? _source;
+  StreamSubscription<SseBlock>? _source;
   bool _closed = false;
-  // What the last item carries: also the id of a dropped event.
+  // What the last block left: also the id of a dropped event or of a block
+  // without data.
   String _lastId;
   Duration? _lastRetry;
   bool _receivedMessage = false;
@@ -100,20 +102,28 @@ final class _Decoding<T> {
   }
 
   void _listen(Stream<List<int>> stream) {
-    _source = SseDecoder(lastEventId: _owner.lastEventId, retry: _owner.retry)
-        .bind(stream)
-        .listen(
-          _onMessage,
-          onError: (Object error, StackTrace stackTrace) =>
-              _end(cause: error, stackTrace: stackTrace),
-          onDone: _end,
-          cancelOnError: true,
-        );
+    _source =
+        SseBlockDecoder(
+              lastEventId: _owner.lastEventId,
+              retry: _owner.retry,
+            )
+            .bind(stream)
+            .listen(
+              _onBlock,
+              onError: (Object error, StackTrace stackTrace) =>
+                  _end(cause: error, stackTrace: stackTrace),
+              onDone: _end,
+              cancelOnError: true,
+            );
+  }
+
+  void _onBlock(SseBlock block) {
+    _lastId = block.lastEventId;
+    _lastRetry = block.retry;
+    if (block.message case final message?) _onMessage(message);
   }
 
   void _onMessage(SseMessage message) {
-    _lastId = message.id;
-    _lastRetry = message.retry;
     _receivedMessage = true;
     final SseItem<T>? item;
     try {

@@ -103,7 +103,7 @@ final class _Reconnection<T> {
       case SseDisconnected(:final cause, :final stackTrace):
         // A dropped event (SseEventIgnored) still moves the id and counts as
         // progress: the connection worked.
-        if (item.lastEventId case final id?) _lastEventId = id;
+        _lastEventId = item.lastEventId;
         if (item.retry case final retry?) _retry = retry;
         if (item.receivedMessage) _attempt = 0;
         _current = null;
@@ -132,7 +132,7 @@ final class _Reconnection<T> {
   Future<void> _nextConnection(Object? cause, StackTrace? stackTrace) async {
     final options = _owner.options;
     if (_attempt >= options.maxAttempts) {
-      return _end(SseDisconnected(cause: cause, stackTrace: stackTrace));
+      return _end(_disconnected(cause, stackTrace));
     }
     _attempt++;
     final delay = options.delayBefore(_attempt, _retry);
@@ -142,9 +142,7 @@ final class _Reconnection<T> {
     await _wait(delay);
     if (_closed) return;
     if (_cancel case final cancel?) {
-      return _end(
-        SseDisconnected(cause: cancel, stackTrace: cancel.stackTrace),
-      );
+      return _end(_disconnected(cancel, cancel.stackTrace));
     }
     _resume(await _owner.reopen((lastEventId: _lastEventId, retry: _retry)));
   }
@@ -158,7 +156,7 @@ final class _Reconnection<T> {
     if (_closed || isNoContent) {
       // Listening and cancelling closes the connection of the response.
       if (result case Success(:final data)) data.listen(null).cancel();
-      _end(const SseDisconnected());
+      _end(_disconnected(null, null));
       return;
     }
     switch (result) {
@@ -167,9 +165,9 @@ final class _Reconnection<T> {
       case TransportError(:final exception, :final stackTrace):
         unawaited(_reconnect(exception, stackTrace));
       case Cancelled(:final exception, :final stackTrace):
-        _end(SseDisconnected(cause: exception, stackTrace: stackTrace));
+        _end(_disconnected(exception, stackTrace));
       case final Failure<Stream<SseItem<T>>, Object?> failure:
-        _end(SseDisconnected(cause: failure));
+        _end(_disconnected(failure, null));
     }
   }
 
@@ -178,6 +176,16 @@ final class _Reconnection<T> {
     final cancelled = _owner.cancelled;
     return cancelled == null ? wait : Future.any([wait, cancelled]);
   }
+
+  /// The last item of the stream: it carries the last event id and retry
+  /// the stream saw.
+  SseDisconnected<T> _disconnected(Object? cause, StackTrace? stackTrace) =>
+      SseDisconnected(
+        cause: cause,
+        stackTrace: stackTrace,
+        lastEventId: _lastEventId,
+        retry: _retry,
+      );
 
   void _end(SseDisconnected<T> last) {
     if (_closed) return;

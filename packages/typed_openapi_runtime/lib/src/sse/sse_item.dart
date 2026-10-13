@@ -96,7 +96,7 @@ final class SseDisconnected<T> extends SseItem<T> {
   const SseDisconnected({
     this.cause,
     this.stackTrace,
-    this.lastEventId,
+    this.lastEventId = '',
     this.retry,
     this.receivedMessage = false,
   });
@@ -107,13 +107,13 @@ final class SseDisconnected<T> extends SseItem<T> {
   /// Where [cause] was raised.
   final StackTrace? stackTrace;
 
-  /// The last event id of the connection when it ended, also from an
-  /// event the decoder dropped (`SseEventIgnored`), as WHATWG keeps it for
-  /// any dispatched event; null when not known. A reconnection sends it as
-  /// `Last-Event-ID`.
-  final String? lastEventId;
+  /// The last event id of the stream when it ended, `''` when it had none
+  /// (as [SseEvent.id]): also the id of an event the decoder dropped
+  /// (`SseEventIgnored`) and of a block without data, as WHATWG sets it at
+  /// every empty line. A reconnection sends it as `Last-Event-ID`.
+  final String lastEventId;
 
-  /// The last reconnection time of the connection when it ended, or null.
+  /// The last reconnection time of the stream when it ended, or null.
   final Duration? retry;
 
   /// Whether the connection delivered at least one message: an event, an

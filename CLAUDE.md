@@ -148,8 +148,9 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   that changes nothing is TOA669; `EventData` reads the events' union from
   that object in the override's order; `unknown: ignore` makes the
   generated `fromEvent` throw `SseEventIgnored`, which `SseItemDecoder`
-  drops; its id still reaches `SseDisconnected.lastEventId` and so the
-  `Last-Event-ID` of a reconnection, as WHATWG keeps it). A missing file is TOA801, a directory or a
+  drops; its id, like that of a block without data, still reaches
+  `SseDisconnected.lastEventId` and so the `Last-Event-ID` of a
+  reconnection, as WHATWG keeps it). A missing file is TOA801, a directory or a
   bad value TOA802 (the value is ignored), an unknown key the error TOA803
   with "did you mean" for a known key within Levenshtein distance 2.
   `OverrideResolver` maps entries to model nodes (`OverrideTarget`; a
@@ -786,8 +787,13 @@ that the API composes, including an `implements` fake of a tag class.
   `CallOptions` (`sse`: `SseOptions`). `openEvents` needs its stream
   listened to or cancelled; a listener cancel cancels the request.
 - `sse/` - `SseDecoder` (WHATWG, bytes -> `SseMessage`; it may start from
-  a last event id and retry), `SseItemDecoder` (-> `SseEvent` /
-  `SseDecodeError` / `SseDisconnected`; data problems are items, an `Error`
+  a last event id and retry; it keeps the messages of `SseBlockDecoder`,
+  which reports every block, one `SseBlock` per empty line with the
+  stream's last id and retry, since WHATWG sets the id there also when
+  the block has no `data`), `SseItemDecoder` (-> `SseEvent` /
+  `SseDecodeError` / `SseDisconnected`, which always carries the stream's
+  last event id, `''` when it had none, from a block without data too;
+  data problems are items, an `Error`
   from the user's decoder is the only stream error), `SseReconnector`
   (R12.5: `SseReconnecting(attempt, delay, cause)` before each attempt,
   `Last-Event-ID`, the server's `retry` or 1 s doubling to 30 s, 5 attempts
