@@ -16,6 +16,7 @@ import 'names.dart';
 import 'override_notices.dart';
 import 'pending_declaration.dart';
 import 'ref_follower.dart';
+import 'schema_queries.dart';
 import 'schema_shapes.dart';
 
 export 'pending_declaration.dart' show NameHint;
@@ -54,6 +55,7 @@ final class SchemaMapper {
 
   // The collaborators are lazy because a field initializer cannot read the
   // other fields.
+  late final SchemaQueries _queries = SchemaQueries(_context);
   late final DeclarationNames _declNames = DeclarationNames(_context);
   late final OverrideNotices _notices = OverrideNotices(_context);
   late final EnumMapper _enums = EnumMapper(_context, _declNames, _notices);
@@ -356,45 +358,6 @@ final class SchemaMapper {
       _subtypes(schema).isNotEmpty ||
       schema.properties.isNotEmpty ||
       schema.allOf.isNotEmpty;
-
-  /// The kind and the non-null branches of a union: a `oneOf` (or else an
-  /// `anyOf`) with more than one branch besides `null` and the branches
-  /// that add no value to another ([SchemaShapes.subsumedBranches]).
-  (UnionKind, List<Schema>)? _branches(SchemaObject schema) {
-    final (kind, branches) = schema.oneOf.isNotEmpty
-        ? (UnionKind.oneOf, schema.oneOf)
-        : (UnionKind.anyOf, schema.anyOf);
-    final dropped = SchemaShapes.subsumedBranches(schema, refs: _refs);
-    final nonNull = [
-      for (final branch in branches)
-        if (!SchemaShapes.isNullOnly(branch) && !dropped.containsKey(branch))
-          branch,
-    ];
-    // Branches that only add constraints (`required`, ...) or only hold one
-    // value each (an enum) do not make a union.
-    if (nonNull.length < 2 ||
-        nonNull.every(_addsOnlyConstraints) ||
-        SchemaShapes.enumValues(schema) != null) {
-      return null;
-    }
-    return (kind, nonNull);
-  }
-
-  /// Whether [schema] is written inline and only validates: `required`,
-  /// `minProperties` and the like, with no `type` (or only `type: object`),
-  /// `properties`, items, values, `allOf` or union of its own.
-  static bool _addsOnlyConstraints(Schema schema) =>
-      schema is SchemaObject &&
-      schema.ref == null &&
-      schema.types.every((t) => t == .object) &&
-      schema.properties.isEmpty &&
-      schema.items == null &&
-      schema.additionalProperties == null &&
-      schema.format == null &&
-      SchemaShapes.enumValues(schema) == null &&
-      schema.allOf.isEmpty &&
-      schema.oneOf.isEmpty &&
-      schema.anyOf.isEmpty;
 
   /// The declaration of [schema] with identity [id]: the one it has already
   /// when it is reached again, else a new one named by [hint] (an inline
@@ -787,16 +750,6 @@ final class SchemaMapper {
       : _directions.splits(schema)
       ? .response
       : _directions.onlyDirection(schema) ?? .both;
-
-  /// Whether a value of [type], mapped from [schema], is raw JSON that could
-  /// hold a secret: nothing prints the properties of raw JSON, so a secret
-  /// anywhere in [schema] (its properties, the parts of its `allOf`, the
-  /// branches of a union that stays `JsonValue`) makes the value print as
-  /// `<redacted>`.
-  bool _rawSecret(Schema schema, DartType? type) =>
-      type != null &&
-      type.holdsRawJson &&
-      SchemaShapes.carriesSecret(schema, refs: _refs, intoProperties: true);
 
   /// The one value of a property that can hold no other, with the type of
   /// the value: a `const` or a one-value enum written inline, not nullable,
@@ -1638,29 +1591,20 @@ final class SchemaMapper {
         nullable: json.nullable,
       );
 
-  /// How the schema questions follow a `$ref`. Lazy because a field
-  /// initializer cannot read `_context`.
-  late final RefFollower _refs = RefFollower.of(_context.model);
+  // Forwards to [SchemaQueries], until the code that asks moves out too.
+  RefFollower get _refs => _queries.refs;
 
-  SchemaObject? _resolved(Schema schema) =>
-      switch (_context.model.resolveSchema(schema)) {
-        final SchemaObject object => object,
-        _ => null,
-      };
+  SchemaObject? _resolved(Schema schema) => _queries.resolved(schema);
 
-  /// Whether [schema] allows `null`: 3.0 `nullable`, `null` in `type`,
-  /// `null` among the `enum` values or a null branch, or an `allOf` part
-  /// that only says so (`allOf: [{$ref: Pet}, {nullable: true}]`).
   static bool _isNullable(SchemaObject schema) =>
-      (schema.nullable ?? false) ||
-      schema.types.contains(SchemaType.nullType) ||
-      (schema.enumValues?.contains(null) ?? false) ||
-      schema.oneOf.any(SchemaShapes.isNullOnly) ||
-      schema.anyOf.any(SchemaShapes.isNullOnly) ||
-      schema.allOf.any(
-        (part) =>
-            part is SchemaObject &&
-            SchemaShapes.isAnnotationOnly(part) &&
-            SchemaShapes.allowsNull(part),
-      );
+      SchemaQueries.isNullable(schema);
+
+  (UnionKind, List<Schema>)? _branches(SchemaObject schema) =>
+      _queries.branches(schema);
+
+  static bool _addsOnlyConstraints(Schema schema) =>
+      SchemaQueries.addsOnlyConstraints(schema);
+
+  bool _rawSecret(Schema schema, DartType? type) =>
+      _queries.holdsRawSecret(schema, type);
 }
