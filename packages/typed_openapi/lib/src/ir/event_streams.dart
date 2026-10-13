@@ -10,6 +10,7 @@ import 'response_statuses.dart';
 import 'schema_mapper.dart';
 import 'spec_operation.dart';
 import 'sse_override_checks.dart';
+import 'stream_successes.dart';
 import 'written_streams.dart';
 
 /// How the successes of an operation use `text/event-stream`.
@@ -58,7 +59,12 @@ final class EventStreams {
   /// How the successes of [operation] use event streams; [StreamShape.mixed]
   /// is reported (TOA654).
   StreamShape shapeOf(Operation operation) {
-    final (:streams, :alone, :others) = _count(operation);
+    final successes = StreamSuccesses.of(_context, operation);
+    final (streams, alone, others) = (
+      successes.streams.length,
+      successes.alone.length,
+      successes.others.length,
+    );
     if (streams == 0) {
       if (_sse(operation) case final sse?) _checks.withoutStream(sse);
       return .none;
@@ -112,28 +118,6 @@ final class EventStreams {
       );
     }
     return .only;
-  }
-
-  /// How many 2xx successes of [operation] offer an event stream, how many
-  /// of those offer nothing else, and how many have a body without one.
-  ({int streams, int alone, int others}) _count(Operation operation) {
-    var streams = 0;
-    var alone = 0;
-    var others = 0;
-    for (final (status, written) in _statuses.of(operation)) {
-      final response = _context.model.resolve(written);
-      if (!status.startsWith('2') || response == null) continue;
-      final kinds = {
-        for (final type in response.content.keys) MediaTypePicker.kindOf(type),
-      };
-      if (!kinds.contains(BodyKind.eventStream)) {
-        if (kinds.isNotEmpty) others++;
-        continue;
-      }
-      streams++;
-      if (kinds.length == 1) alone++;
-    }
-    return (streams: streams, alone: alone, others: others);
   }
 
   /// The name of the second method of an operation named [name] that also
