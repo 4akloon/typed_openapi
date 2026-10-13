@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:test/test.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_bag.dart';
+import 'package:typed_openapi/src/diagnostics/github_actions_reporter.dart';
 import 'package:typed_openapi/src/diagnostics/reporters.dart';
 import 'package:typed_openapi/src/diagnostics/sarif_reporter.dart';
 
@@ -37,6 +38,13 @@ void main() {
         '  fix: Override:\n      schemas:\n        Pet:\n          nullable: true\n'
         '    $hint\n',
       ),
+    );
+  });
+
+  test('GitHubActionsReporter puts the hint after a %0A line break', () {
+    expect(
+      const GitHubActionsReporter().format(multiLine()),
+      contains('nullable: true%0A$hint'),
     );
   });
 
