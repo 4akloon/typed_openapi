@@ -51,7 +51,7 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
 - `diagnostics/` - `Diagnostic` (with `RelatedLocation`s, preset `hints` as
   `(preset, text)` and fingerprint `args`), `DiagnosticCode` (stable `TOAnnn`
   catalog; the config codes TOA901-TOA904 cannot be changed at all, and
-  `fixedCodes` - read errors, TOA801-TOA803, TOA820/821/823, TOA830-TOA833 -
+  `fixedCodes` - read errors, TOA801-TOA803, TOA820/821/823, TOA830-TOA835 -
   can be raised but not lowered), `Severity` (declared from most to least
   serious; level comparison uses its order), `SeverityLevels` (a client's
   `severity` config), `JsonPointer`, `DiagnosticBag` (baselined diagnostics kept
@@ -268,8 +268,16 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   (`OperationFilter`, `FilterPattern`), `types`, `tri_state`, `union`
   (`raw`, the default, or `structural`: how a `oneOf`/`anyOf` without a
   discriminator whose variants share a JSON type is generated, TOA453; an
-  override `union` wins), `errors`; a client's key wins over `defaults`,
-  `naming`/`types`/`errors` key by key).
+  override `union` wins), `errors`, `exhaustive` (R14.2, default true;
+  false makes the bases of enums, unions, status types and event unions
+  `abstract interface`; a schema override `exhaustive` wins; it is in
+  `GenerationConfig.key` only when false, so the key of a config without it
+  is unchanged); a client's key wins over `defaults`,
+  `naming`/`types`/`errors` key by key). `ConfigLoader` reads the file and
+  its clients through `ConfigReader` (typed access, `severityAt`),
+  `ConfigKeys` (the allowed keys, TOA902) and `GenerationReader` (with
+  `CustomTypesReader`, `OperationFilterReader` and `TypeSettingsReader`:
+  `types.number` and `exhaustive`).
   A bad value is TOA902 and the default is used: a `default_group` that is a
   reserved word, equal `input_suffix` and `patch_suffix` (both go back to
   their defaults). `operation_prefix` applies only where its match starts at
@@ -293,8 +301,12 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   also used elsewhere); types refer to declarations by id, and
   `CustomType.json` never names one), `names.dart` (`DartNames`: word
   splitting, case, reserved sets and the name check `NameKind`, `isValid`,
-  `sanitize`, `dropsLetters`; `NameScope` gives a name, a suffix for
-  reserved names and `2`, `3`... for collisions; the arguments of a method
+  `sanitize`, `dropsLetters`; it exports `name_scope.dart`: `NameScope`
+  gives a name, a suffix for
+  reserved names and `2`, `3`... for collisions, and keeps the names of the
+  API lock (`lock`: a name kept for an identity is given to it when free,
+  and never to another identity's normal claim; an override name
+  (`isExplicit`) or `reserve` may take it, `NameChange.lockTaken`); the arguments of a method
   and the fields of a parts class, and the methods of a group class
   (`DartNames.methodNames`, which adds `int`, `bool`, `double` and `num`,
   types the class's other methods use), reserve `DartNames.helperFunctions`,
@@ -383,7 +395,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   client's `OperationRequest.pathVariable`, which a test keeps equal) and
   `IrBuilder`
   (operations written as a `$ref` are skipped (TOA107); groups by tag, path
-  or one class, with an override `group` (UpperCamelCase, or a value that
+  or one class (`GroupNames`; `GroupIr`, in `group_ir.dart`, keeps the
+  group's `key`, its identity in the API snapshot), with an override `group` (UpperCamelCase, or a value that
   differs only by case or separators) and TOA553-TOA555; the names of custom
   types are taken in the type scope first, so a declaration named like one
   gets a suffix, TOA551; `ApiNames` names, after the declarations, groups
@@ -424,7 +437,7 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   text; the responses of an operation are picked (`MediaTypePicker`) and
   checked for an event stream before any type is mapped, so a skipped
   operation declares nothing; the IR types only the API emitter reads are in `api_ir.dart`,
-  which `ir.dart` exports; method names,
+  which `ir.dart` exports; method names (`MethodNames`),
   override names first, then
   `operationId` without the `operation_prefix`, then the path; TOA563 when
   no operation is generated, at the config client if filters left some
@@ -442,7 +455,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   successes are only a stream and others offer a body, TOA654, not
   generated) and `excluded` (`sse.method:
   none` on a stream-only operation: not generated, no diagnostic). The
-  second method is named with `naming.stream_suffix` (`chat` and
+  second method is named with `naming.stream_suffix` by `StreamMethodNames`
+  (`chat` and
   `chatStream`; a reserved word keeps its stem, `classStream`), claimed
   after every other method of the group (TOA663; TOA550 when the name is
   one Dart has, TOA551 on a collision).
@@ -511,14 +525,34 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   is missing from the dump; the
   hidden `typed_openapi ir` command prints it. Naming and mapping codes use
   the second half of each area's hundred: TOA250-TOA256, TOA350-TOA351,
-  TOA450-TOA458, TOA550-TOA565, and media types, errors and event streams
+  TOA450-TOA458, TOA550-TOA571, and media types, errors and event streams
   TOA650-TOA671 (TOA654 and TOA663-TOA671 are event streams; TOA561 became
   TOA650 and TOA651, TOA562 TOA652, the querystring half of
-  TOA564 TOA565); `generate` has TOA830 (output not owned),
-  TOA831 (output not written, or its lock held) and TOA832 (an interrupted
-  run recovered, or a lock taken over; info). TOA552 on an enum value is an info (an override cannot name enum
+  TOA564 TOA565; TOA569-TOA571 are the API lock's names); `generate` has TOA830 (output not owned),
+  TOA831 (output not written, or its lock held), TOA832 (an interrupted
+  run recovered, or a lock taken over; info), TOA834 (`--locked`: the API
+  differs from `typed_openapi.lock`) and TOA835 (`typed_openapi.lock`
+  cannot be read or written). TOA552 on an enum value is an info (an override cannot name enum
   values; `x-enum-varnames` in the spec does), and `unknown` is reserved in
   the enum value scope (`unknown_`).
+  The name lock (M12, decision 5): `NameLock` (`name_lock.dart`, public)
+  holds the names `typed_openapi.lock` keeps, types by
+  `NameLock.declarationKey` (the schema's file relative to the spec's
+  directory, its pointer, and `@input` or `@patch`) and methods by
+  `NameLock.methodKey` (`METHOD /path`, `#stream` for the method that
+  returns the events); `IrContext.names` carries it and
+  `IrBuilder(bag, names:)` takes it. `LockedNames` locks the scopes before
+  any claim: the type scope with the declarations the run has (a kept type
+  the run does not declare is TOA571, info, and its name is free), each
+  group's method scope with its operations; a claim that keeps a name a
+  fresh run would not give is TOA570 (info), and a kept name an override
+  name or a custom type took, or that is not a usable name for its kind
+  (`DartNames.isValid`, not reserved in the scope: a lock is a file anyone
+  edits), is TOA569 (warning) and the identity is named normally. An
+  explicit claim (an override `name`) releases the identity's kept name.
+  Messages quote strings read from the lock with `MessageText.quote`.
+  Models, enums, unions and methods are kept; fields, enum values,
+  arguments, group classes and the helper types are not.
 - `emit/` - the model emitter (M8), whose only input is the IR (it never
   reads the spec): `DartCode` (string literals: `\`, `'`, `$`, line breaks
   including U+0085, U+2028 and U+2029, controls, bidirectional controls (also
@@ -547,7 +581,9 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   then `// dart format off` and
   `// ignore_for_file: deprecated_member_use_from_same_package`). Generated classes are
   `class`, not `final class` (users may extend them); union bases are
-  `sealed` (`abstract interface` when not exhaustive) and every class is
+  `sealed` (`abstract interface` when not exhaustive: a schema override
+  `exhaustive`, else the config's `exhaustive`, which also decides
+  `StatusTypeIr.exhaustive` and `EventUnionIr.exhaustive`) and every class is
   `@immutable`. Every spec string is escaped at every site it reaches: a
   literal, a comment or an identifier (names come from the IR only).
   Constants (`FieldIr.constValue`), constraints (`ConstraintsIr`), the name
@@ -730,8 +766,11 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   in the config, also one that was not selected: the declared input,
   overrides and baseline, the `$ref`'d files of the clients that were
   checked, and the config itself. A client whose output overlaps another's
-  (TOA904) is skipped by `generate`. `GenerateCommand` has `--config/-c`, `--force` and
-  `--break-lock`. `OutputWriter` (`output_writer.dart`) only orchestrates a
+  (TOA904) is skipped by `generate`. `GenerateCommand` has `--config/-c`, `--force`,
+  `--break-lock`, `--locked` and `--fresh-names` (M12). The output lock
+  `.<output>.typed_openapi.lock` and the manifest belong to one output
+  directory; `typed_openapi.lock` next to the config is the API lock
+  (`snapshot/`), a different file. `OutputWriter` (`output_writer.dart`) only orchestrates a
   run, in this order: `OutputParents` (the missing directories above the
   output), `LockAcquirer` (`OutputLock`, `LockHolder`: the lock, its
   take-over), `GeneratedTree` (files, hashes, manifest text),
@@ -749,7 +788,36 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   reported (an error) and the spec is checked without it; `generate` skips
   such a client. Each client then applies its levels
   (`checkClients` -> `ClientCheck`) and its baseline (`check`, which also
-  returns the `ClientCheck`s).
+  returns the `ClientCheck`s). `SpecChecker` names types and methods as
+  `typed_openapi.lock` keeps them (`ApiLockNames`; the `NameLock` is part
+  of the run key); an unreadable lock is TOA835 (an error, exit `1`) for `check`,
+  `ir`, `baseline` and `diff` too, since every command reads it; `SpecChecker.freshNames` ignores the lock.
+- `snapshot/` (M12) - the API snapshot of a client (decision 1):
+  `ApiSnapshot` (`SnapshotType`s by identity, each with a `TypeKind`,
+  `exhaustive`, facts and `SnapshotMember`s), built from the IR only by
+  `SnapshotBuilder` (`DeclarationSnapshots`, `OperationSnapshots`,
+  `SnapshotIdentities`: a schema is its file relative to the spec's
+  directory and pointer, with `@input`/`@patch`; a group `group:<key>`; an
+  operation its `operationId` when unique, else `METHOD /path`, with
+  `#stream` for the events method). `SnapshotJson` writes and reads the
+  lock text (sorted keys, a member per line, `version` 1); `ApiLock`
+  reads and writes `typed_openapi.lock` next to the config (`pathFor`,
+  TOA835; `SnapshotBuilder.rootOf` makes the spec's directory absolute); `SnapshotNameLock` turns a snapshot into the `NameLock` the IR
+  builder keeps (models, enums, unions, methods), `ApiLockNames` reads it
+  for a config.
+- `diff/` (M12) - `ApiDiff.compare(before, after)` gives `ApiChange`s with
+  a `ChangeCategory` (`breaking`, `switchBreaking`, `wire`, `additive`,
+  `docs`; decision 2): types removed or added, `MemberChanges` (members
+  removed, added, required, typed differently; a new variant, value or
+  status of an exhaustive type is `switchBreaking`, of a non-exhaustive
+  one `additive`; a type made sealed is `breaking`) and `FactChanges` (the
+  rule table of facts: JSON keys, path, method, style, media types and
+  statuses are `wire`, docs and `@Deprecated` `docs`). `RenameHints` adds
+  the `name:` override that keeps the old Dart name of a removed component
+  schema (decision 7). `ChangeCounts` are what `generate` prints and
+  `--fail-on` decides by; the reports are `TextDiffReport`,
+  `JsonDiffReport` and `MarkdownDiffReport` (spec text neutralised, and
+  Markdown escaped in the last).
 - `baseline/` - `AnchorIndex` (logical addresses of a spec's nodes:
   operation `METHOD /path`, `in:name` parameter, components schema,
   property), `Fingerprints` (anchor, `sha256([code, anchor, args])[:12]`),
@@ -774,7 +842,14 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   that overlaps another's, writes the whole client with `ApiLibrary` and
   `OutputWriter`, the inputs hash from `ClientCheck.sources` and the
   client's settings; text report, then a line per client; exit code as
-  `check`) and the hidden `IrCommand` (`ir_command.dart`, prints the IR of
+  `check`; `ClientWriter` writes each client, `ApiLockRun` prints its
+  change counts since `typed_openapi.lock` and records its snapshot, or
+  with `--locked` refuses a client whose API differs, TOA834, and writes
+  no lock), `DiffCommand` (`diff_command.dart`, M12: `--config/-c`,
+  `--format` (`text`, `json`, `markdown`), `--fail-on` (`breaking`,
+  `switch-breaking`, `wire`, `any`; without it the exit code is `0`),
+  `--from` and `--to` (two lock files, no spec read), client names; writes
+  nothing) and the hidden `IrCommand` (`ir_command.dart`, prints the IR of
   clients as JSON alone on stdout; the errors and warnings of the run go to
   stderr as text with the count of the infos, a client with no IR is named
   there, and the exit code is the one `check` gives);
@@ -804,9 +879,12 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   (`Normalizer`, `NormalizedSpec`, `NormalizerRule`, `RuleContext`,
   `Finding`, `SpecEdit`, `EditOperation`) and the overrides file
   (`OverrideLoader`, `OverrideSet`, `OverrideEntry` and its subclasses,
-  `DartTypeOverride`, `UnionMode`, `SseOverride`, `SseMethod`). Not
+  `DartTypeOverride`, `UnionMode`, `SseOverride`, `SseMethod`), and
+  `NameLock` (M12: what `IrBuilder(names:)` takes). Not
   exported: `CheckCommand`,
-  `BaselineCommand`, `GenerateCommand`, `RealPaths`, the emitters
+  `BaselineCommand`, `GenerateCommand`, `DiffCommand`, `ClientWriter`,
+  `ApiLockRun`, `snapshot/` and `diff/` (the lock's format is the file,
+  not a Dart API), `LockedNames`, `RealPaths`, the emitters
   (`DartCode`, `DartWriter`, `Imports`, `TypeCodec`, `ModelEmitter`,
   `ModelConstructors`, `EnumEmitter`, `UnionEmitter`, `DiscriminatorDecoder`,
   `UnionVariants`, and the API emitters (`ApiLibrary` aside),

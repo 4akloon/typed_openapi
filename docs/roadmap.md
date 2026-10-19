@@ -18,7 +18,7 @@ Date: 2026-10-11. Each stage is a separate plan in `superpowers/plans/`, and eac
 | M10 | SSE | Methods returning a `Stream` of events, schemas with `itemSchema`, `x-` or override, reconnection with `Last-Event-ID`. Plan: [2026-10-13-m10-sse.md](superpowers/plans/2026-10-13-m10-sse.md) | R12.1, R12.2, R12.4, R12.5 (R12.6 later) | M9, M7 |
 | M11 | Corpus and golden tests | Public specifications (Petstore, Stripe, GitHub, OpenAI, Kubernetes) compile and pass the analyzer; runtime decoding tests; matrix of SDK and formatter versions; fuzz of string escaping. Plan: [2026-10-13-m11-corpus.md](superpowers/plans/2026-10-13-m11-corpus.md) | R15.3, R15.4, R2.6 | M9 |
 | M11b | Transport split | `typed_openapi_runtime` becomes `typed_openapi_client`, a core with no HTTP dependency that builds requests and reads responses itself; generated code takes a `ClientTransport`; `typed_openapi_dio` is the Dio transport; a conformance suite with a loopback server runs every transport on the VM, dart2js and dart2wasm. Plan: [2026-10-19-m11b-transport-split.md](superpowers/plans/2026-10-19-m11b-transport-split.md) | R10.1, R10.2, R12.4 | M11 (implemented on branch `feat/m11b-transport-split`, merge pending) |
-| M12 | Evolution | `diff` between regenerations with change categories (including source-breaking for an exhaustive `switch`), lock file | R14 | M9 |
+| M12 | Evolution | `diff` between regenerations with change categories (including source-breaking for an exhaustive `switch`), lock file; config `exhaustive`; the lock keeps type and method names. Plan: [2026-10-13-m12-evolution.md](superpowers/plans/2026-10-13-m12-evolution.md) | R14 | M9 |
 | M13 | Documentation and product | Support matrix, `x-` registry, code catalog, recipes for NestJS / FastAPI / Spring / ASP.NET, JSON Schema of the config, `lint` mode for the backend, optional `build_runner` | R15.2, R15.5, R15.6, R15.1 (partial) | all |
 
 ## Order
@@ -61,7 +61,7 @@ M2 review findings that were deliberately deferred:
 
 | What | Where |
 |---|---|
-| A `$ref` to `file:///` reads any local file without a directory or size limit | after M9: `diff` (M12) or before 1.0; `generate` writes only into its own output and never deletes an input, and a `$ref` reads a file the user's own spec names (M9 plan, "Carried over") |
+| A `$ref` to `file:///` reads any local file without a directory or size limit | before 1.0; `generate` writes only into its own output and never deletes an input, and a `$ref` reads a file the user's own spec names (M9 plan, "Carried over"). Re-parked by M12: `diff` reads exactly the files `check` reads, and `diff --from/--to` reads only the two lock files it is given |
 | Sibling keys next to `$ref` in a Path Item (allowed in OAS) are not merged with the target | when needed: OAS leaves a conflict undefined and TOA110 reports every sibling, so nothing is lost silently; merging needs a change to the parser (M9 plan) |
 | Case-insensitive file systems: `A.yaml` and `a.yaml` are two documents | when needed (diagnostic or URI normalization) |
 | The YAML merge key `<<` gives no hint that OpenAPI tools often do not support it | M3 (a normalizer rule or a hint) |
@@ -259,7 +259,7 @@ skipped client has no counts.
 | Other `ir/` messages still write a spec name raw (`model_notices.dart`, `part_media_type.dart`, `root_names.dart`, `media_type_picker.dart`, `security_builder.dart`); the text and GitHub reporters neutralise it, JSON and SARIF keep it as it is by design | when the fuzz covers those sinks |
 | The fuzz does not use hostile component names (a `$ref` pointer needs `~1` and percent escaping) and checks server URLs and defaults only with `LeakCheck` | when needed |
 | GitHub Actions are pinned by tag, not by commit SHA (a download has a time limit and a 256 MiB size cap) | before 1.0 (no secrets in CI, `permissions: contents: read`) |
-| The generated code needs `JsonReader.constant` to return a `bool`, but no gate ties the runtime version to the generator version ("release together" is CHANGELOG prose only) | M12 (API snapshot) or M13 |
+| The generated code needs `JsonReader.constant` to return a `bool`, but no gate ties the runtime version to the generator version ("release together" is CHANGELOG prose only) | M13. Re-parked by M12: its snapshot is the API of a generated client, and the client packages' own API is out of its scope (M12 spec, "Out of scope"); a version constraint the generated code checks belongs with the release work |
 | The SARIF rule help does not link a diagnostics catalog | M13 (the catalog is the generated documentation) |
 | `workflows_test.dart` still carries top-level helpers, against "no top-level functions except `main`" | when that file is touched |
 | `size_limits.dart` (three copies) ends an expression-bodied member by a heuristic: a multi-line string at low indentation can end it early (a false negative only) | when needed |
@@ -267,6 +267,29 @@ skipped client has no counts.
 After M11: no Parked row is about the corpus or the platform matrix; the one
 escaping row (U+200E, U+200F, U+061C in the JSON and SARIF reports) stays
 parked because the fuzz covers the text report only.
+
+After M12: the two rows parked for M12 (the `file:///` `$ref` of M2 and the
+`JsonReader.constant` version gate above) are re-parked with their reasons;
+`event_streams.dart` was shortened (M10 table). No other row of these
+tables or of the two below is about the API snapshot, the change report or
+names kept across runs, so each stays parked with its reason. Moved from
+M12 (plan: [2026-10-13-m12-evolution.md](superpowers/plans/2026-10-13-m12-evolution.md),
+"Deferred"):
+
+| What | Where |
+|---|---|
+| The API lock keeps the names of models, enums, unions and methods only; fields, enum values, arguments, group classes and the helper types (status types, event unions, parts classes, variant classes) are named from the spec, so a new property written before an old one can still rename a field (`foo-bar` and `foo_bar` are both `fooBar`) | when a real spec needs it: their scopes are per type, so a collision there is rare and `diff` reports it as `breaking` |
+| A schema renamed in the spec is not detected by structure (decision 7: removed plus added, with a `name:` fix) | out of scope by the M12 spec |
+| `generate --fresh-names` is the only way to drop kept names; a kept name of a type the spec no longer declares is freed by itself (TOA571) | when needed |
+
+Evidence (M12 gates): the corpus check has 0 differences (40 clients, 38
+generated, 27759 files), `exhaustive: false` over the corpus writes 19
+clients with no `sealed class` and 4940 `abstract interface class` bases and
+a clean analyzer, `diff` between two versions of immich, kubernetes, openai
+and stripe lists (breaking/switch-breaking/wire/additive/docs) 9/9/0/25/1,
+1/0/0/28/14, 13/9/6/68/26 and 142/42/2/576/176, the name lock gives 0
+breaking changes on the rename probes where `--fresh-names` gives 3, 4 and 8,
+and the fuzz of 200 seeds finds 0 problems.
 
 ## Parked from the M10 reviews
 
@@ -284,8 +307,8 @@ fixed; the reviews are in `.superpowers/sdd/2026-10-13-m10-sse/`.
 | A string-enum event `schema` is typed `String`, not the enum | final fix round | typing text data as an enum needs a text mode in the IR; the values are still checked by nothing, as for plain text |
 | The TOA654 text lists several statuses with a singular verb ("status 200, 201 offers") | final re-review N1 | wording only |
 | An `sse` override on an operation whose stream method is not generated (TOA654) is unused with no TOA669 | final re-review N2 | TOA654 already says the stream method is left out; report TOA669 there with the next change to `EventStreams` |
-| `event_streams.dart` is at exactly 300 lines | final fix round | extract before the next change there |
-| `EventStreams._reservedSuffix` strips every trailing underscore of a method name, not one | T7/8 nit | harmless: the stem is still a valid name, and the empty case falls back |
+| `event_streams.dart` is at exactly 300 lines | final fix round | Done in M12 (Task 7): the stream method's name moved to `StreamMethodNames`; the file has 262 lines |
+| `EventStreams._reservedSuffix` strips every trailing underscore of a method name, not one | T7/8 nit | harmless: the stem is still a valid name, and the empty case falls back (M12 moved it unchanged to `StreamMethodNames`, so the output stays the same) |
 | Inline event schemas copied into different files count as different event types (TOA654); so do two nested compositions written differently | T9a, 9c | a structural comparison of schemas across files is not worth its cost; write the type once and `$ref` it |
 | A `Accept: null` in `CallOptions.headers` does not remove the generated `Accept` | 9a note | `key: ?value` skips nulls for every header; unchanged behaviour |
 | JSON and SARIF reports keep U+200E, U+200F and U+061C raw in message text (valid JSON, escaped controls) | T9b M2 | machine formats; the text and GitHub reporters, where a person reads, neutralise them |
