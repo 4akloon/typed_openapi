@@ -6405,9 +6405,776 @@ index 7b716ec..458312c 100644
    static const _id = {
 ~~~~
 
-### Task 7: Conformance server and suite (not replayed)
+### Task 7: Conformance server and suite
 
-**Files:** `packages/typed_openapi_transport_tests/` (`publish_to: none`): `lib/src/conformance_server.dart` (a `dart:io` `HttpServer` on `127.0.0.1:0`, routes per case), `lib/src/server_main.dart` (`hybridMain` for `spawnHybridUri`, so Chrome tests reach it), `lib/src/transport_conformance.dart` and one file per case group: methods, headers, statuses, bodies (JSON, form, multipart, file stream), cancellation (before send, in flight, mid-stream), failures (connection refused, timeout), events (stream, reconnect with `Last-Event-ID`), progress. `typed_openapi_dio/test/conformance_test.dart` runs it on the VM and in Chrome with stated skips (repeated request headers, cookies, `HEAD` body rules, in-flight upload progress and stream uploads on the web). The task 5 `loopback_test.dart` moves into the suite. Each new package gets `test/quality/size_limits_test.dart` with an empty allowlist.
+Replayed on the state after task 6 (scratch commit `6fbaad0`).
+
+**Files:** `packages/typed_openapi_transport_tests/` (`publish_to: none`, `resolution: workspace`, added to the root workspace): `lib/src/conformance_server.dart` (`ConformanceServer.start()`: a `dart:io` `HttpServer` on `127.0.0.1:0` with CORS headers and `OPTIONS`, a `closedPort` for the refused case; routes `/echo`, `/status/<code>`, `/bytes`, `/large` (100000 bytes with `Content-Length`), `/slow` (5 s), `/events` (`bufferOutput = false`; without `Last-Event-ID` one event with `id: 1` and close, with it `data: after <id>` and the connection held)), `lib/src/server_main.dart` (`hybridMain` for `spawnHybridUri`, sends `[port, closedPort]`), `lib/src/transport_conformance.dart` (`TransportConformance(create, {skips}).register()`, plus the test "every skip names a case"), `lib/src/conformance_context.dart` and the case files `request_cases.dart` (7), `response_cases.dart` (5), `failure_cases.dart` (3), `event_cases.dart` (1). `typed_openapi_dio/test/conformance_test.dart` replaces task 5's `loopback_test.dart` and skips the event case in a browser (`DioTransport` refuses event streams with Dio's default browser adapter, decision 9).
+
+Replay findings folded in:
+
+- The form case expects `a=x%20y&b=1`: the core's `FormBody` encodes a space as `%20` (RFC 3986), as the runtime did.
+- Under dart2wasm the ports cross the hybrid channel as doubles: `ConformanceContext.start` reads them as `num` and calls `toInt()`.
+- The event case cancels on the event after `one` (a first draft cancelled on `seen.length == 2`, which the `reconnecting` item reached first, and hung). Dio's IO adapter does end an open body on cancel; no core change is needed (a defensive core wrapper was tried and dropped: the hang was the test's).
+- Not done: a `test/quality/size_limits_test.dart` in the new packages (their files are all under 160 lines); listed under Deferred.
+
+Steps: `git rm packages/typed_openapi_dio/test/loopback_test.dart`, apply the patch, `dart pub get` at the root.
+
+~~~~diff
+diff --git a/packages/typed_openapi_dio/pubspec.yaml b/packages/typed_openapi_dio/pubspec.yaml
+index 2fe0caa..39f2e68 100644
+--- a/packages/typed_openapi_dio/pubspec.yaml
++++ b/packages/typed_openapi_dio/pubspec.yaml
+@@ -16,5 +16,6 @@ dependencies:
+ dev_dependencies:
+   stream_channel: ^2.1.0
+   test: ^1.24.0
++  typed_openapi_transport_tests: any
+ 
+ resolution: workspace
+diff --git a/packages/typed_openapi_dio/test/conformance_test.dart b/packages/typed_openapi_dio/test/conformance_test.dart
+new file mode 100644
+index 0000000..951f019
+--- /dev/null
++++ b/packages/typed_openapi_dio/test/conformance_test.dart
+@@ -0,0 +1,16 @@
++import 'package:dio/dio.dart';
++import 'package:typed_openapi_dio/typed_openapi_dio.dart';
++import 'package:typed_openapi_transport_tests/typed_openapi_transport_tests.dart';
++
++void main() {
++  final isWeb = DioTransport(Dio()).isWeb;
++  TransportConformance(
++    (baseUrl) => DioTransport(Dio(BaseOptions(baseUrl: '$baseUrl'))),
++    skips: {
++      if (isWeb)
++        'events arrive, reconnect with Last-Event-ID and end on cancel':
++            "Dio's default browser adapter delivers a body only when the "
++            'connection closes, so DioTransport refuses event streams there.',
++    },
++  ).register();
++}
+diff --git a/packages/typed_openapi_transport_tests/README.md b/packages/typed_openapi_transport_tests/README.md
+new file mode 100644
+index 0000000..8dd5d73
+--- /dev/null
++++ b/packages/typed_openapi_transport_tests/README.md
+@@ -0,0 +1,20 @@
++# typed_openapi_transport_tests
++
++The conformance suite of typed_openapi transports (not published). Every
++`ClientTransport` runs the same cases against a loopback HTTP server that
++the suite starts in a hybrid isolate, so the cases also run in a browser:
++
++```dart
++void main() {
++  TransportConformance(
++    (baseUrl) => DioTransport(Dio(BaseOptions(baseUrl: '$baseUrl'))),
++    skips: {'<case name>': '<why this transport cannot meet it>'},
++  ).register();
++}
++```
++
++A skip must name a case (a test checks it) and say why. The cases cover the
++method, target and headers, JSON, form, multipart and streamed bodies, send
++and receive progress, error and undocumented statuses, binary bodies, a
++refused connection, a cancel before and during a call, and an event stream
++that reconnects with `Last-Event-ID` and ends on cancel.
+diff --git a/packages/typed_openapi_transport_tests/lib/src/conformance_context.dart b/packages/typed_openapi_transport_tests/lib/src/conformance_context.dart
+new file mode 100644
+index 0000000..7eff79a
+--- /dev/null
++++ b/packages/typed_openapi_transport_tests/lib/src/conformance_context.dart
+@@ -0,0 +1,86 @@
++import 'dart:async';
++
++import 'package:stream_channel/stream_channel.dart';
++import 'package:test/test.dart';
++import 'package:typed_openapi_client/typed_openapi_client.dart';
++
++/// What the cases share: the running server, the transport under test and
++/// the skips.
++final class ConformanceContext {
++  /// Creates the context for the transports [_create] makes.
++  ConformanceContext(this._create, this._skips);
++
++  final ClientTransport Function(Uri baseUrl) _create;
++  final Map<String, String> _skips;
++  final Set<String> _names = {};
++
++  // Set by [start], which `setUpAll` runs before any case reads them.
++  late StreamChannel<Object?> _channel;
++  late Uri _baseUrl;
++  late int _closedPort;
++
++  /// Starts the server in a hybrid isolate (the VM, also for a browser
++  /// test) and waits for its ports.
++  Future<void> start() async {
++    _channel = spawnHybridUri(
++      'package:typed_openapi_transport_tests/src/server_main.dart',
++    );
++    // Under dart2wasm a number from the hybrid isolate arrives as a double.
++    final [port as num, closed as num] =
++        await _channel.stream.first as List<Object?>;
++    _baseUrl = Uri.parse('http://127.0.0.1:${port.toInt()}');
++    _closedPort = closed.toInt();
++  }
++
++  /// Stops the server.
++  Future<void> stop() => _channel.sink.close();
++
++  /// A sender through a new transport for the server.
++  ClientSender get sender => ClientSender(_create(_baseUrl));
++
++  /// A sender through a transport for a port nothing listens on.
++  ClientSender get refusedSender =>
++      ClientSender(_create(_baseUrl.replace(port: _closedPort)));
++
++  /// Declares the case [name] as a test, skipped when the transport says
++  /// so.
++  void testCase(String name, Future<void> Function() body) {
++    _names.add(name);
++    test(name, body, skip: _skips[name]);
++  }
++
++  /// Fails when a skip names no case: a renamed case must not stay skipped.
++  void checkSkips() =>
++      expect(_skips.keys.where((name) => !_names.contains(name)), isEmpty);
++
++  /// The JSON object an `/echo` request answers with.
++  static Result<Map<String, Object?>, Never> echo(RawResponse response) =>
++      switch (response.statusCode) {
++        200 => response.success(response.jsonObject),
++        _ => response.undocumented(),
++      };
++
++  /// A request of [method] to [target] (path and query), with [body].
++  static OperationRequest request(
++    String target, {
++    String method = 'GET',
++    List<QueryParameter> query = const [],
++    List<HeaderParameter> headers = const [],
++    Object? body,
++    String? contentType,
++    ResponseKind responseKind = .json,
++    Set<int> streamStatuses = const {},
++  }) => OperationRequest(
++    OperationInfo(
++      operationId: 'conformance',
++      method: method,
++      pathTemplate: target,
++    ),
++    query: query,
++    headers: headers,
++    body: body,
++    contentType: contentType,
++    responseKind: responseKind,
++    streamStatuses: streamStatuses,
++  );
++}
+diff --git a/packages/typed_openapi_transport_tests/lib/src/conformance_server.dart b/packages/typed_openapi_transport_tests/lib/src/conformance_server.dart
+new file mode 100644
+index 0000000..790a1e2
+--- /dev/null
++++ b/packages/typed_openapi_transport_tests/lib/src/conformance_server.dart
+@@ -0,0 +1,109 @@
++import 'dart:async';
++import 'dart:convert';
++import 'dart:io';
++
++/// The loopback HTTP server the conformance cases call: it echoes requests,
++/// answers with a status, bytes or a large body, holds a request back, and
++/// streams server-sent events. It runs on the VM, in the test's own process
++/// or, for a browser test, in a hybrid isolate (`server_main.dart`).
++final class ConformanceServer {
++  ConformanceServer._(this._server, this.closedPort);
++
++  /// Starts the server on `127.0.0.1` and an ephemeral port.
++  static Future<ConformanceServer> start() async {
++    final closed = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
++    final closedPort = closed.port;
++    await closed.close();
++    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
++    return ConformanceServer._(server, closedPort).._listen();
++  }
++
++  final HttpServer _server;
++
++  /// A port nothing listens on, for the connection-refused case.
++  final int closedPort;
++
++  /// The port the server listens on.
++  int get port => _server.port;
++
++  /// Stops the server and drops its open connections.
++  Future<void> close() => _server.close(force: true);
++
++  void _listen() => _server.listen((request) async {
++    final response = request.response;
++    // Browsers call from another origin: allow every method and header,
++    // and let the client read the headers the cases check.
++    response.headers
++      ..set('access-control-allow-origin', '*')
++      ..set('access-control-allow-methods', '*')
++      ..set('access-control-allow-headers', '*')
++      ..set('access-control-expose-headers', '*');
++    if (request.method == 'OPTIONS') return response.close();
++    final segments = request.uri.pathSegments;
++    switch (segments) {
++      case ['echo', ...]:
++        await _echo(request);
++      case ['status', final code]:
++        response.statusCode = int.parse(code);
++        _json(response, {'code': 'status $code'});
++        await response.close();
++      case ['bytes']:
++        response.headers.contentType = ContentType.binary;
++        response.add([0, 1, 2, 254, 255]);
++        await response.close();
++      case ['large']:
++        final body = List<int>.filled(100000, 0x61);
++        response.headers
++          ..contentType = ContentType.text
++          ..contentLength = body.length;
++        response.add(body);
++        await response.close();
++      case ['slow']:
++        await Future<void>.delayed(const Duration(seconds: 5));
++        await response.close();
++      case ['events']:
++        await _events(request);
++      default:
++        response.statusCode = 404;
++        await response.close();
++    }
++  });
++
++  static Future<void> _echo(HttpRequest request) async {
++    final body = await request.fold<List<int>>([], (a, b) => a..addAll(b));
++    final headers = <String, String>{};
++    request.headers.forEach((name, values) => headers[name] = values.join(','));
++    request.response.headers.set('x-answer', 'echoed');
++    _json(request.response, {
++      'method': request.method,
++      'target': '${request.uri}',
++      'headers': headers,
++      'body': utf8.decode(body, allowMalformed: true),
++      'length': body.length,
++    });
++    await request.response.close();
++  }
++
++  /// Without `Last-Event-ID`: an event with id `1`, then the connection
++  /// closes. With it: one event that names the id, then the connection
++  /// stays open until the client leaves.
++  static Future<void> _events(HttpRequest request) async {
++    final response = request.response
++      // Unbuffered, so each event leaves when it is written.
++      ..bufferOutput = false
++      ..headers.contentType = ContentType('text', 'event-stream');
++    final lastId = request.headers.value('last-event-id');
++    if (lastId == null) {
++      response.write('id: 1\ndata: one\n\n');
++      await response.close();
++      return;
++    }
++    response.write('data: after $lastId\n\n');
++    await response.flush();
++  }
++
++  static void _json(HttpResponse response, Object? body) {
++    response.headers.contentType = ContentType.json;
++    response.write(jsonEncode(body));
++  }
++}
+diff --git a/packages/typed_openapi_transport_tests/lib/src/event_cases.dart b/packages/typed_openapi_transport_tests/lib/src/event_cases.dart
+new file mode 100644
+index 0000000..8e4ba22
+--- /dev/null
++++ b/packages/typed_openapi_transport_tests/lib/src/event_cases.dart
+@@ -0,0 +1,52 @@
++import 'package:test/test.dart';
++import 'package:typed_openapi_client/typed_openapi_client.dart';
++
++import 'conformance_context.dart';
++
++/// The cases of event streams: events arrive as they are written, a
++/// reconnection sends `Last-Event-ID`, a cancel ends the stream.
++final class EventCases {
++  /// Creates the cases on [context].
++  const EventCases(this.context);
++
++  /// The server and the transport under test.
++  final ConformanceContext context;
++
++  /// Declares the cases.
++  void register() {
++    context.testCase(
++      'events arrive, reconnect with Last-Event-ID and end on cancel',
++      _reconnect,
++    );
++  }
++
++  Future<void> _reconnect() async {
++    final signal = CancelSignal();
++    final result = await context.sender.openEvents<String, Never>(
++      ConformanceContext.request('/events', streamStatuses: {200}),
++      (message) => message.data,
++      (response) => response.undocumented(),
++      call: CallOptions(
++        cancel: signal,
++        sse: SseOptions(reconnect: true, wait: (_) async {}),
++      ),
++      reconnection: .on,
++    );
++    final seen = <String>[];
++    final items = (result as Success<Stream<SseItem<String>>, Never>).data;
++    await for (final item in items) {
++      switch (item) {
++        case SseEvent(:final data):
++          seen.add(data);
++          if (data != 'one') signal.cancel();
++        case SseReconnecting():
++          seen.add('reconnecting');
++        case SseDisconnected(cause: TransportException(:final kind)):
++          seen.add('end ${kind.name}');
++        case _:
++          seen.add('$item');
++      }
++    }
++    expect(seen, ['one', 'reconnecting', 'after 1', 'end cancelled']);
++  }
++}
+diff --git a/packages/typed_openapi_transport_tests/lib/src/failure_cases.dart b/packages/typed_openapi_transport_tests/lib/src/failure_cases.dart
+new file mode 100644
+index 0000000..58bcd03
+--- /dev/null
++++ b/packages/typed_openapi_transport_tests/lib/src/failure_cases.dart
+@@ -0,0 +1,56 @@
++import 'dart:async';
++
++import 'package:test/test.dart';
++import 'package:typed_openapi_client/typed_openapi_client.dart';
++
++import 'conformance_context.dart';
++
++/// The cases of failures: a refused connection and cancellation before and
++/// during a call.
++final class FailureCases {
++  /// Creates the cases on [context].
++  const FailureCases(this.context);
++
++  /// The server and the transport under test.
++  final ConformanceContext context;
++
++  /// Declares the cases.
++  void register() {
++    context
++      ..testCase('a refused connection is a connection failure', _refused)
++      ..testCase('a cancel before the call sends nothing', _cancelBefore)
++      ..testCase('a cancel in flight is Cancelled', _cancelInFlight);
++  }
++
++  Future<void> _refused() async {
++    final result = await context.refusedSender.send(
++      ConformanceContext.request('/echo'),
++      ConformanceContext.echo,
++    );
++    final failure = result as TransportError<Map<String, Object?>, Never>;
++    expect(failure.exception.kind, TransportExceptionKind.connection);
++  }
++
++  Future<void> _cancelBefore() async {
++    final signal = CancelSignal()..cancel('early');
++    final result = await context.sender.send(
++      ConformanceContext.request('/echo'),
++      ConformanceContext.echo,
++      call: CallOptions(cancel: signal),
++    );
++    expect(result, isA<Cancelled<Map<String, Object?>, Never>>());
++  }
++
++  Future<void> _cancelInFlight() async {
++    final signal = CancelSignal();
++    final watch = Stopwatch()..start();
++    Timer(const Duration(milliseconds: 200), signal.cancel);
++    final result = await context.sender.send(
++      ConformanceContext.request('/slow'),
++      ConformanceContext.echo,
++      call: CallOptions(cancel: signal),
++    );
++    expect(result, isA<Cancelled<Map<String, Object?>, Never>>());
++    expect(watch.elapsed, lessThan(const Duration(seconds: 4)));
++  }
++}
+diff --git a/packages/typed_openapi_transport_tests/lib/src/request_cases.dart b/packages/typed_openapi_transport_tests/lib/src/request_cases.dart
+new file mode 100644
+index 0000000..95bbbdc
+--- /dev/null
++++ b/packages/typed_openapi_transport_tests/lib/src/request_cases.dart
+@@ -0,0 +1,153 @@
++import 'dart:convert';
++import 'dart:typed_data';
++
++import 'package:test/test.dart';
++import 'package:typed_openapi_client/typed_openapi_client.dart';
++
++import 'conformance_context.dart';
++
++/// The cases of the request on the wire: method, target, headers, bodies
++/// and send progress, as the server's `/echo` saw them.
++final class RequestCases {
++  /// Creates the cases on [context].
++  const RequestCases(this.context);
++
++  /// The server and the transport under test.
++  final ConformanceContext context;
++
++  /// Declares the cases.
++  void register() {
++    context
++      ..testCase('the method, target and headers arrive', _target)
++      ..testCase('PUT, PATCH and DELETE keep their method', _methods)
++      ..testCase('a JSON body arrives with its type and length', _json)
++      ..testCase('a form body arrives', _form)
++      ..testCase('a multipart body arrives whole', _multipart)
++      ..testCase('a file stream arrives with its length', _stream)
++      ..testCase('send progress reaches the length', _sendProgress);
++  }
++
++  Future<Map<String, Object?>> _echo(
++    OperationRequest request, {
++    CallOptions? call,
++  }) async {
++    final result = await context.sender.send(
++      request,
++      ConformanceContext.echo,
++      call: call,
++    );
++    return (result as Success<Map<String, Object?>, Never>).data;
++  }
++
++  Future<void> _target() async {
++    final echo = await _echo(
++      ConformanceContext.request(
++        '/echo',
++        query: [const QueryParameter('q', 'a b/c')],
++        headers: [const HeaderParameter('X-Trace', 't1')],
++      ),
++      call: const CallOptions(headers: {'X-Call': 'c1'}),
++    );
++    expect(echo['method'], 'GET');
++    expect(echo['target'], '/echo?q=a%20b%2Fc');
++    final headers = echo['headers']! as Map<String, Object?>;
++    expect((headers['x-trace'], headers['x-call']), ('t1', 'c1'));
++  }
++
++  Future<void> _methods() async {
++    for (final method in ['PUT', 'PATCH', 'DELETE']) {
++      final echo = await _echo(
++        ConformanceContext.request('/echo', method: method),
++      );
++      expect(echo['method'], method);
++    }
++  }
++
++  Future<void> _json() async {
++    final echo = await _echo(
++      ConformanceContext.request(
++        '/echo',
++        method: 'POST',
++        body: {
++          'name': 'Rex',
++          'tags': ['a'],
++        },
++        contentType: 'application/json',
++      ),
++    );
++    expect(echo['body'], '{"name":"Rex","tags":["a"]}');
++    expect(echo['length'], 27);
++    final headers = echo['headers']! as Map<String, Object?>;
++    expect(headers['content-type'], startsWith('application/json'));
++  }
++
++  Future<void> _form() async {
++    final echo = await _echo(
++      ConformanceContext.request(
++        '/echo',
++        method: 'POST',
++        body: const FormBody({'a': 'x y', 'b': 1}),
++        contentType: 'application/x-www-form-urlencoded',
++      ),
++    );
++    expect(echo['body'], 'a=x%20y&b=1');
++  }
++
++  Future<void> _multipart() async {
++    final echo = await _echo(
++      ConformanceContext.request(
++        '/echo',
++        method: 'POST',
++        body: MultipartBody([
++          const MultipartPart.value('name', 'Rex'),
++          MultipartPart.file(
++            'photo',
++            FileUpload.bytes(
++              Uint8List.fromList([1, 2, 3]),
++              filename: 'p.bin',
++              contentType: 'application/octet-stream',
++            ),
++          ),
++        ]),
++        contentType: 'multipart/form-data',
++      ),
++    );
++    final body = echo['body']! as String;
++    expect(body, contains('name="name"\r\n\r\nRex\r\n'));
++    expect(body, contains('filename="p.bin"'));
++    expect(body.trimRight(), endsWith('--'));
++  }
++
++  Future<void> _stream() async {
++    final echo = await _echo(
++      ConformanceContext.request(
++        '/echo',
++        method: 'POST',
++        body: FileUpload.stream(
++          Stream.fromIterable([utf8.encode('ab'), utf8.encode('cd')]),
++          length: 4,
++        ),
++        contentType: 'application/octet-stream',
++      ),
++    );
++    expect((echo['body'], echo['length']), ('abcd', 4));
++  }
++
++  Future<void> _sendProgress() async {
++    final counts = <(int, int)>[];
++    await _echo(
++      ConformanceContext.request(
++        '/echo',
++        method: 'POST',
++        body: Uint8List(3000),
++        contentType: 'application/octet-stream',
++      ),
++      call: CallOptions(
++        onSendProgress: (sent, total) {
++          counts.add((sent, total));
++        },
++      ),
++    );
++    expect(counts.last, (3000, 3000));
++  }
++}
+diff --git a/packages/typed_openapi_transport_tests/lib/src/response_cases.dart b/packages/typed_openapi_transport_tests/lib/src/response_cases.dart
+new file mode 100644
+index 0000000..c8f8d75
+--- /dev/null
++++ b/packages/typed_openapi_transport_tests/lib/src/response_cases.dart
+@@ -0,0 +1,89 @@
++import 'package:test/test.dart';
++import 'package:typed_openapi_client/typed_openapi_client.dart';
++
++import 'conformance_context.dart';
++
++/// The cases of the response as the client reads it: statuses, headers,
++/// bytes and receive progress.
++final class ResponseCases {
++  /// Creates the cases on [context].
++  const ResponseCases(this.context);
++
++  /// The server and the transport under test.
++  final ConformanceContext context;
++
++  /// Declares the cases.
++  void register() {
++    context
++      ..testCase('a documented error status is typed', _error)
++      ..testCase('an undocumented status keeps its body', _undocumented)
++      ..testCase('the response headers arrive', _headers)
++      ..testCase('a binary body arrives as it was sent', _bytes)
++      ..testCase('receive progress counts to the content length', _progress);
++  }
++
++  static Result<Object?, String> _decode(RawResponse r) =>
++      switch (r.statusCode) {
++        200 => r.success(r.body),
++        404 => r.error(r.jsonObject['code']! as String),
++        _ => r.undocumented(),
++      };
++
++  Future<void> _error() async {
++    final result = await context.sender.send(
++      ConformanceContext.request('/status/404'),
++      _decode,
++    );
++    final error = result as HttpError<Object?, String>;
++    expect((error.statusCode, error.body), (404, 'status 404'));
++  }
++
++  Future<void> _undocumented() async {
++    final result = await context.sender.send(
++      ConformanceContext.request('/status/418'),
++      _decode,
++    );
++    final undocumented = result as UndocumentedStatus<Object?, String>;
++    expect(undocumented.statusCode, 418);
++    expect(undocumented.rawBody, {'code': 'status 418'});
++  }
++
++  Future<void> _headers() async {
++    final result = await context.sender.send(
++      ConformanceContext.request('/echo'),
++      ConformanceContext.echo,
++    );
++    final success = result as Success<Map<String, Object?>, Never>;
++    expect(success.headers['x-answer'], ['echoed']);
++    expect(
++      success.headers['content-type']?.single,
++      startsWith('application/json'),
++    );
++  }
++
++  Future<void> _bytes() async {
++    final result = await context.sender.send(
++      ConformanceContext.request('/bytes', responseKind: .bytes),
++      _decode,
++    );
++    expect((result as Success<Object?, String>).data, [0, 1, 2, 254, 255]);
++  }
++
++  Future<void> _progress() async {
++    final counts = <(int, int)>[];
++    final result = await context.sender.send(
++      ConformanceContext.request('/large', responseKind: .text),
++      _decode,
++      call: CallOptions(
++        onReceiveProgress: (received, total) {
++          counts.add((received, total));
++        },
++      ),
++    );
++    expect(
++      ((result as Success<Object?, String>).data! as String).length,
++      100000,
++    );
++    expect(counts.last, (100000, 100000));
++  }
++}
+diff --git a/packages/typed_openapi_transport_tests/lib/src/server_main.dart b/packages/typed_openapi_transport_tests/lib/src/server_main.dart
+new file mode 100644
+index 0000000..e089c62
+--- /dev/null
++++ b/packages/typed_openapi_transport_tests/lib/src/server_main.dart
+@@ -0,0 +1,15 @@
++import 'package:stream_channel/stream_channel.dart';
++
++import 'conformance_server.dart';
++
++/// Starts a [ConformanceServer] for `spawnHybridUri` and sends its port and
++/// a closed port; the server stops when the test closes the channel.
++///
++/// `package:test` calls this top-level function by its name, so it cannot
++/// be a method.
++Future<void> hybridMain(StreamChannel<Object?> channel) async {
++  final server = await ConformanceServer.start();
++  channel.sink.add([server.port, server.closedPort]);
++  await channel.stream.drain<void>();
++  await server.close();
++}
+diff --git a/packages/typed_openapi_transport_tests/lib/src/transport_conformance.dart b/packages/typed_openapi_transport_tests/lib/src/transport_conformance.dart
+new file mode 100644
+index 0000000..109c221
+--- /dev/null
++++ b/packages/typed_openapi_transport_tests/lib/src/transport_conformance.dart
+@@ -0,0 +1,44 @@
++import 'package:test/test.dart';
++import 'package:typed_openapi_client/typed_openapi_client.dart';
++
++import 'conformance_context.dart';
++import 'event_cases.dart';
++import 'failure_cases.dart';
++import 'request_cases.dart';
++import 'response_cases.dart';
++
++/// The cases every [ClientTransport] runs against the loopback
++/// [ConformanceServer]: the request on the wire, the response as the
++/// client reads it, failures, cancellation, progress and event streams.
++///
++/// A transport package calls [register] from a test file:
++///
++/// ```dart
++/// void main() => TransportConformance(
++///   (baseUrl) => DioTransport(Dio(BaseOptions(baseUrl: '$baseUrl'))),
++/// ).register();
++/// ```
++final class TransportConformance {
++  /// Creates the suite for the transports [create] makes for a base URL.
++  /// [skips] maps a case name to the reason the transport does not meet
++  /// it on this platform; a name that is not a case throws.
++  TransportConformance(this.create, {this.skips = const {}});
++
++  /// Makes the transport under test for the server's base URL.
++  final ClientTransport Function(Uri baseUrl) create;
++
++  /// The cases skipped, by name, with the reason.
++  final Map<String, String> skips;
++
++  /// Declares the cases as tests, with a server started once for them.
++  void register() {
++    final context = ConformanceContext(create, skips);
++    setUpAll(context.start);
++    tearDownAll(context.stop);
++    group('requests', () => RequestCases(context).register());
++    group('responses', () => ResponseCases(context).register());
++    group('failures', () => FailureCases(context).register());
++    group('events', () => EventCases(context).register());
++    test('every skip names a case', context.checkSkips);
++  }
++}
+diff --git a/packages/typed_openapi_transport_tests/lib/typed_openapi_transport_tests.dart b/packages/typed_openapi_transport_tests/lib/typed_openapi_transport_tests.dart
+new file mode 100644
+index 0000000..08b78a3
+--- /dev/null
++++ b/packages/typed_openapi_transport_tests/lib/typed_openapi_transport_tests.dart
+@@ -0,0 +1,4 @@
++/// The conformance suite of typed_openapi transports.
++library;
++
++export 'src/transport_conformance.dart' show TransportConformance;
+diff --git a/packages/typed_openapi_transport_tests/pubspec.yaml b/packages/typed_openapi_transport_tests/pubspec.yaml
+new file mode 100644
+index 0000000..3fe92e9
+--- /dev/null
++++ b/packages/typed_openapi_transport_tests/pubspec.yaml
+@@ -0,0 +1,15 @@
++name: typed_openapi_transport_tests
++description: >
++  The conformance suite of typed_openapi transports: one set of cases that
++  any ClientTransport runs against a loopback HTTP server.
++publish_to: none
++
++environment:
++  sdk: ">=3.10.0 <4.0.0"
++
++dependencies:
++  stream_channel: ^2.1.2
++  test: ^1.24.0
++  typed_openapi_client: ^0.0.1
++
++resolution: workspace
+diff --git a/pubspec.yaml b/pubspec.yaml
+index 411e2fb..25d3eab 100644
+--- a/pubspec.yaml
++++ b/pubspec.yaml
+@@ -13,3 +13,4 @@ workspace:
+   - packages/typed_openapi_client
+   - packages/typed_openapi_dio
+   - packages/typed_openapi_tool
++  - packages/typed_openapi_transport_tests
+~~~~
+
+**Gate:** `dart analyze packages` clean; `dart format` 0 changed; `cd packages/typed_openapi_dio && dart test` +27; `dart test -p chrome` +37 ~1; `dart test -p chrome --compiler dart2wasm` +37 ~1 (the skip is the event case). Client, generator and tool suites unchanged from task 6.
 
 Commit: `test(typed_openapi_transport_tests): transport conformance suite`.
 
@@ -6446,6 +7213,7 @@ None in the code on main.
 ## Deferred
 
 - A `package:http` or `dart:io` adapter (spec, out of scope).
+- Size-limit ratchet tests (`test/quality/size_limits_test.dart`) for `typed_openapi_dio` and `typed_openapi_transport_tests`; every file of both is within the limits today.
 
 ## Open questions
 
@@ -6458,7 +7226,7 @@ None in the code on main.
 
 ## Not replayed
 
-- Task 7 (conformance package), task 8 (CI and publish), task 9 (documentation): designed above, no code in this plan, not run.
+- Task 8 (CI and publish), task 9 (documentation): designed above, not yet replayed.
 
 ## Self-review
 
