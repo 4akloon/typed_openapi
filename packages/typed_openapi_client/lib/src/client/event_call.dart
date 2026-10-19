@@ -4,15 +4,15 @@ import '../result/result.dart';
 import '../sse/sse_item.dart';
 import '../sse/sse_message.dart';
 import 'call_options.dart';
-import 'connection_tokens.dart';
+import 'connection_signals.dart';
 
 /// What every connection of one event-stream call shares: the request, how
 /// it decodes events and error responses, the call's options and its
-/// connections' cancel tokens.
+/// connections' cancel signals.
 final class EventCall<T, E> {
-  /// Creates the call; its connections are linked to `call.cancelToken`.
+  /// Creates the call; its connections are linked to `call.cancel`.
   EventCall(this.request, this.decodeEvent, this.decodeError, this.call)
-    : tokens = ConnectionTokens(call?.cancelToken);
+    : signals = ConnectionSignals(call?.cancel);
 
   /// The request every connection sends.
   final OperationRequest request;
@@ -27,6 +27,6 @@ final class EventCall<T, E> {
   /// The options of the call.
   final CallOptions? call;
 
-  /// The cancel tokens of the connections.
-  final ConnectionTokens tokens;
+  /// The cancel signals of the connections.
+  final ConnectionSignals signals;
 }

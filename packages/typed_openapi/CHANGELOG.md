@@ -4,6 +4,13 @@
 - Generated files import `package:typed_openapi_client/typed_openapi_client.dart`
   in place of `package:typed_openapi_runtime/typed_openapi_runtime.dart`: the
   runtime package is renamed (M11b).
+- Groups and the root client take a `ClientTransport` in place of a `Dio`
+  and send through `ClientSender` in place of `DioRequestSender`; generated
+  files no longer import `package:dio`. A Dio user writes
+  `ApiClient(DioTransport(dio))` with `package:typed_openapi_dio`. Schemas
+  named `Dio` keep their name; `ClientSender`, `ClientTransport`,
+  `CancelSignal` and the other transport types of the client are taken
+  (TOA551). TOA566 names the transport's base URL (M11b).
 - A model with an optional constant (a `const` or one-value `enum` the
   schema does not require) remembers which of them the decoded JSON did
   not have, in a private `_absent` list, and `toJson` leaves those out, so

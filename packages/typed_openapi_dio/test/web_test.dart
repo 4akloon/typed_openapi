@@ -7,9 +7,9 @@ library;
 import 'package:dio/dio.dart';
 import 'package:test/test.dart';
 import 'package:typed_openapi_client/typed_openapi_client.dart';
+import 'package:typed_openapi_dio/typed_openapi_dio.dart';
 
-import '../helpers/fake_adapter.dart';
-import '../helpers/test_platform.dart';
+import 'helpers/fake_adapter.dart';
 
 void main() {
   const getPet = OperationInfo(
@@ -30,68 +30,73 @@ void main() {
   Future<Result<Object?, Never>> send(
     FakeAdapter adapter, {
     OperationRequest operation = request,
-  }) => DioRequestSender(
-    Dio(BaseOptions(baseUrl: 'https://api.test'))..httpClientAdapter = adapter,
+  }) => ClientSender(
+    DioTransport(
+      Dio(BaseOptions(baseUrl: 'https://api.test'))
+        ..httpClientAdapter = adapter,
+    ),
   ).send(operation, decode);
 
   test('the platform is detected without configuration', () {
-    expect(DioRequestSender(Dio()).isWeb, isTrue);
+    expect(DioTransport(Dio()).isWeb, isTrue);
   });
 
   test('the default Dio adapter cannot stream events and says so', () async {
-    final result = await DioRequestSender(Dio()).openEvents<String, Never>(
-      const OperationRequest(
-        getPet,
-        path: [PathParameter('petId', 7)],
-        streamStatuses: {200},
-      ),
-      (message) => message.data,
-      (response) => response.undocumented(),
-    );
+    final result = await ClientSender(DioTransport(Dio()))
+        .openEvents<String, Never>(
+          const OperationRequest(
+            getPet,
+            path: [PathParameter('petId', 7)],
+            streamStatuses: {200},
+          ),
+          (message) => message.data,
+          (response) => response.undocumented(),
+        );
     final error = result as TransportError<Stream<SseItem<String>>, Never>;
-    expect(error.exception.message, DioRequestSender.webStreamingMessage);
-    expect(error.exception.error, isA<UnsupportedError>());
+    expect(error.exception.message, DioTransport.webStreamingMessage);
+    expect(error.exception.cause, isA<UnsupportedError>());
   });
 
   test(
     'a reconnecting stream on the default adapter fails the same way',
     () async {
       var waits = 0;
-      final result = await DioRequestSender(Dio()).openEvents<String, Never>(
-        const OperationRequest(
-          getPet,
-          path: [PathParameter('petId', 7)],
-          streamStatuses: {200},
-        ),
-        (message) => message.data,
-        (response) => response.undocumented(),
-        call: CallOptions(
-          sse: SseOptions(reconnect: true, wait: (_) async => waits++),
-        ),
-        reconnection: SseReconnection.on,
-      );
+      final result = await ClientSender(DioTransport(Dio()))
+          .openEvents<String, Never>(
+            const OperationRequest(
+              getPet,
+              path: [PathParameter('petId', 7)],
+              streamStatuses: {200},
+            ),
+            (message) => message.data,
+            (response) => response.undocumented(),
+            call: CallOptions(
+              sse: SseOptions(reconnect: true, wait: (_) async => waits++),
+            ),
+            reconnection: SseReconnection.on,
+          );
       final error = result as TransportError<Stream<SseItem<String>>, Never>;
-      expect(error.exception.message, DioRequestSender.webStreamingMessage);
+      expect(error.exception.message, DioTransport.webStreamingMessage);
       expect(waits, 0);
     },
   );
 
   group('malformed JSON', () {
-    // What Dio's JSON parser reports differs by compiler: dart2js gives the
-    // browser's SyntaxError text with no source, dart2wasm the body bytes.
+    // The client parses the bytes itself, so every compiler reports the
+    // same: the status and the text.
     for (final body in ['{"id":', '<html>', '{"id": 7}x']) {
-      test('$body is a decode error without a status', () async {
+      test('$body is a decode error with its status and text', () async {
         final result = await send(
           FakeAdapter.text(200, body, 'application/json'),
         );
         final error = result as DecodeError<Object?, Never>;
-        expect(error.statusCode, isNull);
+        expect(error.statusCode, 200);
         expect(error.error.pointer, '');
         expect(
           error.error.message,
           'expected a JSON body, got text that is not JSON',
         );
-        expect(error.rawBody, TestPlatform.isJavaScript ? isNull : body);
+        expect(error.rawBody, body);
       });
     }
 
@@ -111,8 +116,8 @@ void main() {
     });
   });
 
-  test('a FormatException from an interceptor of a JSON request is a decode '
-      'error too, because the failures cannot be told apart', () async {
+  test('a FormatException from an interceptor is a transport failure, never '
+      'a decode error', () async {
     final dio = Dio(BaseOptions(baseUrl: 'https://api.test'))
       ..httpClientAdapter = FakeAdapter.json(200, {'id': 7})
       ..interceptors.add(
@@ -122,8 +127,8 @@ void main() {
           },
         ),
       );
-    final result = await DioRequestSender(dio).send(request, decode);
-    expect(result, isA<DecodeError<Object?, Never>>());
+    final result = await ClientSender(DioTransport(dio)).send(request, decode);
+    expect(result, isA<TransportError<Object?, Never>>());
   });
 
   test('valid JSON and an empty body are not decode errors', () async {

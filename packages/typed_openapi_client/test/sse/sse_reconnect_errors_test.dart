@@ -1,26 +1,20 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:typed_data';
 
-import 'package:dio/dio.dart';
 import 'package:test/test.dart';
 import 'package:typed_openapi_client/typed_openapi_client.dart';
 
-import '../helpers/fake_adapter.dart';
+import '../helpers/fake_transport.dart';
 
 /// An event-stream response with [text] that then closes.
-ResponseBody _stream(String text) => ResponseBody(
-  Stream.value(Uint8List.fromList(utf8.encode(text))),
-  200,
-  headers: {
-    Headers.contentTypeHeader: ['text/event-stream'],
-  },
-);
+TransportResponse _stream(String text) =>
+    FakeTransport.response(text, 200, 'text/event-stream');
 
 /// Answers the requests in order with [answers]; the last one repeats.
-FakeAdapter _adapter(List<ResponseBody Function(RequestOptions)> answers) {
+FakeTransport _adapter(
+  List<TransportResponse Function(TransportRequest)> answers,
+) {
   var next = 0;
-  return FakeAdapter(
+  return FakeTransport(
     (options) => answers[next < answers.length - 1 ? next++ : next](options),
   );
 }
@@ -44,17 +38,16 @@ void main() {
 
   /// The stream of a [watch] that reconnects, opened through [adapter].
   Future<Stream<SseItem<String>>> open(
-    FakeAdapter adapter, {
+    FakeTransport adapter, {
     SseOptions options = const SseOptions(reconnect: true),
   }) async {
-    final result = await DioRequestSender(Dio()..httpClientAdapter = adapter)
-        .openEvents(
-          watch,
-          (m) => m.data,
-          decodeError,
-          call: CallOptions(sse: options),
-          reconnection: SseReconnection.on,
-        );
+    final result = await ClientSender(adapter).openEvents(
+      watch,
+      (m) => m.data,
+      decodeError,
+      call: CallOptions(sse: options),
+      reconnection: SseReconnection.on,
+    );
     return (result as Success<Stream<SseItem<String>>, String>).data;
   }
 
@@ -133,7 +126,7 @@ void main() {
     final adapter = _adapter([
       (_) => _stream('data: a\n\n'),
       (_) => _stream('data: b\n\n'),
-      (_) => ResponseBody.fromString('', 204),
+      (_) => FakeTransport.response('', 204),
     ]);
     final stream = await open(
       adapter,
@@ -162,7 +155,7 @@ void main() {
     final adapter = _adapter([
       (_) => _stream('id: ідентифікатор\ndata: a\n\n'),
       (_) => _stream('data: b\n\n'),
-      (_) => ResponseBody.fromString('', 204),
+      (_) => FakeTransport.response('', 204),
     ]);
     final stream = await open(
       adapter,
@@ -176,7 +169,7 @@ void main() {
       'end closed',
     ]);
     for (final request in adapter.requests) {
-      expect(request.headers.keys, isNot(contains('Last-Event-ID')));
+      expect(FakeTransport.header(request, 'Last-Event-ID'), isNull);
     }
     expect(adapter.requests, hasLength(3));
   });
@@ -184,13 +177,13 @@ void main() {
   test('an event id of printable ASCII is sent as it is', () async {
     final adapter = _adapter([
       (_) => _stream('id: a b~9\ndata: a\n\n'),
-      (_) => ResponseBody.fromString('', 204),
+      (_) => FakeTransport.response('', 204),
     ]);
     final stream = await open(
       adapter,
       options: SseOptions(reconnect: true, wait: (_) async {}),
     );
     await stream.toList();
-    expect(adapter.requests[1].headers['Last-Event-ID'], 'a b~9');
+    expect(FakeTransport.header(adapter.requests[1], 'Last-Event-ID'), 'a b~9');
   });
 }

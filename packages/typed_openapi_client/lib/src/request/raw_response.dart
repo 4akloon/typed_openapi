@@ -27,7 +27,7 @@ final class RawResponse {
   /// The HTTP status code.
   final int statusCode;
 
-  /// The body as the HTTP client returned it: JSON parsed by Dio, a
+  /// The body as the HTTP client returned it: parsed JSON, a
   /// [String], bytes ([Uint8List]) or `null`.
   final Object? body;
 
@@ -122,7 +122,7 @@ final class RawResponse {
   }
 
   /// Whether [headers] name a JSON content type (`application/json`,
-  /// `text/json`, `*/*+json`), as Dio decides.
+  /// `text/json`, `*/*+json`), as [MediaTypeText] decides.
   static bool isJson(Map<String, List<String>> headers) =>
       switch (headers['content-type']?.firstOrNull) {
         final type? => MediaTypeText(type).isJson,

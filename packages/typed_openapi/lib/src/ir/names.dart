@@ -50,9 +50,9 @@ final class DartNames {
 
   /// Type names a generated library sees without importing them: those of
   /// `dart:core`, `Uint8List` of `dart:typed_data`, the names of
-  /// `typed_openapi_client` that generated code uses, and `Dio`, the one
-  /// name the API files import from `package:dio` (so its other exports,
-  /// such as `Response`, `Options` and `Headers`, stay free for schemas).
+  /// `typed_openapi_client` that generated code uses. Generated code imports
+  /// nothing from an HTTP client, so `Dio`, `Response` or `Options` stay
+  /// free for schemas.
   static const takenTypeNames = {
     // dart:core
     'ArgumentError', 'AssertionError', 'BigInt', 'BidirectionalIterator',
@@ -70,8 +70,7 @@ final class DartNames {
     // typed_openapi_client
     'CallOptions', 'CancelSignal', 'Cancelled', 'ClientSender',
     'ClientTransport', 'CookieParameter', 'Date', 'DecodeError',
-    'DeepEquality',
-    'DioRequestSender', 'Failure', 'FileUpload', 'FormBody', 'FormEncoding',
+    'DeepEquality', 'Failure', 'FileUpload', 'FormBody', 'FormEncoding',
     'HeaderParameter', 'HttpError',
     'JsonDecodeException', 'JsonReader', 'JsonValue', 'MultipartBody',
     'MultipartPart', 'OperationInfo',
@@ -85,8 +84,6 @@ final class DartNames {
     'Success', 'TransportError', 'TransportException',
     'TransportExceptionKind', 'TransportRequest', 'TransportResponse',
     'UndocumentedStatus',
-    // package:dio, which the API files import with `show Dio` only.
-    'Dio',
   };
 
   /// Members every Dart object has.

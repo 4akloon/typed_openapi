@@ -1,11 +1,11 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND.
 // dart format off
 
-import 'package:dio/dio.dart' show Dio;
 import 'package:typed_openapi_client/typed_openapi_client.dart'
     show
         CallOptions,
-        DioRequestSender,
+        ClientSender,
+        ClientTransport,
         FormBody,
         FormEncoding,
         JsonReader,
@@ -24,10 +24,10 @@ import '../models/send_note_error.dart';
 
 /// The operations of the `StoreApi` group.
 class StoreApi {
-  /// Sends the requests through [dio], which it uses as it is.
-  StoreApi(Dio dio) : _sender = DioRequestSender(dio);
+  /// Sends the requests through [transport].
+  StoreApi(ClientTransport transport) : _sender = ClientSender(transport);
 
-  final DioRequestSender _sender;
+  final ClientSender _sender;
 
   static const _placeOrder = OperationInfo(
     operationId: 'placeOrder',

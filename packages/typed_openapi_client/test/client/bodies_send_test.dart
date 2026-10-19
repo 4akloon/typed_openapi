@@ -1,11 +1,10 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:dio/dio.dart';
 import 'package:test/test.dart';
 import 'package:typed_openapi_client/typed_openapi_client.dart';
 
-import '../helpers/fake_adapter.dart';
+import '../helpers/fake_transport.dart';
 
 void main() {
   const upload = OperationInfo(
@@ -17,13 +16,13 @@ void main() {
   Result<void, Never> decodeVoid(RawResponse r) =>
       r.statusCode == 204 ? r.success(null) : r.undocumented();
 
-  (DioRequestSender, FakeAdapter) senderFor(FakeAdapter adapter) => (
-    DioRequestSender(Dio()..httpClientAdapter = adapter),
+  (ClientSender, FakeTransport) senderFor(FakeTransport adapter) => (
+    ClientSender(adapter),
     adapter,
   );
 
-  FakeAdapter noContent() =>
-      FakeAdapter((_) => ResponseBody.fromString('', 204));
+  FakeTransport noContent() =>
+      FakeTransport((_) => FakeTransport.response('', 204));
 
   test('a form body is sent as text with its content type', () async {
     final (sender, adapter) = senderFor(noContent());
@@ -38,7 +37,7 @@ void main() {
     expect(result, isA<Success<void, Never>>());
     expect(adapter.bodies.single, 'name=a%20b&n=1');
     expect(
-      adapter.requests.single.contentType,
+      FakeTransport.header(adapter.requests.single, 'content-type'),
       'application/x-www-form-urlencoded',
     );
   });
@@ -90,7 +89,8 @@ void main() {
       ),
       decodeVoid,
     );
-    final type = adapter.requests.single.headers['content-type'] as String;
+    final type =
+        FakeTransport.header(adapter.requests.single, 'content-type') as String;
     expect(type, startsWith('multipart/form-data; boundary='));
     final body = adapter.bodies.single;
     expect(body, contains('name="note"\r\n\r\nhi\r\n'));
@@ -147,15 +147,19 @@ void main() {
       decodeVoid,
     );
     expect(adapter.bodies, ['png', 'abc']);
-    expect(adapter.requests.first.contentType, 'application/octet-stream');
-    expect(adapter.requests.last.contentType, 'image/png');
-    expect(adapter.requests.last.headers['content-length'], '3');
+    expect(
+      FakeTransport.header(adapter.requests.first, 'content-type'),
+      'application/octet-stream',
+    );
+    expect(
+      FakeTransport.header(adapter.requests.last, 'content-type'),
+      'image/png',
+    );
+    expect(FakeTransport.header(adapter.requests.last, 'content-length'), '3');
   });
 
   test('a binary operation decodes a JSON error body', () async {
-    final sender = DioRequestSender(
-      Dio()..httpClientAdapter = FakeAdapter.json(404, {'code': 'gone'}),
-    );
+    final sender = ClientSender(FakeTransport.json(404, {'code': 'gone'}));
     Result<Uint8List, Object?> decode(RawResponse r) => switch (r.statusCode) {
       200 => r.success(r.bytes),
       404 => r.error(JsonReader.asObject(r.parsedJson)['code']),
@@ -174,50 +178,5 @@ void main() {
     );
     expect(result, isA<HttpError<Uint8List, Object?>>());
     expect((result as HttpError<Uint8List, Object?>).body, 'gone');
-  });
-
-  test('an interceptor reads the security metadata of the operation', () async {
-    const bearer = SecurityScheme('bearer', .http, scheme: 'bearer');
-    const key = SecurityScheme(
-      'key',
-      .apiKey,
-      location: .query,
-      parameterName: 'k',
-    );
-    const secured = OperationInfo(
-      operationId: 'secured',
-      method: 'GET',
-      pathTemplate: '/x',
-      security: [
-        [
-          SecurityUse(bearer, ['read']),
-        ],
-        [SecurityUse(key)],
-      ],
-    );
-    final seen = <String>[];
-    final dio = Dio()
-      ..httpClientAdapter = noContent()
-      ..interceptors.add(
-        InterceptorsWrapper(
-          onRequest: (options, handler) {
-            final info = OperationInfo.of(options)!;
-            for (final alternative in info.security) {
-              for (final use in alternative) {
-                seen.add(
-                  '${use.scheme.type.name} ${use.scheme.scheme ?? ''} '
-                  '${use.scheme.location?.name ?? ''} '
-                  '${use.scheme.parameterName ?? ''} ${use.scopes}',
-                );
-              }
-            }
-            handler.next(options);
-          },
-        ),
-      );
-    await DioRequestSender(
-      dio,
-    ).send(const OperationRequest(secured), decodeVoid);
-    expect(seen, ['http bearer   [read]', 'apiKey  query k []']);
   });
 }

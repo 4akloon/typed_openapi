@@ -8,6 +8,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:typed_openapi_dio/typed_openapi_dio.dart';
 import 'package:fixture/events_hostile_raw/api_client.dart';
 import 'package:typed_openapi_client/typed_openapi_client.dart';
 
@@ -53,7 +54,7 @@ Future<void> main() async {
   }
   // No event field and an empty one are both `message`.
   text.write('data: plain\n\nevent:\ndata: empty\n\n');
-  final client = ApiClient(Dio()..httpClientAdapter = Adapter('$text'));
+  final client = ApiClient(DioTransport(Dio()..httpClientAdapter = Adapter('$text')));
   final result = await client.defaultApi.feed();
   if (result case Success(:final data)) {
     await for (final item in data) {

@@ -1,7 +1,7 @@
 import 'package:test/test.dart';
 import 'package:typed_openapi_client/typed_openapi_client.dart';
 
-import '../helpers/fake_adapter.dart';
+import '../helpers/fake_transport.dart';
 import '../helpers/watch_stream.dart';
 
 void main() {
@@ -17,7 +17,7 @@ void main() {
   WatchStream watch(List<String> bodies, {int maxAttempts = 5}) {
     var next = 0;
     return WatchStream(
-      FakeAdapter(
+      FakeTransport(
         (_) => next < bodies.length
             ? WatchStream.response(bodies[next++])
             : WatchStream.response('', 204),

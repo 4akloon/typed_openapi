@@ -1,10 +1,9 @@
 import 'dart:convert';
 
-import 'package:dio/dio.dart';
 import 'package:test/test.dart';
 import 'package:typed_openapi_client/typed_openapi_client.dart';
 
-import 'helpers/fake_adapter.dart';
+import 'helpers/fake_transport.dart';
 import 'helpers/pets_api.dart';
 
 /// A hand-written fake in another library, as a user test writes one.
@@ -51,13 +50,9 @@ void main() {
     'unknown': 'ignored',
   };
 
-  Dio dioWith(FakeAdapter adapter) =>
-      Dio(BaseOptions(baseUrl: 'https://api.test'))
-        ..httpClientAdapter = adapter;
-
   test('a generated GET decodes a model and its nested values', () async {
-    final adapter = FakeAdapter.json(200, petJson);
-    final api = PetsApi(dioWith(adapter));
+    final adapter = FakeTransport.json(200, petJson);
+    final api = PetsApi(adapter);
     final result = await api.getPetById(petId: 7, fields: ['id', 'name']);
     final pet = switch (result) {
       Success(:final data) => data,
@@ -72,17 +67,17 @@ void main() {
       '"tags":[{"name":"good"}],"metadata":{"source":"shelter","score":1.5}}',
     );
     expect(
-      adapter.requests.single.uri.toString(),
-      'https://api.test/pets/7?fields=id,name',
+      adapter.requests.single.target,
+      '/pets/7?fields=id,name',
     );
   });
 
   test('a date property decodes and encodes as a full-date', () async {
-    final adapter = FakeAdapter.json(200, {
+    final adapter = FakeTransport.json(200, {
       ...petJson,
       'birthday': '2019-12-31',
     });
-    final result = await PetsApi(dioWith(adapter)).getPetById(petId: 7);
+    final result = await PetsApi(adapter).getPetById(petId: 7);
     final pet = switch (result) {
       Success(:final data) => data,
       Failure() => fail('expected a success, got $result'),
@@ -94,11 +89,11 @@ void main() {
   test(
     'a date-time sent for a date is a decode error at the property',
     () async {
-      final adapter = FakeAdapter.json(200, {
+      final adapter = FakeTransport.json(200, {
         ...petJson,
         'birthday': '2019-12-31T00:00:00Z',
       });
-      final result = await PetsApi(dioWith(adapter)).getPetById(petId: 7);
+      final result = await PetsApi(adapter).getPetById(petId: 7);
       expect(
         result,
         isA<DecodeError<Pet, ApiError>>()
@@ -111,11 +106,11 @@ void main() {
   );
 
   test('the caller switches over every outcome', () async {
-    final adapter = FakeAdapter.json(200, {
+    final adapter = FakeTransport.json(200, {
       ...petJson,
       'tags': [{}],
     });
-    final result = await PetsApi(dioWith(adapter)).getPetById(petId: 7);
+    final result = await PetsApi(adapter).getPetById(petId: 7);
     final message = switch (result) {
       Success(:final data) => data.name,
       HttpError(:final body) => body.code,
@@ -126,8 +121,8 @@ void main() {
   });
 
   test('a generated PATCH sends only the fields that are set', () async {
-    final adapter = FakeAdapter((_) => ResponseBody.fromString('', 204));
-    final result = await PetsApi(dioWith(adapter)).updatePet(
+    final adapter = FakeTransport((_) => FakeTransport.response('', 204));
+    final result = await PetsApi(adapter).updatePet(
       petId: 7,
       body: const UpdatePet(name: .value('Rex'), tag: .nullValue()),
     );
@@ -137,25 +132,23 @@ void main() {
   });
 
   test('a documented error status is typed', () async {
-    final adapter = FakeAdapter.json(409, {'code': 'CONFLICT'});
+    final adapter = FakeTransport.json(409, {'code': 'CONFLICT'});
     final result = await PetsApi(
-      dioWith(adapter),
+      adapter,
     ).updatePet(petId: 7, body: const UpdatePet());
     expect((result as HttpError<void, ApiError>).body.code, 'CONFLICT');
     expect(adapter.bodies.single, '{}');
   });
 
   test('a generated event stream yields typed items', () async {
-    final adapter = FakeAdapter(
-      (_) => ResponseBody(
-        Stream.value(utf8.encode('data: {"name": "Max"}\n\n')),
+    final adapter = FakeTransport(
+      (_) => FakeTransport.response(
+        'data: {"name": "Max"}\n\n',
         200,
-        headers: {
-          Headers.contentTypeHeader: ['text/event-stream'],
-        },
+        'text/event-stream',
       ),
     );
-    final result = await PetsApi(dioWith(adapter)).watchPet(petId: 7);
+    final result = await PetsApi(adapter).watchPet(petId: 7);
     final names = switch (result) {
       Success(:final data) =>
         await data
@@ -174,8 +167,8 @@ void main() {
   });
 
   test('an operation without documented errors still has failures', () async {
-    final adapter = FakeAdapter.json(503, {'message': 'down'});
-    final result = await PetsApi(dioWith(adapter)).watchPet(petId: 7);
+    final adapter = FakeTransport.json(503, {'message': 'down'});
+    final result = await PetsApi(adapter).watchPet(petId: 7);
     final outcome = switch (result) {
       Success() => 'stream',
       Failure() => 'failed',

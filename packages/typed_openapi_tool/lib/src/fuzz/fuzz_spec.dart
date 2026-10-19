@@ -21,7 +21,7 @@ final class FuzzSpec {
     'Error',
     'Request',
     'Unknown',
-    'Dio',
+    'Transport',
   ];
   static const _methods = ['get', 'post', 'patch', 'put', 'delete'];
   static const _id = {

@@ -1,11 +1,10 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:dio/dio.dart';
 import 'package:test/test.dart';
 import 'package:typed_openapi_client/typed_openapi_client.dart';
 
-import '../helpers/fake_adapter.dart';
+import '../helpers/fake_transport.dart';
 
 void main() {
   const upload = OperationInfo(
@@ -17,13 +16,13 @@ void main() {
   Result<void, Never> decodeVoid(RawResponse r) =>
       r.statusCode == 204 ? r.success(null) : r.undocumented();
 
-  FakeAdapter noContent() =>
-      FakeAdapter((_) => ResponseBody.fromString('', 204));
+  FakeTransport noContent() =>
+      FakeTransport((_) => FakeTransport.response('', 204));
 
   /// Sends [parts] as a multipart body and returns the adapter that saw it.
-  Future<FakeAdapter> sendParts(List<MultipartPart> parts) async {
+  Future<FakeTransport> sendParts(List<MultipartPart> parts) async {
     final adapter = noContent();
-    await DioRequestSender(Dio()..httpClientAdapter = adapter).send(
+    await ClientSender(adapter).send(
       OperationRequest(
         upload,
         body: MultipartBody(parts),
@@ -35,9 +34,7 @@ void main() {
   }
 
   Future<Result<void, Never>> send(OperationRequest request) =>
-      DioRequestSender(
-        Dio()..httpClientAdapter = noContent(),
-      ).send(request, decodeVoid);
+      ClientSender(noContent()).send(request, decodeVoid);
 
   FileUpload file([String content = 'x', String? contentType]) =>
       FileUpload.bytes(
@@ -213,7 +210,7 @@ void main() {
   group('a form value', () {
     test('that is not ASCII or is reserved is percent-encoded', () async {
       final adapter = noContent();
-      await DioRequestSender(Dio()..httpClientAdapter = adapter).send(
+      await ClientSender(adapter).send(
         const OperationRequest(
           upload,
           body: FormBody({'q': 'Київ & co+1', 'r': 'a=b'}),

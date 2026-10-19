@@ -83,7 +83,6 @@ publish_to: none
 environment:
   sdk: ">=3.10.0 <4.0.0"
 dependencies:
-  dio: ^5.11.1
   typed_openapi_client:
     path: ${_quoted(runtime)}
 dev_dependencies:

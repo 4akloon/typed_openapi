@@ -6,7 +6,7 @@ import 'operation_info.dart';
 
 /// How the response body is read, by the content type of the spec.
 enum ResponseKind {
-  /// JSON, parsed by Dio (`ResponseType.json`).
+  /// JSON, parsed by the client when the response names a JSON type.
   json,
 
   /// Text.

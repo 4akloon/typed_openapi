@@ -1,20 +1,11 @@
-import 'dart:convert';
-import 'dart:typed_data';
-
-import 'package:dio/dio.dart';
 import 'package:test/test.dart';
 import 'package:typed_openapi_client/typed_openapi_client.dart';
 
-import '../helpers/fake_adapter.dart';
+import '../helpers/fake_transport.dart';
 
 /// An event-stream response with [text] that then closes.
-ResponseBody _stream(String text, [int status = 200]) => ResponseBody(
-  Stream.value(Uint8List.fromList(utf8.encode(text))),
-  status,
-  headers: {
-    Headers.contentTypeHeader: ['text/event-stream'],
-  },
-);
+TransportResponse _stream(String text, [int status = 200]) =>
+    FakeTransport.response(text, status, 'text/event-stream');
 
 void main() {
   const watch = OperationRequest(
@@ -32,24 +23,24 @@ void main() {
     Map<String, Object?> headers,
   ) async {
     var next = 0;
-    final adapter = FakeAdapter(
+    final adapter = FakeTransport(
       (_) => next < bodies.length ? _stream(bodies[next++]) : _stream('', 204),
     );
-    final result = await DioRequestSender(Dio()..httpClientAdapter = adapter)
-        .openEvents(
-          watch,
-          (m) => m.data,
-          decodeError,
-          call: CallOptions(
-            headers: headers,
-            sse: SseOptions(reconnect: true, wait: (_) async {}),
-          ),
-        );
+    final result = await ClientSender(adapter).openEvents(
+      watch,
+      (m) => m.data,
+      decodeError,
+      call: CallOptions(
+        headers: headers,
+        sse: SseOptions(reconnect: true, wait: (_) async {}),
+      ),
+    );
     await (result as Success<Stream<SseItem<String>>, String>).data
         .drain<void>();
     return [
       for (final request in adapter.requests)
-        request.headers['Last-Event-ID'] ?? request.headers['last-event-id'],
+        FakeTransport.header(request, 'Last-Event-ID') ??
+            FakeTransport.header(request, 'last-event-id'),
     ];
   }
 

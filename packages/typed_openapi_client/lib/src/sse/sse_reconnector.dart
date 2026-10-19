@@ -1,8 +1,8 @@
 import 'dart:async';
 
-import 'package:dio/dio.dart';
-
 import '../result/result.dart';
+import '../transport/cancel_signal.dart';
+import '../transport/transport_exception.dart';
 import 'cancellable_wait.dart';
 import 'sse_item.dart';
 import 'sse_options.dart';
@@ -19,7 +19,7 @@ typedef SseResume = ({String lastEventId, Duration? retry});
 /// follow; a failed attempt (a [TransportError]) is the next attempt. The
 /// stream ends with [SseDisconnected] when [SseOptions.maxAttempts]
 /// attempts in a row bring no message, when the request is cancelled (the
-/// listener cancels, or [cancelled] completes, also during a wait), when
+/// listener cancels, or [cancel] is cancelled, also during a wait), when
 /// the server answers an attempt with a status that is not a stream (the
 /// `Failure` is the cause), or with 204 No Content, which tells a client
 /// to stop reconnecting.
@@ -29,7 +29,7 @@ final class SseReconnector<T>
   const SseReconnector(
     this.options,
     this.reopen, {
-    this.cancelled,
+    this.cancel,
     this.onCancel,
   });
 
@@ -40,8 +40,8 @@ final class SseReconnector<T>
   final Future<Result<Stream<SseItem<T>>, Object?>> Function(SseResume resume)
   reopen;
 
-  /// Completes when the call's cancel token is cancelled.
-  final Future<DioException>? cancelled;
+  /// The call's cancel signal.
+  final CancelSignal? cancel;
 
   /// Called when the listener cancels the stream, to abort a request that
   /// [reopen] has in flight.
@@ -65,11 +65,20 @@ final class _Reconnection<T> {
   Duration? _retry;
   int _attempt = 0;
   bool _closed = false;
-  DioException? _cancel;
+  TransportException? _cancel;
+  // Read once: every wait races the same future, and a signal is asked for
+  // it once per call, not once per reconnection.
+  Future<void>? _cancelled;
 
   Stream<SseItem<T>> start(Stream<SseItem<T>> first) {
-    _owner.cancelled?.then((e) {
-      _cancel = e;
+    _cancelled = _owner.cancel?.whenCancelled;
+    _cancelled?.then((_) {
+      _cancel = TransportException(
+        .cancelled,
+        'The call was cancelled.',
+        cause: _owner.cancel?.reason,
+        stackTrace: StackTrace.current,
+      );
       _sleep.cancel();
     });
     _out = StreamController<SseItem<T>>(
@@ -114,7 +123,7 @@ final class _Reconnection<T> {
         _out.add(item);
       case SseReconnecting():
         _out.add(item);
-      case SseDisconnected(cause: DioException(type: .cancel)):
+      case SseDisconnected(cause: TransportException(kind: .cancelled)):
         _end(item);
       case SseDisconnected(:final cause, :final stackTrace):
         // A dropped event (SseEventIgnored) still moves the id and counts as
@@ -139,7 +148,7 @@ final class _Reconnection<T> {
     } on Object catch (error, trace) {
       // Not awaited by anyone: an escaping error would hang the stream and
       // reach the zone. It comes from user code (a `wait` or an interceptor)
-      // or from the Dio adapter, and is a bug as an Error in a decoder is.
+      // or from the transport, and is a bug as an Error in a decoder is.
       _fail(error, trace);
     }
   }
@@ -189,7 +198,7 @@ final class _Reconnection<T> {
 
   Future<void> _wait(Duration delay) {
     final wait = _sleep.wait(delay);
-    final cancelled = _owner.cancelled;
+    final cancelled = _cancelled;
     return cancelled == null ? wait : Future.any([wait, cancelled]);
   }
 

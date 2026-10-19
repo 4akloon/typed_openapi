@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:dio/dio.dart';
 import 'package:test/test.dart';
 import 'package:typed_openapi_client/typed_openapi_client.dart';
 
@@ -14,18 +13,7 @@ void main() {
   );
 
   group('OperationInfo', () {
-    test('is found in the extra map of a request', () {
-      expect(
-        OperationInfo.of(
-          RequestOptions(extra: {OperationInfo.extraKey: operation}),
-        ),
-        operation,
-      );
-      expect(OperationInfo.of(RequestOptions(extra: {'other': 1})), isNull);
-      expect(
-        OperationInfo.of(RequestOptions(extra: {OperationInfo.extraKey: 'x'})),
-        isNull,
-      );
+    test('prints its method, path and id', () {
       expect(
         '$operation',
         'GET /pets/{petId}/tags{;filter}/{kind} (listPetTags)',

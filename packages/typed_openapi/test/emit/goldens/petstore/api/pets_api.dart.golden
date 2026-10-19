@@ -4,12 +4,12 @@
 import 'dart:convert' show jsonEncode;
 import 'dart:typed_data' show Uint8List;
 
-import 'package:dio/dio.dart' show Dio;
 import 'package:typed_openapi_client/typed_openapi_client.dart'
     show
         CallOptions,
+        ClientSender,
+        ClientTransport,
         CookieParameter,
-        DioRequestSender,
         FileUpload,
         HeaderParameter,
         JsonReader,
@@ -33,10 +33,10 @@ import '../models/status.dart';
 
 /// The operations of the `PetsApi` group.
 class PetsApi {
-  /// Sends the requests through [dio], which it uses as it is.
-  PetsApi(Dio dio) : _sender = DioRequestSender(dio);
+  /// Sends the requests through [transport].
+  PetsApi(ClientTransport transport) : _sender = ClientSender(transport);
 
-  final DioRequestSender _sender;
+  final ClientSender _sender;
 
   static const _createPet = OperationInfo(
     operationId: 'createPet',

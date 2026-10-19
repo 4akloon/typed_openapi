@@ -1,6 +1,5 @@
 // Code in the shape the generator (M8, M9, M10) is expected to emit, to
 // check that the runtime API composes. Illustrative, not a contract.
-import 'package:dio/dio.dart';
 import 'package:typed_openapi_client/typed_openapi_client.dart';
 
 /// `components.schemas.Tag`.
@@ -128,10 +127,10 @@ final class PetChange {
 
 /// The `pets` tag: a plain class, so `implements PetsApi` mocks it (R10.7).
 class PetsApi {
-  /// Calls the API through [dio], used as is.
-  PetsApi(Dio dio) : _sender = DioRequestSender(dio);
+  /// Calls the API through [transport].
+  PetsApi(ClientTransport transport) : _sender = ClientSender(transport);
 
-  final DioRequestSender _sender;
+  final ClientSender _sender;
 
   static const _getPetById = OperationInfo(
     operationId: 'getPetById',

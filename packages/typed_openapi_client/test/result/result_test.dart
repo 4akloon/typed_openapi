@@ -1,9 +1,7 @@
-import 'package:dio/dio.dart';
 import 'package:test/test.dart';
 import 'package:typed_openapi_client/typed_openapi_client.dart';
 
 void main() {
-  final options = RequestOptions(path: '/pets');
   final failures = <Failure<int, String>>[
     const HttpError('not found', statusCode: 404),
     const UndocumentedStatus(statusCode: 418, rawBody: 'teapot'),
@@ -17,12 +15,12 @@ void main() {
       statusCode: 200,
       rawBody: {'id': 'x'},
     ),
-    TransportError(
-      DioException.connectionError(requestOptions: options, reason: 'refused'),
+    const TransportError(
+      TransportException(.connection, 'refused'),
       StackTrace.empty,
     ),
-    Cancelled(
-      DioException.requestCancelled(requestOptions: options, reason: 'left'),
+    const Cancelled(
+      TransportException(.cancelled, 'left'),
       StackTrace.empty,
     ),
   ];
@@ -32,7 +30,7 @@ void main() {
     HttpError(:final statusCode, :final body) => '$statusCode $body',
     UndocumentedStatus(:final statusCode) => 'undocumented $statusCode',
     DecodeError(:final error) => 'decode ${error.pointer}',
-    TransportError(:final exception) => 'transport ${exception.type.name}',
+    TransportError(:final exception) => 'transport ${exception.kind.name}',
     Cancelled() => 'cancelled',
   };
 
@@ -49,7 +47,7 @@ void main() {
       '404 not found',
       'undocumented 418',
       'decode /id',
-      'transport connectionError',
+      'transport connection',
       'cancelled',
     ]);
   });
@@ -67,7 +65,7 @@ void main() {
       'UndocumentedStatus(418)',
       'DecodeError(200: JsonDecodeException: expected an integer, '
           'got a string at /id in Pet)',
-      'TransportError(connectionError)',
+      'TransportError(connection)',
       'Cancelled',
     ]);
   });

@@ -1,27 +1,21 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:typed_data';
 
-import 'package:dio/dio.dart';
 import 'package:test/test.dart';
 import 'package:typed_openapi_client/typed_openapi_client.dart';
 
-import '../helpers/fake_adapter.dart';
-import '../helpers/gated_adapter.dart';
+import '../helpers/fake_transport.dart';
+import '../helpers/gated_transport.dart';
 
 /// An event-stream response with [text] that then closes.
-ResponseBody _stream(String text, [int status = 200]) => ResponseBody(
-  Stream.value(Uint8List.fromList(utf8.encode(text))),
-  status,
-  headers: {
-    Headers.contentTypeHeader: ['text/event-stream'],
-  },
-);
+TransportResponse _stream(String text, [int status = 200]) =>
+    FakeTransport.response(text, status, 'text/event-stream');
 
 /// Answers the requests in order with [answers]; the last one repeats.
-FakeAdapter _adapter(List<ResponseBody Function(RequestOptions)> answers) {
+FakeTransport _adapter(
+  List<TransportResponse Function(TransportRequest)> answers,
+) {
   var next = 0;
-  return FakeAdapter(
+  return FakeTransport(
     (options) => answers[next < answers.length - 1 ? next++ : next](options),
   );
 }
@@ -45,17 +39,16 @@ void main() {
 
   /// The stream of a [watch] that reconnects, opened through [adapter].
   Future<Stream<SseItem<String>>> open(
-    HttpClientAdapter adapter,
+    ClientTransport adapter,
     SseOptions options,
   ) async {
-    final result = await DioRequestSender(Dio()..httpClientAdapter = adapter)
-        .openEvents(
-          watch,
-          (m) => m.data,
-          decodeError,
-          call: CallOptions(sse: options),
-          reconnection: SseReconnection.on,
-        );
+    final result = await ClientSender(adapter).openEvents(
+      watch,
+      (m) => m.data,
+      decodeError,
+      call: CallOptions(sse: options),
+      reconnection: SseReconnection.on,
+    );
     return (result as Success<Stream<SseItem<String>>, String>).data;
   }
 
@@ -105,7 +98,10 @@ void main() {
         (_) => _stream('', 204),
       ]);
       await items(await open(adapter, options()));
-      return [for (final r in adapter.requests) r.headers['Last-Event-ID']];
+      return [
+        for (final r in adapter.requests)
+          FakeTransport.header(r, 'Last-Event-ID'),
+      ];
     }
 
     test('ignores an id with a NUL', () async {
@@ -164,7 +160,7 @@ void main() {
 
   test('a pause during the reopen holds the next connection', () async {
     final gate = Completer<void>();
-    final adapter = GatedAdapter((options, index) async {
+    final adapter = GatedTransport((options, index) async {
       if (index == 0) return _stream('data: a\n\n');
       if (index == 1) {
         await gate.future;

@@ -5,7 +5,7 @@ import 'dart:async';
 ///
 /// One signal may serve several calls; a cancelled signal stays cancelled,
 /// so a call made with it afterwards is cancelled before it is sent.
-final class CancelSignal {
+base class CancelSignal {
   /// Creates a signal that is not cancelled.
   CancelSignal();
 

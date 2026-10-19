@@ -28,6 +28,7 @@ void main() {
       final runtime = p.normalize(
         p.absolute(p.join('..', 'typed_openapi_client')),
       );
+      final dio = p.normalize(p.absolute(p.join('..', 'typed_openapi_dio')));
       temp
         ..write('pubspec.yaml', '''
 name: fixture
@@ -36,6 +37,12 @@ environment:
   sdk: ">=3.10.0 <4.0.0"
 dependencies:
   dio: ^5.11.1
+  typed_openapi_client:
+    path: ${runtime.replaceAll(r'\', '/')}
+  typed_openapi_dio:
+    path: ${dio.replaceAll(r'\', '/')}
+dependency_overrides:
+  # typed_openapi_dio depends on the hosted client; use the one here.
   typed_openapi_client:
     path: ${runtime.replaceAll(r'\', '/')}
 dev_dependencies:
@@ -202,14 +209,14 @@ success 200
   reconnecting 1 after 1000ms
   reconnecting 2 after 1500ms
   reconnecting 3 after 1500ms
-  end connectionError
+  end connection
 waits [1000, 1500, 1500]
   event message # Thread(id: t1, replies: null)
   reconnecting 1 after 1000ms
-  end cancel
+  end cancelled
 requests 1
   event message # Thread(id: t1, replies: null)
-  end cancel
+  end cancelled
   delta Hi
   usage 3
   note plain text

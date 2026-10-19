@@ -218,7 +218,7 @@ paths:
   });
 
   group('names the API files import', () {
-    test('a schema named like a dio export other than Dio keeps its name', () {
+    test('a schema named like a Dio export keeps its name', () {
       final ir = build(
         IrFixture(r'''
 openapi: 3.1.0
@@ -258,7 +258,7 @@ components:
           'Response',
           'Options',
           'Headers',
-          'DioModel',
+          'Dio',
           'FileUploadModel',
           'SecuritySchemeModel',
         ]),

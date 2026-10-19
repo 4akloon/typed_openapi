@@ -3,8 +3,8 @@ library;
 
 export 'package:meta/meta.dart' show immutable;
 
-export 'src/dio/call_options.dart' show CallOptions;
-export 'src/dio/dio_request_sender.dart' show DioRequestSender;
+export 'src/client/call_options.dart' show CallOptions;
+export 'src/client/client_sender.dart' show ClientSender;
 export 'src/json/json_decode_exception.dart' show JsonDecodeException;
 export 'src/json/json_reader.dart' show JsonReader;
 export 'src/json/json_value.dart' show JsonValue;

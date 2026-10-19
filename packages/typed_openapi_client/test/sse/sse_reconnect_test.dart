@@ -2,32 +2,25 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:dio/dio.dart';
 import 'package:test/test.dart';
 import 'package:typed_openapi_client/typed_openapi_client.dart';
 
-import '../helpers/fake_adapter.dart';
+import '../helpers/fake_transport.dart';
 
 /// An event-stream response with [text] that then closes.
-ResponseBody _stream(String text, [int status = 200]) => ResponseBody(
-  Stream.value(Uint8List.fromList(utf8.encode(text))),
-  status,
-  headers: {
-    Headers.contentTypeHeader: ['text/event-stream'],
-  },
-);
+TransportResponse _stream(String text, [int status = 200]) =>
+    FakeTransport.response(text, status, 'text/event-stream');
 
 /// A connection that fails before any response.
-ResponseBody _refused(RequestOptions options) => throw DioException(
-  requestOptions: options,
-  type: DioExceptionType.connectionError,
-  message: 'refused',
-);
+TransportResponse _refused(TransportRequest request) =>
+    throw const TransportException(.connection, 'refused');
 
 /// Answers the requests in order with [answers]; the last one repeats.
-FakeAdapter _adapter(List<ResponseBody Function(RequestOptions)> answers) {
+FakeTransport _adapter(
+  List<TransportResponse Function(TransportRequest)> answers,
+) {
   var next = 0;
-  return FakeAdapter(
+  return FakeTransport(
     (options) => answers[next < answers.length - 1 ? next++ : next](options),
   );
 }
@@ -49,7 +42,8 @@ void main() {
     SseDecodeError() => 'decode error',
     SseReconnecting(:final attempt, :final delay) =>
       'reconnecting $attempt after ${delay.inMilliseconds}ms',
-    SseDisconnected(cause: DioException(:final type)) => 'end ${type.name}',
+    SseDisconnected(cause: TransportException(:final kind)) =>
+      'end ${kind.name}',
     SseDisconnected(cause: HttpError(:final statusCode)) =>
       'end http $statusCode',
     SseDisconnected(:final cause) => 'end ${cause ?? 'closed'}',
@@ -57,7 +51,7 @@ void main() {
 
   /// The items of a [watch] stream opened through [adapter].
   Future<List<String>> items(
-    FakeAdapter adapter, {
+    FakeTransport adapter, {
     SseReconnection reconnection = SseReconnection.onRequest,
     SseOptions? sse,
     List<Duration>? waits,
@@ -69,14 +63,13 @@ void main() {
       maxDelay: sse?.maxDelay ?? const Duration(seconds: 30),
       wait: (delay) async => waits?.add(delay),
     );
-    final result = await DioRequestSender(Dio()..httpClientAdapter = adapter)
-        .openEvents(
-          watch,
-          (m) => m.data,
-          decodeError,
-          call: CallOptions(sse: options),
-          reconnection: reconnection,
-        );
+    final result = await ClientSender(adapter).openEvents(
+      watch,
+      (m) => m.data,
+      decodeError,
+      call: CallOptions(sse: options),
+      reconnection: reconnection,
+    );
     final stream = (result as Success<Stream<SseItem<String>>, String>).data;
     return (await stream.toList()).map(describe).toList();
   }
@@ -148,8 +141,8 @@ void main() {
       ['event a #7', 'reconnecting 1 after 2500ms', 'end closed'],
     );
     expect(waits, [const Duration(milliseconds: 2500)]);
-    expect(adapter.requests[0].headers['Last-Event-ID'], isNull);
-    expect(adapter.requests[1].headers['Last-Event-ID'], '7');
+    expect(FakeTransport.header(adapter.requests[0], 'Last-Event-ID'), isNull);
+    expect(FakeTransport.header(adapter.requests[1], 'Last-Event-ID'), '7');
   });
 
   test('the event id carries over to the next connection', () async {
@@ -168,7 +161,7 @@ void main() {
         'end closed',
       ],
     );
-    expect(adapter.requests[2].headers['Last-Event-ID'], '7');
+    expect(FakeTransport.header(adapter.requests[2], 'Last-Event-ID'), '7');
   });
 
   test(
@@ -192,7 +185,7 @@ void main() {
           'reconnecting 2 after 2000ms',
           'reconnecting 3 after 3000ms',
           'reconnecting 4 after 3000ms',
-          'end connectionError',
+          'end connection',
         ],
       );
       expect(adapter.requests, hasLength(5));
@@ -214,7 +207,7 @@ void main() {
   test('an attempt answered with an error status ends the stream', () async {
     final adapter = _adapter([
       (_) => _stream('data: a\n\n'),
-      (_) => ResponseBody.fromString('gone', 404),
+      (_) => FakeTransport.response('gone', 404),
     ]);
     expect(await items(adapter, reconnection: SseReconnection.on), [
       'event a #',
@@ -226,21 +219,20 @@ void main() {
   test(
     'cancelling during the wait ends the stream, no request follows',
     () async {
-      final token = CancelToken();
+      final token = CancelSignal();
       final adapter = _adapter([(_) => _stream('data: a\n\n')]);
-      final result = await DioRequestSender(Dio()..httpClientAdapter = adapter)
-          .openEvents(
-            watch,
-            (m) => m.data,
-            decodeError,
-            call: CallOptions(
-              cancelToken: token,
-              sse: SseOptions(
-                reconnect: true,
-                wait: (_) => Completer<void>().future,
-              ),
-            ),
-          );
+      final result = await ClientSender(adapter).openEvents(
+        watch,
+        (m) => m.data,
+        decodeError,
+        call: CallOptions(
+          cancel: token,
+          sse: SseOptions(
+            reconnect: true,
+            wait: (_) => Completer<void>().future,
+          ),
+        ),
+      );
       final stream = (result as Success<Stream<SseItem<String>>, String>).data;
       final seen = <String>[];
       final done = Completer<void>();
@@ -249,7 +241,11 @@ void main() {
         if (item is SseReconnecting) token.cancel();
       }, onDone: done.complete);
       await done.future;
-      expect(seen, ['event a #', 'reconnecting 1 after 1000ms', 'end cancel']);
+      expect(seen, [
+        'event a #',
+        'reconnecting 1 after 1000ms',
+        'end cancelled',
+      ]);
       expect(adapter.requests, hasLength(1));
     },
   );
@@ -257,15 +253,14 @@ void main() {
   test('a listener that cancels during the wait stops the attempts', () async {
     final wait = Completer<void>();
     final adapter = _adapter([(_) => _stream('data: a\n\n')]);
-    final result = await DioRequestSender(Dio()..httpClientAdapter = adapter)
-        .openEvents(
-          watch,
-          (m) => m.data,
-          decodeError,
-          call: CallOptions(
-            sse: SseOptions(reconnect: true, wait: (_) => wait.future),
-          ),
-        );
+    final result = await ClientSender(adapter).openEvents(
+      watch,
+      (m) => m.data,
+      decodeError,
+      call: CallOptions(
+        sse: SseOptions(reconnect: true, wait: (_) => wait.future),
+      ),
+    );
     final stream = (result as Success<Stream<SseItem<String>>, String>).data;
     late final StreamSubscription<SseItem<String>> subscription;
     subscription = stream.listen((item) {
@@ -278,26 +273,25 @@ void main() {
   });
 
   test('cancelling during the stream ends it without a reconnect', () async {
-    final token = CancelToken();
+    final token = CancelSignal();
     final body = StreamController<Uint8List>();
     addTearDown(body.close);
     final adapter = _adapter([
-      (_) => ResponseBody(
-        body.stream,
-        200,
+      (_) => TransportResponse(
+        statusCode: 200,
+        body: body.stream,
         headers: {
-          Headers.contentTypeHeader: ['text/event-stream'],
+          'content-type': ['text/event-stream'],
         },
       ),
     ]);
-    final result = await DioRequestSender(Dio()..httpClientAdapter = adapter)
-        .openEvents(
-          watch,
-          (m) => m.data,
-          decodeError,
-          call: CallOptions(cancelToken: token),
-          reconnection: SseReconnection.on,
-        );
+    final result = await ClientSender(adapter).openEvents(
+      watch,
+      (m) => m.data,
+      decodeError,
+      call: CallOptions(cancel: token),
+      reconnection: SseReconnection.on,
+    );
     final stream = (result as Success<Stream<SseItem<String>>, String>).data;
     final seen = <String>[];
     final done = Completer<void>();
@@ -307,7 +301,7 @@ void main() {
     }, onDone: done.complete);
     body.add(Uint8List.fromList(utf8.encode('data: a\n\n')));
     await done.future;
-    expect(seen, ['event a #', 'end cancel']);
+    expect(seen, ['event a #', 'end cancelled']);
     expect(adapter.requests, hasLength(1));
   });
 }

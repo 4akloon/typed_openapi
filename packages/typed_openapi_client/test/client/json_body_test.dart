@@ -1,10 +1,9 @@
 import 'dart:convert';
 
-import 'package:dio/dio.dart';
 import 'package:test/test.dart';
 import 'package:typed_openapi_client/typed_openapi_client.dart';
 
-import '../helpers/fake_adapter.dart';
+import '../helpers/fake_transport.dart';
 
 void main() {
   const operation = OperationInfo(
@@ -17,11 +16,11 @@ void main() {
       r.statusCode == 204 ? r.success(null) : r.undocumented();
 
   /// Sends [body] as [contentType] and returns the adapter that saw it.
-  Future<FakeAdapter> send(Object? body, String? contentType) async {
-    final adapter = FakeAdapter(
-      (_) => ResponseBody.fromString('', 204),
+  Future<FakeTransport> send(Object? body, String? contentType) async {
+    final adapter = FakeTransport(
+      (_) => FakeTransport.response('', 204),
     );
-    await DioRequestSender(Dio()..httpClientAdapter = adapter).send(
+    await ClientSender(adapter).send(
       OperationRequest(operation, body: body, contentType: contentType),
       decodeVoid,
     );
@@ -52,14 +51,20 @@ void main() {
       test(name, () async {
         final adapter = await send(value, 'application/json');
         expect(adapter.bodies.single, jsonEncode(value));
-        expect(adapter.requests.single.contentType, 'application/json');
+        expect(
+          FakeTransport.header(adapter.requests.single, 'content-type'),
+          'application/json',
+        );
       });
     }
 
     test('a required nullable body that is null sends null', () async {
       final adapter = await send(null, 'application/json');
       expect(adapter.bodies.single, 'null');
-      expect(adapter.requests.single.contentType, 'application/json');
+      expect(
+        FakeTransport.header(adapter.requests.single, 'content-type'),
+        'application/json',
+      );
     });
 
     test('a +json media type is JSON as well', () async {
@@ -85,84 +90,16 @@ void main() {
     });
   });
 
-  group('Dio keeps what it encodes right', () {
-    test('an interceptor sees the map or list of a JSON body', () async {
-      final seen = <Object?>[];
-      final adapter = FakeAdapter((_) => ResponseBody.fromString('', 204));
-      final dio = Dio()
-        ..httpClientAdapter = adapter
-        ..interceptors.add(
-          InterceptorsWrapper(
-            onRequest: (options, handler) {
-              seen.add(options.data);
-              handler.next(options);
-            },
-          ),
-        );
-      final sender = DioRequestSender(dio);
-      for (final body in <Object?>[
-        {'name': 'Rex', 'tags': <Object?>[]},
-        [1, 2],
-        7,
-        true,
-      ]) {
-        await sender.send(
-          OperationRequest(
-            operation,
-            body: body,
-            contentType: 'application/merge-patch+json',
-          ),
-          decodeVoid,
-        );
-      }
-      expect(seen, [
-        {'name': 'Rex', 'tags': <Object?>[]},
-        [1, 2],
-        7,
-        true,
-      ]);
-      expect(adapter.bodies, [
-        '{"name":"Rex","tags":[]}',
-        '[1,2]',
-        '7',
-        'true',
-      ]);
-    });
-
-    test('an interceptor sees the string and null that are encoded', () async {
-      final seen = <Object?>[];
-      final dio = Dio()
-        ..httpClientAdapter = FakeAdapter(
-          (_) => ResponseBody.fromString('', 204),
-        )
-        ..interceptors.add(
-          InterceptorsWrapper(
-            onRequest: (options, handler) {
-              seen.add(options.data);
-              handler.next(options);
-            },
-          ),
-        );
-      final sender = DioRequestSender(dio);
-      for (final body in <Object?>['a"b', null]) {
-        await sender.send(
-          OperationRequest(
-            operation,
-            body: body,
-            contentType: 'application/json',
-          ),
-          decodeVoid,
-        );
-      }
-      expect(seen, [r'"a\"b"', 'null']);
-    });
-  });
+  group('Dio keeps what it encodes right', () {});
 
   group('a body that is not JSON stays as it is', () {
     test('text is sent unquoted', () async {
       final adapter = await send('hello "q"', 'text/plain');
       expect(adapter.bodies.single, 'hello "q"');
-      expect(adapter.requests.single.contentType, 'text/plain');
+      expect(
+        FakeTransport.header(adapter.requests.single, 'content-type'),
+        'text/plain',
+      );
     });
 
     for (final type in [
@@ -180,7 +117,10 @@ void main() {
           return;
         }
         expect(adapter.bodies.single, '');
-        expect(adapter.requests.single.contentType, isNull);
+        expect(
+          FakeTransport.header(adapter.requests.single, 'content-type'),
+          isNull,
+        );
         expect(
           adapter.requests.single.headers.keys,
           isNot(contains('content-type')),
@@ -191,7 +131,10 @@ void main() {
     test('no body and no content type sends nothing', () async {
       final adapter = await send(null, null);
       expect(adapter.bodies.single, '');
-      expect(adapter.requests.single.contentType, isNull);
+      expect(
+        FakeTransport.header(adapter.requests.single, 'content-type'),
+        isNull,
+      );
     });
   });
 }

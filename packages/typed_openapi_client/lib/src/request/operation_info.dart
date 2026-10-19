@@ -1,12 +1,10 @@
-import 'package:dio/dio.dart';
-
 import 'security.dart';
 
 /// What a request is: the operation of the spec it calls.
 ///
-/// The request sender puts it into `RequestOptions.extra` under
-/// [extraKey], so interceptors can tell operations apart
-/// (`OperationInfo.of(options)?.operationId`).
+/// Every `TransportRequest` carries it, so a transport can tell operations
+/// apart; the Dio transport puts it into `RequestOptions.extra` under
+/// [extraKey] for interceptors.
 final class OperationInfo {
   /// Describes one operation.
   const OperationInfo({
@@ -39,14 +37,6 @@ final class OperationInfo {
   /// security optional; no alternatives mean no security. The client only
   /// describes them: interceptors add the credentials.
   final List<List<SecurityUse>> security;
-
-  /// The operation of a request, or `null` for a request a generated
-  /// client did not send.
-  static OperationInfo? of(RequestOptions options) =>
-      switch (options.extra[extraKey]) {
-        final OperationInfo info => info,
-        _ => null,
-      };
 
   @override
   String toString() => '$method $pathTemplate ($operationId)';

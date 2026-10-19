@@ -8,6 +8,7 @@ library;
 import 'package:dio/dio.dart';
 import 'package:test/test.dart';
 import 'package:typed_openapi_client/typed_openapi_client.dart';
+import 'package:typed_openapi_dio/typed_openapi_dio.dart';
 
 void main() {
   late Dio dio;
@@ -43,7 +44,7 @@ void main() {
   };
 
   test('the browser drops a Cookie header and sends the others', () async {
-    final result = await DioRequestSender(dio).send(
+    final result = await ClientSender(DioTransport(dio)).send(
       const OperationRequest(
         probe,
         headers: [HeaderParameter('X-Probe', 'sent')],

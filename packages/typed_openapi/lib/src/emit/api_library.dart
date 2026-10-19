@@ -86,7 +86,7 @@ final class ApiLibrary {
   String _root(ClientIr ir, Map<String, String> groupFiles) {
     final root = ir.root;
     final imports = Imports(rootFile(root.name))
-      ..show('package:dio/dio.dart', 'Dio');
+      ..fromRuntime('ClientTransport');
     for (final group in ir.groups) {
       imports.file('$directory/${groupFiles[group.name]}');
     }
@@ -99,7 +99,7 @@ final class ApiLibrary {
       ..line()
       ..prose(
         'The client of the API: a field for each group of operations, and '
-        'the servers of the spec. Set the base URL on your Dio.',
+        'the servers of the spec. The transport sets the base URL.',
       )
       ..block('class ${root.name}', () {
         _constructor(out, ir);
@@ -121,13 +121,13 @@ final class ApiLibrary {
   /// when it fits.
   void _constructor(DartWriter out, ClientIr ir) {
     out.prose(
-      'Creates the client: every group sends through [dio], which it uses '
-      'as it is.',
+      'Creates the client: every group sends through [transport].',
     );
     final initializers = [
-      for (final group in ir.groups) '${group.field} = ${group.name}(dio)',
+      for (final group in ir.groups)
+        '${group.field} = ${group.name}(transport)',
     ];
-    final head = '${ir.root.name}(Dio dio)';
+    final head = '${ir.root.name}(ClientTransport transport)';
     final flat = initializers.isEmpty
         ? '$head;'
         : '$head : ${initializers.join(', ')};';

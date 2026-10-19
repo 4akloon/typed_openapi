@@ -1,6 +1,5 @@
-import 'package:dio/dio.dart';
-
 import '../json/json_decode_exception.dart';
+import '../transport/transport_exception.dart';
 
 /// The outcome of a generated operation: [Success] with the decoded body of
 /// type [T], or a [Failure] whose documented error body has type [E].
@@ -110,12 +109,12 @@ final class DecodeError<T, E> extends Failure<T, E> {
   /// What did not match and where (JSON pointer, expected, actual).
   final JsonDecodeException error;
 
-  /// The HTTP status code; `null` when Dio could not parse the JSON body
-  /// and dropped the response.
+  /// The HTTP status code; `null` only for a decode error made without a
+  /// response.
   final int? statusCode;
 
-  /// The body as the HTTP client returned it; for JSON Dio could not parse,
-  /// the text its parser reported.
+  /// The body: the text of a JSON body that does not parse, else the value
+  /// the decoder was given.
   final Object? rawBody;
 
   /// The response headers, names in lower case.
@@ -126,19 +125,19 @@ final class DecodeError<T, E> extends Failure<T, E> {
 }
 
 /// The request got no response: a timeout, a connection or certificate
-/// problem, or another failure Dio reports.
+/// problem, or another failure the transport reports.
 final class TransportError<T, E> extends Failure<T, E> {
   /// Creates a transport failure.
   const TransportError(this.exception, this.stackTrace);
 
-  /// What Dio reported; `exception.type` tells the kind.
-  final DioException exception;
+  /// What the transport reported; `exception.kind` tells the kind.
+  final TransportException exception;
 
   /// Where [exception] was thrown.
   final StackTrace stackTrace;
 
   @override
-  String toString() => 'TransportError(${exception.type.name})';
+  String toString() => 'TransportError(${exception.kind.name})';
 }
 
 /// The caller cancelled the request; not a failure of the server or the
@@ -147,8 +146,9 @@ final class Cancelled<T, E> extends Failure<T, E> {
   /// Creates a cancellation outcome.
   const Cancelled(this.exception, this.stackTrace);
 
-  /// What Dio reported (`DioExceptionType.cancel`).
-  final DioException exception;
+  /// What the sender or the transport reported
+  /// ([TransportExceptionKind.cancelled]).
+  final TransportException exception;
 
   /// Where [exception] was thrown.
   final StackTrace stackTrace;

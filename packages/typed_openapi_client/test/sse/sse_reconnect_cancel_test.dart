@@ -1,30 +1,23 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:typed_data';
 
-import 'package:dio/dio.dart';
 import 'package:test/test.dart';
 import 'package:typed_openapi_client/typed_openapi_client.dart';
 
-import '../helpers/gated_adapter.dart';
+import '../helpers/fake_transport.dart';
+import '../helpers/gated_transport.dart';
 
 /// An event-stream response with [text] that then closes.
-ResponseBody _stream(String text) => ResponseBody(
-  Stream.value(Uint8List.fromList(utf8.encode(text))),
-  200,
-  headers: {
-    Headers.contentTypeHeader: ['text/event-stream'],
-  },
-);
+TransportResponse _stream(String text) =>
+    FakeTransport.response(text, 200, 'text/event-stream');
 
-/// A token that counts how often a listener is attached to it.
-final class _CountingToken extends CancelToken {
-  int whenCancelCalls = 0;
+/// A signal that counts how often a listener is attached to it.
+final class _CountingSignal extends CancelSignal {
+  int whenCancelledCalls = 0;
 
   @override
-  Future<DioException> get whenCancel {
-    whenCancelCalls++;
-    return super.whenCancel;
+  Future<void> get whenCancelled {
+    whenCancelledCalls++;
+    return super.whenCancelled;
   }
 }
 
@@ -38,27 +31,26 @@ void main() {
       r.undocumented();
 
   Future<Stream<SseItem<String>>> open(
-    GatedAdapter adapter, {
+    GatedTransport adapter, {
     SseOptions? sse,
-    CancelToken? token,
+    CancelSignal? token,
   }) async {
-    final result = await DioRequestSender(Dio()..httpClientAdapter = adapter)
-        .openEvents(
-          watch,
-          (m) => m.data,
-          decodeError,
-          call: CallOptions(
-            sse: sse ?? SseOptions(wait: (_) async {}),
-            cancelToken: token,
-          ),
-          reconnection: .onRequest,
-        );
+    final result = await ClientSender(adapter).openEvents(
+      watch,
+      (m) => m.data,
+      decodeError,
+      call: CallOptions(
+        sse: sse ?? SseOptions(wait: (_) async {}),
+        cancel: token,
+      ),
+      reconnection: .onRequest,
+    );
     return (result as Success<Stream<SseItem<String>>, String>).data;
   }
 
   test('a listener that cancels during a reopen aborts that request', () async {
     final gate = Completer<void>();
-    final adapter = GatedAdapter((options, index) async {
+    final adapter = GatedTransport((options, index) async {
       if (index == 0) return _stream('data: a\n\n');
       await gate.future;
       return _stream('data: b\n\n');
@@ -81,7 +73,7 @@ void main() {
     'a listener that cancels during the default wait stops its timer',
     () async {
       final timers = <Duration, bool>{};
-      final adapter = GatedAdapter(
+      final adapter = GatedTransport(
         (options, index) async => _stream('data: a\n\n'),
       );
       await runZoned(
@@ -117,11 +109,11 @@ void main() {
 
   test('a reconnecting call listens to its cancel token once', () async {
     var next = 0;
-    final adapter = GatedAdapter(
+    final adapter = GatedTransport(
       (options, index) async =>
           next++ < 4 ? _stream('data: a\n\n') : _stream('data: z\n\n'),
     );
-    final token = _CountingToken();
+    final token = _CountingSignal();
     final stream = await open(
       adapter,
       sse: SseOptions(wait: (_) async {}, reconnect: true, maxAttempts: 2),
@@ -131,7 +123,7 @@ void main() {
     await adapter.started(4);
     await subscription.cancel();
     // The reconnector's own listener and the one that links the connections.
-    expect(token.whenCancelCalls, lessThanOrEqualTo(2));
+    expect(token.whenCancelledCalls, lessThanOrEqualTo(2));
   });
 }
 
