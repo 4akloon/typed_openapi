@@ -81,6 +81,12 @@
   switch-breaking, wire, additive, docs). `generate --locked` checks the
   lock instead of updating it and skips a client whose API differs
   (TOA834); a lock that cannot be read is TOA835 (M12).
+- `typed_openapi diff [client...]` reports how the API of each client
+  changed since `typed_openapi.lock`, or between two lock files (`--from`,
+  `--to`), as `text`, `json` or `markdown`; `--fail-on breaking |
+  switch-breaking | wire | any` sets the exit code. A schema renamed in the
+  spec is removed plus added, with the `name:` override that keeps the old
+  Dart name (M12).
 - `ApiLibrary` is exported: the files of a whole client from its IR, as
   `generate` writes them (M11). The programmatic guide now writes a whole
   client with it, and a test checks the files equal those of `generate`.

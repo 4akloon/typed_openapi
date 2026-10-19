@@ -1,10 +1,11 @@
 # Command line
 
-`typed_openapi` has three commands: `check` reads specs and reports problems, `generate` writes the Dart clients, and `baseline` records the problems you accept. All of them read `typed_openapi.yaml` from the working directory, and none of them calls the network.
+`typed_openapi` has four commands: `check` reads specs and reports problems, `generate` writes the Dart clients, `diff` reports how their API changed, and `baseline` records the problems you accept. All of them read `typed_openapi.yaml` from the working directory, and none of them calls the network.
 
 ```sh
 dart run typed_openapi check
 dart run typed_openapi generate
+dart run typed_openapi diff
 dart run typed_openapi baseline create
 ```
 
@@ -22,6 +23,7 @@ Global options:
 Available commands:
   baseline   Accept the current diagnostics, or remove entries that no longer match.
   check      Check specs and report diagnostics without generating code.
+  diff       Report how the API of the clients changed since typed_openapi.lock.
   generate   Check specs and generate the clients without errors.
 ```
 
@@ -122,6 +124,32 @@ The second run writes nothing, because the output is the same. Ownership, locks 
 
 A run of some clients keeps the sections of the others, and drops the section of a client the config no longer declares. `generate --locked` changes no lock: a client whose API differs from its section, or has none, is skipped with TOA834, and so is a section of a client the config no longer declares. A lock that cannot be read, such as one with merge-conflict markers, is TOA835 and the run writes no client: resolve the conflict, or delete the file to start from the current API. This file is not the lock of an output directory (`.<output>.typed_openapi.lock`), which only keeps two runs apart.
 
+## diff
+
+`typed_openapi diff [options] [client...]` compares the API of each client in `typed_openapi.lock` with the API the current spec and config give, and lists every change with its category. It writes nothing: run it before `generate` to see what a spec update does to code that uses the client. A client the lock does not have reports every type as `additive`; a client whose spec cannot be read is named on stderr and the exit code is `1`.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `-c`, `--config` | `typed_openapi.yaml` | Path to the config file. |
+| `--format` | `text` | `text`, `json`, or `markdown` (for a pull request comment). |
+| `--fail-on` | none | Exit `1` when a change of this category or a more serious one is found: `breaking`, `switch-breaking` (also breaking), `wire` (also both breaking kinds), or `any` (every change, `additive` and `docs` included). Without it the command only reports. |
+| `--from` | the lock next to the config | The lock file to compare from, such as the lock of the main branch (`git show main:typed_openapi.lock > base.lock`). |
+| `--to` | the current spec | A second lock file to compare to; with it no config or spec is read. Needs `--from`. |
+
+```text
+$ typed_openapi diff
+shop: 1 breaking, 1 switch-breaking, 0 wire, 1 additive, 0 docs.
+  breaking: Model Pet was removed.
+    Keep the old name with this override:
+      schemas:
+        Animal:
+          name: Pet
+  switch-breaking: Enum value PetStatus.sold was added.
+  additive: Model Animal was added.
+```
+
+A schema renamed in the spec has a new spec location, so it is a new type: `diff` reports the old one as removed and the new one as added, and does not guess that they are the same. When one schema of the same kind was added in the same file, the report gives the override that keeps the old Dart name; otherwise its key is `<NewKey>`. The text and Markdown reports escape control characters from the spec, and the Markdown report also escapes the characters that would mark up the comment.
+
 ## baseline
 
 A baseline is a file of accepted diagnostics for one client. Both subcommands take `-c`/`--config` and client names, and need a `baseline:` path on the client.
@@ -147,7 +175,7 @@ Without a `baseline:` key on any selected client, `baseline create` prints `No c
 | Code | Meaning |
 | --- | --- |
 | `0` | No errors. Warnings and infos do not change it. |
-| `1` | At least one error that a baseline does not accept (also: a client was skipped by `generate`, or a spec could not be read by `baseline`). |
+| `1` | At least one error that a baseline does not accept (also: a client was skipped by `generate`, a spec could not be read by `baseline` or `diff`, or `diff --fail-on` found a change of that category). |
 | `64` | Usage error: unknown client, unknown option, missing subcommand, or no client with a baseline. |
 | `78` | The config file could not be loaded (not found, or not readable as a config at all). |
 
