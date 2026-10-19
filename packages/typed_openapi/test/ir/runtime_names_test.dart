@@ -9,9 +9,9 @@ void main() {
     final barrel = File(
       p.join(
         '..',
-        'typed_openapi_runtime',
+        'typed_openapi_client',
         'lib',
-        'typed_openapi_runtime.dart',
+        'typed_openapi_client.dart',
       ),
     ).readAsStringSync();
     final exported = {

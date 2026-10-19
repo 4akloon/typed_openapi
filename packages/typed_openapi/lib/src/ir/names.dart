@@ -50,7 +50,7 @@ final class DartNames {
 
   /// Type names a generated library sees without importing them: those of
   /// `dart:core`, `Uint8List` of `dart:typed_data`, the names of
-  /// `typed_openapi_runtime` that generated code uses, and `Dio`, the one
+  /// `typed_openapi_client` that generated code uses, and `Dio`, the one
   /// name the API files import from `package:dio` (so its other exports,
   /// such as `Response`, `Options` and `Headers`, stay free for schemas).
   static const takenTypeNames = {
@@ -67,7 +67,7 @@ final class DartNames {
     'String', 'StringBuffer', 'StringSink', 'Symbol', 'Type', 'TypeError',
     'UnimplementedError', 'UnsupportedError', 'Uri', 'WeakReference', 'bool',
     'double', 'int', 'num', 'Uint8List',
-    // typed_openapi_runtime
+    // typed_openapi_client
     'CallOptions', 'Cancelled', 'CookieParameter', 'Date', 'DecodeError',
     'DeepEquality',
     'DioRequestSender', 'Failure', 'FileUpload', 'FormBody', 'FormEncoding',

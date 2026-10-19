@@ -10,7 +10,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:fixture/chat_override_raw/api_client.dart' as overridden;
 import 'package:fixture/chat_raw/api_client.dart';
-import 'package:typed_openapi_runtime/typed_openapi_runtime.dart';
+import 'package:typed_openapi_client/typed_openapi_client.dart';
 
 /// Answers each request with the next of [answers]; the last one repeats.
 final class Adapter implements HttpClientAdapter {

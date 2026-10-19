@@ -7,7 +7,7 @@ import 'package:typed_openapi/src/ir/ir.dart';
 import 'package:typed_openapi/src/ir/ir_builder.dart';
 import 'package:typed_openapi/src/model/operation.dart';
 import 'package:typed_openapi/src/model/path_template.dart';
-import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'
+import 'package:typed_openapi_client/typed_openapi_client.dart'
     show OperationRequest;
 
 import '../helpers/ir_fixture.dart';

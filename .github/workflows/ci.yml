@@ -50,7 +50,7 @@ jobs:
         run: >-
           dart format --output=none --set-exit-if-changed
           packages/typed_openapi
-          packages/typed_openapi_runtime
+          packages/typed_openapi_client
           packages/typed_openapi_tool
 
       - name: Analyze
@@ -61,9 +61,9 @@ jobs:
         run: dart test
         working-directory: packages/typed_openapi
 
-      - name: Test typed_openapi_runtime
+      - name: Test typed_openapi_client
         run: dart test
-        working-directory: packages/typed_openapi_runtime
+        working-directory: packages/typed_openapi_client
 
       # The SARIF tests read the schema from the corpus cache and fail in CI
       # when it is missing.
@@ -95,7 +95,7 @@ jobs:
 
       - name: Test in Chrome
         run: dart test -p chrome --compiler ${{ matrix.compiler }}
-        working-directory: packages/typed_openapi_runtime
+        working-directory: packages/typed_openapi_client
 
   corpus:
     name: Corpus (${{ matrix.sdk }})
@@ -195,6 +195,6 @@ jobs:
         run: dart pub publish --dry-run
         working-directory: packages/typed_openapi
 
-      - name: Dry-run typed_openapi_runtime
+      - name: Dry-run typed_openapi_client
         run: dart pub publish --dry-run
-        working-directory: packages/typed_openapi_runtime
+        working-directory: packages/typed_openapi_client

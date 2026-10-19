@@ -1,6 +1,9 @@
 ## 0.0.1 - Unreleased
 
 ### Output changes
+- Generated files import `package:typed_openapi_client/typed_openapi_client.dart`
+  in place of `package:typed_openapi_runtime/typed_openapi_runtime.dart`: the
+  runtime package is renamed (M11b).
 - A model with an optional constant (a `const` or one-value `enum` the
   schema does not require) remembers which of them the decoded JSON did
   not have, in a private `_absent` list, and `toJson` leaves those out, so

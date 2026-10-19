@@ -26,7 +26,7 @@ void main() {
       final temp = TempDir();
       package = temp.path;
       final runtime = p.normalize(
-        p.absolute(p.join('..', 'typed_openapi_runtime')),
+        p.absolute(p.join('..', 'typed_openapi_client')),
       );
       temp
         ..write('pubspec.yaml', '''
@@ -36,7 +36,7 @@ environment:
   sdk: ">=3.10.0 <4.0.0"
 dependencies:
   dio: ^5.11.1
-  typed_openapi_runtime:
+  typed_openapi_client:
     path: ${runtime.replaceAll(r'\', '/')}
 dev_dependencies:
   lints: ^6.1.0

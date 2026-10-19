@@ -40,7 +40,7 @@ final class CorpusRun {
   /// The directory of the packages, one per mode.
   final String work;
 
-  /// The directory of `typed_openapi_runtime`.
+  /// The directory of `typed_openapi_client`.
   final String runtime;
 
   /// The `union` modes to generate.

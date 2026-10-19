@@ -45,7 +45,7 @@ void main() {
     final log = StringBuffer();
     final report = await FuzzRun(
       work: p.join(temp.path, 'fuzz'),
-      runtime: p.normalize(p.absolute(p.join('..', 'typed_openapi_runtime'))),
+      runtime: p.normalize(p.absolute(p.join('..', 'typed_openapi_client'))),
       log: log,
       sampleEvery: 2,
       fetchesPackages: false,
@@ -78,7 +78,7 @@ void main() {
     final temp = TempDir();
     final report = await FuzzRun(
       work: p.join(temp.path, 'fuzz'),
-      runtime: p.normalize(p.absolute(p.join('..', 'typed_openapi_runtime'))),
+      runtime: p.normalize(p.absolute(p.join('..', 'typed_openapi_client'))),
       log: StringBuffer(),
       fetchesPackages: false,
     ).run(from: 0, count: 0);

@@ -67,8 +67,8 @@ final class LockCommand extends Command<int> {
       )
       ..addOption(
         'runtime',
-        defaultsTo: '../typed_openapi_runtime',
-        help: 'The typed_openapi_runtime package the output depends on.',
+        defaultsTo: '../typed_openapi_client',
+        help: 'The typed_openapi_client package the output depends on.',
       );
   }
 

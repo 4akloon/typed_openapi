@@ -9,7 +9,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:fixture/petstore_raw/api_client.dart';
-import 'package:typed_openapi_runtime/typed_openapi_runtime.dart';
+import 'package:typed_openapi_client/typed_openapi_client.dart';
 
 /// Answers each request with the next response of [answers].
 final class Adapter implements HttpClientAdapter {

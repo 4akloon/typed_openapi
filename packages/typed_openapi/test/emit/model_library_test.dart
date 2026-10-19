@@ -258,7 +258,7 @@ void main() {
         '// GENERATED CODE - DO NOT MODIFY BY HAND.\n'
         '// dart format off\n'
         '\n'
-        "import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'\n"
+        "import 'package:typed_openapi_client/typed_openapi_client.dart'\n"
         '    show DeepEquality, JsonReader, immutable;\n'
         '\n'
         "import 'type_2_fa.dart';\n"
