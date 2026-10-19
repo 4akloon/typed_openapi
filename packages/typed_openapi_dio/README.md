@@ -54,6 +54,9 @@ final api = PetshopClient(DioTransport(dio));
 - A request interceptor sees the body as the bytes the client encoded (a
   `Stream<List<int>>` with its `Content-Type` and `Content-Length`
   headers), not as a map.
+- An interceptor may resolve a response with parsed data (a map or list, a
+  string, bytes or null); the adapter turns it back into bytes (JSON for a
+  map or list) for the core.
 - `CallOptions.extra` is merged into `RequestOptions.extra`.
 
 ## Interceptors and security metadata

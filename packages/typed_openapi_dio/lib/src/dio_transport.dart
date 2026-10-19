@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:typed_openapi_client/typed_openapi_client.dart';
 
 import 'dio_failures.dart';
+import 'dio_responses.dart';
 import 'query_guard.dart';
 
 /// A [ClientTransport] that sends through the user's [Dio], which it uses
@@ -59,8 +60,8 @@ final class DioTransport implements ClientTransport {
       );
     }
     try {
-      return _response(
-        await dio.request<ResponseBody>(
+      return DioResponses.of(
+        await dio.request<Object?>(
           QueryGuard(dio.options.baseUrl).target(request.target),
           data: request.body,
           options: _options(request),
@@ -70,7 +71,7 @@ final class DioTransport implements ClientTransport {
     } on DioException catch (e, stackTrace) {
       if (e.response case final Response<Object?> response?
           when response.data is ResponseBody) {
-        return _response(response);
+        return DioResponses.of(response);
       }
       throw DioFailures.exception(e, stackTrace);
     }
@@ -96,15 +97,6 @@ final class DioTransport implements ClientTransport {
       unawaited(signal.whenCancelled.then((_) => token.cancel(signal.reason)));
     }
     return token;
-  }
-
-  static TransportResponse _response(Response<Object?> response) {
-    final body = response.data as ResponseBody;
-    return TransportResponse(
-      statusCode: response.statusCode ?? body.statusCode,
-      headers: response.headers.map,
-      body: DioFailures.body(body.stream),
-    );
   }
 
   bool get _hasDefaultAdapter =>
