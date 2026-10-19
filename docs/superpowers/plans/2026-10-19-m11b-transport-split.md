@@ -7376,7 +7376,7 @@ rg -n 'DioRequestSender|typed_openapi_runtime|OperationInfo\.of\(|cancelToken' -
 
 Expected: only `docs/roadmap.md` (the M11b row says what was renamed).
 
-- [ ] **Step 3: Final gate** (the whole milestone): generator `+1376 ~1`; client `+305`, Chrome dart2js `+289`, dart2wasm `+289`; adapter `+27`, Chrome dart2js `+37 ~1`, dart2wasm `+37 ~1`; tool `+200`; `dart analyze packages` clean; `dart format` 0 changes in every package; fuzz `200 seeds: 1200 builds, 10907 files, 17 sampled; 0 problems.`; CORPUS_T7
+- [ ] **Step 3: Final gate** (the whole milestone): generator `+1376 ~1`; client `+305`, Chrome dart2js `+289`, dart2wasm `+289`; adapter `+27`, Chrome dart2js `+37 ~1`, dart2wasm `+37 ~1`; tool `+200`; `dart analyze packages` clean; `dart format` 0 changes in every package; fuzz `200 seeds: 1200 builds, 10907 files, 17 sampled; 0 problems.`; `corpus check` (5 min 35 s): `40 clients, 38 generated, 27759 files; 0 differences from the lock.` (the round-trip counts in the lock included), 224 spec defects listed
 - [ ] **Step 4: Commit** `docs: the client core and the Dio adapter`.
 
 ~~~~diff
@@ -9645,7 +9645,7 @@ index 80af6a2..df7dd24 100644
 ## Corpus run
 
 - Task 1: `corpus update` regenerated every client of both modes: 40 clients (38 generated, 2 with expected check errors), 27759 files, about 9.5 minutes; only file hashes changed in `corpus.lock`; diagnostics and round-trip counts equal; round-trip failures 0.
-- Task 4 (part 4c): `corpus update` (7 min 51 s): 40 clients, 38 generated, 27759 files; 652 lines of `corpus.lock` changed, all file hashes (the group and root files of every client in both modes); diagnostics and round-trip counts equal; round-trip failures 0; 222 spec defects reported, as before.
+- Task 4 (part 4c): `corpus update` (7 min 51 s): 40 clients, 38 generated, 27759 files; 652 lines of `corpus.lock` changed, all file hashes (the group and root files of every client in both modes); diagnostics and round-trip counts equal; round-trip failures 0; 222 spec defects reported, as before (the final check lists 224: 4 printed and "220 more"; its counts equal the lock).
 
 ## Fuzz
 
