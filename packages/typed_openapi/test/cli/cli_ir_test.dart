@@ -35,6 +35,7 @@ paths:
           {
             'name': 'PetsApi',
             'field': 'pets',
+            'key': 'Pets',
             'operations': [
               {
                 'name': 'listPets',

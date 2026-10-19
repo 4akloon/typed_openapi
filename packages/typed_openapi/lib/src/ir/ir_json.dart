@@ -33,6 +33,7 @@ final class IrJson {
           {
             'name': group.name,
             'field': group.field,
+            'key': group.key,
             'operations': [
               for (final operation in group.operations)
                 operations.operation(operation),

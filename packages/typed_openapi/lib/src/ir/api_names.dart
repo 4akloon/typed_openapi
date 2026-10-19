@@ -108,6 +108,7 @@ final class ApiNames {
                 name(operation, inlineBodies),
             ],
             field: _root.groupField(word, group, _locationOf(group)),
+            key: word,
           ),
       ],
       root: RootIr(root, servers: _root.servers()),

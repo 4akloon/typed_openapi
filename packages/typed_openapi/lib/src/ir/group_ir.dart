@@ -4,13 +4,21 @@ import 'operation_ir.dart';
 /// (R5.3).
 final class GroupIr {
   /// Creates a group; [operations] are sorted by name.
-  GroupIr(this.name, List<OperationIr> operations, {this.field = 'api'})
-    : operations = List.unmodifiable(
-        operations.toList()..sort((a, b) => a.name.compareTo(b.name)),
-      );
+  GroupIr(
+    this.name,
+    List<OperationIr> operations, {
+    this.field = 'api',
+    this.key = '',
+  }) : operations = List.unmodifiable(
+         operations.toList()..sort((a, b) => a.name.compareTo(b.name)),
+       );
 
   /// The Dart name of the class.
   final String name;
+
+  /// The group's word: the tag or the path segment in UpperCamelCase, `''`
+  /// for the default group; the group's identity in the API snapshot.
+  final String key;
 
   /// The name of the group's field in the root client (`pets` for
   /// `PetsApi`).
