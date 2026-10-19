@@ -74,7 +74,7 @@ final class SseReconnecting<T> extends SseItem<T> {
   final Duration delay;
 
   /// Why the last connection ended: null when the server closed it, else
-  /// the error (usually a `DioException`).
+  /// the error (usually a `TransportException`).
   final Object? cause;
 
   /// Where [cause] was raised.
@@ -86,7 +86,7 @@ final class SseReconnecting<T> extends SseItem<T> {
 }
 
 /// The end of the stream: the server closed it ([cause] is `null`) or the
-/// connection failed ([cause] is the error, usually a `DioException`, also
+/// connection failed ([cause] is the error, usually a `TransportException`, also
 /// for a cancelled request). When the stream reconnects, it comes after
 /// the last attempt, and a reconnection the server answers with another
 /// status ends the stream with that `Failure` as [cause]. Always the last

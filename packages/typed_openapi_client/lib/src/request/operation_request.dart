@@ -72,7 +72,7 @@ final class OperationRequest {
   final String? accept;
 
   /// For an event-stream operation, the documented success statuses whose
-  /// body is the stream; `DioRequestSender.openEvents` opens the stream for
+  /// body is the stream; `ClientSender.openEvents` opens the stream for
   /// these only and decodes any other status like a normal response.
   final Set<int> streamStatuses;
 
