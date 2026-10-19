@@ -200,7 +200,7 @@ is a `TransportError` of kind `other`. Nothing else:
 ## See also
 
 - [JSON decoding](json_decoding.md) - what `DecodeError.error` holds.
-- [Getting started](getting_started.md) - `CallOptions`, `CancelToken`.
+- [Getting started](getting_started.md) - `CallOptions`, `CancelSignal`.
 - [Server-Sent Events](sse.md) - the result of `openEvents` and its stream.
 - How the generator shapes `T` and `E`:
   [responses and errors](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi/doc/generated/responses_and_errors.md).

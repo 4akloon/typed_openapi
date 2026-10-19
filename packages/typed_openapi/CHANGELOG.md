@@ -10,7 +10,7 @@
   `ApiClient(DioTransport(dio))` with `package:typed_openapi_dio`. Schemas
   named `Dio` keep their name; `ClientSender`, `ClientTransport`,
   `CancelSignal` and the other transport types of the client are taken
-  (TOA551). TOA566 names the transport's base URL (M11b).
+  (TOA550). TOA566 names the transport's base URL (M11b).
 - A model with an optional constant (a `const` or one-value `enum` the
   schema does not require) remembers which of them the decoded JSON did
   not have, in a private `_absent` list, and `toJson` leaves those out, so

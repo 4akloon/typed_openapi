@@ -5,6 +5,10 @@ import 'dart:async';
 ///
 /// One signal may serve several calls; a cancelled signal stays cancelled,
 /// so a call made with it afterwards is cancelled before it is sent.
+///
+/// A signal is meant for one call or one scope (a screen, a group of
+/// requests). Every call that listens adds a listener that lives as long as
+/// the signal, so do not reuse one signal for an unbounded number of calls.
 base class CancelSignal {
   /// Creates a signal that is not cancelled.
   CancelSignal();

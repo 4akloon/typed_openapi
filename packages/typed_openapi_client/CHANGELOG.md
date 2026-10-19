@@ -1,6 +1,20 @@
 ## 0.0.1 - Unreleased
 
 ### Added
+- M11b: the package is renamed from `typed_openapi_runtime` and is Dio-free
+  (it depends on `meta` only). `ClientTransport` is the contract a
+  transport implements, with `TransportRequest` and `TransportResponse`
+  (lower-case header names, a body stream read once); `ClientSender`
+  replaces `DioRequestSender`; `CancelSignal` replaces Dio's `CancelToken`
+  in `CallOptions.cancel`; `TransportException` has the kinds `timeout`,
+  `connection`, `cancelled` and `other`, and `TransportError` and
+  `Cancelled` carry one. The Dio adapter is the new `typed_openapi_dio`.
+- Request body encoding (JSON, form, multipart, text, bytes) and the send
+  and receive progress counting moved from the Dio adapter into the core
+  (`BodyEncoder`, `MultipartEncoder`, `ProgressCounter`), so a request is
+  the same on the wire through any transport. A multipart file part with no
+  media type is sent as `application/octet-stream` (Dio guessed one from
+  the file name).
 - `JsonReader.constant` returns whether the constant was there, so a
   generated model can leave out of `toJson` an optional constant the JSON
   did not have (M11).
@@ -12,9 +26,9 @@
   `DecodeError`, `TransportError` and `Cancelled`.
 - Encoders for OpenAPI path, query, header and cookie parameter styles.
 - `OperationInfo`, `OperationRequest` and `RawResponse`.
-- `DioRequestSender` and `CallOptions`: requests through the user's Dio.
+- `ClientSender` and `CallOptions`: requests through a `ClientTransport`.
 - `SseDecoder` (WHATWG event stream format), `SseItemDecoder` and the
-  `SseItem` stream items; `DioRequestSender.openEvents`.
+  `SseItem` stream items; `ClientSender.openEvents`.
 - For generated models: `DeepEquality` (deep `==` and `hashCode` of lists,
   maps and patches), `JsonReader.constant`, `JsonReader.additional`,
   `JsonReader.asBytes`, and `immutable` re-exported from `package:meta`.
@@ -26,8 +40,8 @@
   parts are sent in order, so a text part after a file or a typed part has
   `Content-Type: text/plain; charset=utf-8`, while one before them has no
   `Content-Type`; a value that cannot be a part is `ArgumentError`);
-  `DioRequestSender` turns them into
-  what Dio sends, so generated signatures have no Dio types.
+  `BodyEncoder` turns them into
+  bytes, so generated signatures have no transport types.
 - Security metadata for interceptors: `OperationInfo.security` with
   `SecurityUse`, `SecurityScheme`, `SecuritySchemeType` (with `unknown` for
   a scheme the spec names but does not define) and `SecurityLocation`.
@@ -46,8 +60,9 @@
   a row that bring no message (an event, one that does not decode, or one
   the program drops; comments, or blocks with only an `id:` or a `retry:`,
   are not messages). A 204, an error status and a cancel end the stream, a
-  `TransportError` is the next attempt; the stream forwards an error that a
-  throwing `wait` or the adapter raises, and carries a pause to the new
+  `TransportException` of any kind except cancelled is the next attempt;
+  the stream forwards an error that a throwing `wait` or the transport
+  raises, and carries a pause to the new
   connection. A listener that cancels aborts a request in flight and stops
   the wait.
 - `SseEventIgnored`, which a generated decoder throws for an event the
@@ -67,6 +82,9 @@
   stream reconnects without `Last-Event-ID`.
 
 ### Changed
+- `DecodeError` for invalid JSON carries the status and the body text.
+- `OperationInfo.of` moved to `DioTransport.operationOf` in
+  `typed_openapi_dio`; `OperationInfo` is in every `TransportRequest`.
 - The hint of the `date` and `date-time` decode errors no longer names an
   internal requirement id; the `SseOptions.wait` doc comment describes the
   cancellable timer it uses by default.
