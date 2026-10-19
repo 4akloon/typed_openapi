@@ -183,7 +183,7 @@ switch (await client.pets.getPet(petId: 1)) {
 - Клієнт не змінює твій Dio: base URL задаєш ти, з констант серверів
   кореневого класу (`PetstoreClient.server`, або метод на кшталт
   `PetstoreClient.server1(region: 'eu')` для URL зі змінними). Коли query
-  містить `//` (значення з `allowReserved`), а base URL абсолютний, runtime
+  містить `//` (значення з `allowReserved`), а base URL абсолютний, `DioTransport`
   з'єднує їх сам, бо Dio схлопнув би `//`; відносний base URL лишається Dio,
   який `//` схлопує.
 - Кожен запит несе `OperationInfo` у `RequestOptions.extra`

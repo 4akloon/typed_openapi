@@ -1127,7 +1127,7 @@ server from Chrome, `cookie_server.dart`, started by `spawnHybridUri`; its
 
 ## Transport conformance (`packages/typed_openapi_transport_tests/`)
 
-`publish_to: none`. `TransportConformance(create, {skips}).register()`
+`publish_to: none`. `TransportConformance(create, {createWithTimeout, skips}).register()`
 declares the cases every `ClientTransport` must pass, against
 `ConformanceServer`, a loopback HTTP server that `server_main.dart`'s
 `hybridMain` starts in a hybrid isolate (so a browser test can use it; its

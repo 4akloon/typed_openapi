@@ -303,7 +303,7 @@ await api.pets.watchPet(
 On the web, Dio's default browser adapter delivers a body only when the
 connection closes, so a stream cannot work with it. `openEvents` then returns
 a `TransportError` whose `exception.message` is
-`DioTransport.webStreamingMessage` and `exception.error` is an
+`DioTransport.webStreamingMessage` and `exception.cause` is an
 `UnsupportedError`, before any request is sent. Set a fetch-based adapter on
 your `Dio`, such as `ConversionLayerAdapter` from `dio_compatibility_layer`
 with `package:http`'s `BrowserClient`, or `fetch_client`. A reconnection

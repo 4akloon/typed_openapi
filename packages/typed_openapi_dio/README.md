@@ -87,6 +87,8 @@ A call is cancelled through the client's `CancelSignal`, which the
 transport turns into a Dio `CancelToken`:
 
 ```dart
+import 'package:typed_openapi_client/typed_openapi_client.dart';
+
 final cancel = CancelSignal();
 final pending = api.pets.getPet(petId: 7, call: CallOptions(cancel: cancel));
 cancel.cancel('user left the page');

@@ -1,6 +1,6 @@
 # The generated client
 
-`typed_openapi generate` writes one Dart package-ready directory per client: models, one API class per group of operations, two barrel files and a root class. The code depends on `package:dio` and [`typed_openapi_client`](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/README.md) only, needs no `build_runner` step and is clean under `dart analyze --fatal-infos`.
+`typed_openapi generate` writes one Dart package-ready directory per client: models, one API class per group of operations, two barrel files and a root class. The code depends only on [`typed_openapi_client`](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/README.md); the app supplies a transport (see [`typed_openapi_dio`](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_dio/README.md)). It needs no `build_runner` step and is clean under `dart analyze --fatal-infos`.
 
 ## Layout
 
