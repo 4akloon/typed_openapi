@@ -1,0 +1,15 @@
+name: typed_openapi_transport_tests
+description: >
+  The conformance suite of typed_openapi transports: one set of cases that
+  any ClientTransport runs against a loopback HTTP server.
+publish_to: none
+
+environment:
+  sdk: ">=3.10.0 <4.0.0"
+
+dependencies:
+  stream_channel: ^2.1.2
+  test: ^1.24.0
+  typed_openapi_client: ^0.0.1
+
+resolution: workspace
