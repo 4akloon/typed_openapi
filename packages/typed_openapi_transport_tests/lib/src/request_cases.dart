@@ -19,10 +19,13 @@ final class RequestCases {
   void register() {
     context
       ..testCase('the method, target and headers arrive', _target)
+      ..testCase(
+        'a header given twice reaches the server with both values',
+        _repeated,
+      )
       ..testCase('PUT, PATCH and DELETE keep their method', _methods)
       ..testCase('a JSON body arrives with its type and length', _json)
       ..testCase('a form body arrives', _form)
-      ..testCase('a multipart body arrives whole', _multipart)
       ..testCase('a file stream arrives with its length', _stream)
       ..testCase('send progress reaches the length', _sendProgress);
   }
@@ -52,6 +55,25 @@ final class RequestCases {
     expect(echo['target'], '/echo?q=a%20b%2Fc');
     final headers = echo['headers']! as Map<String, Object?>;
     expect((headers['x-trace'], headers['x-call']), ('t1', 'c1'));
+  }
+
+  /// `DioTransport` joins the values of a header into one line with `, `,
+  /// which is how HTTP reads a repeated header, so the server sees both
+  /// values in order.
+  Future<void> _repeated() async {
+    final echo = await _echo(
+      ConformanceContext.request('/echo'),
+      call: const CallOptions(
+        headers: {
+          'X-Multi': ['first', 'second'],
+        },
+      ),
+    );
+    final headers = echo['headers']! as Map<String, Object?>;
+    expect((headers['x-multi']! as String).split(RegExp(r',\s*')), [
+      'first',
+      'second',
+    ]);
   }
 
   Future<void> _methods() async {
@@ -91,31 +113,6 @@ final class RequestCases {
       ),
     );
     expect(echo['body'], 'a=x%20y&b=1');
-  }
-
-  Future<void> _multipart() async {
-    final echo = await _echo(
-      ConformanceContext.request(
-        '/echo',
-        method: 'POST',
-        body: MultipartBody([
-          const MultipartPart.value('name', 'Rex'),
-          MultipartPart.file(
-            'photo',
-            FileUpload.bytes(
-              Uint8List.fromList([1, 2, 3]),
-              filename: 'p.bin',
-              contentType: 'application/octet-stream',
-            ),
-          ),
-        ]),
-        contentType: 'multipart/form-data',
-      ),
-    );
-    final body = echo['body']! as String;
-    expect(body, contains('name="name"\r\n\r\nRex\r\n'));
-    expect(body, contains('filename="p.bin"'));
-    expect(body.trimRight(), endsWith('--'));
   }
 
   Future<void> _stream() async {

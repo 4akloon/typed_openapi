@@ -2,10 +2,14 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'server_stats.dart';
+import 'stream_routes.dart';
+
 /// The loopback HTTP server the conformance cases call: it echoes requests,
-/// answers with a status, bytes or a large body, holds a request back, and
-/// streams server-sent events. It runs on the VM, in the test's own process
-/// or, for a browser test, in a hybrid isolate (`server_main.dart`).
+/// answers with a status, a redirect, bytes or a large body, holds a request
+/// back, drops a connection, counts what it saw (`/stats`) and streams
+/// server-sent events. It runs on the VM, in the test's own process or, for a
+/// browser test, in a hybrid isolate (`server_main.dart`).
 final class ConformanceServer {
   ConformanceServer._(this._server, this.closedPort);
 
@@ -19,9 +23,16 @@ final class ConformanceServer {
   }
 
   final HttpServer _server;
+  final ServerStats _stats = ServerStats();
+
+  late final StreamRoutes _streams = StreamRoutes(_stats);
 
   /// A port nothing listens on, for the connection-refused case.
   final int closedPort;
+
+  /// How many requests the server has seen, except `/stats` and the
+  /// preflight `OPTIONS` of a browser.
+  int get requestCount => _stats.requestCount;
 
   /// The port the server listens on.
   int get port => _server.port;
@@ -40,12 +51,24 @@ final class ConformanceServer {
       ..set('access-control-expose-headers', '*');
     if (request.method == 'OPTIONS') return response.close();
     final segments = request.uri.pathSegments;
+    if (segments.firstOrNull != 'stats') _stats.request(request.uri.path);
     switch (segments) {
+      case ['stats']:
+        _json(response, _stats.toJson());
+        await response.close();
       case ['echo', ...]:
         await _echo(request);
       case ['status', final code]:
         response.statusCode = int.parse(code);
         _json(response, {'code': 'status $code'});
+        await response.close();
+      case ['empty', final code]:
+        response.statusCode = int.parse(code);
+        await response.close();
+      case ['redirect', final code]:
+        response
+          ..statusCode = int.parse(code)
+          ..headers.set('location', '/echo/redirected');
         await response.close();
       case ['bytes']:
         response.headers.contentType = ContentType.binary;
@@ -58,11 +81,16 @@ final class ConformanceServer {
           ..contentLength = body.length;
         response.add(body);
         await response.close();
-      case ['slow']:
-        await Future<void>.delayed(const Duration(seconds: 5));
-        await response.close();
-      case ['events']:
-        await _events(request);
+      case ['large-stream']:
+        await _streams.largeStream(request);
+      case ['trickle']:
+        await _streams.trickle(request);
+      case ['slow', ...]:
+        await _streams.slow(request);
+      case ['close']:
+        await _streams.closeSocket(request);
+      case ['events', ...final rest]:
+        await _streams.events(request, rest.firstOrNull);
       default:
         response.statusCode = 404;
         await response.close();
@@ -82,24 +110,6 @@ final class ConformanceServer {
       'length': body.length,
     });
     await request.response.close();
-  }
-
-  /// Without `Last-Event-ID`: an event with id `1`, then the connection
-  /// closes. With it: one event that names the id, then the connection
-  /// stays open until the client leaves.
-  static Future<void> _events(HttpRequest request) async {
-    final response = request.response
-      // Unbuffered, so each event leaves when it is written.
-      ..bufferOutput = false
-      ..headers.contentType = ContentType('text', 'event-stream');
-    final lastId = request.headers.value('last-event-id');
-    if (lastId == null) {
-      response.write('id: 1\ndata: one\n\n');
-      await response.close();
-      return;
-    }
-    response.write('data: after $lastId\n\n');
-    await response.flush();
   }
 
   static void _json(HttpResponse response, Object? body) {
