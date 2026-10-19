@@ -68,7 +68,8 @@ final class DartNames {
     'UnimplementedError', 'UnsupportedError', 'Uri', 'WeakReference', 'bool',
     'double', 'int', 'num', 'Uint8List',
     // typed_openapi_client
-    'CallOptions', 'Cancelled', 'CookieParameter', 'Date', 'DecodeError',
+    'CallOptions', 'CancelSignal', 'Cancelled', 'ClientSender',
+    'ClientTransport', 'CookieParameter', 'Date', 'DecodeError',
     'DeepEquality',
     'DioRequestSender', 'Failure', 'FileUpload', 'FormBody', 'FormEncoding',
     'HeaderParameter', 'HttpError',
@@ -81,7 +82,9 @@ final class DartNames {
     'SseDisconnected', 'SseEvent', 'SseEventIgnored', 'SseItem',
     'SseItemDecoder', 'SseMessage', 'SseOptions', 'SseReconnecting',
     'SseReconnection', 'SseReconnector', 'SseResume',
-    'Success', 'TransportError', 'UndocumentedStatus',
+    'Success', 'TransportError', 'TransportException',
+    'TransportExceptionKind', 'TransportRequest', 'TransportResponse',
+    'UndocumentedStatus',
     // package:dio, which the API files import with `show Dio` only.
     'Dio',
   };
