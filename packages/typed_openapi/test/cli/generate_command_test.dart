@@ -82,7 +82,7 @@ void main() {
       out,
       endsWith(
         'Generated pets in gen/pets: 6 files, 6 written, '
-        '0 deleted.\n',
+        '0 deleted.\nAPI of pets: first snapshot in typed_openapi.lock.\n',
       ),
     );
     final first = tree('gen/pets');

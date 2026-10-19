@@ -219,6 +219,8 @@ Applying fixes and overrides, baselines, and writing the output.
 | TOA831 | `output-not-written` | error (fixed) | `generate` cannot write a client's output directory, or another run holds its lock (`.<output>.typed_openapi.lock` next to the output; a lock of a process that is gone is taken over, and `--break-lock` takes over one whose owner cannot be told). | Check whether another generate runs on this output. |
 | TOA832 | `output-recovered` | info (fixed) | An earlier `generate` was killed while it replaced the output directory and left the previous tree or a half-built one in sibling directories named `.<output>.typed_openapi-*`. The run put the previous output back, when the output was missing, and removed the leftovers. Also reported when a run takes over the lock of a process that is gone, or breaks a lock whose owner cannot be told with `--break-lock`. | See the message of the diagnostic. |
 | TOA833 | `output-file-replaced` | info (fixed) | `generate --force` overwrote or deleted a file that it did not write or that changed since it wrote it; one report for each file. | See the message of the diagnostic. |
+| TOA834 | `api-lock-differs` | error (fixed) | `generate --locked` found that a client's API differs from its snapshot in `typed_openapi.lock`, or that the lock has no snapshot of it, or one of a client the config no longer declares. The client is not written and the lock is not changed. | Run `generate` without `--locked` and commit the lock; `typed_openapi diff` lists the changes. |
+| TOA835 | `api-lock-unusable` | error (fixed) | `typed_openapi.lock` cannot be read, is not a lock of version 1, or cannot be written. A run that cannot read it writes no client. | Resolve a merge conflict in the file, or delete it to start from the current API. |
 
 ## Config (TOA9xx)
 
@@ -239,7 +241,7 @@ Reading `typed_openapi.yaml`.
 | Mapping to Dart | the other TOA2xx-TOA6xx | the IR builder while it names and types the client |
 | Overrides | TOA560, TOA800-TOA809 | the overrides file, see [Overrides](overrides.md) |
 | Baseline | TOA820-TOA823 | see [Baseline](baseline.md) |
-| Generate | TOA830-TOA833 | see [Generated output](generate_output.md) |
+| Generate | TOA830-TOA835 | see [Generated output](generate_output.md) and [the API lock](cli.md#the-api-lock) |
 | Config | TOA901-TOA904 | see [Configuration](configuration.md) |
 
 ## See also

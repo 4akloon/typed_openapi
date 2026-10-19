@@ -9,6 +9,8 @@ import '../diagnostics/display_paths.dart';
 import '../diagnostics/reporters.dart';
 import '../generate/output_writer.dart';
 import '../generate/real_paths.dart';
+import '../snapshot/api_lock.dart';
+import 'api_lock_run.dart';
 import 'check_command.dart';
 import 'client_writer.dart';
 
@@ -21,9 +23,12 @@ import 'client_writer.dart';
 /// generator may not replace (TOA830): a directory that holds a package, a
 /// file the config makes any client read, or a file the generator did not
 /// write or that changed since it did (`--force` replaces those and lists
-/// each, never the others; `--break-lock` only takes over a lock). The report
-/// and a line per client go to stdout, and the exit code is the one `check`
-/// gives.
+/// each, never the others; `--break-lock` only takes over a lock). The API
+/// snapshot of each client written goes into `typed_openapi.lock` next to
+/// the config, with a line that counts its changes per category; `--locked`
+/// checks the lock instead and skips a client whose API differs (M12). The
+/// report and the lines per client go to stdout, and the exit code is the
+/// one `check` gives.
 final class GenerateCommand extends Command<int> {
   /// Creates the command; reports go to [_out], and files are named as
   /// [_paths] does.
@@ -48,6 +53,14 @@ final class GenerateCommand extends Command<int> {
         help:
             'Take over the lock of an output when it cannot be told whether '
             'the run that holds it is still going. Replaces no file.',
+      )
+      ..addFlag(
+        'locked',
+        negatable: false,
+        help:
+            'Check each client against its API snapshot in '
+            'typed_openapi.lock instead of updating it; a client whose API '
+            'differs is not written (for CI).',
       );
   }
 
@@ -67,30 +80,12 @@ final class GenerateCommand extends Command<int> {
 
   @override
   Future<int> run() async {
-    final results = argResults!;
     final diagnostics = DiagnosticBag();
-    final configPath = results.option('config')!;
+    final configPath = argResults!.option('config')!;
     final config = ConfigLoader(diagnostics, _paths).load(configPath);
-    final lines = <String>[];
-    if (config != null) {
-      final only = results.rest.toSet();
-      final unknown = only.difference(config.declaredClients);
-      if (unknown.isNotEmpty) {
-        usageException(
-          'Unknown client: ${(unknown.toList()..sort()).join(', ')}.',
-        );
-      }
-      final checks = SpecChecker(diagnostics, _paths).check(config, only: only);
-      final writer = ClientWriter(
-        OutputWriter(diagnostics, _paths),
-        _paths,
-        protected: _protected(configPath, config, checks),
-        overlapping: _overlapping(config.clients),
-        force: results.flag('force'),
-        breakLock: results.flag('break-lock'),
-      );
-      lines.addAll(checks.map(writer.write));
-    }
+    final lines = config == null
+        ? const <String>[]
+        : _generate(config, configPath, diagnostics);
     _out.writeln(const TextReporter().format(diagnostics));
     lines.forEach(_out.writeln);
     if (config == null) return ExitCode.config.code;
@@ -99,15 +94,56 @@ final class GenerateCommand extends Command<int> {
         : ExitCode.success.code;
   }
 
-  /// Every file any client of [config] reads, also one that is not run, by
-  /// absolute path: an output directory must not hold one, or the run would
-  /// delete it.
+  /// Checks and writes the clients of [config] and updates (or, with
+  /// `--locked`, checks) the API lock; returns a line per client.
+  List<String> _generate(
+    ProjectConfig config,
+    String configPath,
+    DiagnosticBag diagnostics,
+  ) {
+    final results = argResults!;
+    final only = results.rest.toSet();
+    final unknown = only.difference(config.declaredClients);
+    if (unknown.isNotEmpty) {
+      usageException(
+        'Unknown client: ${(unknown.toList()..sort()).join(', ')}.',
+      );
+    }
+    final checks = SpecChecker(diagnostics, _paths).check(config, only: only);
+    final lock = ApiLockRun.open(
+      diagnostics,
+      _paths,
+      configPath,
+      isLocked: results.flag('locked'),
+    );
+    if (lock == null) {
+      return ['Skipped every client: ${ApiLock.fileName} cannot be used.'];
+    }
+    final writer = ClientWriter(
+      OutputWriter(diagnostics, _paths),
+      _paths,
+      lock,
+      protected: _protected(configPath, config, checks, lock.path),
+      overlapping: _overlapping(config.clients),
+      force: results.flag('force'),
+      breakLock: results.flag('break-lock'),
+    );
+    final lines = checks.map(writer.write).toList();
+    lock.finish(config.declaredClients);
+    return lines;
+  }
+
+  /// Every file any client of [config] reads, also one that is not run,
+  /// and the API lock at [lockPath], by absolute path: an output directory
+  /// must not hold one, or the run would delete it.
   List<String> _protected(
     String configPath,
     ProjectConfig config,
     List<ClientCheck> checks,
+    String lockPath,
   ) => {
     _paths.absolute(configPath),
+    lockPath,
     for (final client in config.clients) ...[
       client.input,
       ?client.overrides,

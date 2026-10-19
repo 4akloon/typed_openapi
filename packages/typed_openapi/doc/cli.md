@@ -95,15 +95,32 @@ dart run typed_openapi check --format json | jq '.summary'
 | `-c`, `--config` | `typed_openapi.yaml` | Path to the config file. |
 | `--force` | off | Replace files in an output directory that `typed_openapi` did not write or that changed since it wrote them. Each is reported as TOA833. |
 | `--break-lock` | off | Take over a lock when it cannot be told whether the run that holds it still goes. Replaces no file. |
+| `--locked` | off | Check each client against its API snapshot in `typed_openapi.lock` instead of updating the file. A client whose API differs is not written (TOA834). For CI. |
 
 ```text
 $ typed_openapi generate
 Generated shop in lib/src/api/shop: 7 files, 7 written, 0 deleted.
+API of shop: first snapshot in typed_openapi.lock.
 $ typed_openapi generate
 Generated shop in lib/src/api/shop: 7 files, 0 written, 0 deleted.
+API of shop since typed_openapi.lock: 0 breaking, 0 switch-breaking, 0 wire, 0 additive, 0 docs.
 ```
 
 The second run writes nothing, because the output is the same. Ownership, locks and `--force` are explained in [Generated output](generate_output.md).
+
+### The API lock
+
+`generate` keeps the public API of every client it writes in `typed_openapi.lock`, next to `typed_openapi.yaml`: one section per client, with every type, field, enum value, variant, method and argument under a stable identity (the spec location of a schema, the `operationId` or `METHOD /path` of an operation). Commit the file, also when the generated code is git-ignored, as you would `pubspec.lock`. Each run prints, for each client written, how many changes since the lock fall in each category:
+
+| Category | Meaning |
+| --- | --- |
+| `breaking` | Code that uses the client may no longer compile: a type, member or method was removed or renamed, a type changed, or something became required. |
+| `switch-breaking` | A new enum value, union variant, status variant or event appeared; only an exhaustive `switch` over a sealed type breaks. With `exhaustive: false` this is `additive`. |
+| `wire` | The Dart API is the same, but a JSON key, a path, a parameter style, a media type or the statuses changed. |
+| `additive` | A new type, method, or optional field or argument. |
+| `docs` | Only doc comments or `@Deprecated` changed. |
+
+A run of some clients keeps the sections of the others, and drops the section of a client the config no longer declares. `generate --locked` changes no lock: a client whose API differs from its section, or has none, is skipped with TOA834, and so is a section of a client the config no longer declares. A lock that cannot be read, such as one with merge-conflict markers, is TOA835 and the run writes no client: resolve the conflict, or delete the file to start from the current API. This file is not the lock of an output directory (`.<output>.typed_openapi.lock`), which only keeps two runs apart.
 
 ## baseline
 

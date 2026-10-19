@@ -75,6 +75,12 @@
   `abstract interface` in place of `sealed`, so a new value is not a
   breaking change for a `switch` with a default case. The default `true`
   changes nothing; an override `exhaustive` on a schema wins.
+- `generate` keeps the API snapshot of every client it writes in
+  `typed_openapi.lock` next to the config and prints, for each client, the
+  count of its changes since the lock per category (breaking,
+  switch-breaking, wire, additive, docs). `generate --locked` checks the
+  lock instead of updating it and skips a client whose API differs
+  (TOA834); a lock that cannot be read is TOA835 (M12).
 - `ApiLibrary` is exported: the files of a whole client from its IR, as
   `generate` writes them (M11). The programmatic guide now writes a whole
   client with it, and a test checks the files equal those of `generate`.
