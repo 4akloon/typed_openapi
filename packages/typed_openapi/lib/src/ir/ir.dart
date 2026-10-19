@@ -1,11 +1,12 @@
 import '../model/spec_node.dart';
 import 'api_ir.dart';
 import 'dart_type.dart';
-import 'operation_ir.dart';
+import 'group_ir.dart';
 
 export 'api_ir.dart';
 export 'body_kind.dart';
 export 'errors_ir.dart';
+export 'group_ir.dart';
 export 'operation_ir.dart';
 export 'parameter_ir.dart';
 export 'request_body_ir.dart';
@@ -473,24 +474,4 @@ final class UnionVariantIr {
   /// Whether the value of the variant is a secret: `toString` of its class
   /// does not print it (see [FieldIr.sensitive]).
   final bool sensitive;
-}
-
-/// An API class: the operations of a tag, a path segment or the whole spec
-/// (R5.3).
-final class GroupIr {
-  /// Creates a group; [operations] are sorted by name.
-  GroupIr(this.name, List<OperationIr> operations, {this.field = 'api'})
-    : operations = List.unmodifiable(
-        operations.toList()..sort((a, b) => a.name.compareTo(b.name)),
-      );
-
-  /// The Dart name of the class.
-  final String name;
-
-  /// The name of the group's field in the root client (`pets` for
-  /// `PetsApi`).
-  final String field;
-
-  /// The operations, by method name.
-  final List<OperationIr> operations;
 }

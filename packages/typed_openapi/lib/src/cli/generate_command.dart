@@ -1,8 +1,4 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:args/command_runner.dart';
-import 'package:crypto/crypto.dart';
 import 'package:io/io.dart' show ExitCode;
 
 import '../check/spec_checker.dart';
@@ -11,11 +7,10 @@ import '../config/project_config.dart';
 import '../diagnostics/diagnostic_bag.dart';
 import '../diagnostics/display_paths.dart';
 import '../diagnostics/reporters.dart';
-import '../emit/api_library.dart';
 import '../generate/output_writer.dart';
 import '../generate/real_paths.dart';
-import '../ir/ir.dart';
 import 'check_command.dart';
+import 'client_writer.dart';
 
 /// `typed_openapi generate`: checks every client as `check` does and
 /// writes each client without errors into its output directory: the
@@ -86,56 +81,15 @@ final class GenerateCommand extends Command<int> {
         );
       }
       final checks = SpecChecker(diagnostics, _paths).check(config, only: only);
-      final writer = OutputWriter(diagnostics, _paths);
-      final overlapping = _overlapping(config.clients);
-      // Every file any client of the config reads, also one that is not run:
-      // an output directory must not hold one, or the run would delete it.
-      final protected = {
-        _paths.absolute(configPath),
-        for (final client in config.clients) ...[
-          client.input,
-          ?client.overrides,
-          ?client.baseline,
-        ],
-        for (final check in checks) ...check.sources,
-      }.toList()..sort();
-      for (final check in checks) {
-        final client = check.client;
-        final ir = check.ir;
-        if (ir == null || check.errors > 0) {
-          lines.add(
-            'Skipped ${client.name}: its check reports errors; fix them and '
-            'run generate again.',
-          );
-          continue;
-        }
-        if (overlapping.contains(client.name)) {
-          lines.add(
-            'Skipped ${client.name}: its output overlaps the output of '
-            'another client (TOA904).',
-          );
-          continue;
-        }
-        final files = _files(client, ir);
-        final changes = writer.write(
-          client,
-          files,
-          inputs: inputsOf(check),
-          protected: protected,
-          force: results.flag('force'),
-          breakLock: results.flag('break-lock'),
-        );
-        lines.add(
-          changes == null
-              ? 'Skipped ${client.name}: see the error above.'
-              : 'Generated ${client.name} in ${_paths.of(client.output)}: '
-                    '${files.length} files, ${changes.written} written, '
-                    '${changes.deleted} deleted.'
-                    '${changes.forced == 0 ? '' : ' --force replaced '
-                              '${changes.forced} foreign or modified '
-                              '${changes.forced == 1 ? 'file' : 'files'}.'}',
-        );
-      }
+      final writer = ClientWriter(
+        OutputWriter(diagnostics, _paths),
+        _paths,
+        protected: _protected(configPath, config, checks),
+        overlapping: _overlapping(config.clients),
+        force: results.flag('force'),
+        breakLock: results.flag('break-lock'),
+      );
+      lines.addAll(checks.map(writer.write));
     }
     _out.writeln(const TextReporter().format(diagnostics));
     lines.forEach(_out.writeln);
@@ -145,9 +99,22 @@ final class GenerateCommand extends Command<int> {
         : ExitCode.success.code;
   }
 
-  /// The files of the whole client [client] with the IR [ir].
-  static Map<String, String> _files(ClientConfig client, ClientIr ir) =>
-      ApiLibrary(width: client.lineWidth).files(ir, client: client.name);
+  /// Every file any client of [config] reads, also one that is not run, by
+  /// absolute path: an output directory must not hold one, or the run would
+  /// delete it.
+  List<String> _protected(
+    String configPath,
+    ProjectConfig config,
+    List<ClientCheck> checks,
+  ) => {
+    _paths.absolute(configPath),
+    for (final client in config.clients) ...[
+      client.input,
+      ?client.overrides,
+      ?client.baseline,
+    ],
+    for (final check in checks) ...check.sources,
+  }.toList()..sort();
 
   /// The names of the clients whose output directory is, or is inside, that
   /// of another client, also through symbolic links or a different case.
@@ -159,34 +126,4 @@ final class GenerateCommand extends Command<int> {
           clients[j].name,
         ],
   };
-
-  /// The hash of what the code of [check]'s client is generated from: the
-  /// content of every file the run read, the client's settings that change
-  /// the code, and the generator. The same inputs give the same hash on
-  /// any machine: paths are not part of it.
-  static String inputsOf(ClientCheck check) {
-    final client = check.client;
-    String hashOf(String path) {
-      try {
-        return sha256.convert(File(path).readAsBytesSync()).toString();
-      } on FileSystemException {
-        return 'unreadable';
-      }
-    }
-
-    return sha256
-        .convert(
-          utf8.encode(
-            jsonEncode({
-              'generator': OutputWriter.generator,
-              'files': [for (final path in check.sources) hashOf(path)],
-              'generation': client.generation.key,
-              'line_width': client.lineWidth,
-              'preset': client.preset?.name,
-              'rules': client.disabledRules.toList()..sort(),
-            }),
-          ),
-        )
-        .toString();
-  }
 }

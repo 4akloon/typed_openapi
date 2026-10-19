@@ -2,13 +2,14 @@ import '../config/project_config.dart';
 import '../diagnostics/diagnostic_bag.dart';
 import '../diagnostics/json_pointer.dart';
 import '../model/operation.dart';
-import '../model/path_template.dart';
 import '../model/spec_node.dart';
 import '../normalize/normalizer.dart';
 import 'api_names.dart';
 import 'direction_index.dart';
+import 'group_names.dart';
 import 'ir.dart';
 import 'ir_context.dart';
+import 'method_names.dart';
 import 'names.dart';
 import 'operation_builder.dart';
 import 'operation_checks.dart';
@@ -25,12 +26,6 @@ import 'schema_mapper.dart';
 final class IrBuilder {
   /// Creates a builder that reports to [_diagnostics].
   const IrBuilder(this._diagnostics);
-
-  static const _names = DartNames();
-
-  /// The `operationId` prefix the `nestjs` preset removes:
-  /// `UserController_get` → `get`.
-  static final nestjsPrefix = RegExp('^[A-Za-z0-9]*Controller_');
 
   final DiagnosticBag _diagnostics;
 
@@ -57,12 +52,13 @@ final class IrBuilder {
     }
     final mapper = SchemaMapper(context, directions);
     final operations = OperationBuilder(context, mapper);
+    final groupNames = GroupNames(context);
     final groups = <String, List<SpecOperation>>{};
     final groupSites = <String, SpecOperation>{};
     final tagOfGroup = <String, String>{};
     final untagged = <SpecOperation>[];
     for (final entry in selected) {
-      final choice = _group(context, entry, tagOfGroup);
+      final choice = groupNames.choose(entry, tagOfGroup);
       if (choice.untagged) untagged.add(entry);
       final group = choice.name;
       (groups[group] ??= []).add(entry);
@@ -79,7 +75,7 @@ final class IrBuilder {
         reserved: {...DartNames.reservedWords, ...DartNames.methodNames},
         reservedSuffix: '_',
       );
-      final names = _methodNames(context, groups[group]!, scope);
+      final names = MethodNames(context).of(groups[group]!, scope);
       for (final entry in groups[group]!) {
         final methods = operations.build(entry, names[entry]!, scope);
         if (methods.isNotEmpty) (built[group] ??= []).addAll(methods);
@@ -113,8 +109,7 @@ final class IrBuilder {
     final groupIrs = {
       for (final group in built.keys.toList()..sort())
         group: GroupIr(
-          _groupName(
-            context,
+          groupNames.className(
             types,
             group,
             groupSites[group]!.operation.location,
@@ -262,276 +257,4 @@ final class IrBuilder {
     });
     return (result, refs);
   }
-
-  /// The group of [entry] before the class name template: an override's
-  /// `group`, else by `group_by`.
-  static _GroupChoice _group(
-    IrContext context,
-    SpecOperation entry,
-    Map<String, String> tagOfGroup,
-  ) {
-    final operation = entry.operation;
-    final override = context.overrides.operationAt(operation.location);
-    if (override?.group case final written?) {
-      // A group is a word list like a tag: a value that differs from its
-      // UpperCamelCase form only by case or separators is that form.
-      final words = _names.pascal(written);
-      final String? name;
-      if (_names.isValid(written, .type)) {
-        name = written;
-      } else if (words != null && !_names.dropsLetters(written)) {
-        name = words;
-      } else {
-        name = context.checkedOverrideName(
-          override!,
-          'group',
-          written,
-          .type,
-          what: 'group',
-        );
-      }
-      if (name != null) return _GroupChoice(name);
-    }
-    final config = context.config;
-    switch (config.groupBy) {
-      case .single:
-        return const _GroupChoice('');
-      case .path:
-        final segment = entry.path
-            .split('/')
-            .firstWhere(
-              (s) => s.isNotEmpty && !s.startsWith('{'),
-              orElse: () => '',
-            );
-        final group = _names.pascal(segment) ?? '';
-        if (group.isNotEmpty && !tagOfGroup.containsKey(group)) {
-          tagOfGroup[group] = segment;
-          context.checkLossyName(
-            segment,
-            group,
-            operation.location,
-            what: 'Path segment',
-            override: context.overrideAt(
-              ['operations', entry.overrideKey],
-              {'group': group},
-            ),
-          );
-        }
-        return _GroupChoice(group);
-      case .tag:
-        if (operation.tags.isEmpty) {
-          return const _GroupChoice('', untagged: true);
-        }
-        final tag = operation.tags.first;
-        final tagAt = operation.location.child('tags').child(0);
-        if (operation.tags.length > 1) {
-          context.report(
-            .operationMultipleTags,
-            'This operation has tags ${operation.tags.join(', ')}; it is '
-            'generated once, in the group of "$tag".',
-            operation.location.child('tags'),
-            fix: 'Keep one tag at the source, or name the group.',
-            override: context.overrideAt(
-              ['operations', entry.overrideKey],
-              {'group': _names.pascal(tag) ?? 'MyGroup'},
-            ),
-          );
-        }
-        final group = _names.pascal(tag);
-        if (group == null) {
-          context.report(
-            .nameUnrepresentable,
-            'Tag "$tag" has no ASCII letter or digit, so the operation is in '
-            '${config.defaultGroup}.',
-            tagAt,
-            fix: 'Name the group of the operation.',
-            override: context.overrideAt(
-              ['operations', entry.overrideKey],
-              {'group': 'MyGroup'},
-            ),
-          );
-          return const _GroupChoice('');
-        }
-        final earlier = tagOfGroup[group];
-        if (earlier == null) {
-          tagOfGroup[group] = tag;
-          context.checkLossyName(
-            tag,
-            group,
-            tagAt,
-            what: 'Tag',
-            override: context.overrideAt(
-              ['operations', entry.overrideKey],
-              {'group': group},
-            ),
-          );
-        } else if (earlier != tag) {
-          context.report(
-            .tagsMerged,
-            'Tags "$earlier" and "$tag" give the same group name, so their '
-            'operations are in one class.',
-            tagAt,
-            fix: 'Write the tag the same way everywhere at the source.',
-          );
-        }
-        return _GroupChoice(group);
-    }
-  }
-
-  /// The class name of [group] in the library scope [types]; [groupClasses]
-  /// are the class names the groups got already.
-  static String _groupName(
-    IrContext context,
-    NameScope types,
-    String group,
-    SpecLocation site,
-    Set<String> groupClasses,
-  ) {
-    final config = context.config;
-    final candidate = group.isEmpty
-        ? config.defaultGroup
-        : config.groupTemplate.replaceAll('{Tag}', group);
-    final (name, change) = types.claim(candidate);
-    groupClasses.add(name);
-    if (change != null) {
-      final ofGroup = change == .collision && groupClasses.contains(candidate);
-      context.report(
-        change == .reserved ? .nameReserved : .nameCollision,
-        change == .reserved
-            ? 'Group class "$candidate" would be a name Dart already has; it '
-                  'is named "$name".'
-            : ofGroup
-            ? 'The group class "$candidate" is the class of another group '
-                  'already; this group\'s class is named "$name".'
-            : 'A type is named "$candidate" already; the group class is '
-                  'named "$name".',
-        site,
-        fix: ofGroup
-            ? 'Name the group with the group override of its operations, or '
-                  'change naming.group or naming.default_group in the config.'
-            : 'Change naming.group in the config, or rename the schema.',
-      );
-    }
-    return name;
-  }
-
-  /// The words of a method name made from [method] and [path]: the method,
-  /// the words of every path segment without its variables, then, when the
-  /// path has variables, `By` and the variables in path order joined by
-  /// `And`: `GET /users/{userId}/posts/{postId}` gives
-  /// `getUsersPostsByUserIdAndPostId`, `GET /pets/{id}` gives
-  /// `getPetsById`.
-  static String _pathName(String method, String path) {
-    final variables = [
-      for (final match in PathTemplate(path).variables) match[1]!,
-    ];
-    final literal = path.replaceAll(PathTemplate.variable, ' ');
-    if (variables.isEmpty) return '$method $literal';
-    return '$method $literal By ${variables.join(' And ')}';
-  }
-
-  /// The method names of the operations [entries] of one group, in
-  /// [scope]. Names that overrides give are claimed first, so an automatic
-  /// name that is the same gets the suffix, not the override's.
-  static Map<SpecOperation, String> _methodNames(
-    IrContext context,
-    List<SpecOperation> entries,
-    NameScope scope,
-  ) {
-    final overrides = <SpecOperation, String>{};
-    for (final entry in entries) {
-      final override = context.overrides.operationAt(entry.operation.location);
-      final name = override?.name;
-      if (override == null || name == null) continue;
-      final checked = context.checkedOverrideName(
-        override,
-        'name',
-        name,
-        .member,
-        what: 'method',
-      );
-      if (checked != null) overrides[entry] = checked;
-    }
-    final names = <SpecOperation, String>{};
-    for (final entry in [
-      for (final e in entries)
-        if (overrides.containsKey(e)) e,
-      for (final e in entries)
-        if (!overrides.containsKey(e)) e,
-    ]) {
-      names[entry] = _methodName(context, entry, scope, overrides[entry]);
-    }
-    return names;
-  }
-
-  /// The method name of [entry] in its group's [scope] (R5.1): [override],
-  /// else `operationId` without the configured prefix, else [_pathName], in
-  /// lowerCamelCase.
-  static String _methodName(
-    IrContext context,
-    SpecOperation entry,
-    NameScope scope,
-    String? override,
-  ) {
-    final operation = entry.operation;
-    final prefix =
-        context.config.operationPrefix ??
-        (context.client.preset == .nestjs ? nestjsPrefix : null);
-    final id = operation.operationId;
-    final source = id == null
-        ? _pathName(entry.method, entry.path)
-        : prefix == null
-        ? id
-        : _withoutPrefix(id, prefix);
-    final candidate = override ?? _names.camel(source);
-    final (name, change) = scope.claim(candidate ?? 'operation');
-    final at = ['operations', entry.overrideKey];
-    if (candidate == null || change != null) {
-      context.report(
-        candidate == null
-            ? .nameUnrepresentable
-            : change == .reserved
-            ? .nameReserved
-            : .nameCollision,
-        candidate == null
-            ? 'operationId "$id" has no ASCII letter or digit; the method is '
-                  'named "$name".'
-            : change == .reserved
-            ? 'Method "$candidate" would be a name Dart already has; it is '
-                  'named "$name".'
-            : 'Another method of the group is named "$candidate"; this one '
-                  'is named "$name".',
-        operation.location,
-        fix: 'Name the method explicitly to keep the name stable.',
-        override: context.overrideAt(at, {'name': name}),
-      );
-    }
-    if (override == null && candidate != null) {
-      context.checkLossyName(
-        id == null ? entry.path : source,
-        name,
-        operation.location,
-        what: id == null ? 'Path' : 'operationId',
-        override: context.overrideAt(at, {'name': name}),
-      );
-    }
-    return name;
-  }
-
-  /// [id] without the match of [prefix] when it starts at index 0 and is
-  /// not empty; else [id] itself.
-  static String _withoutPrefix(String id, RegExp prefix) {
-    final match = prefix.matchAsPrefix(id);
-    if (match == null || match.end == 0) return id;
-    return id.substring(match.end);
-  }
-}
-
-/// The group an operation is in before the class name template; [untagged]
-/// when it has no group of its own (no tag), so it is in the default group.
-final class _GroupChoice {
-  const _GroupChoice(this.name, {this.untagged = false});
-
-  final String name;
-  final bool untagged;
 }

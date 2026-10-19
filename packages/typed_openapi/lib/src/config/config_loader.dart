@@ -10,13 +10,10 @@ import '../diagnostics/json_pointer.dart';
 import '../diagnostics/severity.dart';
 import '../diagnostics/severity_levels.dart';
 import '../generate/real_paths.dart';
-import '../ir/names.dart';
 import '../load/yaml_composer.dart';
-import '../normalize/normalizer.dart';
-import '../overrides/override_set.dart';
-import 'config_sources.dart';
-import 'generation_config.dart';
-import 'operation_settings_reader.dart';
+import 'config_keys.dart';
+import 'config_reader.dart';
+import 'generation_reader.dart';
 import 'project_config.dart';
 
 /// Reads `typed_openapi.yaml` into a [ProjectConfig].
@@ -27,37 +24,6 @@ final class ConfigLoader {
   /// Creates a loader that reports to [_diagnostics]; [_paths] names the
   /// config file in diagnostics.
   const ConfigLoader(this._diagnostics, [this._paths = const DisplayPaths()]);
-
-  static const _topLevelKeys = {'defaults', 'clients'};
-  static const _generationKeys = {
-    'naming',
-    'group_by',
-    'include',
-    'exclude',
-    'types',
-    'tri_state',
-    'union',
-    'errors',
-    'sse',
-  };
-  static const _defaultsKeys = {
-    'preset',
-    'line_width',
-    'rules',
-    'severity',
-    ..._generationKeys,
-  };
-  static const _clientKeys = {
-    'input',
-    'output',
-    'preset',
-    'overrides',
-    'baseline',
-    'line_width',
-    'rules',
-    'severity',
-    ..._generationKeys,
-  };
 
   final DiagnosticBag _diagnostics;
   final DisplayPaths _paths;
@@ -103,13 +69,13 @@ final class ConfigLoader {
     }
     final composed = _compose(text, file, full);
     if (composed == null) return null;
-    final reader = _ConfigReader(file, _diagnostics, composed.spans);
+    final reader = ConfigReader(file, _diagnostics, composed.spans);
     final root = composed.root;
     if (root is! Map<String, Object?>) {
       reader.invalid('The config must be a mapping.', .root);
       return null;
     }
-    reader.checkKeys(root, _topLevelKeys, .root);
+    reader.checkKeys(root, ConfigKeys.topLevel, .root);
 
     final defaultsPointer = JsonPointer.root.child('defaults');
     final defaults = reader.mapAt(root, 'defaults', .root);
@@ -118,7 +84,7 @@ final class ConfigLoader {
     var defaultRules = const <String, bool>{};
     var defaultLevels = const <DiagnosticCode, Severity?>{};
     if (defaults != null) {
-      reader.checkKeys(defaults, _defaultsKeys, defaultsPointer);
+      reader.checkKeys(defaults, ConfigKeys.defaults, defaultsPointer);
       defaultPreset = reader.presetAt(defaults, defaultsPointer);
       defaultWidth = reader.intAt(defaults, 'line_width', defaultsPointer);
       defaultRules = reader.rulesAt(defaults, defaultsPointer);
@@ -147,7 +113,7 @@ final class ConfigLoader {
         reader.invalid('Client "$name" must be a mapping.', pointer);
         continue;
       }
-      reader.checkKeys(value, _clientKeys, pointer);
+      reader.checkKeys(value, ConfigKeys.client, pointer);
       final input = reader.stringAt(value, 'input', pointer, required: true);
       final output = reader.stringAt(value, 'output', pointer, required: true);
       final preset = reader.presetAt(value, pointer) ?? defaultPreset;
@@ -162,7 +128,7 @@ final class ConfigLoader {
         ...defaultLevels,
         ...reader.severityAt(value, pointer),
       };
-      final generation = _GenerationReader(reader, [
+      final generation = GenerationReader(reader, [
         if (defaults != null) (defaults, defaultsPointer),
         (value, pointer),
       ]).read();
@@ -281,502 +247,5 @@ final class ConfigLoader {
         );
       }
     }
-  }
-}
-
-/// Typed access to the values of a config document that reports bad ones.
-class _ConfigReader {
-  _ConfigReader(this.file, this.diagnostics, this.spans);
-
-  final String file;
-  final DiagnosticBag diagnostics;
-  final Map<String, SourceSpan> spans;
-
-  SourceSpan? spanAt(JsonPointer at) => spans[at.value];
-
-  void checkKeys(
-    Map<String, Object?> map,
-    Set<String> allowed,
-    JsonPointer at,
-  ) {
-    for (final name in map.keys) {
-      if (allowed.contains(name)) continue;
-      diagnostics.report(
-        .configUnknownKey,
-        'Unknown key "$name".',
-        file: file,
-        pointer: at.child(name),
-        span: spanAt(at.child(name)),
-        fix: 'Allowed keys here: ${(allowed.toList()..sort()).join(', ')}.',
-      );
-    }
-  }
-
-  Map<String, Object?>? mapAt(
-    Map<String, Object?> parent,
-    String key,
-    JsonPointer at, {
-    bool required = false,
-  }) {
-    if (!parent.containsKey(key)) {
-      if (required) invalid('Missing required key "$key".', at);
-      return null;
-    }
-    final value = parent[key];
-    if (value is Map<String, Object?>) return value;
-    invalid('"$key" must be a mapping.', at.child(key));
-    return null;
-  }
-
-  String? stringAt(
-    Map<String, Object?> parent,
-    String key,
-    JsonPointer at, {
-    bool required = false,
-  }) {
-    if (!parent.containsKey(key)) {
-      if (required) invalid('Missing required key "$key".', at);
-      return null;
-    }
-    final value = parent[key];
-    if (value is String && value.isNotEmpty) return value;
-    invalid('"$key" must be a non-empty string.', at.child(key));
-    return null;
-  }
-
-  int? intAt(Map<String, Object?> parent, String key, JsonPointer at) {
-    if (!parent.containsKey(key)) return null;
-    final value = parent[key];
-    if (value is int && value > 0) return value;
-    invalid('"$key" must be a positive integer.', at.child(key));
-    return null;
-  }
-
-  /// `rules` of [parent]: normalizer rule names mapped to whether they run.
-  /// Unknown names are reported and skipped.
-  Map<String, bool> rulesAt(Map<String, Object?> parent, JsonPointer at) {
-    final rules = mapAt(parent, 'rules', at);
-    if (rules == null) return const {};
-    final pointer = at.child('rules');
-    final known = Normalizer.ruleNames;
-    final result = <String, bool>{};
-    for (final MapEntry(key: name, :value) in rules.entries) {
-      if (!known.contains(name)) {
-        diagnostics.report(
-          .configUnknownKey,
-          'Unknown normalizer rule "$name".',
-          file: file,
-          pointer: pointer.child(name),
-          span: spanAt(pointer.child(name)),
-          fix: 'Known rules: ${(known.toList()..sort()).join(', ')}.',
-        );
-        continue;
-      }
-      if (value is! bool) {
-        invalid(
-          'Rule "$name" must be true or false.',
-          pointer.child(name),
-        );
-        continue;
-      }
-      result[name] = value;
-    }
-    return result;
-  }
-
-  /// `severity` of [parent]: diagnostic codes, by id or slug, mapped to
-  /// their level; `null` is `off`. Unknown codes are a warning, bad levels
-  /// and levels a code cannot have are errors; all of them are skipped.
-  Map<DiagnosticCode, Severity?> severityAt(
-    Map<String, Object?> parent,
-    JsonPointer at,
-  ) {
-    final entries = mapAt(parent, 'severity', at);
-    if (entries == null) return const {};
-    final pointer = at.child('severity');
-    final result = <DiagnosticCode, Severity?>{};
-    final names = <DiagnosticCode, String>{};
-    for (final MapEntry(key: name, :value) in entries.entries) {
-      final at = pointer.child(name);
-      final code = _codes[name];
-      if (code == null) {
-        diagnostics.report(
-          .configUnknownKey,
-          'Unknown diagnostic code "$name".',
-          file: file,
-          pointer: at,
-          span: spanAt(at),
-          fix:
-              'Use a code such as TOA201 or its name such as bool-required; '
-              'the codes are in `DiagnosticCode` and the CHANGELOG.',
-        );
-        continue;
-      }
-      if (names[code] case final first?) {
-        invalid(
-          '"$name" names the same code as "$first" (${code.id}); '
-          'only the first is used.',
-          at,
-        );
-        continue;
-      }
-      names[code] = name;
-      if (value is! String || !_levels.containsKey(value)) {
-        invalid(
-          'The level of "$name" must be error, warning, info or off.',
-          at,
-        );
-        continue;
-      }
-      final level = _levels[value];
-      if (DiagnosticCode.configCodes.contains(code)) {
-        invalid(
-          'The level of ${code.id} ${code.slug} cannot be changed: the '
-          'config is read before levels apply.',
-          at,
-        );
-        continue;
-      }
-      if (DiagnosticCode.fixedCodes.contains(code) &&
-          (level == null || level.index > code.defaultSeverity.index)) {
-        invalid(
-          '${code.id} ${code.slug} cannot be lowered or turned off: '
-          'without it a file that cannot be read would pass.',
-          at,
-        );
-        continue;
-      }
-      result[code] = level;
-    }
-    return result;
-  }
-
-  static final _codes = {
-    for (final code in DiagnosticCode.values) ...{
-      code.id: code,
-      code.slug: code,
-    },
-  };
-
-  static const _levels = <String, Severity?>{
-    'error': .error,
-    'warning': .warning,
-    'info': .info,
-    'off': null,
-  };
-
-  Preset? presetAt(Map<String, Object?> parent, JsonPointer at) {
-    final name = stringAt(parent, 'preset', at);
-    if (name == null) return null;
-    final preset = Preset.values.asNameMap()[name];
-    if (preset != null) return preset;
-    final known = Preset.values.map((v) => v.name).toList()..sort();
-    invalid(
-      'Unknown preset "$name". Known presets: ${known.join(', ')}.',
-      at.child('preset'),
-    );
-    return null;
-  }
-
-  void invalid(String message, JsonPointer at) {
-    diagnostics.report(
-      .configInvalid,
-      message,
-      file: file,
-      pointer: at,
-      span: spanAt(at),
-    );
-  }
-}
-
-/// Reads the generation settings of a client: each key from the client, or
-/// from `defaults` when the client does not set it; `naming`, `types` and
-/// `errors` key by key, and `types.formats` and `types.schemas` entry by
-/// entry.
-final class _GenerationReader {
-  _GenerationReader(
-    this._reader,
-    List<(Map<String, Object?>, JsonPointer)> sources,
-  ) : _sources = ConfigSources(sources);
-
-  static const _namingKeys = {
-    'client',
-    'group',
-    'default_group',
-    'input_suffix',
-    'patch_suffix',
-    'operation_prefix',
-    'stream_suffix',
-  };
-  static const _filterKeys = {'tags', 'operations', 'paths'};
-  static const _typesKeys = {'number', 'formats', 'schemas'};
-  static const _customTypeKeys = {'type', 'import', 'converter'};
-  static final _identifier = RegExp(r'^[A-Za-z_$][A-Za-z0-9_$]*$');
-
-  final _ConfigReader _reader;
-
-  /// The maps to read, `defaults` first.
-  final ConfigSources _sources;
-
-  GenerationConfig read() {
-    _checkSectionKeys();
-    final suffixes = _suffixes();
-    final client = _sources.last.$2;
-    final errorSchema = _string('errors', 'default_schema');
-    final operations = OperationSettingsReader(_sources, _reader.invalid);
-    return GenerationConfig(
-      groupTemplate: _groupTemplate() ?? GenerationConfig.defaultGroupTemplate,
-      defaultGroup: _defaultGroup() ?? GenerationConfig.defaultDefaultGroup,
-      inputSuffix: suffixes.$1,
-      patchSuffix: suffixes.$2,
-      operationPrefix: operations.operationPrefix(),
-      streamSuffix: operations.streamSuffix(),
-      streamReconnect: operations.streamReconnect(),
-      clientClass: _clientClass(),
-      groupBy: _choice('group_by', GroupBy.values) ?? .tag,
-      include: _filter('include'),
-      exclude: _filter('exclude'),
-      numberType: _numberType(),
-      formats: _customTypes('formats'),
-      schemas: _customTypes('schemas'),
-      triState: _choice('tri_state', TriStateRule.values) ?? .patch,
-      union: _choice('union', UnionMode.values) ?? .raw,
-      defaultErrorSchema: errorSchema?.$1,
-      defaultErrorSchemaPointer: errorSchema?.$2,
-      defaultErrorSchemaSpan: errorSchema == null
-          ? null
-          : _reader.spanAt(errorSchema.$2),
-      file: _reader.file,
-      client: client,
-      clientSpan: _reader.spanAt(client),
-    );
-  }
-
-  void _checkSectionKeys() {
-    for (final (map, at) in _sources) {
-      for (final (section, keys) in [
-        ('naming', _namingKeys),
-        ('types', _typesKeys),
-        ('errors', const {'default_schema'}),
-        ('sse', const {'reconnect'}),
-      ]) {
-        if (_reader.mapAt(map, section, at) case final inner?) {
-          _reader.checkKeys(inner, keys, at.child(section));
-        }
-      }
-    }
-  }
-
-  (String, JsonPointer)? _string(String section, String key) {
-    final picked = _sources.pick(key, section);
-    if (picked == null) return null;
-    final (value, at) = picked;
-    if (value is String && value.isNotEmpty) return (value, at);
-    return _invalid('"$key" must be a non-empty string.', at);
-  }
-
-  String? _groupTemplate() {
-    final picked = _string('naming', 'group');
-    if (picked == null) return null;
-    final (value, at) = picked;
-    final probe = value.replaceAll('{Tag}', 'Tag');
-    if (value.contains('{Tag}') && _identifier.hasMatch(probe)) return value;
-    return _invalid(
-      '"group" must contain {Tag} and give a Dart identifier, such as '
-      '{Tag}Api.',
-      at,
-    );
-  }
-
-  String? _identifierAt(String key) {
-    final picked = _sources.pick(key, 'naming');
-    if (picked == null) return null;
-    final (value, at) = picked;
-    if (value is String && _identifier.hasMatch(value)) return value;
-    return _invalid('"$key" must be a Dart identifier.', at);
-  }
-
-  /// `default_group` is the name of a class, so a reserved word or a
-  /// built-in identifier cannot be it.
-  String? _defaultGroup() {
-    final name = _identifierAt('default_group');
-    if (name == null) return null;
-    if (!DartNames.reservedWords.contains(name) &&
-        !DartNames.builtInIdentifiers.contains(name)) {
-      return name;
-    }
-    return _invalid(
-      '"default_group" is the name of a class and "$name" is a reserved word '
-      'in Dart.',
-      _sources.pick('default_group', 'naming')!.$2,
-    );
-  }
-
-  /// `client` is the name of a class, as `default_group` is.
-  String? _clientClass() {
-    final name = _identifierAt('client');
-    if (name == null) return null;
-    if (!DartNames.reservedWords.contains(name) &&
-        !DartNames.builtInIdentifiers.contains(name) &&
-        name.startsWith(RegExp(r'[A-Z$]'))) {
-      return name;
-    }
-    return _invalid(
-      '"client" is the name of a class: an identifier that starts with an '
-      'uppercase letter and is not a reserved word in Dart.',
-      _sources.pick('client', 'naming')!.$2,
-    );
-  }
-
-  /// `input_suffix` and `patch_suffix`: two model names made from one schema
-  /// must differ, so equal suffixes are an error, reported at the later
-  /// key, and both go back to their defaults.
-  (String, String) _suffixes() {
-    final input = _identifierAt('input_suffix');
-    final patch = _identifierAt('patch_suffix');
-    final inputSuffix = input ?? GenerationConfig.defaultInputSuffix;
-    final patchSuffix = patch ?? GenerationConfig.defaultPatchSuffix;
-    if (inputSuffix != patchSuffix) return (inputSuffix, patchSuffix);
-    final at = patch != null
-        ? _sources.pick('patch_suffix', 'naming')!.$2
-        : _sources.pick('input_suffix', 'naming')!.$2;
-    _invalid(
-      '"input_suffix" and "patch_suffix" must be different, both are '
-      '"$inputSuffix"; the defaults ${GenerationConfig.defaultInputSuffix} '
-      'and ${GenerationConfig.defaultPatchSuffix} are used.',
-      at,
-    );
-    return (
-      GenerationConfig.defaultInputSuffix,
-      GenerationConfig.defaultPatchSuffix,
-    );
-  }
-
-  String? _numberType() {
-    final picked = _string('types', 'number');
-    if (picked == null) return null;
-    final (value, at) = picked;
-    return switch (value) {
-      'num' => null,
-      'double' || 'int' => value,
-      _ => _invalid('"number" must be num, double or int.', at),
-    };
-  }
-
-  T? _choice<T extends Enum>(String key, List<T> values) {
-    final picked = _sources.pick(key);
-    if (picked == null) return null;
-    final (value, at) = picked;
-    for (final choice in values) {
-      if (value == choice.name) return choice;
-    }
-    return _invalid(
-      '"$key" must be one of ${values.map((v) => v.name).join(', ')}.',
-      at,
-    );
-  }
-
-  OperationFilter _filter(String key) {
-    final picked = _sources.pick(key);
-    if (picked == null) return const OperationFilter();
-    final (value, at) = picked;
-    if (value is! Map<String, Object?>) {
-      _invalid('"$key" must be a mapping.', at);
-      return const OperationFilter();
-    }
-    _reader.checkKeys(value, _filterKeys, at);
-    List<FilterPattern> patterns(String name) {
-      final list = value[name];
-      if (list == null) return const [];
-      if (list is! List<Object?>) {
-        _invalid('"$name" must be a list of strings.', at.child(name));
-        return const [];
-      }
-      final result = <FilterPattern>[];
-      for (final (i, item) in list.indexed) {
-        final pointer = at.child(name).child(i);
-        if (item is String && item.isNotEmpty) {
-          result.add(FilterPattern(item, pointer, _reader.spanAt(pointer)));
-        } else {
-          _invalid('Each entry must be a non-empty string.', pointer);
-        }
-      }
-      return result;
-    }
-
-    return OperationFilter(
-      tags: patterns('tags'),
-      operations: patterns('operations'),
-      paths: patterns('paths'),
-    );
-  }
-
-  Map<String, DartTypeOverride> _customTypes(String key) {
-    final result = <String, DartTypeOverride>{};
-    for (final (map, at) in _sources) {
-      final types = map['types'];
-      if (types is! Map<String, Object?> || !types.containsKey(key)) {
-        continue;
-      }
-      final pointer = at.child('types').child(key);
-      final entries = types[key];
-      if (entries is! Map<String, Object?>) {
-        _invalid('"$key" must be a mapping.', pointer);
-        continue;
-      }
-      for (final MapEntry(key: name, :value) in entries.entries) {
-        final custom = _customType(value, pointer.child(name));
-        if (custom != null) result[name] = custom;
-      }
-    }
-    return result;
-  }
-
-  DartTypeOverride? _customType(Object? value, JsonPointer at) {
-    if (value is! Map<String, Object?>) {
-      return _invalid('A custom type must be a mapping.', at);
-    }
-    _reader.checkKeys(value, _customTypeKeys, at);
-    final type = value['type'];
-    final import = value['import'];
-    final converter = value['converter'];
-    if (type is! String || type.isEmpty) {
-      return _invalid('A custom type needs "type", a Dart type name.', at);
-    }
-    if (import is! String || import.isEmpty) {
-      return _invalid(
-        'A custom type needs "import", the library that declares "$type".',
-        at,
-      );
-    }
-    if (converter != null && (converter is! String || converter.isEmpty)) {
-      return _invalid(
-        '"converter" must be a non-empty string.',
-        at.child('converter'),
-      );
-    }
-    var valid = true;
-    for (final (field, written) in [
-      ('type', type),
-      ('import', import),
-      if (converter is String) ('converter', converter),
-    ]) {
-      if (DartTypeOverride.problem(field, written) case final problem?) {
-        _invalid(problem, at.child(field));
-        valid = false;
-      }
-    }
-    if (!valid) return null;
-    return DartTypeOverride(
-      type: type,
-      import: import,
-      converter: converter as String?,
-    );
-  }
-
-  /// Reports an invalid value at [at]; returns null.
-  Null _invalid(String message, JsonPointer at) {
-    _reader.invalid(message, at);
-    return null;
   }
 }
