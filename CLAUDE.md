@@ -866,7 +866,9 @@ generator's public API only. Its network use is the `SpecCache` download
   an unknown name the same usage error; `update` takes no names (a partial
   update would drop the other clients from the lock), and `check` with
   names compares only the clients of those specs (`CorpusLock.only`).
-  `tar` runs through `TarRunner` under a 2-minute timeout. `HttpDownload` also caps a download at 256 MiB (`maxBytes`): a larger `Content-Length`, or a running total past the cap, is a `CorpusException`.
+  `tar` runs through `TarRunner` under a 2-minute timeout. `HttpDownload`
+  also caps a download at 256 MiB (`maxBytes`): a larger `Content-Length`,
+  or a running total past the cap, is a `CorpusException`.
   `update` writes no `corpus.lock` when a gate failed (an expectation that
   does not hold, a client not generated or written by a second run, `pub
   get`, `dart analyze`, `dart format`, a round trip that did not run) and
