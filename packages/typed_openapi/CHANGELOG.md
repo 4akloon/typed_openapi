@@ -92,7 +92,7 @@
   as the lock has it, so a schema or an operation added to the spec never
   renames one that existed; the new one gets the suffix. TOA570 (info)
   names a kept name a run without the lock would not give, TOA569
-  (warning) one an override or a custom type took, TOA571 (info) a type the
+  (warning) one an override or a custom type took, or that is not a usable Dart name (a lock is a file anyone edits), TOA571 (info) a type the
   spec no longer declares. `generate --fresh-names` names everything from
   the spec alone. `IrBuilder` takes the lock as `names:`; `SpecChecker`
   reads it next to the config, and `SpecChecker.freshNames` does not.

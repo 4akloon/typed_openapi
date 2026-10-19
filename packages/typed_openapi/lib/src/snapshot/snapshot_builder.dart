@@ -18,7 +18,8 @@ final class SnapshotBuilder {
 
   /// The URI of [client]'s root document as `SpecLoader` makes it, so the
   /// locations in it are relative to its directory.
-  static Uri rootOf(ClientConfig client) => p.toUri(p.normalize(client.input));
+  static Uri rootOf(ClientConfig client) =>
+      p.toUri(p.normalize(p.absolute(client.input)));
 
   /// The snapshot of [ir], its types sorted by identity.
   ApiSnapshot build(ClientIr ir) {

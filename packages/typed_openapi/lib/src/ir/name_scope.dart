@@ -49,12 +49,19 @@ final class NameScope {
   /// Keeps each name of [names] for its identity, the key: only a claim
   /// for that identity, or an explicit one, gets it. Lock only the
   /// identities that are claimed in this run, so a name whose owner is
-  /// gone is free again.
-  void lock(Map<String, String> names) {
+  /// gone is free again. A name that is reserved here is not kept; those
+  /// entries are returned.
+  Map<String, String> lock(Map<String, String> names) {
+    final rejected = <String, String>{};
     for (final MapEntry(key: identity, value: name) in names.entries) {
+      if (_reserved.contains(name)) {
+        rejected[identity] = name;
+        continue;
+      }
       _kept[identity] = name;
       _keeper[name] = identity;
     }
+    return rejected;
   }
 
   /// Gives out [candidate], or a free name made from it: with
@@ -72,6 +79,7 @@ final class NameScope {
     String? identity,
     bool isExplicit = false,
   }) {
+    if (isExplicit && identity != null) _release(identity);
     final kept = isExplicit ? null : _kept[identity];
     if (kept != null && _taken.add(kept)) {
       return (kept, _keptChange(candidate, kept, identity));
@@ -79,6 +87,12 @@ final class NameScope {
     final owner = isExplicit ? null : identity ?? '';
     final (name, change) = _claim(candidate, alternatives, owner);
     return (name, kept == null ? change : .lockTaken);
+  }
+
+  /// Frees the name kept for [identity], which an explicit name replaces.
+  void _release(String identity) {
+    final name = _kept.remove(identity);
+    if (name != null && _keeper[name] == identity) _keeper.remove(name);
   }
 
   /// Why the [kept] name of [identity] is not [candidate]: what a run

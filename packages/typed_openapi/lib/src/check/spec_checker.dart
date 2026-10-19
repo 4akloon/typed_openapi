@@ -236,14 +236,17 @@ final class SpecChecker {
               client.overrides,
               client.generation.key,
               client.generation.clientClass == null ? client.name : null,
-              locked[client.name] ?? NameLock.none,
+              _namesOf(locked, client),
             )] ??= _run(
               client,
-              locked[client.name] ?? NameLock.none,
+              _namesOf(locked, client),
             ),
           ),
     ];
   }
+
+  NameLock _namesOf(Map<String, NameLock> locked, ClientConfig client) =>
+      locked[client.name] ?? NameLock.none;
 
   ClientCheck _withLevels(ClientConfig client, ClientCheck run) => ClientCheck(
     client,
