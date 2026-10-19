@@ -7178,9 +7178,174 @@ index 411e2fb..25d3eab 100644
 
 Commit: `test(typed_openapi_transport_tests): transport conformance suite`.
 
-### Task 8: CI, workspace, publish (not replayed)
+### Task 8: CI, workspace, publish
 
-`ci.yml`: tests of `typed_openapi_dio` and `typed_openapi_transport_tests` in the matrix; the web job runs the client and the adapter with both compilers; the publish dry-run covers `typed_openapi_client` and `typed_openapi_dio` (`dart pub publish --dry-run` of the adapter needs the client published first, or a `dependency_overrides` note). `nightly.yml` the same for the beta SDK. `workflows_test.dart` pins the new rows. `publish.yml` publishes the two packages, client first.
+Replayed on the state after task 7 (scratch commit `6997d08`).
+
+- `ci.yml`: `typed_openapi_dio` and `typed_openapi_transport_tests` in the format step; a `Test typed_openapi_dio` step (it runs the conformance suite; the suite package has no tests of its own) in the matrix; the web job (renamed "Client and Dio adapter on the web") runs the client and the adapter with both compilers; a dry-run of `typed_openapi_dio`. Inside the workspace the adapter's `typed_openapi_client: ^0.0.1` resolves to the path package (`resolution: workspace`), so its dry-run passes before the client is on pub.dev (0 warnings in the replay).
+- `nightly.yml`: a beta-SDK step for `typed_openapi_dio` (`if: always()`).
+- `publish.yml`: the tag pattern `typed_openapi_dio-v*` and a header note that a release needing a new client pushes the client's tag first, then the adapter's.
+- `workflows_test.dart`: a `directoriesOf` helper and two tests (the adapter on the VM and in Chrome; its dry-run and publish tag).
+
+~~~~diff
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index ac56402..519293c 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -12,7 +12,9 @@ permissions:
+ # The platform and SDK matrix of M11 (spec decision 4), every PR:
+ # - ubuntu with the minimum SDK (3.10.0) and stable runs every suite; macOS
+ #   and Windows run them with stable;
+-# - the runtime also runs in Chrome, compiled to JavaScript and to Wasm;
++# - the client core and the Dio adapter (with the transport conformance
++#   suite against its loopback server) also run in Chrome, compiled to
++#   JavaScript and to Wasm;
+ # - the corpus job generates the public specs with both SDKs and compares
+ #   the output with corpus.lock;
+ # - the quick fuzz runs 200 seeds; the semver job checks that a change of
+@@ -51,6 +53,8 @@ jobs:
+           dart format --output=none --set-exit-if-changed
+           packages/typed_openapi
+           packages/typed_openapi_client
++          packages/typed_openapi_dio
++          packages/typed_openapi_transport_tests
+           packages/typed_openapi_tool
+ 
+       - name: Analyze
+@@ -65,6 +69,11 @@ jobs:
+         run: dart test
+         working-directory: packages/typed_openapi_client
+ 
++      # The Dio adapter, with the transport conformance suite.
++      - name: Test typed_openapi_dio
++        run: dart test
++        working-directory: packages/typed_openapi_dio
++
+       # The SARIF tests read the schema from the corpus cache and fail in CI
+       # when it is missing.
+       - name: Fetch the SARIF schema
+@@ -76,7 +85,7 @@ jobs:
+         working-directory: packages/typed_openapi_tool
+ 
+   web:
+-    name: Runtime on the web (${{ matrix.compiler }})
++    name: Client and Dio adapter on the web (${{ matrix.compiler }})
+     timeout-minutes: 20
+     runs-on: ubuntu-latest
+     strategy:
+@@ -93,10 +102,14 @@ jobs:
+       - name: Install dependencies (workspace)
+         run: dart pub get
+ 
+-      - name: Test in Chrome
++      - name: Test typed_openapi_client in Chrome
+         run: dart test -p chrome --compiler ${{ matrix.compiler }}
+         working-directory: packages/typed_openapi_client
+ 
++      - name: Test typed_openapi_dio in Chrome
++        run: dart test -p chrome --compiler ${{ matrix.compiler }}
++        working-directory: packages/typed_openapi_dio
++
+   corpus:
+     name: Corpus (${{ matrix.sdk }})
+     timeout-minutes: 30
+@@ -198,3 +211,7 @@ jobs:
+       - name: Dry-run typed_openapi_client
+         run: dart pub publish --dry-run
+         working-directory: packages/typed_openapi_client
++
++      - name: Dry-run typed_openapi_dio
++        run: dart pub publish --dry-run
++        working-directory: packages/typed_openapi_dio
+diff --git a/.github/workflows/nightly.yml b/.github/workflows/nightly.yml
+index 34c911c..2a6e9ed 100644
+--- a/.github/workflows/nightly.yml
++++ b/.github/workflows/nightly.yml
+@@ -41,6 +41,11 @@ jobs:
+         run: dart test -p chrome
+         working-directory: packages/typed_openapi_client
+ 
++      - name: Test typed_openapi_dio
++        if: always()
++        run: dart test
++        working-directory: packages/typed_openapi_dio
++
+       - name: Check the corpus
+         if: always()
+         run: dart run bin/corpus.dart check
+diff --git a/.github/workflows/publish.yml b/.github/workflows/publish.yml
+index 2060295..dd3c4f9 100644
+--- a/.github/workflows/publish.yml
++++ b/.github/workflows/publish.yml
+@@ -3,6 +3,8 @@
+ # Tag convention: <package>-v<version> (e.g. `typed_openapi-v0.1.0`,
+ # `typed_openapi_client-v0.1.1`) — only the tagged package is published,
+ # matching the repo's "bump only what changed" release policy.
++# typed_openapi_dio depends on typed_openapi_client: a release that needs a
++# new client publishes the client tag first, then the adapter's.
+ #
+ # Auth is pub.dev's GitHub Actions OIDC flow (no secrets): `dart-lang/setup-dart`
+ # mints a temporary pub.dev credential from the job's `id-token`. For it to be
+@@ -18,6 +20,7 @@ on:
+     tags:
+       - 'typed_openapi-v*'
+       - 'typed_openapi_client-v*'
++      - 'typed_openapi_dio-v*'
+ 
+ jobs:
+   publish:
+diff --git a/packages/typed_openapi_tool/test/ci/workflows_test.dart b/packages/typed_openapi_tool/test/ci/workflows_test.dart
+index cfcd69c..bf06f7b 100644
+--- a/packages/typed_openapi_tool/test/ci/workflows_test.dart
++++ b/packages/typed_openapi_tool/test/ci/workflows_test.dart
+@@ -24,6 +24,13 @@ List<String> runsOf(String name, String job) => [
+     if (step case {'run': final String run}) run,
+ ];
+ 
++/// The distinct working directories of the steps of the job [job] of the
++/// workflow [name], in order.
++List<String> directoriesOf(String name, String job) => {
++  for (final step in at(name, ['jobs', job, 'steps']) as List<Object?>)
++    if (step case {'working-directory': final String directory}) directory,
++}.toList();
++
+ void main() {
+   test('every job of every workflow has a timeout', () {
+     final folder = Directory(p.join('..', '..', '.github', 'workflows'));
+@@ -62,6 +69,30 @@ void main() {
+     ]);
+   });
+ 
++  test('every PR tests the Dio adapter on the VM and in Chrome', () {
++    expect(directoriesOf('ci.yml', 'analyze-test'), [
++      'packages/typed_openapi',
++      'packages/typed_openapi_client',
++      'packages/typed_openapi_dio',
++      'packages/typed_openapi_tool',
++    ]);
++    expect(directoriesOf('ci.yml', 'web'), [
++      'packages/typed_openapi_client',
++      'packages/typed_openapi_dio',
++    ]);
++  });
++
++  test('the Dio adapter is dry-run and published by its tag', () {
++    expect(
++      directoriesOf('ci.yml', 'publish-dry-run'),
++      contains('packages/typed_openapi_dio'),
++    );
++    expect(
++      at('publish.yml', ['on', 'push', 'tags']),
++      contains('typed_openapi_dio-v*'),
++    );
++  });
++
+   test('every PR checks the corpus with both SDKs, the fuzz and semver', () {
+     expect(at('ci.yml', ['jobs', 'corpus', 'strategy', 'matrix', 'sdk']), [
+       '3.10.0',
+~~~~
+
+**Gate:** `cd packages/typed_openapi_tool && dart test` +200 (198 + the two workflow tests); `dart analyze packages` clean; `cd packages/typed_openapi_dio && dart pub publish --dry-run` 0 warnings.
 
 Commit: `ci: test and publish the client and the Dio adapter`.
 
@@ -7226,7 +7391,7 @@ None in the code on main.
 
 ## Not replayed
 
-- Task 8 (CI and publish), task 9 (documentation): designed above, not yet replayed.
+- Task 9 (documentation): designed above, not yet replayed.
 
 ## Self-review
 
