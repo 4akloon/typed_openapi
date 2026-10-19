@@ -82,6 +82,16 @@ The user took these decisions in a conversation; "my call" marks what the author
     - `.github/workflows/ci.yml` and `nightly.yml` run the new packages' tests, the web job runs both, `test/ci/workflows_test.dart` is updated. The publish dry-run covers `typed_openapi_client` and `typed_openapi_dio`.
     - Documentation: the runtime's README and `doc/` move to the core; the Dio-specific parts (setup, web, interceptors, cancellation) go to the adapter's README; `CLAUDE.md`, the generator's guides and `docs/roadmap.md` are updated. The two long files (`sse.md`, `event_streams.md`) are split while moving.
 
+## Calls made after the builder check (author's calls)
+
+- **Dio's error path is kept.** `DioTransport` does not force `validateStatus`: the user's setting decides, so Dio's `onError` interceptors (a 401 token refresh, for example) still run, as the design rule "HTTP errors go through Dio's `onError`" requires. A `DioException` of type `badResponse` is turned back into a `TransportResponse` with the status and the body stream; the other types become a `TransportException`. The price: a Dio response interceptor sees a `ResponseBody` stream, not parsed JSON, and a user `Transformer` or `responseDecoder` is bypassed because the core reads and decodes the bytes. Both are documented in the adapter's README.
+- **`OperationRequest.responseKind` stays** (`json`, `text`, `bytes`) with a new meaning: how the core reads the response bytes into a `RawResponse`. Generated code is unchanged by it; only its doc comments stop naming Dio.
+- **Headers.** The core sets `Content-Type` (the operation's own wins, M9), `Content-Length` when the length is known (in-memory bodies; a `FileUpload` stream only when the caller gives a length), `Accept` and the headers of the operation. It sets nothing else; `Accept-Encoding`, `User-Agent`, cookies and authorization belong to the transport. The multipart boundary comes from a generator the sender takes (`ClientSender(boundary: ...)`), random by default and fixed in tests, so the ported M9 tests and the conformance suite assert exact bytes.
+- **The target.** `TransportRequest.target` is the path and the encoded query exactly as `OperationRequest.resolvePath` builds them today. The transport resolves it against its own base URL by its own rule; `DioTransport` passes it to `dio.request` unchanged, so a base URL with a path prefix and a `Dio` with no base URL behave as they do today.
+- **Web uploads.** A browser adapter may buffer an upload. Send progress then reports once, and the conformance suite skips the in-flight progress and stream-upload cases on the web with a stated reason.
+- **SSE reconnection** retries after every `TransportException` kind except `cancelled`, as it retries every failure but a cancel today.
+- **Semver gate.** The generator's CHANGELOG top section is `0.0.1 - Unreleased` (never published), so an "Output changes" entry is enough, no version bump. The runtime's CHANGELOG moves with the package to `typed_openapi_client`.
+
 ## Constraints
 
 - Generated output changes only as decision 7 says: the `Dio` import and constructor types, the sender name, the transport type. Nothing else in a generated file changes; a diff of the golden files shows that and nothing more.
