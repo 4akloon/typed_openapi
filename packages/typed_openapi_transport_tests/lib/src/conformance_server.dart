@@ -30,10 +30,6 @@ final class ConformanceServer {
   /// A port nothing listens on, for the connection-refused case.
   final int closedPort;
 
-  /// How many requests the server has seen, except `/stats` and the
-  /// preflight `OPTIONS` of a browser.
-  int get requestCount => _stats.requestCount;
-
   /// The port the server listens on.
   int get port => _server.port;
 

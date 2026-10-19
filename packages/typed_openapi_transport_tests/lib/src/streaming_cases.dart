@@ -25,8 +25,8 @@ final class StreamingCases {
       ConformanceContext.request('/large-stream', responseKind: .bytes),
       (r) => r.success(r.bytes),
     );
-    final success = result as Success<Object?, dynamic>;
-    final bytes = (success.data as List<int>);
+    final success = result as Success<Object?, Object?>;
+    final bytes = success.data as List<int>;
     expect(bytes.length, StreamRoutes.largeLength);
     expect(success.headers['content-length'], isNull);
     var checksum = 0;
@@ -57,7 +57,7 @@ final class StreamingCases {
         },
       ),
     );
-    expect(result, isA<Cancelled<Object?, dynamic>>());
+    expect(result, isA<Cancelled<Object?, Object?>>());
     await context.waitForServer((s) => s['disconnects']!['/trickle'] == 1);
   }
 }

@@ -4,10 +4,6 @@ final class ServerStats {
   final Map<String, int> _requests = {};
   final Map<String, int> _disconnects = {};
 
-  /// How many requests the server has answered or is answering, except the
-  /// ones for `/stats` and the preflight `OPTIONS` of a browser.
-  int get requestCount => _requests.values.fold(0, (a, b) => a + b);
-
   /// Counts a request for [path].
   void request(String path) =>
       _requests.update(path, (n) => n + 1, ifAbsent: () => 1);
