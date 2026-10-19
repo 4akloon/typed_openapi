@@ -12,6 +12,7 @@ final class EventUnionIr {
     this.unknownName = '',
     this.keepUnknown = true,
     this.unknownSensitive = false,
+    this.exhaustive = true,
   });
 
   /// The variants, in the order of the spec, one per event name.
@@ -34,6 +35,10 @@ final class EventUnionIr {
   /// `toString` does not print it: some event's data carries one.
   final bool unknownSensitive;
 
+  /// Whether a `switch` must name every event: the base is `sealed`, else
+  /// `abstract interface` (config `exhaustive`, R14.2); set with the names.
+  final bool exhaustive;
+
   /// This union, keeping unknown events when [keepUnknown].
   EventUnionIr keeping({required bool keepUnknown}) => EventUnionIr(
     variants,
@@ -42,17 +47,19 @@ final class EventUnionIr {
     unknownSensitive: unknownSensitive,
   );
 
-  /// This union with its names and [variants] named.
+  /// This union with its names and [variants] named, [exhaustive] or not.
   EventUnionIr named(
     String name,
     String unknownName,
-    List<EventVariantIr> variants,
-  ) => EventUnionIr(
+    List<EventVariantIr> variants, {
+    required bool exhaustive,
+  }) => EventUnionIr(
     variants,
     location: location,
     name: name,
     unknownName: unknownName,
     keepUnknown: keepUnknown,
     unknownSensitive: unknownSensitive,
+    exhaustive: exhaustive,
   );
 }

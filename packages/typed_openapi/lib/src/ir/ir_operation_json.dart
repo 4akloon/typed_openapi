@@ -98,6 +98,7 @@ final class IrOperationJson {
     if (union.keepUnknown) 'unknownName': union.unknownName,
     'keepUnknown': union.keepUnknown,
     if (union.unknownSensitive) 'unknownSensitive': true,
+    if (!union.exhaustive) 'exhaustive': false,
     'variants': [
       for (final v in union.variants)
         {
@@ -167,6 +168,7 @@ final class IrOperationJson {
 
   Map<String, Object?> _statusType(StatusTypeIr type) => {
     'name': type.name,
+    if (!type.exhaustive) 'exhaustive': false,
     'cases': [
       for (final c in type.cases)
         {

@@ -76,13 +76,17 @@ final class PartIr {
 /// statuses have different bodies (decision 18 of M8).
 final class StatusTypeIr {
   /// Creates the type [name] with a variant for each of [cases].
-  const StatusTypeIr(this.name, this.cases);
+  const StatusTypeIr(this.name, this.cases, {this.exhaustive = true});
 
   /// The Dart name of the sealed class.
   final String name;
 
   /// The variants, in the order of the responses.
   final List<StatusCaseIr> cases;
+
+  /// Whether a `switch` must name every variant: the base is `sealed`, else
+  /// `abstract interface` (config `exhaustive`, R14.2).
+  final bool exhaustive;
 }
 
 /// A variant of a [StatusTypeIr]: one status.

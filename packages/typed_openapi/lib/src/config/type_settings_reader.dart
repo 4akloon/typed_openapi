@@ -2,9 +2,9 @@ import '../diagnostics/json_pointer.dart';
 import 'config_sources.dart';
 
 /// Reads the settings of how a client's types are generated: `types.number`
-/// from the last source that has it (`defaults` first). A bad value is
-/// reported through the `invalid` function (TOA902) and the default is
-/// used.
+/// and `exhaustive`, each from the last source that has it (`defaults`
+/// first). A bad value is reported through the `invalid` function (TOA902)
+/// and the default is used.
 final class TypeSettingsReader {
   /// Creates a reader of [_sources] that reports through [_invalid].
   const TypeSettingsReader(this._sources, this._invalid);
@@ -28,6 +28,18 @@ final class TypeSettingsReader {
       'double' || 'int' => value,
       _ => _report('"number" must be num, double or int.', at),
     };
+  }
+
+  /// `exhaustive` (R14.2): whether the bases of enums, unions, status types
+  /// and event unions are `sealed`, so a `switch` names every case; `true`
+  /// unless set.
+  bool exhaustive() {
+    final picked = _sources.pick('exhaustive');
+    if (picked == null) return true;
+    final (value, at) = picked;
+    if (value is bool) return value;
+    _invalid('"exhaustive" must be true or false; true is used.', at);
+    return true;
   }
 
   /// Reports [message] at [at]; returns null.

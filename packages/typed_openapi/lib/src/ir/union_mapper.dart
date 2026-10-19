@@ -176,7 +176,7 @@ final class UnionMapper {
       defaultVariant: draft.values.fallback,
       exhaustive:
           _tools.context.overrides.schemaAt(schema.location)?.exhaustive ??
-          true,
+          _tools.context.config.exhaustive,
       unknownSensitive: site.branches.any(
         (branch) => SchemaShapes.carriesSecret(
           branch,

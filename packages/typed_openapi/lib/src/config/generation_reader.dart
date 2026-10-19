@@ -36,6 +36,7 @@ final class GenerationReader {
     final client = _sources.last.$2;
     final errorSchema = _string('errors', 'default_schema');
     final operations = OperationSettingsReader(_sources, _reader.invalid);
+    final types = TypeSettingsReader(_sources, _reader.invalid);
     return GenerationConfig(
       groupTemplate: _groupTemplate() ?? GenerationConfig.defaultGroupTemplate,
       defaultGroup: _defaultGroup() ?? GenerationConfig.defaultDefaultGroup,
@@ -48,11 +49,12 @@ final class GenerationReader {
       groupBy: _choice('group_by', GroupBy.values) ?? .tag,
       include: _filters.read('include'),
       exclude: _filters.read('exclude'),
-      numberType: TypeSettingsReader(_sources, _reader.invalid).numberType(),
+      numberType: types.numberType(),
       formats: _customTypes.read('formats'),
       schemas: _customTypes.read('schemas'),
       triState: _choice('tri_state', TriStateRule.values) ?? .patch,
       union: _choice('union', UnionMode.values) ?? .raw,
+      exhaustive: types.exhaustive(),
       defaultErrorSchema: errorSchema?.$1,
       defaultErrorSchemaPointer: errorSchema?.$2,
       defaultErrorSchemaSpan: errorSchema == null

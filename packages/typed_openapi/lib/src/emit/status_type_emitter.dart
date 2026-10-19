@@ -24,11 +24,12 @@ final class StatusTypeEmitter {
     String what,
   ) {
     final method = '${group.name}.${operation.name}';
+    final (modifier, switching) = type.exhaustive
+        ? ('sealed', 'names every one')
+        : ('abstract interface', 'needs a default case');
     out
-      ..prose(
-        'The $what of [$method], by status: a `switch` names every one.',
-      )
-      ..block('sealed class ${type.name}', () {
+      ..prose('The $what of [$method], by status: a `switch` $switching.')
+      ..block('$modifier class ${type.name}', () {
         out
           ..prose('Creates the value.')
           ..line('const ${type.name}();');

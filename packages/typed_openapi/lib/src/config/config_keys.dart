@@ -16,6 +16,7 @@ final class ConfigKeys {
     'types',
     'tri_state',
     'union',
+    'exhaustive',
     'errors',
     'sse',
   };

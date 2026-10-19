@@ -53,13 +53,16 @@ final class EventUnionEmitter {
 
   /// Writes the sealed class with `fromEvent`.
   void _base(DartWriter out, EventUnionIr union, String method) {
+    final (modifier, switching) = union.exhaustive
+        ? ('sealed', 'names every one')
+        : ('abstract interface', 'needs a default case');
     out
       ..prose(
-        'The events of [$method], by their event name: a `switch` names '
-        'every one.',
+        'The events of [$method], by their event name: a `switch` '
+        '$switching.',
       )
       ..line('@immutable')
-      ..block('sealed class ${union.name}', () {
+      ..block('$modifier class ${union.name}', () {
         out
           ..prose('Creates the value.')
           ..line('const ${union.name}();')

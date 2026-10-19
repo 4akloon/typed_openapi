@@ -195,7 +195,7 @@ final class ApiNames {
       operation.location,
       override: operation,
     );
-    return StatusTypeIr(name, [
+    return StatusTypeIr(name, exhaustive: _context.config.exhaustive, [
       for (final (status, type) in cases)
         StatusCaseIr(
           status,

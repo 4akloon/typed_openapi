@@ -105,6 +105,17 @@ linter:
           }
         }
       }
+      // Not exhaustive (R14.2): every base is an interface, and the code
+      // must analyze as cleanly as the sealed one.
+      for (final fixture in ['petstore', 'pets', 'everything', 'chat']) {
+        final files = emitClient(
+          '$fixture.yaml',
+          generation: const GenerationConfig(exhaustive: false),
+        );
+        for (final MapEntry(:key, :value) in files.entries) {
+          temp.write(p.join('lib', '${fixture}_open', key), value);
+        }
+      }
       for (final mode in UnionMode.values) {
         final files = emitClient(
           'chat.yaml',

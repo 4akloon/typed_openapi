@@ -70,6 +70,11 @@
   missing config) at the config file. `SarifReporter` takes `defaultFile`.
 
 ### Added
+- Config `exhaustive` (M12, R14.2), in `defaults` or a client: with
+  `false` the bases of enums, unions, status types and event unions are
+  `abstract interface` in place of `sealed`, so a new value is not a
+  breaking change for a `switch` with a default case. The default `true`
+  changes nothing; an override `exhaustive` on a schema wins.
 - `ApiLibrary` is exported: the files of a whole client from its IR, as
   `generate` writes them (M11). The programmatic guide now writes a whole
   client with it, and a test checks the files equal those of `generate`.

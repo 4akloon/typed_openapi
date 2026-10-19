@@ -4,6 +4,7 @@ library;
 import 'dart:mirrors';
 
 import 'package:test/test.dart';
+import 'package:typed_openapi/src/config/generation_config.dart';
 import 'package:typed_openapi/src/ir/ir.dart';
 import 'package:typed_openapi/src/ir/ir_json.dart';
 
@@ -183,6 +184,14 @@ void main() {
   final json = IrJson((_) => 'api.yaml').toJson(ir);
   final keys = <String>{};
   _collectKeys(json, keys);
+  // `exhaustive` is written only when false (R14.2).
+  const open = GenerationConfig(exhaustive: false);
+  _collectKeys(
+    IrJson(
+      (_) => 'api.yaml',
+    ).toJson(IrFixture(_spec, generation: open).build()),
+    keys,
+  );
 
   test('every field of the operation IR is in the dump', () {
     final missing = [

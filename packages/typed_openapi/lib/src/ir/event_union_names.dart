@@ -41,7 +41,7 @@ final class EventUnionNames {
           )
         : '';
     return events.withUnion(
-      union.named(name, unknown, [
+      union.named(name, unknown, exhaustive: _context.config.exhaustive, [
         for (final (index, variant) in union.variants.indexed)
           variant.named(_variantName(name, variant, index, operation)),
       ]),
