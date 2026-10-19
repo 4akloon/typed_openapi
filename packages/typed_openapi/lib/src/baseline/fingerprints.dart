@@ -70,7 +70,7 @@ final class Fingerprints {
       );
     } on p.PathException {
       // On another drive than the baseline file.
-      return p.posix.joinAll(p.split(full));
+      return DisplayPaths.withSlashes(full);
     }
   }
 }

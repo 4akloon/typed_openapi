@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import '../diagnostics/display_paths.dart';
 import '../load/spec_document.dart';
 import '../load/spec_loader.dart';
 
@@ -66,14 +67,18 @@ final class SpecDocuments {
   /// named by its absolute path, as is every file when the root's name is
   /// absolute.
   String displayPath(Uri uri) {
-    if (uri == root.uri) return root.file;
+    if (uri == root.uri) return DisplayPaths.withSlashes(root.file);
     final path = _pathOf(uri);
     final rootPath = _pathOf(root.uri);
     if (path == null || rootPath == null) return '$uri';
-    if (p.isAbsolute(root.file)) return p.normalize(path);
+    if (p.isAbsolute(root.file)) {
+      return DisplayPaths.withSlashes(p.normalize(path));
+    }
     final relative = p.relative(path, from: p.dirname(rootPath));
     final name = p.normalize(p.join(p.dirname(root.file), relative));
-    return p.split(name).first == '..' ? p.normalize(path) : name;
+    return DisplayPaths.withSlashes(
+      p.split(name).first == '..' ? p.normalize(path) : name,
+    );
   }
 
   static String? _pathOf(Uri uri) {

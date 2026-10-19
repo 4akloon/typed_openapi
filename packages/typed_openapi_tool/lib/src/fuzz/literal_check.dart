@@ -21,6 +21,7 @@ final class LiteralCheck {
   Future<List<String>> run(Map<String, List<String>> expected) async {
     final program = StringBuffer()
       ..writeln("import 'dart:convert';")
+      ..writeln("import 'dart:io';")
       ..writeln('const literals = <String, List<String>>{');
     for (final name in expected.keys) {
       program.writeln("  '$name': [");
@@ -31,19 +32,27 @@ final class LiteralCheck {
     }
     program
       ..writeln('};')
-      ..writeln('void main() => print(jsonEncode(literals));');
+      // A file, not stdout: on Windows a child writes stdout in the ANSI code
+      // page, which turns the hostile characters into question marks.
+      ..writeln(
+        'void main(List<String> args) => '
+        'File(args.single).writeAsStringSync(jsonEncode(literals));',
+      );
     final file = p.join(directory, 'bin', 'literals.dart');
     File(file)
       ..createSync(recursive: true)
       ..writeAsStringSync('$program');
+    final output = p.join(directory, 'literals.json');
     final result = await Process.run(Platform.resolvedExecutable, [
       'run',
       file,
+      output,
     ], workingDirectory: directory);
     if (result.exitCode != 0) {
       return ['The literals program failed: ${result.stderr}'];
     }
-    final values = jsonDecode('${result.stdout}') as Map<String, Object?>;
+    final values =
+        jsonDecode(File(output).readAsStringSync()) as Map<String, Object?>;
     return [
       for (final MapEntry(key: name, value: strings) in expected.entries)
         ..._missing(name, strings, (values[name] as List<Object?>).cast()),

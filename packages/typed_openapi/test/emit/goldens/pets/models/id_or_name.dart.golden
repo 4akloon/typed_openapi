@@ -1,5 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND.
 // dart format off
+// ignore_for_file: deprecated_member_use_from_same_package
 
 import 'package:typed_openapi_client/typed_openapi_client.dart'
     show DeepEquality, JsonReader, JsonValue, immutable;

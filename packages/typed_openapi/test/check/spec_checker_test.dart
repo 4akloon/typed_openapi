@@ -279,7 +279,7 @@ clients:
       DisplayPaths(dir.path),
     ).check(ConfigLoader(bag).load(path)!);
     expect(bag.all.map((d) => (d.code, d.file)), [
-      (DiagnosticCode.unknownKey, p.join('specs', 'common.yaml')),
+      (DiagnosticCode.unknownKey, 'specs/common.yaml'),
     ]);
   });
 
@@ -303,7 +303,9 @@ clients:
     expect(bag.all.map((d) => (d.code, d.file)), [
       (
         DiagnosticCode.unknownKey,
-        p.normalize(p.join(dir.path, 'shared', 'common.yaml')),
+        DisplayPaths.withSlashes(
+          p.normalize(p.join(dir.path, 'shared', 'common.yaml')),
+        ),
       ),
     ]);
   });

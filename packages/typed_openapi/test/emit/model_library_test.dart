@@ -244,9 +244,7 @@ void main() {
     ]);
     expect(
       files['models.dart'],
-      '// GENERATED CODE - DO NOT MODIFY BY HAND.\n'
-      '// dart format off\n'
-      '\n'
+      '${ModelLibrary.header}\n'
       "export 'models/root.dart';\n"
       "export 'models/type_2_fa.dart';\n"
       "export 'models/user_dto.dart';\n"
@@ -255,9 +253,7 @@ void main() {
     expect(
       files['models/root.dart'],
       startsWith(
-        '// GENERATED CODE - DO NOT MODIFY BY HAND.\n'
-        '// dart format off\n'
-        '\n'
+        '${ModelLibrary.header}\n'
         "import 'package:typed_openapi_client/typed_openapi_client.dart'\n"
         '    show DeepEquality, JsonReader, immutable;\n'
         '\n'

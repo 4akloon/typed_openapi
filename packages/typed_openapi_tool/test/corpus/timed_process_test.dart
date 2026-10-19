@@ -28,7 +28,7 @@ Future<void> main(List<String> args) async {
       [script, '0'],
     );
     expect(result.exitCode, 0);
-    expect(result.stdout, 'started\ndone\n');
+    expect('${result.stdout}'.replaceAll('\r\n', '\n'), 'started\ndone\n');
   });
 
   test('kills a process that outlives the limit', () async {

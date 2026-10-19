@@ -57,7 +57,7 @@ final class OutputWriterFixture {
     for (final e
         in dir.directory.listSync(recursive: true, followLinks: false).toList()
           ..sort((a, b) => a.path.compareTo(b.path)))
-      p.relative(e.path, from: dir.path): e is File
+      p.posix.joinAll(p.split(p.relative(e.path, from: dir.path))): e is File
           ? e.readAsStringSync()
           : null,
   };

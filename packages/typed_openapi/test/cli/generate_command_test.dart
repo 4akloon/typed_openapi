@@ -81,7 +81,7 @@ void main() {
     expect(
       out,
       endsWith(
-        'Generated pets in ${p.join('gen', 'pets')}: 6 files, 6 written, '
+        'Generated pets in gen/pets: 6 files, 6 written, '
         '0 deleted.\n',
       ),
     );
@@ -681,7 +681,7 @@ void main() {
         '  c: {input: specs/pets.yaml, output: gen/z}\n',
       );
       expect(code, 1);
-      expect(out, contains('Generated c in ${p.join('gen', 'z')}'));
+      expect(out, contains('Generated c in gen/z'));
       expect(tree('gen/x'), isEmpty);
     });
   });

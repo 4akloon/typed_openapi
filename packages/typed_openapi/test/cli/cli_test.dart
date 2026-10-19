@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
 import '../helpers/cli_runner.dart';
@@ -44,7 +43,7 @@ clients:
     ], workingDirectory: workingDirectory);
     expect(code, 1);
     expect(out, contains('error TOA011 unsupported-openapi-version'));
-    expect(out, contains('  --> ${p.join('specs', 'old.json')}:2:14'));
+    expect(out, contains('  --> specs/old.json:2:14'));
   });
 
   test('prints JSON with --format json', () async {

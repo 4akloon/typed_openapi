@@ -145,7 +145,7 @@ components:
     expect((code as SchemaObject).types, [SchemaType.string]);
     final d = bag.all.single;
     expect(d.code, DiagnosticCode.unresolvedRef);
-    expect(d.file, p.join('specs', 'common', 'errors.yaml'));
+    expect(d.file, 'specs/common/errors.yaml');
     expect(d.line, 7);
   });
 
