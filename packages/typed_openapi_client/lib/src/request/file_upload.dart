@@ -6,9 +6,9 @@ import 'dart:typed_data';
 /// Generated methods take a [FileUpload] instead of a type of an HTTP
 /// client, so their signatures do not depend on one. [FileUpload.bytes]
 /// works on every platform, the web included; [FileUpload.stream] sends the
-/// data as it is read and can be sent once. A transport may buffer an upload, for
-/// example in a browser, so a stream is not always streamed; for Dio see the
-/// README of `typed_openapi_dio`.
+/// data as it is read and can be sent once. A transport may buffer an
+/// upload, for example in a browser, so a stream is not always streamed; for
+/// Dio see the README of `typed_openapi_dio`.
 final class FileUpload {
   /// A file held in memory.
   FileUpload.bytes(Uint8List this.bytes, {this.filename, this.contentType})

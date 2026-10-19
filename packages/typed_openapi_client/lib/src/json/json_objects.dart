@@ -2,10 +2,9 @@ import 'json_decode_exception.dart';
 
 /// A decoded JSON value viewed as an object, `Map<String, Object?>`.
 ///
-/// `jsonDecode` gives `Map<String, dynamic>`, but a mock
-/// or a transport that decodes bodies itself can give a
-/// `Map<dynamic, dynamic>`; it is an
-/// object all the same as long as every key is a string.
+/// `jsonDecode` gives `Map<String, dynamic>`, but a mock or a transport that
+/// decodes bodies itself can give a `Map<dynamic, dynamic>`; it is an object
+/// all the same as long as every key is a string.
 extension type const JsonObjects(Object? _value) {
   /// The value as `Map<String, Object?>` (the same map, or a view of it
   /// without copying), or `null` when it is not a map or has a non-string key.
