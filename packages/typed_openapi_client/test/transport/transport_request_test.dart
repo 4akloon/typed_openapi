@@ -14,7 +14,7 @@ void main() {
       target: '/files',
       operation: operation,
       headers: {
-        'content-length': ['12'],
+        'Content-Length': ['12'],
       },
     );
     expect(request.contentLength, 12);
