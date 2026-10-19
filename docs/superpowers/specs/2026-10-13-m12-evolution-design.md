@@ -74,4 +74,4 @@ The user took these decisions in a grilling session.
 
 - Detecting renames by structure.
 - Migrating user code, for example codemods.
-- Changes of the runtime package's own API. Those are covered by the runtime's semver and CHANGELOG.
+- Changes of the client packages' own API (`typed_openapi_client`, `typed_openapi_dio`). Those are covered by their semver and CHANGELOGs.
