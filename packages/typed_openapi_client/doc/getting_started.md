@@ -1,7 +1,8 @@
 # Getting started
 
-A generated client sends its requests through `DioRequestSender` and returns
-a `Result<T, E>` from every method. This guide wires a `Dio`, makes a call,
+A generated client builds its requests with `ClientSender`, hands them to a
+`ClientTransport` and returns a `Result<T, E>` from every method. This guide
+wires the Dio transport (`typed_openapi_dio`), makes a call,
 reads the result and shows what `CallOptions` can do. The client below is the
 one the generator writes for a two-operation Petshop spec (a `GET
 /pets/{petId}` and a `PATCH /pets/{petId}`); the trimmed generated method is
@@ -12,18 +13,21 @@ in [Results and errors](results_and_errors.md).
 ```yaml
 dependencies:
   dio: ^5.11.1
-  typed_openapi_runtime: ^0.0.1   # not on pub.dev yet; use a path or git dependency
+  typed_openapi_client: ^0.0.1   # not on pub.dev yet; use a path or git dependency
+  typed_openapi_dio: ^0.0.1      # the transport over your Dio; the same
 ```
 
-Generated files import `package:typed_openapi_runtime/typed_openapi_runtime.dart`
-and `package:dio/dio.dart` (only `Dio`). The generator itself
+Generated files import only
+`package:typed_openapi_client/typed_openapi_client.dart`; your app adds the
+transport (`typed_openapi_dio` and `dio`). The generator itself
 (`typed_openapi`) is a dev tool and never a dependency of your app.
 
 ## 2. Create the client
 
 ```dart
 import 'package:dio/dio.dart';
-import 'package:typed_openapi_runtime/typed_openapi_runtime.dart';
+import 'package:typed_openapi_client/typed_openapi_client.dart';
+import 'package:typed_openapi_dio/typed_openapi_dio.dart';
 
 import 'petshop/petshop.dart'; // generated
 
@@ -34,17 +38,17 @@ final dio = Dio(
     headers: {'User-Agent': 'petshop-app/1.0'},
   ),
 );
-final api = PetshopClient(dio);
+final api = PetshopClient(DioTransport(dio));
 ```
 
-The client uses your `Dio` as it is. It never sets a base URL, an
+`DioTransport` uses your `Dio` as it is. It never sets a base URL, an
 interceptor, a transformer or `validateStatus`, and it never retries; those
 belong to you. Authentication, logging, retries and per-call timeouts are
 interceptors on this `Dio` (see [Security metadata](security_metadata.md)).
 
 > **Note:** The root class has a field per group of operations (`api.pets`).
-> Each group is a plain `class` that takes the `Dio`, so you can `implements`
-> it in a test fake.
+> Each group is a plain `class` that takes the `ClientTransport`, so you can
+> `implements` it in a test fake, or give it a fake transport.
 
 ## 3. Call a method and read the result
 
@@ -84,7 +88,7 @@ User-Agent: petshop-app/1.0
 ```
 
 > **Gotcha:** `options.queryParameters` is empty in an interceptor. The
-> runtime encodes the path and the query itself and gives Dio one finished
+> client encodes the path and the query itself and gives the transport one finished
 > path, so read `options.uri` instead.
 
 ## 4. CallOptions
@@ -95,11 +99,11 @@ fake that implements it).
 
 | Field | Effect |
 | --- | --- |
-| `cancelToken` | A Dio `CancelToken`; cancelling gives `Cancelled` |
+| `cancel` | A `CancelSignal`; cancelling gives `Cancelled` |
 | `headers` | Added to the request; win over the operation's header parameters (case-insensitively) |
-| `extra` | Merged into `RequestOptions.extra`, for your interceptors |
-| `onSendProgress` | Dio's progress callback for the request body |
-| `onReceiveProgress` | Dio's progress callback for the response body |
+| `extra` | Given to the transport (`TransportRequest.extra`); `DioTransport` merges it into `RequestOptions.extra` |
+| `onSendProgress` | Bytes of the request body sent so far, counted by the client |
+| `onReceiveProgress` | Bytes of the response body received so far, counted by the client |
 | `sse` | `SseOptions` for an event stream (reconnection); other operations ignore it |
 
 ```dart
@@ -118,9 +122,9 @@ await api.pets.getPet(
 ### Cancelling
 
 ```dart
-final token = CancelToken();
-final pending = api.pets.getPet(petId: 7, call: CallOptions(cancelToken: token));
-token.cancel('user left the page');
+final signal = CancelSignal();
+final pending = api.pets.getPet(petId: 7, call: CallOptions(cancel: signal));
+signal.cancel('user left the page');
 print(await pending); // Cancelled
 ```
 
@@ -136,7 +140,7 @@ cannot use it to pick another media type such as
 
 ### Per-call timeouts
 
-Timeouts, the base URL and retries are Dio's. For a value that differs per
+Timeouts, the base URL and retries belong to the transport, here your Dio. For a value that differs per
 call, pass it in `extra` and apply it in an interceptor:
 
 ```dart
@@ -164,7 +168,7 @@ The runtime puts an `OperationInfo` (operation id, method, path template,
 tags, security) into `RequestOptions.extra`:
 
 ```dart
-final operation = OperationInfo.of(options); // null for a request the client did not send
+final operation = DioTransport.operationOf(options); // null for a request DioTransport did not send
 print(operation?.operationId);               // getPet
 ```
 

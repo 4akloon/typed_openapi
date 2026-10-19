@@ -1,8 +1,10 @@
-# typed_openapi_runtime
+# typed_openapi_client
 
-Runtime для клієнтів, згенерованих
+Ядро клієнтів, згенерованих
 [`typed_openapi`](https://pub.dev/packages/typed_openapi): єдиний пакет, від якого
-залежить згенерований код. Залежності: `dio` і `meta`.
+залежить згенерований код. Воно саме будує кожен запит і читає кожну
+відповідь, а байти передає `ClientTransport`; транспорт поверх твого `Dio` —
+[`typed_openapi_dio`](../typed_openapi_dio/README.md). Залежність: `meta`.
 
 > **Статус:** у розробці, ще не опубліковано.
 
@@ -44,14 +46,14 @@ Runtime для клієнтів, згенерованих
 - Кодувальники стилів параметрів OpenAPI (`simple`, `label`, `matrix`,
   `form`, `spaceDelimited`, `pipeDelimited`, `deepObject`, заголовки,
   cookie) з percent-кодуванням за RFC 3986.
-- `DioRequestSender`: надсилає запит через твій `Dio` і типізує результат.
-  `CallOptions` несе токен скасування, заголовки, `extra` і колбеки прогресу
+- `ClientSender`: будує запит, надсилає його через `ClientTransport` і
+  типізує результат. `CallOptions` несе `CancelSignal`, заголовки, `extra` і колбеки прогресу
   для одного виклику. Заголовки з `CallOptions.headers` мають перевагу над
   заголовками-параметрами операції, але не над її `Content-Type`: тип вмісту
   тіла запиту (наприклад `application/json`) завжди виграє, тож
   `Content-Type`, заданий там, ігнорується, коли операція надсилає тіло.
 - Декодер потоку подій (`text/event-stream`) за WHATWG;
-  `DioRequestSender.openEvents` повертає `Result`, у `Success` якого лежить
+  `ClientSender.openEvents` повертає `Result`, у `Success` якого лежить
   потік із `SseEvent`, `SseDecodeError` (одна погана подія) і наприкінці
   `SseDisconnected`. Проблеми з даними — це елементи потоку, а не помилки
   потоку (єдиний виняток: `Error` з твого декодера подій — це баг програми,
@@ -75,34 +77,27 @@ Runtime для клієнтів, згенерованих
   потік одразу; останній елемент — завжди `SseDisconnected` з останнім id
   події та `retry`, тож можна відновитися самому.
 
-## Твій Dio використовується як є
+## Транспорт
 
-- У твоєму `Dio` нічого не змінюється: base URL, заголовки, таймаути,
-  інтерсептори, transformer і `validateStatus` лишаються твоїми. Повторів
-  немає: це справа твоїх інтерсепторів.
-- Помилкові статуси проходять через `onError` твоїх інтерсепторів, і лише
-  потім типізуються.
+- Ядро кодує шлях, query, заголовки й тіло і читає байти відповіді, тож
+  запит однаковий через будь-який `ClientTransport`. Base URL, таймаути,
+  повтори, cookie й авторизація належать транспорту; ядро нічого не
+  повторює.
 - Кожен запит несе свій `OperationInfo` (operation id, метод, шаблон шляху,
-  теги): `OperationInfo.of(options)` в інтерсепторі.
-- Шлях і query кодує runtime і передає Dio одним рядком, тож в
-  інтерсепторах `options.queryParameters` порожній; читай `options.uri`.
-  Dio стискає кожне `//` готового URL; коли значення query містить `//`
-  (значення з `allowReserved`, наприклад `next=/a//b`), а base URL
-  абсолютний, runtime сам з'єднує base URL зі шляхом, щоб значення
-  збереглося.
+  теги, безпека) у `TransportRequest.operation`; для Dio його читає
+  `DioTransport.operationOf(options)` в інтерсепторі.
+- Як поводиться твій `Dio` (інтерсептори, `onError`, `//` у query) описано
+  в README [`typed_openapi_dio`](../typed_openapi_dio/README.md).
 
 ## Нотатки
 
 - `Result` збігається з `Result` з `package:async`. У бібліотеці, що
   імпортує обидва, сховай один (`import 'package:async/async.dart' hide
-  Result;`, або `import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'
+  Result;`, або `import 'package:typed_openapi_client/typed_openapi_client.dart'
   hide Result;`) або імпортуй один із префіксом.
-- JSON розбирає Dio. Коли тіло — невалідний JSON, Dio відкидає відповідь,
-  тож `DecodeError` не має `statusCode`, а його `rawBody` — текст, який
-  повідомив парсер Dio: усе тіло, коли Dio прочитав його одразу, і лише
-  чанк із помилкою, коли Dio його стрімив (був заголовок `Content-Length`).
-  Після компіляції в JavaScript Dio повідомляє лише текст `SyntaxError`
-  браузера, тож там `rawBody` — `null`.
+- JSON розбирає ядро. Коли тіло — невалідний JSON, `DecodeError` має
+  `statusCode` відповіді, а його `rawBody` — увесь текст тіла, на кожній
+  платформі.
 - `FormatException`, кинутий під час декодування (твій конвертер,
   `Date.parse`), — це проблема з даними: `DecodeError` у результаті,
   `SseDecodeError` у потоці подій. `Error` — це баг, його не ловлять.
@@ -110,8 +105,8 @@ Runtime для клієнтів, згенерованих
   (`''`, порожній список, `label` від `''`), кидає `ArgumentError`: клієнт
   прибрав би сегмент, і `/users/{id}/sessions` став би `/users/sessions`.
 - `rawBody` у `DecodeError` і `UndocumentedStatus` — за можливістю: це тіло
-  в тому вигляді, в якому його повернув Dio (розібраний JSON, текст або
-  байти), або `null`, коли відповідь без тіла чи Dio нічого не зберіг.
+  в тому вигляді, в якому його прочитало ядро (розібраний JSON, текст або
+  байти), або `null`, коли відповідь без тіла.
 - `date-time` має бути RFC 3339 зі зсувом (`2024-02-03T04:05:06Z`). Значення
   без зсуву — `DecodeError` з підказкою: для сервера, що пише інший формат,
   зістав формат зі своїм типом через конвертер (`types.formats`) або
@@ -125,12 +120,10 @@ Runtime для клієнтів, згенерованих
 ## Web
 
 Пакет працює на web, зібраний у JavaScript (dart2js) або в WebAssembly
-(dart2wasm). Потокам подій там потрібен потоковий адаптер: стандартний
-браузерний адаптер Dio віддає тіло лише після закриття з'єднання, тож
-операція з потоком подій повертає `TransportError` з поясненням
-(`DioRequestSender.webStreamingMessage`). Постав у свій Dio адаптер на
-fetch, наприклад `ConversionLayerAdapter` з `dio_compatibility_layer` з
-`BrowserClient` з `package:http` або `fetch_client`. Перепідключення надсилає
+(dart2wasm). Потокам подій там потрібен транспорт, що стрімить тіло:
+`DioTransport` зі стандартним браузерним адаптером Dio повертає
+`TransportError` з поясненням (`DioTransport.webStreamingMessage`); що
+поставити замість нього, описано в README `typed_openapi_dio`. Перепідключення надсилає
 `Last-Event-ID`, який не належить до заголовків запиту, дозволених CORS
 за замовчуванням: для потоку з іншого origin сервер має дозволити
 `Last-Event-ID` в `Access-Control-Allow-Headers` у відповіді на preflight,
@@ -140,7 +133,7 @@ fetch, наприклад `ConversionLayerAdapter` з `dio_compatibility_layer` 
 cookie-параметри на web не працюють (браузер тримає свої cookie і надсилає
 їх сам, за своїми налаштуваннями credentials). Тест перевіряє це в Chrome,
 скомпільованому в JavaScript і в Wasm: заголовок `Cookie`, виставлений
-через Dio, cookie-параметром чи напряму, ніколи не доходить до сервера, а
+cookie-параметром чи напряму, ніколи не доходить до сервера, а
 інші заголовки того самого запиту доходять.
 
 ## Розробка
@@ -152,7 +145,9 @@ dart test -p chrome --compiler dart2wasm     # dart2wasm
 ```
 
 Файли й тести, що потребують VM (`dart:io`, літерали int64), позначені
-`@TestOn('vm')` або `testOn: 'vm'`; `test/dio/web_test.dart` працює лише в
-браузері. Якщо Chrome не знайдено, задай `CHROME_EXECUTABLE`.
+`@TestOn('vm')` або `testOn: 'vm'`. Якщо Chrome не знайдено, задай
+`CHROME_EXECUTABLE`. Тести не ходять у мережу: вони надсилають через
+`FakeTransport`. Кожен транспорт також проходить набір відповідності
+`typed_openapi_transport_tests` проти локального сервера.
 
 [English version](README.md)

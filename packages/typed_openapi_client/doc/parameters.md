@@ -128,7 +128,7 @@ next=/a//b?x=1#frag[1]       -> next=/a//b?x%3D1%23frag%5B1%5D
 
 > **Note:** Dio collapses every `//` of the finished URL, query included.
 > When a query holds `//` (the `next=/a//b` above) and the base URL is
-> absolute, the runtime joins the base URL itself so the value is kept.
+> absolute, `DioTransport` joins the base URL itself so the value is kept.
 > Interceptors still see the finished URL.
 
 ## Header parameters

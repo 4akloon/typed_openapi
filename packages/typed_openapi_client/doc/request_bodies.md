@@ -1,12 +1,14 @@
 # Request bodies
 
 A generated method puts its body into `OperationRequest.body` together with a
-`contentType`, and `DioRequestSender` turns it into what Dio sends. The body
+`contentType`, and `ClientSender` encodes it into the bytes every transport
+sends. The body
 is one of: a JSON value (the `toJson()` of a model, or a string, number,
 boolean, list or map), text, a `FormBody`, a `MultipartBody` or a
 `FileUpload`; `null` means no body. This guide lists what goes on the wire
-for each and which arguments throw. The bodies below were sent through an
-in-memory Dio adapter and are shown as it recorded them.
+for each and which arguments throw. The bodies below were sent through
+`DioTransport` over an in-memory Dio adapter and are shown as it recorded
+them.
 
 ## JSON
 
@@ -22,10 +24,9 @@ type (`application/vnd.api+json`) is JSON.
 | `null` | none (`contentType` is `null`) | no body, no `Content-Type` |
 | `null` | `text/plain` | no body, no `Content-Type` |
 
-The runtime encodes a JSON body itself only where Dio gets it wrong: Dio
-sends a `String` as it is, so the string `a"b` would go out unquoted, and it
-sends `null` as no body. A map, list, number or boolean stays Dio's data, so
-an interceptor sees the object, not a string.
+The client encodes every JSON body itself: a string is quoted and `null` is
+the JSON `null`. A transport gets the bytes, so a Dio interceptor sees the
+encoded body, not the object.
 
 > **Gotcha:** A `null` body with a JSON content type is the JSON value
 > `null`, and a generated method passes no `contentType` for an absent
@@ -37,7 +38,7 @@ an interceptor sees the object, not a string.
 A text body (`text/plain`) is sent as the `String` it is. A binary body is a
 `FileUpload` (below). A request is never given a type of the HTTP client:
 signatures use `FileUpload`, `FormBody` and `MultipartBody` so that they do
-not depend on Dio.
+not depend on a transport.
 
 ## `Content-Type` and `Accept`
 
@@ -46,7 +47,7 @@ not depend on Dio.
   ignored when the operation sends a body: it cannot pick
   `application/merge-patch+json`.
 - A `FileUpload` with its own `contentType` wins over the spec's, and a
-  multipart body gets `multipart/form-data; boundary=...` from Dio.
+  multipart body gets `multipart/form-data; boundary=...` from the client.
 - `Accept`: the `OperationRequest.accept` of an operation that has both a
   body method and an event-stream method (for example `application/json`),
   so a server that picks by `Accept` does not answer with the stream. `null`
@@ -108,12 +109,12 @@ FileUpload.stream(file.openRead(), length: await file.length());
 
 - `.bytes` holds the data in memory and works on every platform.
 - `.stream` sends the data as it is read and can be sent **once** (a stream
-  is listened to once); `length` is required, and the runtime sends it as
-  `Content-Length`, because Dio sends a stream as it is.
+  is listened to once); `length` is required, and the client sends it as
+  `Content-Length`.
 - `contentType` wins over the spec's; a value that is not a media type
   (`'nonsense'`) throws a `FormatException` when sending.
 - On the web, Dio's browser adapter buffers a stream into one `Uint8List`
-  before it sends, so a stream is not streamed there.
+  before it sends, so a stream is not streamed there with `DioTransport`.
 
 As a body of its own, a `FileUpload` is sent as the bytes or the stream with
 its `contentType` (or the operation's). `FileUpload(a.bin, 3 bytes, x/y)` is
@@ -134,7 +135,8 @@ MultipartBody([
 ])
 ```
 
-The wire body (boundary shortened, headers lower-cased as Dio writes them):
+The wire body (boundary shortened; the client writes it byte for byte as
+Dio's `FormData` did, headers lower-cased):
 
 ```text
 ----BOUNDARY
@@ -187,12 +189,15 @@ part for each property of the object, in order, `null` giving none
 
 ### The ordering rule
 
-Dio writes every plain field of a `FormData` before its files. A text part
+Dio's `FormData`, which this encoding keeps, writes every plain field
+before its files. A text part
 stays a plain field **while no file or typed part precedes it** (the usual
 shape: values first, files last), and sends no `Content-Type` for the text.
 After the first file or typed part, text parts are sent as
 `text/plain; charset=utf-8` parts (the `caption` above), so the wire order is
-always the order of `MultipartBody.parts`.
+always the order of `MultipartBody.parts`. A file part with no media type
+of its own or of the spec is sent as `application/octet-stream` (Dio's
+`FormData` guessed one from the file name; the client does not guess).
 
 ### Errors
 
@@ -212,9 +217,10 @@ with `toJson` first.
 
 ## Progress
 
-`CallOptions.onSendProgress` and `onReceiveProgress` are Dio's callbacks and
-are passed through. On the web `dio_web_adapter` reports send progress when
-the request has a body; see [Web and platforms](web_and_platforms.md).
+`CallOptions.onSendProgress` and `onReceiveProgress` are counted by the
+client as the body bytes pass to and from the transport: `(count, total)`,
+`total` the body length or the response's `Content-Length` (`-1` without
+one). See [Web and platforms](web_and_platforms.md).
 
 ## See also
 

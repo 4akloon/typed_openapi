@@ -8,11 +8,14 @@ The examples use the `chat.yaml` and `chat.overrides.yaml` test fixtures (OpenAP
 
 ```dart
 import 'package:dio/dio.dart';
-import 'package:typed_openapi_runtime/typed_openapi_runtime.dart';
+import 'package:typed_openapi_client/typed_openapi_client.dart';
+import 'package:typed_openapi_dio/typed_openapi_dio.dart';
 import 'package:my_app/chat/chat.dart';
 
 Future<void> main() async {
-  final chat = ChatApi(Dio(BaseOptions(baseUrl: 'https://api.example.com')));
+  final chat = ChatApi(
+    DioTransport(Dio(BaseOptions(baseUrl: 'https://api.example.com'))),
+  );
 
   final result = await chat.followChat(chatId: 'c1');
   switch (result) {
@@ -50,7 +53,7 @@ The method first returns a `Result`: a status the spec does not list as a stream
 | `SseReconnecting<T>` | The connection ended and a new attempt starts after `delay`. |
 | `SseDisconnected<T>` | Always the last item: the server closed the stream (`cause` is `null`) or it failed. It carries `lastEventId`, `retry` and `receivedMessage`. |
 
-The stream never emits errors; problems are items. The full runtime behaviour (WHATWG parsing, `Last-Event-ID`, backoff, cancellation, web adapters) is in the runtime guide, [SSE](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_runtime/doc/sse.md). On the web, the default Dio adapter delivers the body only when the connection closes, so use a streaming adapter there.
+The stream never emits errors; problems are items. The full runtime behaviour (WHATWG parsing, `Last-Event-ID`, backoff, cancellation, web adapters) is in the runtime guide, [SSE](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/doc/sse.md). On the web, the default Dio adapter delivers the body only when the connection closes, so use a streaming adapter there.
 
 > **Note:** `openEvents` needs its stream listened to or cancelled. Cancelling the listener cancels the request. To cancel from outside, pass a `CancelToken` in `CallOptions`, see [Operations](operations.md).
 
@@ -385,4 +388,4 @@ The full catalog, with levels you can change, is in [Diagnostics](../diagnostics
 - [Operations](operations.md) and [Responses and errors](responses_and_errors.md): how the other methods are written.
 - [Overrides](../overrides.md) and [Configuration](../configuration.md): `sse`, `naming.stream_suffix`.
 - [Security](security.md): sending a token with a stream request.
-- Runtime: [SSE](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_runtime/doc/sse.md).
+- Runtime: [SSE](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/doc/sse.md).

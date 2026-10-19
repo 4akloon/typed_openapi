@@ -173,7 +173,7 @@ Paths are not part of it, so a checkout in another directory gives the same hash
 .*.typed_openapi-*/
 ```
 
-> **Note:** The generated code imports only `package:typed_openapi_runtime` and `package:dio`. Add both to the app's `dependencies`; see the [runtime package](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_runtime/README.md).
+> **Note:** The generated code imports only `package:typed_openapi_client`. Add it and a transport (`typed_openapi_dio` with `dio`) to the app's `dependencies`; see the [runtime package](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/README.md).
 
 ## See also
 

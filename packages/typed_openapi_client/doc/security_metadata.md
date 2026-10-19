@@ -2,22 +2,23 @@
 
 A generated client **describes** the security of an operation and sends no
 credentials. The spec's `security` requirements travel with every request as
-metadata, so one interceptor on your `Dio` can add the right token, key or
+metadata, so one interceptor of your transport (here on your `Dio`) can add the right token, key or
 signature for the operation being called. This guide covers the metadata
 types and a working interceptor.
 
 ## Where it is
 
-The runtime puts an `OperationInfo` into `RequestOptions.extra` under
+The client puts an `OperationInfo` into `TransportRequest.operation`;
+`DioTransport` copies it into `RequestOptions.extra` under
 `OperationInfo.extraKey` (`typed_openapi.operation`). Read it with
-`OperationInfo.of(options)`, which is `null` for a request a generated client
-did not send:
+`DioTransport.operationOf(options)`, which is `null` for a request the
+transport did not send:
 
 ```dart
 class AuthInterceptor extends Interceptor {
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
-    final operation = OperationInfo.of(options);
+    final operation = DioTransport.operationOf(options);
     if (operation == null) return handler.next(options); // not a generated call
     print('${operation.operationId}: ${operation.security}');
     // ...
@@ -157,7 +158,7 @@ class AuthInterceptor extends Interceptor {
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
-    final operation = OperationInfo.of(options);
+    final operation = DioTransport.operationOf(options);
     if (operation == null) return handler.next(options);
 
     final alternatives = operation.security;

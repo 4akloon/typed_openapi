@@ -18,7 +18,7 @@ Goal: an in-house OpenAPI codegen for Dart that covers the features of competito
    * Each client is a separate library with its own namespace: identical model names (`User`) in two clients do not conflict (R4.3), and there is no shared barrel file between clients.
    * Output directories of different clients cannot overlap: this is an error diagnostic (in swagger_parser, several `schemes` overwrite a shared `export.dart`, #405).
    * The CLI generates or checks all clients together or one by name.
-   * All clients use the same `typed_openapi_runtime`.
+   * All clients use the same `typed_openapi_client` (the runtime, renamed in M11b).
    * Shared models between clients (for example, one error schema for several services) are not in v1.
 
    ```yaml

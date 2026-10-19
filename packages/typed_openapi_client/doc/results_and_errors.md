@@ -47,14 +47,14 @@ the documented errors (`Never` when there are none).
 | `HttpError<T, E>` | A documented error status (4xx, 5xx or `default`) whose body decoded as `E` | `body`, `statusCode`, `headers` |
 | `UndocumentedStatus<T, E>` | A status the operation does not document | `statusCode`, `rawBody`, `headers` |
 | `DecodeError<T, E>` | A body that does not match the schema, is not valid JSON, or is rejected by a decoder | `error` (a `JsonDecodeException`), `statusCode`, `rawBody`, `headers` |
-| `TransportError<T, E>` | No response: timeout, connection or certificate problem, any other Dio failure | `exception` (a `DioException`), `stackTrace` |
-| `Cancelled<T, E>` | The caller cancelled the request | `exception` (a `DioException`, type `cancel`), `stackTrace` |
+| `TransportError<T, E>` | No complete response: timeout, connection or certificate problem, any other transport failure | `exception` (a `TransportException`), `stackTrace` |
+| `Cancelled<T, E>` | The caller cancelled the request | `exception` (a `TransportException` of kind `cancelled`), `stackTrace` |
 
 Header maps use lower-case names and `List<String>` values. `HttpError` and
 `Success` never hold a raw body; `UndocumentedStatus` and `DecodeError` do.
 
 Real output of each outcome from the generated `getPet`, produced with an
-in-memory Dio adapter (`describe` is a `switch` over the six variants):
+in-memory Dio adapter through `DioTransport` (`describe` is a `switch` over the six variants):
 
 ```text
 200 ok            -> Success 200 Rex
@@ -62,9 +62,9 @@ in-memory Dio adapter (`describe` is a `switch` over the six variants):
 404 wrong body    -> DecodeError status=404 pointer="/code" expected a required property, got no value rawBody={message: x}
 500               -> UndocumentedStatus 500 rawBody={oops: true}
 200 wrong type    -> DecodeError status=200 pointer="/id" expected an integer, got a string rawBody={id: one, name: Rex}
-200 not json      -> DecodeError status=null pointer="" expected a JSON body, got text that is not JSON rawBody=<html>
+200 not json      -> DecodeError status=200 pointer="" expected a JSON body, got text that is not JSON rawBody=<html>
 200 text/plain    -> DecodeError status=200 pointer="" expected an object, got a string rawBody={"id":1,"name":"Rex"}
-timeout           -> TransportError connectionTimeout
+timeout           -> TransportError timeout
 cancel            -> Cancelled
 ```
 
@@ -114,74 +114,57 @@ A success without a response body has `T = void`; match it with `Success()`.
 
 ## What triggers each variant
 
-Requests go through your `Dio`, so Dio's own rules apply first.
+The transport sends the request first and owns its rules; with
+`DioTransport` an error status goes through your interceptors' `onError`,
+which may resolve it into a response of any status (see
+[`typed_openapi_dio`](../../typed_openapi_dio/README.md)).
 
-1. **`validateStatus`** decides whether Dio treats a status as an error. An
-   error status goes through your interceptors' `onError`, which may resolve
-   it into a response of any status. The decoder then switches on the final
-   status, so a response an interceptor resolved is typed like any other.
-2. A response (a good status, or a `badResponse` that carries one) is decoded
-   by the generated switch: a documented success becomes `Success`, a
-   documented error status `HttpError`, anything else `UndocumentedStatus`.
-3. A decoder that rejects the body gives `DecodeError`: a
-   `JsonDecodeException` (type, missing property, bad date-time) or a
-   `FormatException` thrown by a converter or `Date.parse`. A
-   `FormatException` becomes a `DecodeError` at the root pointer `""`.
-4. A `DioException` without a response is mapped as in the next table.
-
-### How a `DioException` maps
-
-| `DioException.type` | Result |
-| --- | --- |
-| `cancel` | `Cancelled` |
-| `badResponse` with a response | decoded as in step 2 (so `HttpError`, `UndocumentedStatus` or `DecodeError`) |
-| `connectionTimeout`, `sendTimeout`, `receiveTimeout`, `connectionError`, `badCertificate`, `badResponse` without a response | `TransportError` |
-| `unknown` with an `Error` as its cause | rethrown (see below) |
-| `unknown` with a `FormatException` from Dio's JSON parser, on a request that reads JSON | `DecodeError` with no status |
-| `unknown` with any other cause (`SocketException`, `HandshakeException`, custom exceptions) | `TransportError` |
-
-`TransportError.exception.type` tells the kind (`connectionTimeout`,
-`receiveTimeout`, ...), and the original `DioException` is kept whole, so
-`exception.error` and `exception.message` are available.
+1. A response of any status is read whole and decoded by the generated
+   switch on its final status: a documented success becomes `Success`, a
+   documented error status `HttpError`, anything else
+   `UndocumentedStatus`.
+2. A body that is not valid JSON, or a decoder that rejects the body, gives
+   `DecodeError`: a `JsonDecodeException` (type, missing property, bad
+   date-time) or a `FormatException` thrown by a converter or
+   `Date.parse`. A `FormatException` becomes a `DecodeError` at the root
+   pointer `""`.
+3. A request that gets no complete response fails with a
+   `TransportException`: `Cancelled` for kind `cancelled`, `TransportError`
+   for `timeout`, `connection` and `other`. `exception.cause` is the
+   transport's own exception (a `DioException` for `DioTransport`), kept
+   whole.
 
 ### Malformed JSON
 
-Dio parses JSON itself. When a body is not valid JSON, Dio drops the
-response and throws, so there is no status: the `DecodeError` has
-`statusCode == null`, `error.pointer == ""`, and `error.message` is
-`expected a JSON body, got text that is not JSON`.
-
-- On the VM and dart2wasm, `rawBody` is the text Dio's parser reported:
-  the whole body when Dio read it at once, only the failing chunk when it
-  streamed it (a `Content-Length` header was present).
-- When compiled to JavaScript, Dio reports only the browser's `SyntaxError`
-  text, so `rawBody` is `null`.
-- On the VM, a `FormatException` from anywhere else (`Uri.parse` in an
-  interceptor, a custom transformer that reports text) stays a
-  `TransportError`; a request that does not read JSON (a text or binary
-  operation) never gets a decode error here.
-- In a browser the failures cannot be told apart, so a `FormatException`
-  thrown by an interceptor of a JSON request is also a `DecodeError` there.
+The client parses JSON itself, by the `Content-Type` of the response. When
+a body is not valid JSON, the `DecodeError` has the response's
+`statusCode`, `error.pointer == ""`, `error.message` is
+`expected a JSON body, got text that is not JSON`, and `rawBody` is the
+whole body text, on every platform. A request that does not read JSON (a
+text or binary operation) never gets this error.
 
 ### `rawBody` is best effort
 
 `rawBody` of a `DecodeError` and of an `UndocumentedStatus` is the body as
-Dio returned it: parsed JSON, text or bytes, and `null` when the response
-had no body. When the operation reads bytes or text (a documented binary or
-XML error makes the whole operation read bytes), `UndocumentedStatus.rawBody`
-is the raw bytes, not parsed JSON. JSON sent with a non-JSON content type
-(`text/plain`) is **not** guessed: a JSON operation gets a `String`, which an
-object decoder rejects (the `200 text/plain` line above).
+the client read it: parsed JSON, text or bytes, and `null` when the
+response had no body. When the operation reads bytes or text (a documented
+binary or XML error makes the whole operation read bytes),
+`UndocumentedStatus.rawBody` is the raw bytes, not parsed JSON. JSON sent
+with a non-JSON content type (`text/plain`) is **not** guessed: a JSON
+operation gets a `String`, which an object decoder rejects (the `200
+text/plain` line above).
 
 ## What is never caught
 
-The runtime catches `DioException`, `JsonDecodeException` and, from a
-decoder, `FormatException`. Nothing else:
+The client catches `TransportException`, `JsonDecodeException` and, from a
+decoder, `FormatException`; another `Exception` raised while a body is read
+is a `TransportError` of kind `other`. Nothing else:
 
 - **An `Error` is a bug and reaches the caller.** A `TypeError` or
-  `StateError` thrown by a decoder, or by one of your interceptors or
-  adapters (Dio wraps it in an `unknown` `DioException`), is rethrown with
-  its original stack trace:
+  `StateError` thrown by a decoder, or by the transport (`DioTransport`
+  rethrows one that your interceptors or adapter threw, which Dio wraps in
+  an `unknown` `DioException`), reaches the caller with its original stack
+  trace:
 
   ```text
   rethrown: Bad state: bug in interceptor
@@ -193,12 +176,12 @@ decoder, `FormatException`. Nothing else:
   that cannot be a part. See [Parameters](parameters.md) and
   [Request bodies](request_bodies.md). A media type that is not a media type
   throws `FormatException` from `send`.
-- **An exception your interceptor throws** is a Dio failure like any other:
-  `TransportError`.
+- **An exception your interceptor throws** is a transport failure like any
+  other: `TransportError`.
 
   ```dart
   // onRequest: (o, h) => throw const FormatException('Uri.parse failed')
-  // on the VM -> TransportError (type unknown)
+  // -> TransportError (kind other)
   // handler.reject(DioException(...)) -> TransportError too
   ```
 
@@ -207,12 +190,12 @@ decoder, `FormatException`. Nothing else:
 - `Result` has the same name as `Result` in `package:async`. In a library
   that imports both, hide one:
   `import 'package:async/async.dart' hide Result;` or
-  `import 'package:typed_openapi_runtime/typed_openapi_runtime.dart' hide Result;`,
+  `import 'package:typed_openapi_client/typed_openapi_client.dart' hide Result;`,
   or import one with a prefix.
 - `toString` is short and carries no body: `Success(200)`,
-  `HttpError(404)`, `UndocumentedStatus(500)`, `TransportError(connectionTimeout)`,
+  `HttpError(404)`, `UndocumentedStatus(500)`, `TransportError(timeout)`,
   `Cancelled`. Print `rawBody` yourself if you want it, and mind private data.
-- Retrying is yours: nothing in the runtime retries.
+- Retrying is yours: nothing in the client retries.
 
 ## See also
 

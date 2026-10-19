@@ -37,7 +37,7 @@ undocumented status 503
 | `TransportError(exception, stackTrace)` | network failure, timeout |
 | `Cancelled(exception, stackTrace)` | the `CancelToken` was cancelled |
 
-`Failure` is the sealed base of the last five. If a method has no documented errors, `E` is `Never`, but you still write `case Failure()`. The runtime reference is the [results and errors guide](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_runtime/doc/results_and_errors.md).
+`Failure` is the sealed base of the last five. If a method has no documented errors, `E` is `Never`, but you still write `case Failure()`. The runtime reference is the [results and errors guide](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/doc/results_and_errors.md).
 
 ## The success type
 
@@ -103,7 +103,7 @@ switch (r.statusCode) {
 ```
 
 - A range `2XX`, `4XX`, `5XX` (either case) covers its hundred. `default` covers every status not matched and not 2xx (a `default` is never a success).
-- Keys that are not a status, a range or `default` are `TOA657` and skipped; `1xx` and `3xx` are `TOA658` info and skipped (Dio follows redirects), so they arrive as `UndocumentedStatus`.
+- Keys that are not a status, a range or `default` are `TOA657` and skipped; `1xx` and `3xx` are `TOA658` info and skipped (the transport follows redirects), so they arrive as `UndocumentedStatus`.
 - An inline error body is named after the operation and, when several responses of a kind declare one, the status.
 
 ### `errors.default_schema`

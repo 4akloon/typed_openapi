@@ -6,12 +6,17 @@ Guidance for working in this repository.
 
 `typed_openapi` generates Dart clients from OpenAPI 3.x specs, aimed at
 imperfect, code-first specs (NestJS, FastAPI, Spring, ASP.NET). It is a Dart
-pub workspace with three pure-Dart packages (no Flutter):
+pub workspace with five pure-Dart packages (no Flutter):
 
 - `packages/typed_openapi` - the generator: CLI and programmatic API. Never a
   runtime dependency of user apps.
-- `packages/typed_openapi_runtime` - the only package generated clients depend
-  on (typed errors, `Result`, `Patch`, JSON decoding with paths, encoders, SSE).
+- `packages/typed_openapi_client` - the client core, the only package
+  generated clients depend on (typed errors, `Result`, `Patch`, JSON decoding
+  with paths, encoders, request bodies, SSE, the `ClientTransport` contract).
+- `packages/typed_openapi_dio` - `DioTransport`, the transport over the
+  user's `Dio` (M11b).
+- `packages/typed_openapi_transport_tests` - the transport conformance suite
+  and its loopback server. `publish_to: none`.
 - `packages/typed_openapi_tool` - repository tools (M11): the public-spec
   corpus and the escaping fuzz. `publish_to: none`; nothing depends on it.
 
@@ -22,12 +27,12 @@ Minimum SDK: Dart 3.10 (`>=3.10.0 <4.0.0`), also for generated code.
 ```sh
 dart pub get                                 # repo root, once and after pubspec edits
 dart analyze packages                        # repo root; must print "No issues found!"
-cd packages/typed_openapi && dart test       # also in typed_openapi_runtime
-cd packages/typed_openapi_runtime && dart test -p chrome                        # dart2js
-cd packages/typed_openapi_runtime && dart test -p chrome --compiler dart2wasm   # dart2wasm
+cd packages/typed_openapi && dart test       # also in typed_openapi_client, typed_openapi_dio
+cd packages/typed_openapi_client && dart test -p chrome                        # dart2js; also typed_openapi_dio
+cd packages/typed_openapi_client && dart test -p chrome --compiler dart2wasm   # dart2wasm; also typed_openapi_dio
 cd packages/typed_openapi && dart format lib test bin   # a second run must change 0 files
-cd packages/typed_openapi_runtime && dart format lib test # the same
-cd packages/<package> && dart pub publish --dry-run # before publishing
+cd packages/typed_openapi_client && dart format lib test # the same; also typed_openapi_dio, typed_openapi_transport_tests
+cd packages/<package> && dart pub publish --dry-run # before publishing (the client before the Dio transport)
 cd packages/typed_openapi_tool && dart test
 cd packages/typed_openapi_tool && dart format lib test bin # the same
 cd packages/typed_openapi_tool && dart run bin/corpus.dart check  # network on first fetch
@@ -340,8 +345,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   stream; any other media type is bytes (`Uint8List`) without its schema and
   the media types that are dropped are named, TOA651, except variants of the
   chosen type and other JSON types; `MediaTypeName.isJson` (`model/`) is
-  the one definition of a JSON media type, `text/json` included, as Dio
-  and the runtime read it; a form or multipart response is bytes,
+  the one definition of a JSON media type, `text/json` included, as the
+  client core reads it; a form or multipart response is bytes,
   TOA650; a text request body is `String`; the `encoding` of a form or
   multipart body (`EncodingIr`, a key that names no property of the body
   schema (also through `$ref`, `allOf`, `oneOf` and `anyOf`; not when the
@@ -374,7 +379,7 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   a parameter style its `in` does not allow falls back to the default,
   TOA564, and an `in: querystring` parameter is skipped, TOA565; path
   variables are `PathTemplate.variable` in `model/path_template.dart`, the
-  runtime's `OperationRequest.pathVariable`, which a test keeps equal) and
+  client's `OperationRequest.pathVariable`, which a test keeps equal) and
   `IrBuilder`
   (operations written as a `$ref` are skipped (TOA107); groups by tag, path
   or one class, with an override `group` (UpperCamelCase, or a value that
@@ -394,14 +399,14 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   object; `PartMediaType` makes each part's `encoding.contentType` one
   concrete type, TOA661 (a type is concrete when it is an RFC 9110 media
   type whose quoted strings hold no control character, a tab included:
-  Dio's `DioMediaType.parse` would throw at call time), and an object part
+  the client's `ParsedMediaType` would throw at call time), and an object part
   that is not JSON a `String` the caller supplies, TOA662); `OperationBuilder` keeps security requirements
   (an alternative that names a scheme `components.securitySchemes` does not
   define, or is not an object (`SecurityRequirement.isMalformed`, also
   TOA111; a `security` field that is not a list is one such requirement at
   the field), is TOA568 and left out as a whole when another alternative can be described;
   when none can, all stay with the scheme of kind `SecurityKind.unknown`
-  (the runtime's `SecuritySchemeType.unknown`), so the metadata never says
+  (the client's `SecuritySchemeType.unknown`), so the metadata never says
   less than the spec: no operation reads as open or as optional), skips
   event streams it cannot express (TOA654) and reports
   operation servers (TOA566), callbacks and webhooks (TOA567) and a missing
@@ -534,7 +539,7 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   a private `_absent` list, which `toJson` leaves out and `==` compares, so
   a decoded value is written back as it came, while a model made in code
   writes every constant, so the two are not equal when a constant was
-  absent; the generated `fromJson` needs a runtime whose
+  absent; the generated `fromJson` needs a client whose
   `JsonReader.constant` returns a bool), `EnumEmitter`, `UnionEmitter` and `ModelLibrary` (`models/<snake>.dart`
   per declaration, names that clash get `2`, `3`...; the barrel
   `models.dart`; the header is `// GENERATED CODE - DO NOT MODIFY BY HAND.`
@@ -626,11 +631,11 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `OperationEmitter` (with `RequestWriter` for parameters and bodies,
   `DecoderWriter` for the status `switch`, `StatusTypeEmitter` and
   `PartsEmitter` for the types after the class) writes a group: a plain `class` with
-  `{Group}(Dio dio)`, a private `OperationInfo` (tags, security) and a
+  `{Group}(ClientTransport transport)` (a `ClientSender` over it), a private `OperationInfo` (tags, security) and a
   static decoder per operation (private names apart in their own scope),
   methods with named arguments only (`required` for required ones; enum
   arguments take the known values), `body`, then `CallOptions? call`,
-  returning `Future<Result<T, E>>` from `DioRequestSender.send` (a method
+  returning `Future<Result<T, E>>` from `ClientSender.send` (a method
   with `OperationIr.events` returns `Stream<SseItem<T>>` from `openEvents`
   through `EventStreamWriter`: `streamStatuses` are its 2xx statuses, a
   range written once as `for (var s = 200; s < 300; s++) s` and not next to
@@ -643,12 +648,12 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   name (escaped literals), plain variant classes equal by value with
   `<redacted>` for secrets, and the unknown variant `(event, data)`); the
   decoder switches on the status: codes, then ranges, then `default`
-  (every status but 2xx), `_` is `undocumented()`; Dio reads JSON unless
-  every success with a body is text (`text`) or something else is
-  (`bytes`), and then JSON bodies go through `RawResponse.parsedJson`; a
-  documented binary error (`application/octet-stream`, XML, any media type
-  that is not JSON or `text/*`) also makes the operation `bytes`, since Dio
-  would turn its bytes into text. An error body is decoded by the media
+  (every status but 2xx), `_` is `undocumented()`; the request's
+  `responseKind` is JSON unless every success with a body is text
+  (`text`) or something else is (`bytes`), and then JSON bodies go
+  through `RawResponse.parsedJson`; a documented binary error
+  (`application/octet-stream`, XML, any media type that is not JSON or
+  `text/*`) also makes the operation `bytes`, so its bytes are kept. An error body is decoded by the media
   type of its response, as a success is: `r.bytes` for bytes, `r.text` for
   text (an empty one is `''`), the type's decoder for JSON; errors that
   share one body type but not a media type (`text/plain` and JSON strings)
@@ -662,12 +667,15 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   base and wrap `body`, equal by value, with a `toString` that prints the
   body, `<redacted>` for a secret body (`ResponseIr.sensitive`, from
   `ResponseSecrets`) and `Uint8List(<length>)` for bytes) and the parts
-  classes after the group class. Only `Dio` is imported from `package:dio`.
+  classes after the group class. Generated code imports only
+  `package:typed_openapi_client`.
   `test/emit/generated_client_test.dart` builds a package of the clients
   of the fixtures (both `union` modes), runs `dart analyze --fatal-infos`
   on it and runs `test/emit/programs/calls.dart.txt` (`bin/calls.dart`
-  there), which calls the petstore client through a fake Dio adapter and
-  prints every request and result.
+  there), which calls the petstore client through `DioTransport` over a
+  fake Dio adapter and prints every request and result (the package has
+  `dependency_overrides` for `typed_openapi_client`, a path outside the
+  workspace).
 - `generate/` - `OutputWriter` (atomic per run: the whole tree and the
   manifest `.typed_openapi.json` (generator, `format` 2, hash of the inputs,
   every file with its hash) are built in a staging directory next to the
@@ -930,27 +938,39 @@ generator's public API only. Its network use is the `SpecCache` download
 - CI (`.github/workflows/ci.yml`, every PR, top-level `permissions:
   contents: read`): tests on ubuntu with 3.10.0 and stable, on macOS and
   Windows with stable (format and analyze on ubuntu/stable only); the
-  runtime in Chrome with dart2js and dart2wasm; the corpus job (both SDKs:
+  client and the Dio transport (with the conformance suite) in Chrome with
+  dart2js and dart2wasm; publish dry-runs of the generator, the client and
+  the Dio transport; the corpus job (both SDKs:
   `corpus check`, then `corpus fetch sarif_schema` and the SARIF test); 200
   fuzz seeds; semver (pull requests only, full history). Long jobs have
   `timeout-minutes`. `nightly.yml`: the beta SDK (steps with `if: always()`,
   a warning only), the corpus on Windows, 6000 seeds.
   `test/ci/workflows_test.dart` pins these layers.
 
-## Runtime (`packages/typed_openapi_runtime/lib/src/`)
+## Client core (`packages/typed_openapi_client/lib/src/`)
 
-The only package generated clients depend on (dependencies: `dio`, `meta`, floor `^1.15.0` so Flutter's pinned `meta` resolves).
-Pure Dart, works on the web (compiled to JS and to Wasm); SSE needs a
-streaming adapter there (Dio's default browser adapter delivers the body
-only when the connection closes), and cookie parameters do not work (browsers
-drop the `Cookie` header: `test/dio/cookie_browser_test.dart` checks it in
-Chrome against a loopback server, `cookie_server.dart`, started by
-`spawnHybridUri`; its `hybridMain` is the one top-level function a test
-helper has, as `package:test` requires).
-Generated code is expected to look like `test/helpers/pets_api.dart`
-(illustrative, not a contract); `test/generated_client_test.dart` checks
-that the API composes, including an `implements` fake of a tag class.
+The only package generated clients depend on (dependency: `meta`, floor
+`^1.15.0` so Flutter's pinned `meta` resolves). It builds every request and
+reads every response itself and hands finished bytes to a
+`ClientTransport`, so a request is the same on the wire through any
+transport. Pure Dart, works on the web (compiled to JS and to Wasm); SSE
+needs a transport that streams there, and cookie parameters do not work
+(browsers drop the `Cookie` header). Generated code is expected to look
+like `test/helpers/pets_api.dart` (illustrative, not a contract);
+`test/generated_client_test.dart` checks that the API composes, including an
+`implements` fake of a tag class.
 
+- `transport/` - `ClientTransport` (`send(TransportRequest)` completes with
+  a `TransportResponse` of any status once its headers arrived; a request
+  that gets no response, or a body that fails while it is read, is a
+  `TransportException`), `TransportRequest` (method, `target`: the path with
+  the encoded query, which the transport resolves against its own base URL,
+  `operation` (`OperationInfo`), ordered headers, body stream, `cancel`,
+  `extra`, `isEventStream`), `TransportResponse` (status, lower-case
+  headers, body stream read once), `TransportException(kind, message,
+  {cause, stackTrace})` with `TransportExceptionKind` `timeout`,
+  `connection`, `cancelled`, `other`, and `CancelSignal` (a base class: a
+  cancelled signal stays cancelled; `whenCancelled`, `reason`).
 - `json/` - `JsonReader` (strict reads for generated `fromJson`: the only
   widening is int where a number is expected; `null` is an error only in a
   required non-nullable property, an optional one reads it as absent; RFC
@@ -963,68 +983,76 @@ that the API composes, including an `implements` fake of a tag class.
   `Date` (`format: date`, no time or zone), `DeepEquality` (deep `==` and
   `hashCode` of lists, maps and patches for generated models). The barrel
   re-exports `immutable` from `package:meta`, so generated code imports only
-  the runtime. `JsonReader` also has `constant` (which says whether an
+  the client. `JsonReader` also has `constant` (which says whether an
   optional constant was there), `additional` (the keys a
   model does not list, as an unmodifiable map), `patchValue`, `asBytes` and
   `attempt` for generated code.
 - `result/` - sealed `Result<T, E>`: `Success`, `Failure` (`HttpError`,
-  `UndocumentedStatus`, `DecodeError`, `TransportError`, `Cancelled`); no
-  helper methods, pattern matching only. `E = Never` still needs
-  `case Failure()`.
+  `UndocumentedStatus`, `DecodeError`, `TransportError`, `Cancelled`, the
+  last two carrying the `TransportException`); no helper methods, pattern
+  matching only. `E = Never` still needs `case Failure()`.
 - `params/` - `PathParameter`, `QueryParameter`, `HeaderParameter`,
   `CookieParameter` (OAS styles, RFC 6570 expansion, RFC 3986
   percent-encoding; a path expansion that is empty, `.` or `..` throws
   `ArgumentError`, as does a `.`/`..` value); internal `ParameterValue`,
   `PercentEncoder`.
-- `request/` - `OperationInfo` (put into `RequestOptions.extra`; its
-  `security` lists alternatives of `SecurityUse`s of `SecurityScheme`s,
-  metadata only; `SecuritySchemeType.unknown` is a scheme the spec names
-  but does not define), `OperationRequest` (resolves the path and the query
-  itself; `pathVariable` is the one pattern of a path variable, which the
-  generator copies; `streamStatuses` for event streams; `accept` is the
+- `request/` - `OperationInfo` (in every `TransportRequest`; `extraKey` is
+  where the Dio transport puts it; its `security` lists alternatives of
+  `SecurityUse`s of `SecurityScheme`s, metadata only;
+  `SecuritySchemeType.unknown` is a scheme the spec names but does not
+  define), `OperationRequest` (resolves the path and the query itself;
+  `pathVariable` is the one pattern of a path variable, which the generator
+  copies; `responseKind` (`ResponseKind` `json`, `text`, `bytes`) says how
+  the body is read; `streamStatuses` for event streams; `accept` is the
   `Accept` of the method that returns the body of an operation that also
-  has an event-stream method, and a call's own `Accept` wins), `RawResponse` (what
-  a generated decoder switches on; `parsedJson` parses a JSON body that Dio
-  read as text or bytes), and the bodies `FileUpload` (bytes or a stream),
+  has an event-stream method, and a call's own `Accept` wins),
+  `RawResponse` (what a generated decoder switches on; `parse` reads JSON
+  by the content type, `parsedJson` parses a JSON body of a `text` or
+  `bytes` operation), and the bodies `FileUpload` (bytes or a stream),
   `FormBody`/`FormEncoding` and `MultipartBody`/`MultipartPart`, which
-  `DioBody` (`dio/`) turns into form text, `FormData` and bytes or a
-  stream for `DioRequestSender`. A body sent as `application/json` or
-  `+json` is encoded by `DioBody` only where Dio gets it wrong: a `String`
-  (Dio sends it unquoted) and a `null` (Dio sends no body) become JSON
-  text; a map, list, number or boolean stays Dio's data, so an interceptor
-  sees the object. A `null` body with a JSON `contentType` is the JSON
-  `null` of a required nullable body; a `null` body with any other
-  `contentType` sends no `Content-Type`, and a generated method passes no
-  `contentType` for an absent optional body. A file's own `contentType` is
-  checked as a media type (`FormatException`, also on a binary body).
-  `MediaTypeText` (`request/`) is the one definition of a JSON media type
-  (`application/json`, `text/json`, `+json`), also for `RawResponse.isJson`.
-  `MultipartForm` (`dio/`) builds the `FormData` in the order of the parts
-  (Dio writes fields before files, so a text part stays a field only while
-  no file or typed part precedes it; later text parts go as `text/plain`
-  parts); a value that is not a finite JSON scalar, a list in a list, a
-  non-JSON value in a JSON part, or an object with a media type that is not
-  JSON is `ArgumentError`, never stringified.
-- `dio/` - `DioRequestSender(dio, {isWeb})` (`send`, `openEvents`; requests
-  only through `dio.request` (`DioCall`), never mutates the user's Dio,
-  never retries a request (an event stream reconnects only as R12.5 says);
-  `DioResults` maps responses and Dio failures to `Result`s;
-  decoding catches only `DioException`, `JsonDecodeException` and, from the
-  user's decoder, `FormatException` (a converter or `Date.parse` rejecting
-  the data: `DecodeError` at the root pointer, `SseDecodeError` in a
-  stream), `openEvents` also turns an `Exception` raised while reading a
-  non-stream body into `TransportError`, and an `Error` is never caught; the
-  query is
-  built by the runtime, so interceptors see an empty `queryParameters`),
-  `CallOptions` (`sse`: `SseOptions`). `openEvents` needs its stream
+  `BodyEncoder` turns into an `EncodedBody` (bytes or a stream, its length
+  and `Content-Type`): form text, `multipart/form-data` written by
+  `MultipartEncoder` byte for byte as Dio's `FormData` wrote it (the
+  boundary from an injectable source; a text part has no `Content-Type`
+  while no file or typed part precedes it, later ones are `text/plain;
+  charset=utf-8`; a file part without a media type is
+  `application/octet-stream`), a file, JSON text or text. With a JSON
+  `Content-Type` any value is JSON text (a `String` is quoted, `null` is
+  `null`, the JSON `null` of a required nullable body); a `null` body with
+  any other `contentType` sends no `Content-Type`, and a generated method
+  passes no `contentType` for an absent optional body. A file's own
+  `contentType` is checked as a media type (`ParsedMediaType`, the rules
+  of `package:http_parser`; `FormatException`). `MediaTypeText` is the one
+  definition of a JSON media type (`application/json`, `text/json`,
+  `+json`). A value that is not a finite JSON scalar, a list in a list, a
+  non-JSON value in a JSON part, or an object with a media type that is
+  not JSON is `ArgumentError`, never stringified. Do not write a shift
+  past 31 bits or an int literal beyond 2^53 in `lib/`: neither works in
+  JavaScript (the boundary range is the literal `4294967296`).
+- `client/` - `ClientSender(transport)` (`send`, `openEvents`; never
+  retries a request (an event stream reconnects only as R12.5 says)):
+  `RequestBuilder` builds the `TransportRequest` (target, `Accept`, the
+  operation's headers, the call's, `Last-Event-ID`, `Content-Type` and
+  `Content-Length`, nothing else), `ResponseReader` reads the body by
+  `ResponseKind` and counts it for `onReceiveProgress` (`ProgressCounter`,
+  also for `onSendProgress`), `ClientResults` maps responses and
+  `TransportException`s to `Result`s (`Cancelled` for `cancelled`, else
+  `TransportError`); decoding catches only `TransportException`,
+  `JsonDecodeException` and, from the user's decoder, `FormatException` (a
+  converter or `Date.parse` rejecting the data: `DecodeError` at the root
+  pointer, `SseDecodeError` in a stream); another `Exception` while a body
+  is read is a `TransportError` of kind `other`, and an `Error` is never
+  caught. `CallOptions` (`cancel`: `CancelSignal`, `headers`, `extra` for
+  the transport, the progress callbacks, `sse`: `SseOptions`).
+  `EventOpener` opens event streams: `openEvents` needs its stream
   listened to or cancelled; a listener cancel cancels the request. An
   `EventCall` holds what every connection of one call shares, and its
-  `ConnectionTokens` give each connection a cancel token of its own and
-  put one listener, not one per reconnection, on the call's token. A
+  `ConnectionSignals` give each connection a `CancelSignal` of its own and
+  put one listener, not one per reconnection, on the call's signal. A
   `Last-Event-ID` in `call.headers` is where the stream's last event id
-  starts (`DioCall.userLastEventId`): it goes with the first request and the
-  reconnections until an event id replaces it, and an empty `id:` removes
-  it; `DioCall` sends the stream's id only, never both.
+  starts (`RequestBuilder.userLastEventId`): it goes with the first request
+  and the reconnections until an event id replaces it, and an empty `id:`
+  removes it; the stream's id only is sent, never both.
 - `sse/` - `SseDecoder` (WHATWG, bytes -> `SseMessage`; it may start from
   a last event id and retry; it keeps the messages of `SseBlockDecoder`,
   which reports every block, one `SseBlock` per empty line with the
@@ -1052,23 +1080,74 @@ that the API composes, including an `implements` fake of a tag class.
   end the stream; a listener cancel also aborts a request that is in flight
   (`SseReconnector.onCancel`); a pause of the listener, also during a wait
   or a reopen, holds the next connection; an exception or `Error` thrown on
-  an attempt, by a `wait` or an interceptor, is the stream's one error,
+  an attempt, by a `wait` or the transport, is the stream's one error,
   never the zone's. An event id that is not printable ASCII, space or tab is
   not sent as `Last-Event-ID`, on the web too (a browser would send UTF-8,
   but the VM's `HttpClient` rejects it and every reconnection would fail),
-  and the reconnection goes on without it. Use
-  `transformer.bind(stream)`, not `stream.transform`: Dio gives a
-  `Stream<Uint8List>`.
+  and the reconnection goes on without it. Use `transformer.bind(stream)`,
+  not `stream.transform`: a transport may give a `Stream<Uint8List>`.
 
-Runtime tests never touch the network: Dio gets `FakeAdapter`
-(`test/helpers/fake_adapter.dart`), or `GatedAdapter` when a test holds an
-answer back (`test/helpers/gated_adapter.dart`). They also run in Chrome (the two
-commands above; `CHROME_EXECUTABLE` if Chrome is not found): a file that
-needs the VM (`dart:io`, int64 literals, which dart2js rejects) carries
-`@TestOn('vm')`, a single test `testOn: 'vm'`, and `test/dio/web_test.dart`
-is `@TestOn('browser')`. `test/helpers/test_platform.dart` tells the platform
-for assertions that differ. Do not write an int literal beyond 2^53 in
-`lib/`: it does not compile to JavaScript.
+Client tests never touch the network: they send through `FakeTransport`
+(`test/helpers/fake_transport.dart`), or `GatedTransport` when a test holds
+an answer back (`test/helpers/gated_transport.dart`). They also run in
+Chrome (the commands above; `CHROME_EXECUTABLE` if Chrome is not found): a
+file that needs the VM (`dart:io`, int64 literals, which dart2js rejects)
+carries `@TestOn('vm')`, a single test `testOn: 'vm'`.
+`test/helpers/test_platform.dart` tells the platform for assertions that
+differ.
+
+## Dio transport (`packages/typed_openapi_dio/lib/src/`)
+
+`DioTransport(dio, {isWeb})` sends a `TransportRequest` through the user's
+`Dio` (`dio.request` only, never changed, never retried) with
+`ResponseType.stream`, so a `Transformer` or `responseDecoder` is not used
+and the client reads the bytes. An error status goes through the Dio's
+`onError` interceptors and comes back as a response (a `badResponse`
+`DioException` that carries a `ResponseBody`). `DioFailures` maps a
+`DioException` to a `TransportException` (timeouts `timeout`,
+`connectionError` `connection`, `cancel` `cancelled`, else `other`; the
+`DioException` is the cause) and does so for one raised while the body is
+read; an `Error` (Dio wraps it into an `unknown` `DioException`) is thrown
+again. A `CancelSignal` becomes a `CancelToken`; `CallOptions.extra` and the
+`OperationInfo` (`OperationInfo.extraKey`) go into `RequestOptions.extra`,
+and `DioTransport.operationOf(options)` reads it in an interceptor. The
+query is built by the client, so interceptors see an empty
+`queryParameters`; `QueryGuard` joins the base URL itself when the query
+holds `//`, which Dio would collapse. On the web with Dio's default adapter
+an event stream is refused with `webStreamingMessage` (the adapter delivers
+the body only when the connection closes). Inside the workspace its
+`typed_openapi_client: ^0.0.1` resolves to the package next to it
+(`resolution: workspace`); a release that needs a new client publishes the
+client first. Tests: `dio_transport_test.dart` (a fake adapter,
+`test/helpers/fake_adapter.dart`), `web_test.dart` (`@TestOn('browser')`),
+`cookie_browser_test.dart` (the `Cookie` header never reaches a loopback
+server from Chrome, `cookie_server.dart`, started by `spawnHybridUri`; its
+`hybridMain` is the one top-level function a test helper has, as
+`package:test` requires) and `conformance_test.dart`.
+
+## Transport conformance (`packages/typed_openapi_transport_tests/`)
+
+`publish_to: none`. `TransportConformance(create, {skips}).register()`
+declares the cases every `ClientTransport` must pass, against
+`ConformanceServer`, a loopback HTTP server that `server_main.dart`'s
+`hybridMain` starts in a hybrid isolate (so a browser test can use it; its
+ports arrive as numbers, doubles under dart2wasm). The cases: the method,
+target and headers (a header given twice), PUT, PATCH, DELETE and `HEAD`,
+JSON, form and streamed bodies, multipart with a fixed boundary and exact
+bytes, send and receive progress, the statuses 200, 201, 204, 400, 404, 422,
+500 and 503, undocumented statuses, binary bodies, redirects (a 301 and a 302
+are followed: the policy is the transport's, the cases document a transport
+that follows them), a 4 MiB chunked response, a refused connection, a closed
+socket, a timeout (`createWithTimeout:` is optional; without it the case is
+skipped), a cancel before a call, in flight and during the body, and event
+streams (reconnection with `Last-Event-ID`, split lines and characters,
+`retry:`, a 204, an error status, a listener cancel). Not covered: upload
+and download progress beyond the counts, request `Transfer-Encoding` and
+cookies. A skip names a case and says why (a test checks that every skip
+names one). `typed_openapi_dio` skips seven cases in a browser, all the event
+stream cases and "a cancel during the body", because Dio's default browser
+adapter delivers a body only when the connection closes: the adapter runs
++47 on the VM and +51 ~7 in Chrome with dart2js and dart2wasm.
 
 ## Code rules
 
@@ -1214,8 +1293,9 @@ are not, so follow them by hand:
   everything; no hash-ordered iteration when emitting; no network or `dart fix`
   during generation.
 - A change of generated output is a breaking change of the generator.
-- The user's HTTP client is not ours: generated code never mutates the Dio
-  instance; HTTP errors go through Dio's `onError` and are typed afterwards.
+- The user's HTTP client is not ours: generated code talks to a
+  `ClientTransport` only; `DioTransport` never mutates the Dio instance, and
+  HTTP errors go through Dio's `onError` and are typed afterwards.
 - No `analyzer` dependency in the generator core; tests run `dart analyze` on
   generated fixtures as a subprocess.
 - Escape every string taken from the spec at every interpolation site.

@@ -30,7 +30,7 @@ dart pub get
 
 See the [packages list in the root README](README.md#packages). In short:
 `typed_openapi` is the generator (CLI + programmatic API) and is never a runtime
-dependency of user apps; `typed_openapi_runtime` is the only package generated
+dependency of user apps; `typed_openapi_client` is the only package generated
 clients depend on.
 
 Requirements and research live in [docs/](docs/).
@@ -44,7 +44,7 @@ dart analyze packages
 dart format packages
 
 cd packages/typed_openapi && dart test
-cd packages/typed_openapi_runtime && dart test
+cd packages/typed_openapi_client && dart test
 cd packages/typed_openapi_tool && dart test
 
 # Before publishing a package:
@@ -76,9 +76,9 @@ reintroduces bugs other generators are known for.
   `dart fix` or other SDK-dependent steps during generation.
 - **A change to the generated output is a breaking change** of the generator
   and needs a major version (or an opt-in flag).
-- **The user's HTTP client is not ours.** Generated code never mutates the Dio
-  instance (`baseUrl`, interceptors, `validateStatus`); HTTP errors go through
-  Dio's normal `onError` path and are typed afterwards.
+- **The user's HTTP client is not ours.** Generated code and `DioTransport`
+  never mutate the Dio instance (`baseUrl`, interceptors, `validateStatus`);
+  HTTP errors go through Dio's normal `onError` path and are typed afterwards.
 - **No `analyzer` in the generator core.** Analyzer churns majors every month or
   two; tests run `dart analyze` on generated fixtures as a subprocess.
 - **Escape every string taken from the spec** at every interpolation site.

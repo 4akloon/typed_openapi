@@ -95,7 +95,7 @@ static const _legacy = OperationInfo(
 );
 ```
 
-`/health` has `security: []` and its `OperationInfo` has no `security` argument at all. `/items` (no `security` of its own) inherits the document's `bearer`. The runtime types are `OperationInfo`, `SecurityUse` and `SecurityScheme`, documented in the runtime guide [Security metadata](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_runtime/doc/security_metadata.md).
+`/health` has `security: []` and its `OperationInfo` has no `security` argument at all. `/items` (no `security` of its own) inherits the document's `bearer`. The runtime types are `OperationInfo`, `SecurityUse` and `SecurityScheme`, documented in the runtime guide [Security metadata](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/doc/security_metadata.md).
 
 ## Reading the list
 
@@ -139,13 +139,14 @@ The alternative is left out of the metadata when another alternative can be desc
 
 ## An interceptor that applies the metadata
 
-Dio interceptors see the metadata through `OperationInfo.of(options)`, which returns `null` for a request that a generated client did not send. The interceptor below picks the first alternative whose schemes it has secrets for, sets the headers or query parameter, and rejects the request when it cannot satisfy any alternative. It was run against the generated `vault` client above with a fake Dio adapter (output follows the code).
+Dio interceptors see the metadata through `DioTransport.operationOf(options)`, which returns `null` for a request that `DioTransport` did not send. The interceptor below picks the first alternative whose schemes it has secrets for, sets the headers or query parameter, and rejects the request when it cannot satisfy any alternative. It was run against the generated `vault` client above with a fake Dio adapter (output follows the code).
 
 ```dart
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
-import 'package:typed_openapi_runtime/typed_openapi_runtime.dart';
+import 'package:typed_openapi_client/typed_openapi_client.dart';
+import 'package:typed_openapi_dio/typed_openapi_dio.dart';
 
 /// Thrown (inside a `DioException`, so the call returns `TransportError`)
 /// when no alternative of an operation's security can be satisfied.
@@ -169,7 +170,7 @@ class SecurityInterceptor extends Interceptor {
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
-    final info = OperationInfo.of(options);
+    final info = DioTransport.operationOf(options);
     final alternatives = info?.security ?? const <List<SecurityUse>>[];
     if (alternatives.isEmpty) return handler.next(options); // open operation
 
@@ -241,7 +242,7 @@ final dio = Dio(BaseOptions(baseUrl: 'https://api.example.com'))
   ..interceptors.add(
     SecurityInterceptor({'bearer': token, 'apiKey': apiKey, 'signature': sig}),
   );
-final client = VaultClient(dio);
+final client = VaultClient(DioTransport(dio));
 ```
 
 The fake-adapter run printed these requests (secrets shortened):
@@ -261,7 +262,7 @@ TransportError(unknown)        <- /legacy: the scheme is unknown
 
 ## Notes and limits
 
-- **Query keys.** The generated client builds the query itself and passes Dio one finished path, so `options.queryParameters` is empty in an interceptor. Adding a key to it, as above, makes Dio append it to the URL (`?sig=s`).
+- **Query keys.** The generated client builds the query itself and `DioTransport` passes Dio one finished path, so `options.queryParameters` is empty in an interceptor. Adding a key to it, as above, makes Dio append it to the URL (`?sig=s`).
 - **Cookies.** A script on the web cannot set the `Cookie` header, so a `location: .cookie` scheme works on the Dart VM only.
 - **OAuth.** The metadata carries the scopes an operation needs but not the token URL or flows; getting and refreshing a token is your code. A 401 reaches your interceptor's `onError` as for any Dio request.
 - **Mutual TLS** is a transport setting: configure the `HttpClient` of your adapter.
@@ -272,4 +273,4 @@ TransportError(unknown)        <- /legacy: the scheme is unknown
 - [Operations](operations.md): the group classes and `CallOptions` (per-call headers).
 - [Responses and errors](responses_and_errors.md): `HttpError` for a `401`.
 - [Diagnostics](../diagnostics.md): `TOA568` and the other codes.
-- Runtime: [Security metadata](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_runtime/doc/security_metadata.md).
+- Runtime: [Security metadata](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/doc/security_metadata.md).

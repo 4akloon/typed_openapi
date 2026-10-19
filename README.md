@@ -38,10 +38,14 @@ Five minutes, one spec. Add the packages (they are not on pub.dev yet; pin a `re
 ```yaml
 dependencies:
   dio: ^5.11.1
-  typed_openapi_runtime:
+  typed_openapi_client:
     git:
       url: https://github.com/4akloon/typed_openapi.git
-      path: packages/typed_openapi_runtime
+      path: packages/typed_openapi_client
+  typed_openapi_dio:
+    git:
+      url: https://github.com/4akloon/typed_openapi.git
+      path: packages/typed_openapi_dio
 dev_dependencies:
   typed_openapi:
     git:
@@ -109,17 +113,18 @@ errors: 0, warnings: 0, infos: 0
 Generated petstore in lib/src/petstore: 7 files, 7 written, 0 deleted.
 ```
 
-Use the client with your own Dio. The result is a sealed `Result`, so the 404 body arrives as a `Problem`, not as an exception:
+Use the client with your own Dio through `DioTransport`. The result is a sealed `Result`, so the 404 body arrives as a `Problem`, not as an exception:
 
 ```dart
 import 'package:dio/dio.dart';
-import 'package:typed_openapi_runtime/typed_openapi_runtime.dart';
+import 'package:typed_openapi_client/typed_openapi_client.dart';
+import 'package:typed_openapi_dio/typed_openapi_dio.dart';
 
 import 'src/petstore/petstore.dart';
 
 Future<void> main() async {
   final dio = Dio(BaseOptions(baseUrl: PetstoreClient.server));
-  final client = PetstoreClient(dio);
+  final client = PetstoreClient(DioTransport(dio));
 
   switch (await client.pets.getPet(id: 7)) {
     case Success(:final data):
@@ -146,11 +151,11 @@ Against a server that answers `{"id": 7, "name": "Rex", "status": "available"}` 
 - **Security metadata** as data on each operation; it never signs a request: [Security](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi/doc/generated/security.md).
 - **Works in CI:** exit codes, text, JSON, SARIF and GitHub annotations: [CI](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi/doc/ci.md).
 - **Deterministic output** written atomically; it replaces only files it wrote: [Generated output](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi/doc/generate_output.md).
-- **Runtime on the VM, dart2js and dart2wasm**, with strict JSON decoding that names the JSON pointer of a mismatch: [typed_openapi_runtime](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_runtime/README.md).
+- **Runtime on the VM, dart2js and dart2wasm**, with strict JSON decoding that names the JSON pointer of a mismatch: [typed_openapi_client](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/README.md).
 
 ## Documentation
 
-Every guide of both packages. Package READMEs: [typed_openapi](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi/README.md), [typed_openapi_runtime](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_runtime/README.md).
+Every guide of both packages. Package READMEs: [typed_openapi](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi/README.md), [typed_openapi_client](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/README.md).
 
 **The generator, `typed_openapi`**
 
@@ -191,29 +196,31 @@ Every guide of both packages. Package READMEs: [typed_openapi](https://github.co
 | [Spring](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi/doc/frameworks/spring.md) | springdoc-openapi. |
 | [ASP.NET Core](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi/doc/frameworks/aspnet.md) | What an ASP.NET spec needs. |
 
-**The runtime, `typed_openapi_runtime`**
+**The runtime, `typed_openapi_client`**
 
 | Guide | What it covers |
 | --- | --- |
-| [Getting started](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_runtime/doc/getting_started.md) | The runtime in a generated client. |
-| [Results and errors](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_runtime/doc/results_and_errors.md) | `Result`, `Failure` and its cases. |
-| [JSON decoding](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_runtime/doc/json_decoding.md) | Strict reads, `JsonDecodeException`. |
-| [Patch and nullability](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_runtime/doc/patch_and_nullability.md) | Absent, `null`, value. |
-| [Parameters](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_runtime/doc/parameters.md) | Styles, encoding, cookies. |
-| [Request bodies](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_runtime/doc/request_bodies.md) | Forms, multipart, files. |
-| [Server-Sent Events](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_runtime/doc/sse.md) | Decoder, reconnection, cancel. |
-| [Web and platforms](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_runtime/doc/web_and_platforms.md) | dart2js, dart2wasm, differences. |
-| [Security metadata](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_runtime/doc/security_metadata.md) | `OperationInfo` and schemes. |
+| [Getting started](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/doc/getting_started.md) | The runtime in a generated client. |
+| [Results and errors](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/doc/results_and_errors.md) | `Result`, `Failure` and its cases. |
+| [JSON decoding](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/doc/json_decoding.md) | Strict reads, `JsonDecodeException`. |
+| [Patch and nullability](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/doc/patch_and_nullability.md) | Absent, `null`, value. |
+| [Parameters](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/doc/parameters.md) | Styles, encoding, cookies. |
+| [Request bodies](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/doc/request_bodies.md) | Forms, multipart, files. |
+| [Server-Sent Events](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/doc/sse.md) | Decoder, reconnection, cancel. |
+| [Web and platforms](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/doc/web_and_platforms.md) | dart2js, dart2wasm, differences. |
+| [Security metadata](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/doc/security_metadata.md) | `OperationInfo` and schemes. |
 
 ## Packages
 
 | Package | Role |
 | --- | --- |
 | [`typed_openapi`](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi) | The **generator**: CLI and programmatic API. A dev dependency, never a runtime dependency of your app. |
-| [`typed_openapi_runtime`](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_runtime) | The **runtime** every generated client depends on (with `dio` and `meta`). |
+| [`typed_openapi_client`](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client) | The **client core** every generated client depends on (only `meta`): results, decoding, encoding, event streams, the `ClientTransport` interface. |
+| [`typed_openapi_dio`](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_dio) | The **Dio transport**: `DioTransport` over your own `Dio`. |
+| [`typed_openapi_transport_tests`](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_transport_tests) | The **transport conformance suite**, never published: every transport runs it. |
 | [`typed_openapi_tool`](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_tool) | **Repository tools**, never published: the public-spec corpus and the escaping fuzz. |
 
-The minimum SDK is Dart 3.10 for the generator and for generated code. Translations of the package READMEs: [typed_openapi (Українська)](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi/README.ua.md), [typed_openapi_runtime (Українська)](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_runtime/README.ua.md).
+The minimum SDK is Dart 3.10 for the generator and for generated code. Translations of the package READMEs: [typed_openapi (Українська)](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi/README.ua.md), [typed_openapi_client (Українська)](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/README.ua.md).
 
 ## Status and roadmap
 

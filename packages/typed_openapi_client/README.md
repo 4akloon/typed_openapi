@@ -1,4 +1,4 @@
-# typed_openapi_runtime
+# typed_openapi_client
 
 ![Dart 3.10+](https://img.shields.io/badge/dart-%3E%3D3.10-0175C2)
 ![Platforms](https://img.shields.io/badge/platforms-VM%20%7C%20dart2js%20%7C%20dart2wasm-blue)
@@ -8,7 +8,9 @@
 [`typed_openapi`](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi/README.md)
 depends on** - typed errors, `Result`, `Patch`, strict JSON decoding with
 JSON pointers, parameter encoders, request bodies and a Server-Sent Events
-decoder, all on top of your own `Dio`. Dependencies: `dio` and `meta`. The
+decoder. It builds every request and reads every response itself and hands
+the bytes to a `ClientTransport`; [`typed_openapi_dio`](../typed_openapi_dio/README.md)
+is the transport over your own `Dio`. Its one dependency is `meta`. The
 generator is never a runtime dependency of your app.
 
 > **Status:** in development, not published yet.
@@ -25,14 +27,15 @@ generator is never a runtime dependency of your app.
 
 ## Install
 
-Generated code imports `package:typed_openapi_runtime` and `package:dio`, so
-an app that uses a generated client lists both (the generator does not edit
-your `pubspec.yaml`):
+Generated code imports only `package:typed_openapi_client`. An app lists it
+and a transport, such as the Dio one (the generator does not edit your
+`pubspec.yaml`):
 
 ```yaml
 dependencies:
   dio: ^5.11.1
-  typed_openapi_runtime: ^0.0.1   # not on pub.dev yet; use a path or git dependency
+  typed_openapi_client: ^0.0.1   # not on pub.dev yet; use a path or git dependency
+  typed_openapi_dio: ^0.0.1
 ```
 
 The SDK floor is Dart 3.10 (`>=3.10.0 <4.0.0`), the same as for generated
@@ -42,7 +45,7 @@ code. `meta` is `^1.15.0` so that the version Flutter pins resolves.
 
 ```dart
 final dio = Dio(BaseOptions(baseUrl: 'https://api.example.com'));
-final api = PetshopClient(dio);          // generated; uses your Dio as it is
+final api = PetshopClient(DioTransport(dio)); // generated; your Dio as it is
 
 switch (await api.pets.getPet(petId: 7)) {
   case Success(:final data):             // Pet, decoded and typed
@@ -57,7 +60,7 @@ switch (await api.pets.getPet(petId: 7)) {
 ```
 
 Real output of the calls in [Getting started](doc/getting_started.md), run
-against an in-memory Dio adapter:
+against an in-memory Dio adapter through `DioTransport`:
 
 ```text
 200 Rex born 2021-04-09 [abc]
@@ -74,8 +77,8 @@ cancel, a body that does not match the schema). A bug in your code - an
 
 | Guide | What it covers |
 | --- | --- |
-| [Getting started](doc/getting_started.md) | Wire a `Dio`, call a method, read the `Result`, `CallOptions` |
-| [Results and errors](doc/results_and_errors.md) | Every `Result` variant, what triggers it, how Dio errors map, what is never caught |
+| [Getting started](doc/getting_started.md) | Pick a transport, call a method, read the `Result`, `CallOptions` |
+| [Results and errors](doc/results_and_errors.md) | Every `Result` variant, what triggers it, how transport failures map, what is never caught |
 | [JSON decoding](doc/json_decoding.md) | `JsonReader` strictness, dates, `JsonDecodeException`, `JsonValue`, `DeepEquality` |
 | [Patch and nullability](doc/patch_and_nullability.md) | `Patch<T>` for absent / `null` / value request fields |
 | [Parameters](doc/parameters.md) | Path, query, header and cookie encoding, every style, `ArgumentError` cases |
@@ -88,9 +91,12 @@ cancel, a body that does not match the schema). A bug in your code - an
 
 - **Typed outcomes.** `Success`, `HttpError`, `UndocumentedStatus`,
   `DecodeError`, `TransportError` and `Cancelled`, matched with `switch`.
-- **Your Dio, untouched.** No base URL, interceptor, transformer or
-  `validateStatus` is set or changed; nothing is retried. Interceptors see
-  the finished URL and an `OperationInfo` in `RequestOptions.extra`.
+- **One wire format for every transport.** The core encodes the path, the
+  query, the headers and the body, and reads the response bytes, so a
+  request is the same through any `ClientTransport`. The transport owns the
+  base URL, timeouts, retries, cookies and authorization; nothing is
+  retried by the core. `TransportRequest.operation` is the `OperationInfo`
+  of the call, for interceptors and logs.
 - **Strict decoding with paths.** A wrong type, a missing property or a bad
   date-time is a `DecodeError` carrying the JSON pointer of the first
   mismatch, never the value.
@@ -107,20 +113,22 @@ cancel, a body that does not match the schema). A bug in your code - an
 ## Platforms
 
 The Dart VM, dart2js and dart2wasm. The same test suite runs on all three
-(see [Development](#development)). Event streams need a streaming HTTP
-adapter in a browser, and cookie parameters cannot work there. The full
+(see [Development](#development)). Event streams need a transport that
+streams in a browser, and cookie parameters cannot work there. The full
 table is in [Web and platforms](doc/web_and_platforms.md).
 
 ## Known limits
 
 - A cookie parameter never reaches the server from a browser.
-- An event stream in a browser needs a fetch-based Dio adapter; with Dio's
-  default one `openEvents` returns a `TransportError` that says so.
+- An event stream in a browser needs a transport that streams the body;
+  `DioTransport` with Dio's default adapter returns a `TransportError` that
+  says so.
 - `int` is a JavaScript number on the web: integers beyond 2^53 lose
   precision there. Map such properties to `BigInt` or `String` in the
   generator config.
 - Per-call timeouts are not part of `CallOptions`; timeouts, base URL and
-  retries belong to your `Dio` and its interceptors.
+  retries belong to the transport (for Dio, your `Dio` and its
+  interceptors).
 - `Result` has the same name as `Result` in `package:async`; hide one of the
   two when a library imports both.
 
@@ -133,7 +141,9 @@ dart test -p chrome --compiler dart2wasm     # dart2wasm
 ```
 
 A test file that needs the VM (`dart:io`, int64 literals) carries
-`@TestOn('vm')`; `test/dio/web_test.dart` runs in a browser only. If Chrome
-is not found, set `CHROME_EXECUTABLE`. Runtime tests never touch the network.
+`@TestOn('vm')`. If Chrome is not found, set `CHROME_EXECUTABLE`. The tests
+never touch the network: they send through `FakeTransport`. Every transport
+also runs the conformance suite of `typed_openapi_transport_tests` against a
+loopback server.
 
 [Українська версія](README.ua.md)

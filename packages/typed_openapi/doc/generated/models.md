@@ -138,7 +138,7 @@ User.fromJson({'id': 1, 'name': 'A', 'createdAt': '2026-01-01T00:00:00'});
 // JsonDecodeException: expected an RFC 3339 date-time string, got a date-time without an offset at /createdAt in User. ...
 ```
 
-You rarely call `fromJson` yourself: a generated method catches the exception and returns it as a `DecodeError` (see [Responses and errors](responses_and_errors.md)). The only widening is an `int` where a number is expected. Details of the reader are in the [runtime guide on JSON decoding](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_runtime/doc/json_decoding.md).
+You rarely call `fromJson` yourself: a generated method catches the exception and returns it as a `DecodeError` (see [Responses and errors](responses_and_errors.md)). The only widening is an `int` where a number is expected. Details of the reader are in the [runtime guide on JSON decoding](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/doc/json_decoding.md).
 
 ## Required, optional, nullable
 
@@ -176,7 +176,7 @@ class UserPatch {
 }
 ```
 
-Only PATCH bodies are affected, and only their optional nullable properties. A PATCH body schema that other operations use too is generated as a separate class named with `naming.patch_suffix` (`Patch` by default, `PetPatch`), so the other uses keep plain fields. The override `triState` does the same for one schema or property. See the runtime guide on [patch and nullability](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_runtime/doc/patch_and_nullability.md).
+Only PATCH bodies are affected, and only their optional nullable properties. A PATCH body schema that other operations use too is generated as a separate class named with `naming.patch_suffix` (`Patch` by default, `PetPatch`), so the other uses keep plain fields. The override `triState` does the same for one schema or property. See the runtime guide on [patch and nullability](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/doc/patch_and_nullability.md).
 
 ## Constants and defaults
 

@@ -2,7 +2,7 @@
 
 An operation whose success is a `text/event-stream` is generated as a method
 that returns `Future<Result<Stream<SseItem<T>>, E>>` and calls
-`DioRequestSender.openEvents`. The `Result` tells you whether the stream
+`ClientSender.openEvents`. The `Result` tells you whether the stream
 opened; the `Stream` is a sequence of typed items that follows the WHATWG
 event-stream rules, optionally reconnects with `Last-Event-ID`, and always
 ends with one `SseDisconnected`. Problems with the data are items, never
@@ -49,8 +49,8 @@ carry the stream; a range is expanded) in the `OperationRequest`.
   `decodeError`, exactly like a normal response: `HttpError`,
   `UndocumentedStatus` or `DecodeError`. An error body is read to the end, so
   it must be finite.
-- A `DioException` is mapped as in [Results and errors](results_and_errors.md):
-  `TransportError`, `Cancelled`.
+- A `TransportException` of the transport is mapped as in
+  [Results and errors](results_and_errors.md): `TransportError`, `Cancelled`.
 - `streamStatuses` must not be empty (an `assert`): without it every status
   would be read to the end, and an endless stream would fill memory. A
   generated method always sets it.
@@ -71,7 +71,7 @@ carry the stream; a range is expanded) in the `OperationRequest`.
 `SseEvent.id` and `retry` are the stream's **last** id and retry, which
 persist across events as WHATWG says, not the ones of that event alone.
 `SseDisconnected.cause` is `null` when the server closed the connection, else
-the error: usually a `DioException` (also `cancel` for a cancelled request),
+the error: usually a `TransportException` (kind `cancelled` for a cancelled request),
 or, when a reconnection is answered with a status that is not a stream, the
 `Failure` of that answer (`UndocumentedStatus(503)`, an `HttpError`, ...).
 `SseDisconnected.lastEventId` is `''` when there was none and the same id a
@@ -146,8 +146,8 @@ event stream":
 `SseMessage` holds `event` (default `message`), `data`, `id` and `retry`.
 `message.json` parses `data` (text that is not JSON, or nesting deeper than
 1000 levels, is a `JsonDecodeException`) and `message.jsonObject` requires an
-object. Use `transformer.bind(stream)`, not `stream.transform(...)`: Dio
-gives a `Stream<Uint8List>`, which does not accept a transformer of
+object. Use `transformer.bind(stream)`, not `stream.transform(...)`: a
+transport gives a `Stream<Uint8List>`, which does not accept a transformer of
 `List<int>` at run time.
 
 ```dart
@@ -286,8 +286,8 @@ await api.pets.watchPet(
 - **Cancelling the subscription** (`subscription.cancel()`) cancels the
   request and closes the connection, also one a reconnection has in flight.
   Use it when the screen goes away.
-- **Cancelling `call.cancelToken`** ends the stream with a last
-  `SseDisconnected(cause: DioException(type: cancel))`, also during a wait:
+- **Cancelling `call.cancel`** (a `CancelSignal`) ends the stream with a last
+  `SseDisconnected(cause: TransportException(kind: cancelled))`, also during a wait:
 
   ```text
   [SseEvent(y, ...), SseDisconnected(cause=cancel, lastEventId="", retry=null, receivedMessage=true)]
@@ -303,7 +303,7 @@ await api.pets.watchPet(
 On the web, Dio's default browser adapter delivers a body only when the
 connection closes, so a stream cannot work with it. `openEvents` then returns
 a `TransportError` whose `exception.message` is
-`DioRequestSender.webStreamingMessage` and `exception.error` is an
+`DioTransport.webStreamingMessage` and `exception.error` is an
 `UnsupportedError`, before any request is sent. Set a fetch-based adapter on
 your `Dio`, such as `ConversionLayerAdapter` from `dio_compatibility_layer`
 with `package:http`'s `BrowserClient`, or `fetch_client`. A reconnection
@@ -315,7 +315,8 @@ that carries an id fails with a `TransportError`. See
 
 ## Testing with a fake stream
 
-`openEvents` needs only an `HttpClientAdapter`, so a test feeds it bytes:
+Through `DioTransport`, `openEvents` needs only an `HttpClientAdapter`, so a
+test feeds it bytes (a fake `ClientTransport` works the same way):
 
 ```dart
 class FakeAdapter implements HttpClientAdapter {
@@ -336,6 +337,7 @@ ResponseBody events(String text, [int status = 200]) => ResponseBody(
 
 final adapter = FakeAdapter((_) => events('id: 1\ndata: {"text": "hello"}\n\n'));
 final dio = Dio()..httpClientAdapter = adapter;
+final transport = DioTransport(dio);
 ```
 
 To test reconnection without sleeping, pass
