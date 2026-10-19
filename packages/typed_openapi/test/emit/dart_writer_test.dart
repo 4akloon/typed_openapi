@@ -260,7 +260,7 @@ void main() {
       "import 'dart:typed_data' show Uint8List;\n"
       '\n'
       "import 'package:app/money.dart' show Money;\n"
-      "import 'package:typed_openapi_runtime/typed_openapi_runtime.dart' "
+      "import 'package:typed_openapi_client/typed_openapi_client.dart' "
       'show Date, JsonReader;\n'
       '\n'
       "import 'cat.dart';\n"
@@ -271,7 +271,7 @@ void main() {
     (Imports('a.dart')..fromRuntime('JsonReader')).write(narrow);
     expect(
       narrow.text,
-      "import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'\n"
+      "import 'package:typed_openapi_client/typed_openapi_client.dart'\n"
       '    show JsonReader;\n'
       '\n',
     );
@@ -286,7 +286,7 @@ void main() {
     imports.write(out);
     expect(
       out.text,
-      "import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'\n"
+      "import 'package:typed_openapi_client/typed_openapi_client.dart'\n"
       '    show\n'
       '        AVeryLongNameOne,\n'
       '        AVeryLongNameTwo,\n'

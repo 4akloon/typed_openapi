@@ -31,15 +31,20 @@ jobs:
         run: dart test
         working-directory: packages/typed_openapi
 
-      - name: Test typed_openapi_runtime
+      - name: Test typed_openapi_client
         if: always()
         run: dart test
-        working-directory: packages/typed_openapi_runtime
+        working-directory: packages/typed_openapi_client
 
-      - name: Test the runtime in Chrome
+      - name: Test typed_openapi_client in Chrome
         if: always()
         run: dart test -p chrome
-        working-directory: packages/typed_openapi_runtime
+        working-directory: packages/typed_openapi_client
+
+      - name: Test typed_openapi_dio
+        if: always()
+        run: dart test
+        working-directory: packages/typed_openapi_dio
 
       - name: Check the corpus
         if: always()

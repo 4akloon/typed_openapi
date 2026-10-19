@@ -7,8 +7,9 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:typed_openapi_dio/typed_openapi_dio.dart';
 import 'package:fixture/wire_raw/api_client.dart';
-import 'package:typed_openapi_runtime/typed_openapi_runtime.dart';
+import 'package:typed_openapi_client/typed_openapi_client.dart';
 
 import 'fake_dio.dart';
 
@@ -36,7 +37,7 @@ Future<void> main() async {
   final adapter = Adapter();
   final dio = Dio(BaseOptions(baseUrl: 'https://wire.example.com'))
     ..httpClientAdapter = adapter;
-  final wire = ApiClient(dio).wire;
+  final wire = ApiClient(DioTransport(dio)).wire;
 
   // A parameter or a part named like a function the code calls is renamed.
   adapter.answers.add(() => empty(204));

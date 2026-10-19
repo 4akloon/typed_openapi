@@ -2,7 +2,7 @@
 // dart format off
 // ignore_for_file: deprecated_member_use_from_same_package
 
-import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'
+import 'package:typed_openapi_client/typed_openapi_client.dart'
     show DeepEquality, JsonReader, immutable;
 
 import 'status.dart';

@@ -17,6 +17,7 @@ Date: 2026-10-11. Each stage is a separate plan in `superpowers/plans/`, and eac
 | M9 | Operation emitter and `generate` | Groups by tag, root client, parameters and bodies (JSON, multipart, form, binary), responses, typed errors, security metadata, servers; `generate` (which already writes models from M8) adds the operations. Plan: [2026-10-13-m9-operations.md](superpowers/plans/2026-10-13-m9-operations.md) | R5.3, R10.4, R10.6–R10.9, R11.1, R11.4–R11.6 | M8 |
 | M10 | SSE | Methods returning a `Stream` of events, schemas with `itemSchema`, `x-` or override, reconnection with `Last-Event-ID`. Plan: [2026-10-13-m10-sse.md](superpowers/plans/2026-10-13-m10-sse.md) | R12.1, R12.2, R12.4, R12.5 (R12.6 later) | M9, M7 |
 | M11 | Corpus and golden tests | Public specifications (Petstore, Stripe, GitHub, OpenAI, Kubernetes) compile and pass the analyzer; runtime decoding tests; matrix of SDK and formatter versions; fuzz of string escaping. Plan: [2026-10-13-m11-corpus.md](superpowers/plans/2026-10-13-m11-corpus.md) | R15.3, R15.4, R2.6 | M9 |
+| M11b | Transport split | `typed_openapi_runtime` becomes `typed_openapi_client`, a core with no HTTP dependency that builds requests and reads responses itself; generated code takes a `ClientTransport`; `typed_openapi_dio` is the Dio transport; a conformance suite with a loopback server runs every transport on the VM, dart2js and dart2wasm. Plan: [2026-10-19-m11b-transport-split.md](superpowers/plans/2026-10-19-m11b-transport-split.md) | R10.1, R10.2, R12.4 | M11 (implemented on branch `feat/m11b-transport-split`, merge pending) |
 | M12 | Evolution | `diff` between regenerations with change categories (including source-breaking for an exhaustive `switch`), lock file | R14 | M9 |
 | M13 | Documentation and product | Support matrix, `x-` registry, code catalog, recipes for NestJS / FastAPI / Spring / ASP.NET, JSON Schema of the config, `lint` mode for the backend, optional `build_runner` | R15.2, R15.5, R15.6, R15.1 (partial) | all |
 
@@ -257,10 +258,10 @@ skipped client has no counts.
 | `corpus check` compares diagnostics by count per code, and round-trip failures by count; a changed message, pointer or severity below error passes | by design (the files are compared byte for byte); add a hash of the sorted (code, pointer, message) per client when a regression slips through |
 | Other `ir/` messages still write a spec name raw (`model_notices.dart`, `part_media_type.dart`, `root_names.dart`, `media_type_picker.dart`, `security_builder.dart`); the text and GitHub reporters neutralise it, JSON and SARIF keep it as it is by design | when the fuzz covers those sinks |
 | The fuzz does not use hostile component names (a `$ref` pointer needs `~1` and percent escaping) and checks server URLs and defaults only with `LeakCheck` | when needed |
-| Test files carry top-level helpers (`http_download_test.dart`, `semver_command_test.dart`, `workflows_test.dart`), against "no top-level functions except `main`" | when a test file is touched |
-| A download has a time limit but no size cap; GitHub Actions are pinned by tag, not by commit SHA | before 1.0 (no secrets in CI, `permissions: contents: read`) |
+| GitHub Actions are pinned by tag, not by commit SHA (a download has a time limit and a 256 MiB size cap) | before 1.0 (no secrets in CI, `permissions: contents: read`) |
 | The generated code needs `JsonReader.constant` to return a `bool`, but no gate ties the runtime version to the generator version ("release together" is CHANGELOG prose only) | M12 (API snapshot) or M13 |
 | The SARIF rule help does not link a diagnostics catalog | M13 (the catalog is the generated documentation) |
+| `workflows_test.dart` still carries top-level helpers, against "no top-level functions except `main`" | when that file is touched |
 | `size_limits.dart` (three copies) ends an expression-bodied member by a heuristic: a multi-line string at low indentation can end it early (a false negative only) | when needed |
 
 After M11: no Parked row is about the corpus or the platform matrix; the one

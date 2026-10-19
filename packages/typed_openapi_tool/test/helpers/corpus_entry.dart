@@ -12,6 +12,6 @@ CorpusSpec entry(String name, Expectation expectation) => CorpusSpec(
   expectation: expectation,
 );
 
-/// The directory of `typed_openapi_runtime`, from the tool package.
+/// The directory of `typed_openapi_client`, from the tool package.
 String runtimeDirectory() =>
-    p.normalize(p.absolute(p.join('..', 'typed_openapi_runtime')));
+    p.normalize(p.absolute(p.join('..', 'typed_openapi_client')));

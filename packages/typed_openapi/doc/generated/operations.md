@@ -3,7 +3,7 @@
 Operations are generated into **group classes**, one plain class per group in `api/<group>.dart`, exported by `api.dart` and held by the root client as fields. A method has named arguments only and returns a `Future<Result<T, E>>`; it never throws for a response.
 
 ```dart
-final client = PetstoreClient(dio);
+final client = PetstoreClient(DioTransport(dio));
 final result = await client.pets.listPets(limit: 10, xTrace: 'abc');
 ```
 
@@ -73,7 +73,7 @@ OperationRequest(
 )
 ```
 
-Path parameters use `PathParameter('petId', petId, style: .label)` or `.matrix`. A parameter described with `content` (`application/json`) is JSON-encoded. A style that its `in` does not allow falls back to the default (`TOA564`), and `in: querystring` is skipped (`TOA565`). Browsers drop the `Cookie` header, so cookie parameters do not work on the web. The encoding rules (RFC 6570 expansion, percent-encoding, and the `ArgumentError` for a path value that is empty, `.` or `..`) are in the [runtime guide on parameters](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_runtime/doc/parameters.md).
+Path parameters use `PathParameter('petId', petId, style: .label)` or `.matrix`. A parameter described with `content` (`application/json`) is JSON-encoded. A style that its `in` does not allow falls back to the default (`TOA564`), and `in: querystring` is skipped (`TOA565`). Browsers drop the `Cookie` header, so cookie parameters do not work on the web. The encoding rules (RFC 6570 expansion, percent-encoding, and the `ArgumentError` for a path value that is empty, `.` or `..`) are in the [runtime guide on parameters](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/doc/parameters.md).
 
 ## `CallOptions`
 
@@ -81,18 +81,18 @@ The last argument of every method:
 
 | Field | Use |
 | --- | --- |
-| `cancelToken` | Dio `CancelToken`; a cancelled call is `Cancelled` |
+| `cancel` | `CancelSignal`; a cancelled call is `Cancelled` |
 | `headers` | extra headers for this call |
-| `extra` | values for your interceptors in `RequestOptions.extra` |
-| `onSendProgress`, `onReceiveProgress` | Dio progress callbacks |
+| `extra` | values for the transport (`TransportRequest.extra`; `DioTransport` puts them in `RequestOptions.extra`) |
+| `onSendProgress`, `onReceiveProgress` | progress of the bodies, counted by the client |
 | `sse` | `SseOptions` for [event streams](event_streams.md) |
 
 ```dart
-final token = CancelToken();
-await client.pets.getPet(petId: 1, call: CallOptions(cancelToken: token, headers: {'X-Request-Id': 'r1'}));
+final signal = CancelSignal();
+await client.pets.getPet(petId: 1, call: CallOptions(cancel: signal, headers: {'X-Request-Id': 'r1'}));
 ```
 
-Every request also carries an `OperationInfo` in `RequestOptions.extra` (`OperationInfo.of(options)`): `operationId`, method, path template, tags and the [security requirements](security.md), for interceptors.
+Every request also carries an `OperationInfo` (`TransportRequest.operation`; in a Dio interceptor `DioTransport.operationOf(options)`): `operationId`, method, path template, tags and the [security requirements](security.md), for interceptors.
 
 ## Method names
 

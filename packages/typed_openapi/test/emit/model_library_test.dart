@@ -254,7 +254,7 @@ void main() {
       files['models/root.dart'],
       startsWith(
         '${ModelLibrary.header}\n'
-        "import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'\n"
+        "import 'package:typed_openapi_client/typed_openapi_client.dart'\n"
         '    show DeepEquality, JsonReader, immutable;\n'
         '\n'
         "import 'type_2_fa.dart';\n"

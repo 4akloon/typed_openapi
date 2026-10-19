@@ -13,7 +13,7 @@ import 'type_codec.dart';
 
 /// Writes the class of a [GroupIr] (decisions 1–3, 5–10 of M9): a plain
 /// class, so `implements` mocks it (R10.7), with a method per operation that
-/// builds an `OperationRequest` and sends it through `DioRequestSender`;
+/// builds an `OperationRequest` and sends it through `ClientSender`;
 /// then the sealed types of the operations' statuses and the classes of
 /// their multipart parts. [RequestWriter] writes the request,
 /// [DecoderWriter] the decoder, [StatusTypeEmitter] and [PartsEmitter] the
@@ -37,23 +37,22 @@ final class OperationEmitter {
   static const _code = DartCode();
   static const _names = DartNames();
 
-  /// The runtime library generated code imports.
-  static const _dio = 'package:dio/dio.dart';
-
   /// Writes [group] and the types of its operations to [out].
   void write(GroupIr group, DartWriter out) {
     final name = group.name;
     _codec.imports
-      ..show(_dio, 'Dio')
-      ..fromRuntime('DioRequestSender');
+      ..fromRuntime('ClientSender')
+      ..fromRuntime('ClientTransport');
     final members = _privateNames(group);
     out.prose('The operations of the `${_code.docSpan(name)}` group.');
     out.block('class $name', () {
       out
-        ..prose('Sends the requests through [dio], which it uses as it is.')
-        ..line('$name(Dio dio) : _sender = DioRequestSender(dio);')
+        ..prose('Sends the requests through [transport].')
+        ..line(
+          '$name(ClientTransport transport) : _sender = ClientSender(transport);',
+        )
         ..line()
-        ..line('final DioRequestSender _sender;');
+        ..line('final ClientSender _sender;');
       for (final (operation, info, _) in members) {
         out.line();
         _info(out, operation, info);

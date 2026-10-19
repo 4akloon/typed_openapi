@@ -24,6 +24,13 @@ List<String> runsOf(String name, String job) => [
     if (step case {'run': final String run}) run,
 ];
 
+/// The distinct working directories of the steps of the job [job] of the
+/// workflow [name], in order.
+List<String> directoriesOf(String name, String job) => {
+  for (final step in at(name, ['jobs', job, 'steps']) as List<Object?>)
+    if (step case {'working-directory': final String directory}) directory,
+}.toList();
+
 void main() {
   test('every job of every workflow has a timeout', () {
     final folder = Directory(p.join('..', '..', '.github', 'workflows'));
@@ -60,6 +67,30 @@ void main() {
       'dart2js',
       'dart2wasm',
     ]);
+  });
+
+  test('every PR tests the Dio adapter on the VM and in Chrome', () {
+    expect(directoriesOf('ci.yml', 'analyze-test'), [
+      'packages/typed_openapi',
+      'packages/typed_openapi_client',
+      'packages/typed_openapi_dio',
+      'packages/typed_openapi_tool',
+    ]);
+    expect(directoriesOf('ci.yml', 'web'), [
+      'packages/typed_openapi_client',
+      'packages/typed_openapi_dio',
+    ]);
+  });
+
+  test('the Dio adapter is dry-run and published by its tag', () {
+    expect(
+      directoriesOf('ci.yml', 'publish-dry-run'),
+      contains('packages/typed_openapi_dio'),
+    );
+    expect(
+      at('publish.yml', ['on', 'push', 'tags']),
+      contains('typed_openapi_dio-v*'),
+    );
   });
 
   test('every PR checks the corpus with both SDKs, the fuzz and semver', () {

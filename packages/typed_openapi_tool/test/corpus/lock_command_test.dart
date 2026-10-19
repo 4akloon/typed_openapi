@@ -43,7 +43,7 @@ specs:
       '--work',
       p.join(temp.path, 'work'),
       '--runtime',
-      p.normalize(p.absolute(p.join('..', 'typed_openapi_runtime'))),
+      p.normalize(p.absolute(p.join('..', 'typed_openapi_client'))),
     ];
     Future<int> run(String command, StringBuffer out) => CorpusCli(
       out: out,

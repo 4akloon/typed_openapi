@@ -95,7 +95,7 @@ enum CoreKind {
   /// `string` with format `date-time`, in UTC.
   dateTime('DateTime'),
 
-  /// `string` with format `date`: `Date` of `typed_openapi_runtime`.
+  /// `string` with format `date`: `Date` of `typed_openapi_client`.
   date('Date'),
 
   /// `string` with format `byte`: base64 in JSON.
@@ -104,7 +104,7 @@ enum CoreKind {
   /// `string` with format `binary`: raw bytes of a body or a part.
   binary('Uint8List'),
 
-  /// A schema without constraints: `JsonValue` of `typed_openapi_runtime`.
+  /// A schema without constraints: `JsonValue` of `typed_openapi_client`.
   json('JsonValue');
 
   const CoreKind(this.dartName);
@@ -265,7 +265,7 @@ final class CustomType extends DartType {
       Object.hash(CustomType, type, import, converter, json, nullable);
 }
 
-/// `Patch<T>` of `typed_openapi_runtime`: a field that tells "absent"
+/// `Patch<T>` of `typed_openapi_client`: a field that tells "absent"
 /// from `null` (R7).
 final class PatchType extends DartType {
   /// Creates a patch of [value].

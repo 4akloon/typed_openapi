@@ -7,10 +7,11 @@
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
+import 'package:typed_openapi_dio/typed_openapi_dio.dart';
 import 'package:fixture/discriminator_scalars_raw/api_client.dart';
 import 'package:fixture/optional_constant_structural/api_client.dart'
     as optional;
-import 'package:typed_openapi_runtime/typed_openapi_runtime.dart';
+import 'package:typed_openapi_client/typed_openapi_client.dart';
 
 import 'fake_dio.dart';
 
@@ -35,7 +36,7 @@ Future<void> main() async {
   final adapter = Adapter();
   final dio = Dio(BaseOptions(baseUrl: 'https://values.example.com'))
     ..httpClientAdapter = adapter;
-  final api = ApiClient(dio).defaultApi;
+  final api = ApiClient(DioTransport(dio)).defaultApi;
 
   // A value that is not an object has no discriminator property: it is
   // picked by its JSON type, an integer before a number, and the first
@@ -57,7 +58,7 @@ Future<void> main() async {
 
   // A model decoded without its optional constants writes none of them; one
   // made in code writes them all, so the two are not equal.
-  final facets = optional.ApiClient(dio).defaultApi;
+  final facets = optional.ApiClient(DioTransport(dio)).defaultApi;
   adapter.answers.add(() => json(200, {'field': 'f'}));
   print('facet -> ${show(await facets.getFacet())}');
   for (final body in [

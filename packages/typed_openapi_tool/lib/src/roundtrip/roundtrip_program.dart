@@ -35,7 +35,7 @@ import 'dart:convert' as convert;
 import 'dart:io' as io;
 
 import '$library' as m;
-import 'package:typed_openapi_runtime/typed_openapi_runtime.dart' as rt;
+import 'package:typed_openapi_client/typed_openapi_client.dart' as rt;
 
 typedef RoundTripCodec = ({
   Object? Function(Object?) decode,

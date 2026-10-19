@@ -14,10 +14,10 @@ final class DecoderWriter {
 
   static const _code = DartCode();
 
-  /// How Dio reads the body of every status: by the successes' media
+  /// How the client reads the body of every status: by the successes' media
   /// types; errors of a text or binary operation are parsed from it. A
-  /// binary error makes the whole operation bytes, since Dio would turn the
-  /// bytes of a JSON operation into text.
+  /// binary error makes the whole operation bytes, since the client would
+  /// turn the bytes of a JSON operation into text.
   static String responseKind(OperationIr operation) {
     // An event stream reads its body itself, and its error bodies parsed.
     if (operation.events != null) return 'json';

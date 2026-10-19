@@ -1,6 +1,16 @@
 ## 0.0.1 - Unreleased
 
 ### Output changes
+- Generated files import `package:typed_openapi_client/typed_openapi_client.dart`
+  in place of `package:typed_openapi_runtime/typed_openapi_runtime.dart`: the
+  runtime package is renamed (M11b).
+- Groups and the root client take a `ClientTransport` in place of a `Dio`
+  and send through `ClientSender` in place of `DioRequestSender`; generated
+  files no longer import `package:dio`. A Dio user writes
+  `ApiClient(DioTransport(dio))` with `package:typed_openapi_dio`. Schemas
+  named `Dio` keep their name; `ClientSender`, `ClientTransport`,
+  `CancelSignal` and the other transport types of the client are taken
+  (TOA550). TOA566 names the transport's base URL (M11b).
 - Paths in reports, baseline entries and CI annotations use `/` as the
   separator on every OS, with a drive letter kept on an absolute Windows
   path, so a report and its fingerprints do not depend on the OS. Nothing

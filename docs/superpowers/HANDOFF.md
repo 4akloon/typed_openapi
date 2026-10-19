@@ -7,7 +7,8 @@ Last updated: 2026-10-13 (M11 merged). Read this first on a new device or in a n
 | Milestone | Design | Plan | Code |
 |---|---|---|---|
 | M1–M11 | merged | merged | **merged** (M10: `bd1cdc3`, M11: `3842bd7`) |
-| M12 evolution: API snapshot, change report, name lock | [spec](specs/2026-10-13-m12-evolution-design.md) | brief ready: [briefs/m12-plan.md](briefs/m12-plan.md) | next |
+| M11b transport split: client core, `typed_openapi_dio`, conformance suite | [spec](specs/2026-10-19-m11b-transport-split-design.md) | [plan](plans/2026-10-19-m11b-transport-split.md) | implemented on branch `feat/m11b-transport-split` (merge pending) |
+| M12 evolution: API snapshot, change report, name lock | [spec](specs/2026-10-13-m12-evolution-design.md) | brief ready: [briefs/m12-plan.md](briefs/m12-plan.md); M12's spec still says `typed_openapi_runtime` (the spec: "the runtime package's own API", line 77) and need updating to `typed_openapi_client` before planning | next |
 | M13 documentation, lint, distribution, 0.1.0 readiness | [spec](specs/2026-10-13-m13-product-design.md) | brief ready: [briefs/m13-plan.md](briefs/m13-plan.md) | after M12 |
 
 **Other open work:**

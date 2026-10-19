@@ -50,9 +50,9 @@ final class DartNames {
 
   /// Type names a generated library sees without importing them: those of
   /// `dart:core`, `Uint8List` of `dart:typed_data`, the names of
-  /// `typed_openapi_runtime` that generated code uses, and `Dio`, the one
-  /// name the API files import from `package:dio` (so its other exports,
-  /// such as `Response`, `Options` and `Headers`, stay free for schemas).
+  /// `typed_openapi_client` that generated code uses. Generated code imports
+  /// nothing from an HTTP client, so `Dio`, `Response` or `Options` stay
+  /// free for schemas.
   static const takenTypeNames = {
     // dart:core
     'ArgumentError', 'AssertionError', 'BigInt', 'BidirectionalIterator',
@@ -67,10 +67,10 @@ final class DartNames {
     'String', 'StringBuffer', 'StringSink', 'Symbol', 'Type', 'TypeError',
     'UnimplementedError', 'UnsupportedError', 'Uri', 'WeakReference', 'bool',
     'double', 'int', 'num', 'Uint8List',
-    // typed_openapi_runtime
-    'CallOptions', 'Cancelled', 'CookieParameter', 'Date', 'DecodeError',
-    'DeepEquality',
-    'DioRequestSender', 'Failure', 'FileUpload', 'FormBody', 'FormEncoding',
+    // typed_openapi_client
+    'CallOptions', 'CancelSignal', 'Cancelled', 'ClientSender',
+    'ClientTransport', 'CookieParameter', 'Date', 'DecodeError',
+    'DeepEquality', 'Failure', 'FileUpload', 'FormBody', 'FormEncoding',
     'HeaderParameter', 'HttpError',
     'JsonDecodeException', 'JsonReader', 'JsonValue', 'MultipartBody',
     'MultipartPart', 'OperationInfo',
@@ -81,9 +81,9 @@ final class DartNames {
     'SseDisconnected', 'SseEvent', 'SseEventIgnored', 'SseItem',
     'SseItemDecoder', 'SseMessage', 'SseOptions', 'SseReconnecting',
     'SseReconnection', 'SseReconnector', 'SseResume',
-    'Success', 'TransportError', 'UndocumentedStatus',
-    // package:dio, which the API files import with `show Dio` only.
-    'Dio',
+    'Success', 'TransportError', 'TransportException',
+    'TransportExceptionKind', 'TransportRequest', 'TransportResponse',
+    'UndocumentedStatus',
   };
 
   /// Members every Dart object has.

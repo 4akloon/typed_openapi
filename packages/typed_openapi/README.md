@@ -10,15 +10,19 @@
 
 ## Install
 
-`typed_openapi` is the generator: a dev dependency and a CLI, never a runtime dependency. The generated code depends only on [`typed_openapi_runtime`](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_runtime/README.md) and Dio. Neither package is on pub.dev yet, so use git (or a path to a checkout):
+`typed_openapi` is the generator: a dev dependency and a CLI, never a runtime dependency. The generated code depends only on [`typed_openapi_client`](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/README.md); the app adds a transport, such as [`typed_openapi_dio`](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_dio/README.md) over Dio. None of these packages is on pub.dev yet, so use git (or a path to a checkout):
 
 ```yaml
 dependencies:
   dio: ^5.11.1
-  typed_openapi_runtime:
+  typed_openapi_client:
     git:
       url: https://github.com/4akloon/typed_openapi.git
-      path: packages/typed_openapi_runtime
+      path: packages/typed_openapi_client
+  typed_openapi_dio:
+    git:
+      url: https://github.com/4akloon/typed_openapi.git
+      path: packages/typed_openapi_dio
 dev_dependencies:
   typed_openapi:
     git:
@@ -90,17 +94,18 @@ errors: 0, warnings: 0, infos: 0
 Generated petstore in lib/src/petstore: 7 files, 7 written, 0 deleted.
 ```
 
-Use the client with your own Dio. The result is a sealed `Result` you match on, so the 404 body arrives as a `Problem`, not as an exception:
+Use the client with your own Dio through `DioTransport`. The result is a sealed `Result` you match on, so the 404 body arrives as a `Problem`, not as an exception:
 
 ```dart
 import 'package:dio/dio.dart';
-import 'package:typed_openapi_runtime/typed_openapi_runtime.dart';
+import 'package:typed_openapi_client/typed_openapi_client.dart';
+import 'package:typed_openapi_dio/typed_openapi_dio.dart';
 
 import 'src/petstore/petstore.dart';
 
 Future<void> main() async {
   final dio = Dio(BaseOptions(baseUrl: PetstoreClient.server));
-  final client = PetstoreClient(dio);
+  final client = PetstoreClient(DioTransport(dio));
 
   switch (await client.pets.getPet(id: 7)) {
     case Success(:final data):
@@ -125,7 +130,7 @@ Against a server that answers `{"id": 7, "name": "Rex", "status": "available"}` 
 - **Request bodies.** JSON, forms, multipart with typed parts, text, bytes and files: [Request bodies](doc/generated/request_bodies.md).
 - **Event streams.** `text/event-stream` operations become `Stream`s with reconnection and typed event unions: [Event streams](doc/generated/event_streams.md).
 - **Security metadata.** Each operation carries its security requirements as data; it never signs requests for you: [Security](doc/generated/security.md).
-- **Your Dio stays yours.** The client uses the `Dio` you pass as it is: interceptors, adapters and options are not touched.
+- **Your Dio stays yours.** `DioTransport` uses the `Dio` you pass as it is: interceptors, adapters and options are not touched.
 - **Safe to run in CI.** [`check`](doc/cli.md) exits non-zero on new errors, a [baseline](doc/baseline.md) accepts the old ones, and output is available as text, JSON, SARIF and GitHub annotations: [CI](doc/ci.md).
 - **Deterministic, and careful with your files.** The same spec and config give byte-identical code. `generate` replaces its output atomically and refuses to delete a file it did not write: [Generated output](doc/generate_output.md).
 
@@ -160,7 +165,7 @@ Exit code `0` means no errors, `1` errors, `64` a usage error and `78` a config 
 | [Programmatic API](doc/programmatic_api.md) | Running the checker and the writer from Dart code. |
 | [Troubleshooting](doc/troubleshooting.md) | Common problems and what to do. |
 
-The runtime that generated code depends on has its own guides: [typed_openapi_runtime](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_runtime/README.md).
+The runtime that generated code depends on has its own guides: [typed_openapi_client](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/README.md).
 
 ## Contributing and license
 

@@ -112,7 +112,7 @@ Future<Result<void, Never>> putPhoto({required int petId, required FileUpload bo
 Future<Result<JsonValue, SendNoteError>> sendNote({String? body, CallOptions? call}); // text/plain
 ```
 
-`FileUpload.bytes(...)` works everywhere including the web; `FileUpload.stream(...)` takes a stream, which Dio's browser adapter buffers. Constructors and the content-type check are in the [runtime guide on request bodies](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_runtime/doc/request_bodies.md).
+`FileUpload.bytes(...)` works everywhere including the web; `FileUpload.stream(...)` takes a stream, which Dio's browser adapter buffers. Constructors and the content-type check are in the [runtime guide on request bodies](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/doc/request_bodies.md).
 
 ## See also
 

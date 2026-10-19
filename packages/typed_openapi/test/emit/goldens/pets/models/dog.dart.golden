@@ -5,7 +5,7 @@
 import 'dart:convert' show base64Encode;
 import 'dart:typed_data' show Uint8List;
 
-import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'
+import 'package:typed_openapi_client/typed_openapi_client.dart'
     show DeepEquality, JsonReader, immutable;
 
 @immutable

@@ -1,6 +1,6 @@
 # The generated client
 
-`typed_openapi generate` writes one Dart package-ready directory per client: models, one API class per group of operations, two barrel files and a root class. The code depends on `package:dio` and [`typed_openapi_runtime`](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_runtime/README.md) only, needs no `build_runner` step and is clean under `dart analyze --fatal-infos`.
+`typed_openapi generate` writes one Dart package-ready directory per client: models, one API class per group of operations, two barrel files and a root class. The code depends only on [`typed_openapi_client`](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/README.md); the app supplies a transport (see [`typed_openapi_dio`](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_dio/README.md)). It needs no `build_runner` step and is clean under `dart analyze --fatal-infos`.
 
 ## Layout
 
@@ -43,12 +43,11 @@ The root class has a field per group and the servers of the spec. It never sets 
 
 ```dart
 class PetstoreClient {
-  /// Creates the client: every group sends through [dio], which it uses as it
-  /// is.
-  PetstoreClient(Dio dio)
-    : defaultApi = DefaultApi(dio),
-      pets = PetsApi(dio),
-      store = StoreApi(dio);
+  /// Creates the client: every group sends through [transport].
+  PetstoreClient(ClientTransport transport)
+    : defaultApi = DefaultApi(transport),
+      pets = PetsApi(transport),
+      store = StoreApi(transport);
 
   final DefaultApi defaultApi;
   final PetsApi pets;
@@ -63,11 +62,11 @@ class PetstoreClient {
 }
 ```
 
-Use a server as the base URL of your own `Dio`:
+Use a server as the base URL of your transport, here your own `Dio` through `typed_openapi_dio`:
 
 ```dart
 final dio = Dio(BaseOptions(baseUrl: PetstoreClient.server1(region: 'us')));
-final client = PetstoreClient(dio);
+final client = PetstoreClient(DioTransport(dio));
 ```
 
 | Servers in the spec | Generated |
@@ -78,7 +77,7 @@ final client = PetstoreClient(dio);
 
 A member that would collide with another member of the root class is renamed with a suffix and reported (`TOA551`, for example `server2` when a group field is called `server`). Servers on a single operation or path are not used (`TOA566`).
 
-The client never changes your `Dio`: interceptors, adapters, timeouts and the base URL stay yours. See [Operations](operations.md) for what a method looks like.
+The client and `DioTransport` never change your `Dio`: interceptors, adapters, timeouts and the base URL stay yours. See [Operations](operations.md) for what a method looks like.
 
 ## Naming rules
 

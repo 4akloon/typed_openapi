@@ -2,7 +2,8 @@
 // dart format off
 // ignore_for_file: deprecated_member_use_from_same_package
 
-import 'package:dio/dio.dart' show Dio;
+import 'package:typed_openapi_client/typed_openapi_client.dart'
+    show ClientTransport;
 
 import 'api/chat_api.dart';
 import 'api/threads_api.dart';
@@ -11,11 +12,12 @@ export 'api.dart';
 export 'models.dart';
 
 /// The client of the API: a field for each group of operations, and the servers
-/// of the spec. Set the base URL on your Dio.
+/// of the spec. The transport sets the base URL.
 class ApiClient {
-  /// Creates the client: every group sends through [dio], which it uses as it
-  /// is.
-  ApiClient(Dio dio) : chat = ChatApi(dio), threads = ThreadsApi(dio);
+  /// Creates the client: every group sends through [transport].
+  ApiClient(ClientTransport transport)
+    : chat = ChatApi(transport),
+      threads = ThreadsApi(transport);
 
   /// The operations of [ChatApi].
   final ChatApi chat;

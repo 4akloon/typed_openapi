@@ -75,7 +75,7 @@ void main() {
       final temp = TempDir();
       package = temp.path;
       final runtime = p.normalize(
-        p.absolute(p.join('..', 'typed_openapi_runtime')),
+        p.absolute(p.join('..', 'typed_openapi_client')),
       );
       temp
         ..write('pubspec.yaml', '''
@@ -84,7 +84,7 @@ publish_to: none
 environment:
   sdk: ">=3.10.0 <4.0.0"
 dependencies:
-  typed_openapi_runtime:
+  typed_openapi_client:
     path: ${runtime.replaceAll(r'\', '/')}
 dev_dependencies:
   lints: ^6.1.0
@@ -365,7 +365,7 @@ const _decodeProgram = r'''
 import 'dart:convert';
 
 import 'package:fixture/pets_raw/models.dart';
-import 'package:typed_openapi_runtime/typed_openapi_runtime.dart';
+import 'package:typed_openapi_client/typed_openapi_client.dart';
 
 void main() {
   const text = """

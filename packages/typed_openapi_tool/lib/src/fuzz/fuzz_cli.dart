@@ -32,8 +32,8 @@ final class FuzzCli {
     )
     ..addOption(
       'runtime',
-      defaultsTo: '../typed_openapi_runtime',
-      help: 'The typed_openapi_runtime package the sample depends on.',
+      defaultsTo: '../typed_openapi_client',
+      help: 'The typed_openapi_client package the sample depends on.',
     );
 
   /// Runs the fuzz with [args]; returns the exit code.
