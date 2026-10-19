@@ -55,6 +55,40 @@ void main() {
 ''');
   });
 
+  test('bidirectional and line separator characters are escaped', () {
+    const hostile = 'a\u202eb\u2028c\u0085d\u200fe\u2066f';
+    final text = json.encode({
+      'a': const ApiSnapshot({
+        '#/x': SnapshotType(
+          'X',
+          .enumeration,
+          members: {
+            '"a\u202e"': SnapshotMember(
+              'v',
+              .value,
+              facts: {'path': hostile},
+            ),
+          },
+        ),
+      }),
+    });
+    expect(text, isNot(matches(RegExp('[\u0085\u200f\u2028\u202e\u2066]'))));
+    expect(text, contains(r'\u202e'));
+    final back = json.decode(text)['a']!.types['#/x']!;
+    expect(back.members['"a\u202e"']?.facts['path'], hostile);
+    expect(json.encode(json.decode(text)), text);
+  });
+
+  test('an exhaustive that is not a bool is a FormatException', () {
+    expect(
+      () => json.decode(
+        '{"version": 1, "clients": {"a": {"t": {"name": "T", '
+        '"kind": "model", "exhaustive": "x"}}}}',
+      ),
+      throwsFormatException,
+    );
+  });
+
   test('a lock without clients is valid', () {
     final text = json.encode({});
     expect(json.decode(text), isEmpty);

@@ -3,9 +3,9 @@ import 'dart:convert';
 import 'api_snapshot.dart';
 
 /// Reads and writes the snapshots of clients as the text of
-/// `typed_openapi.lock` (M12, decision 6): JSON with sorted keys, a type's
-/// lines apart and each member on one line, so a change of the API is a
-/// readable change of the file.
+/// `typed_openapi.lock` (M12, decision 6): JSON whose type ids, member ids
+/// and fact keys are sorted, a type's lines apart and each member on one
+/// line, so a change of the API is a readable change of the file.
 final class SnapshotJson {
   /// Creates the codec.
   const SnapshotJson();
@@ -18,12 +18,12 @@ final class SnapshotJson {
     final out = StringBuffer('{\n  "version": $version,\n  "clients": {');
     final names = clients.keys.toList()..sort();
     for (final (i, name) in names.indexed) {
-      out.write('${i == 0 ? '' : ','}\n    ${jsonEncode(name)}: {');
+      out.write('${i == 0 ? '' : ','}\n    ${_encode(name)}: {');
       final types = clients[name]!.types;
       final ids = types.keys.toList()..sort();
       for (final (j, id) in ids.indexed) {
         out
-          ..write('${j == 0 ? '' : ','}\n      ${jsonEncode(id)}: ')
+          ..write('${j == 0 ? '' : ','}\n      ${_encode(id)}: ')
           ..write(_type(types[id]!));
       }
       out.write(ids.isEmpty ? '}' : '\n    }');
@@ -32,12 +32,24 @@ final class SnapshotJson {
     return '$out';
   }
 
+  static final _unsafe = RegExp(
+    '[\u0085\u061c\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]',
+  );
+
+  /// [value] as JSON with the characters `jsonEncode` leaves raw but a
+  /// committed file must not hold (line separators, bidirectional controls)
+  /// written as `\uXXXX`; lone surrogates are escaped by `jsonEncode`.
+  static String _encode(Object? value) => jsonEncode(value).replaceAllMapped(
+    _unsafe,
+    (m) => '\\u${m[0]!.codeUnitAt(0).toRadixString(16).padLeft(4, '0')}',
+  );
+
   String _type(SnapshotType type) {
     final lines = [
-      '"name": ${jsonEncode(type.name)}',
-      '"kind": ${jsonEncode(type.kind.name)}',
+      '"name": ${_encode(type.name)}',
+      '"kind": ${_encode(type.kind.name)}',
       if (!type.exhaustive) '"exhaustive": false',
-      if (type.facts.isNotEmpty) '"facts": ${jsonEncode(_sorted(type.facts))}',
+      if (type.facts.isNotEmpty) '"facts": ${_encode(_sorted(type.facts))}',
       if (type.members.isNotEmpty) '"members": ${_members(type.members)}',
     ];
     return '{\n        ${lines.join(',\n        ')}\n      }';
@@ -46,8 +58,7 @@ final class SnapshotJson {
   String _members(Map<String, SnapshotMember> members) {
     final ids = members.keys.toList()..sort();
     final lines = [
-      for (final id in ids)
-        '${jsonEncode(id)}: ${jsonEncode(_member(members[id]!))}',
+      for (final id in ids) '${_encode(id)}: ${_encode(_member(members[id]!))}',
     ];
     return '{\n          ${lines.join(',\n          ')}\n        }';
   }
@@ -98,7 +109,7 @@ final class SnapshotJson {
           SnapshotType(
             name,
             _enum(TypeKind.values, kind, key),
-            exhaustive: type['exhaustive'] != false,
+            exhaustive: _exhaustive(type['exhaustive'], key),
             facts: _facts(type['facts'], key),
             members: {
               for (final MapEntry(key: id, :value) in _map(
@@ -110,6 +121,12 @@ final class SnapshotJson {
           ),
         _ => throw FormatException('type "$key" has no name or kind'),
       },
+  };
+
+  static bool _exhaustive(Object? json, String at) => switch (json) {
+    null => true,
+    final bool value => value,
+    _ => throw FormatException('"exhaustive" of "$at" is not a bool'),
   };
 
   static SnapshotMember _memberOf(Object? json, String at) => switch (json) {
