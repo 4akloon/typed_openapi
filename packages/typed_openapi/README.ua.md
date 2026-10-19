@@ -5,7 +5,8 @@
 > **Статус:** рання стадія проєктування, пакет ще не опубліковано.
 
 - Вхід: локальний файл OpenAPI 3.0 / 3.1 / 3.2 (JSON або YAML).
-- Вихід: готовий Dart-код на Dio, без кроку `build_runner`.
+- Вихід: готовий Dart-код без кроку `build_runner`; HTTP іде через транспорт
+  (для Dio — `typed_openapi_dio`).
 - Моделі дотримуються контракту `json_serializable` (`fromJson` / `toJson`).
 - Дефекти специфікації виправляються іменованими правилами нормалізатора і
   потрапляють у звіт як діагностика зі стабільними кодами. Усе неоднозначне
@@ -114,7 +115,7 @@ union — `sealed`.
 містить кореневий клас:
 
 ```dart
-final client = PetstoreClient(dio); // naming.client його перейменовує
+final client = PetstoreClient(DioTransport(dio)); // naming.client його перейменовує
 switch (await client.pets.getPet(petId: 1)) {
   case Success(:final data):
     print(data.name);
@@ -182,11 +183,11 @@ switch (await client.pets.getPet(petId: 1)) {
 - Клієнт не змінює твій Dio: base URL задаєш ти, з констант серверів
   кореневого класу (`PetstoreClient.server`, або метод на кшталт
   `PetstoreClient.server1(region: 'eu')` для URL зі змінними). Коли query
-  містить `//` (значення з `allowReserved`), а base URL абсолютний, runtime
+  містить `//` (значення з `allowReserved`), а base URL абсолютний, `DioTransport`
   з'єднує їх сам, бо Dio схлопнув би `//`; відносний base URL лишається Dio,
   який `//` схлопує.
 - Кожен запит несе `OperationInfo` у `RequestOptions.extra`
-  (`OperationInfo.of(options)`): `operationId`, теги й вимоги безпеки з їхніми
+  (`DioTransport.operationOf(options)`): `operationId`, теги й вимоги безпеки з їхніми
   схемами, для інтерсептора, що додає облікові дані.
 
 `generate` пише каталог виходу цілим. Він будує нове дерево і маніфест
@@ -381,6 +382,6 @@ GitHub показує лише обмежену кількість анотац�
 специфікації з багатьма знахідками спершу заведи baseline.
 
 Згенеровані клієнти залежать від
-[`typed_openapi_runtime`](../typed_openapi_runtime/README.ua.md).
+[`typed_openapi_client`](../typed_openapi_client/README.ua.md).
 
 [English version](README.md)

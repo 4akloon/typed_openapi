@@ -1,11 +1,11 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND.
 // dart format off
 
-import 'package:dio/dio.dart' show Dio;
-import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'
+import 'package:typed_openapi_client/typed_openapi_client.dart'
     show
         CallOptions,
-        DioRequestSender,
+        ClientSender,
+        ClientTransport,
         JsonReader,
         OperationInfo,
         OperationRequest,
@@ -19,10 +19,10 @@ import '../models/thread.dart';
 
 /// The operations of the `ThreadsApi` group.
 class ThreadsApi {
-  /// Sends the requests through [dio], which it uses as it is.
-  ThreadsApi(Dio dio) : _sender = DioRequestSender(dio);
+  /// Sends the requests through [transport].
+  ThreadsApi(ClientTransport transport) : _sender = ClientSender(transport);
 
-  final DioRequestSender _sender;
+  final ClientSender _sender;
 
   static const _tailLog = OperationInfo(
     operationId: 'tailLog',

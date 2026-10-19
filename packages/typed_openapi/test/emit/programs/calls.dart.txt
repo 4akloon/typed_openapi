@@ -8,8 +8,9 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:typed_openapi_dio/typed_openapi_dio.dart';
 import 'package:fixture/petstore_raw/api_client.dart';
-import 'package:typed_openapi_runtime/typed_openapi_runtime.dart';
+import 'package:typed_openapi_client/typed_openapi_client.dart';
 
 /// Answers each request with the next response of [answers].
 final class Adapter implements HttpClientAdapter {
@@ -86,7 +87,7 @@ String describe(Object? value) => switch (value) {
 
 String request(Adapter adapter) {
   final options = adapter.requests.last;
-  final info = OperationInfo.of(options);
+  final info = DioTransport.operationOf(options);
   return '${options.method} ${options.uri} '
       '[${info?.operationId}; ${info?.security.map((a) => a.join('+')).join('|')}]';
 }
@@ -95,7 +96,7 @@ Future<void> main() async {
   final adapter = Adapter();
   final dio = Dio(BaseOptions(baseUrl: 'https://pets.example.com/v1'))
     ..httpClientAdapter = adapter;
-  final client = ApiClient(dio);
+  final client = ApiClient(DioTransport(dio));
   final pets = client.pets;
 
   print('server ${ApiClient.server1(region: 'us')} ${ApiClient.server2}');
@@ -228,8 +229,8 @@ Future<void> main() async {
   )));
   print('extra ${adapter.requests.last.headers['X-Extra']}');
 
-  final token = CancelToken()..cancel('stop');
-  print(show(await client.defaultApi.health(call: CallOptions(cancelToken: token))));
+  final token = CancelSignal()..cancel('stop');
+  print(show(await client.defaultApi.health(call: CallOptions(cancel: token))));
 
   adapter.answers.add(() => throw DioException.connectionError(
     requestOptions: RequestOptions(),

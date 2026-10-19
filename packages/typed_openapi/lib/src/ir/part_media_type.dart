@@ -33,8 +33,9 @@ final class PartMediaType {
   static const _token = r"[0-9A-Za-z!#$%&'+.^_`|~-]+";
 
   /// A quoted string of RFC 9110 without a tab or any control character:
-  /// `qdtext` and `quoted-pair` allow a tab there, but Dio's parser does not,
-  /// and a line break in a header is never sent.
+  /// `qdtext` and `quoted-pair` allow a tab there, but the client's
+  /// `ParsedMediaType` (the rules of `package:http_parser`) does not, and a
+  /// line break in a header is never sent.
   static const _quotedString =
       r'"(?:[\x20\x21\x23-\x5B\x5D-\x7E\x80-\xFF]|\\[\x20-\x7E\x80-\xFF])*"';
   static final _concrete = RegExp(

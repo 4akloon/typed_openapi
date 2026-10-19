@@ -151,7 +151,7 @@ Generated names in lib/own: 5 files, 5 written, 0 deleted.
 
 Run `dart analyze` first: it names the file and line. If the error is in `lib/.../models/*.dart` or `api/*.dart`, it is a generator bug (the project analyses its own fixtures with `--fatal-infos`). Common non-bugs:
 
-- **`typed_openapi_runtime` or `dio` missing in `pubspec.yaml`.** The client depends on both. See [Getting started](getting_started.md#install).
+- **`typed_openapi_client` or the transport (`typed_openapi_dio` and `dio`) missing in `pubspec.yaml`.** The generated code imports the client; your code creates the transport. See [Getting started](getting_started.md#install).
 - **An old runtime.** Generator and runtime come from the same checkout; pin both to the same `ref`.
 - **A lower SDK.** The minimum SDK is Dart 3.10, for the generated code too.
 
@@ -177,7 +177,7 @@ Set `baseline:` on the client first; until the file exists `check` reports TOA82
 
 ### The output changed after an upgrade
 
-The manifest `.typed_openapi.json` records the generator version (`"generator": "typed_openapi 0.0.1"`). A new generator can write different code from the same spec and config; that is a change of the generator, not of your API. **Fix:** commit the generated tree, upgrade in a branch, and read the diff. Pin the version of `typed_openapi` and `typed_openapi_runtime` together with the same `ref`. If the diff is a change you did not expect, see [Reporting a bug](#reporting-a-bug). The same spec and config on the same version always give the same bytes. See [Determinism](generate_output.md#determinism).
+The manifest `.typed_openapi.json` records the generator version (`"generator": "typed_openapi 0.0.1"`). A new generator can write different code from the same spec and config; that is a change of the generator, not of your API. **Fix:** commit the generated tree, upgrade in a branch, and read the diff. Pin the version of `typed_openapi` and `typed_openapi_client` together with the same `ref`. If the diff is a change you did not expect, see [Reporting a bug](#reporting-a-bug). The same spec and config on the same version always give the same bytes. See [Determinism](generate_output.md#determinism).
 
 ## Using the client
 
@@ -189,7 +189,7 @@ JsonDecodeException: expected a string, got a number at /tags/1/name in Tag
 pointer /tags/1/name, expected a string, actual a number, schema Tag, field name
 ```
 
-**Cause:** the server's body does not match the spec; the first mismatch is reported, never the value. `pointer` is an RFC 6901 path into the body (`/tags/1/name` is the `name` of the second tag), `expected` is what the spec wants, `actual` is the JSON type that came, `schema` is the model that was reading. **Fix:** compare with the real body (`DecodeError.rawBody`). If the server is right, correct the schema at the source or with an [override](overrides.md) (`nullable: true`, a different `type`). If it is wrong, fix the server. See [JSON decoding](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_runtime/doc/json_decoding.md#jsondecodeexception).
+**Cause:** the server's body does not match the spec; the first mismatch is reported, never the value. `pointer` is an RFC 6901 path into the body (`/tags/1/name` is the `name` of the second tag), `expected` is what the spec wants, `actual` is the JSON type that came, `schema` is the model that was reading. **Fix:** compare with the real body (`DecodeError.rawBody`). If the server is right, correct the schema at the source or with an [override](overrides.md) (`nullable: true`, a different `type`). If it is wrong, fix the server. See [JSON decoding](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/doc/json_decoding.md#jsondecodeexception).
 
 ### `The type 'PetStatus' isn't exhaustively matched`
 
@@ -201,11 +201,11 @@ error - e.dart:3:26 - The type 'PetStatus' isn't exhaustively matched by the swi
 
 ### A field is nullable (or not) when I expected the opposite
 
-A field is `T x` only when it is in `required` and not nullable. Optional fields are `T?`, and a `null` value for an optional non-nullable field is read as absent. The rule `bool-required-to-array` repairs `required: true` on a property (TOA201). To change a field, use `nullable` in an [override](overrides.md); do not edit the generated file. The full table is in [Models](generated/models.md#required-optional-nullable); for PATCH bodies see [Patch and nullability](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_runtime/doc/patch_and_nullability.md).
+A field is `T x` only when it is in `required` and not nullable. Optional fields are `T?`, and a `null` value for an optional non-nullable field is read as absent. The rule `bool-required-to-array` repairs `required: true` on a property (TOA201). To change a field, use `nullable` in an [override](overrides.md); do not edit the generated file. The full table is in [Models](generated/models.md#required-optional-nullable); for PATCH bodies see [Patch and nullability](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/doc/patch_and_nullability.md).
 
 ### An event stream returns one error on the web
 
-**Cause:** Dio's default browser adapter delivers a response body only when the connection closes, so `openEvents` returns a `TransportError` before sending a request. **Fix:** set a fetch-based adapter on your `Dio`, then the stream opens. For a cross-origin stream the server must also list `Last-Event-ID` in `Access-Control-Allow-Headers`. The message and the adapters are in [Web and platforms](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_runtime/doc/web_and_platforms.md#event-streams).
+**Cause:** Dio's default browser adapter delivers a response body only when the connection closes, so `openEvents` returns a `TransportError` before sending a request. **Fix:** set a fetch-based adapter on your `Dio`, then the stream opens. For a cross-origin stream the server must also list `Last-Event-ID` in `Access-Control-Allow-Headers`. The message and the adapters are in [Web and platforms](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/doc/web_and_platforms.md#event-streams).
 
 ## Reporting a bug
 

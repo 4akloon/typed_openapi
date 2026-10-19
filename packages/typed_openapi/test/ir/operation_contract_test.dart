@@ -7,7 +7,7 @@ import 'package:typed_openapi/src/ir/ir.dart';
 import 'package:typed_openapi/src/ir/ir_builder.dart';
 import 'package:typed_openapi/src/model/operation.dart';
 import 'package:typed_openapi/src/model/path_template.dart';
-import 'package:typed_openapi_runtime/typed_openapi_runtime.dart'
+import 'package:typed_openapi_client/typed_openapi_client.dart'
     show OperationRequest;
 
 import '../helpers/ir_fixture.dart';
@@ -218,7 +218,7 @@ paths:
   });
 
   group('names the API files import', () {
-    test('a schema named like a dio export other than Dio keeps its name', () {
+    test('a schema named like a Dio export keeps its name', () {
       final ir = build(
         IrFixture(r'''
 openapi: 3.1.0
@@ -258,7 +258,7 @@ components:
           'Response',
           'Options',
           'Headers',
-          'DioModel',
+          'Dio',
           'FileUploadModel',
           'SecuritySchemeModel',
         ]),

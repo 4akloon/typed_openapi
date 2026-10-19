@@ -54,7 +54,7 @@ final class CorpusPackage {
 
   /// Writes the package for the clients [inputs] (a name and the absolute
   /// path of its spec); [runtime] is the directory of
-  /// `typed_openapi_runtime`.
+  /// `typed_openapi_client`.
   void write(Map<String, String> inputs, String runtime) {
     Directory(directory).createSync(recursive: true);
     File(p.join(directory, marker)).writeAsStringSync('');
@@ -83,8 +83,7 @@ publish_to: none
 environment:
   sdk: ">=3.10.0 <4.0.0"
 dependencies:
-  dio: ^5.11.1
-  typed_openapi_runtime:
+  typed_openapi_client:
     path: ${_quoted(runtime)}
 dev_dependencies:
   lints: ^6.1.0

@@ -32,7 +32,7 @@ final class OperationChecks {
   }
 
   /// Reports `servers` of the path item and of the operation (TOA566): the
-  /// client sends every request to the Dio base URL.
+  /// client sends every request to the base URL of its transport.
   void servers(SpecOperation entry) {
     for (final (node, servers, what) in [
       (entry.item, entry.item.servers, 'path item'),
@@ -42,10 +42,10 @@ final class OperationChecks {
       _context.report(
         .operationServersIgnored,
         'The $what has servers of its own; the client sends its requests to '
-        'the base URL of your Dio.',
+        'the base URL of its transport.',
         node.location.child('servers'),
         fix:
-            'Set the base URL for these requests in an interceptor, or move '
+            'Send these requests through a transport with that base URL, or move '
             'the servers to the document.',
       );
     }

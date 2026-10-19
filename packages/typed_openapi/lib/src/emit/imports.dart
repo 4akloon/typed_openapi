@@ -10,7 +10,7 @@ final class Imports {
 
   /// The runtime library generated code imports.
   static const runtime =
-      'package:typed_openapi_runtime/typed_openapi_runtime.dart';
+      'package:typed_openapi_client/typed_openapi_client.dart';
 
   static const _code = DartCode();
 

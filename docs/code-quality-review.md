@@ -110,7 +110,7 @@ In order of size: `yaml_composer.dart` 810, `ir.dart` 733,
 528, `model/operation.dart` 467, `override_resolver.dart` 450,
 `schema_shapes.dart` 446, `json_reader.dart` 422, `union_emitter.dart` 416,
 `normalizer.dart` 383, `model_emitter.dart` 379, `dio_request_sender.dart`
-378, `object_reader.dart` 342, `schema_shape_rules.dart` 341,
+378 (gone in M11b: `ClientSender` and `DioTransport` replace it), `object_reader.dart` 342, `schema_shape_rules.dart` 341,
 `operation_parser.dart` 314.
 
 Notes:
@@ -213,7 +213,7 @@ shrinks. The single source is now the allowlists in the ratchet tests, one per
 package:
 
 - `packages/typed_openapi/test/quality/size_limits_test.dart`
-- `packages/typed_openapi_runtime/test/quality/size_limits_test.dart`
+- `packages/typed_openapi_client/test/quality/size_limits_test.dart`
 
 Each holds a file allowlist (path -> lines), a method allowlist
 (`path#Type.name` -> lines, methods over 40 lines of `lib/`) and the
@@ -275,7 +275,7 @@ Result:
 
   | Rule or flag | Findings |
   | --- | --- |
-  | `strict-casts`, `strict-inference`, `strict-raw-types` | 6 (one in `dio_request_sender.dart`, one is a compile error in a test only strict-casts finds) |
+  | `strict-casts`, `strict-inference`, `strict-raw-types` | 6 (one in `dio_request_sender.dart`, gone in M11b, one is a compile error in a test only strict-casts finds) |
   | `avoid_equals_and_hash_code_on_mutable_classes` | 24 (add `@immutable`) |
   | `comment_references` | 16 |
   | `missing_whitespace_between_adjacent_strings` | 11 (a real bug class in messages) |

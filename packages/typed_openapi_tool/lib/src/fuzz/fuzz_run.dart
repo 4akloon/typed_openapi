@@ -48,7 +48,7 @@ final class FuzzRun {
   /// The directory of the sample package.
   final String work;
 
-  /// The directory of `typed_openapi_runtime`.
+  /// The directory of `typed_openapi_client`.
   final String runtime;
 
   /// Where the run names the seed it is on when the generator crashes.

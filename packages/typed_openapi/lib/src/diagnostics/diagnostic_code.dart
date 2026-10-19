@@ -387,7 +387,7 @@ enum DiagnosticCode {
   querystringNotGenerated('TOA565', 'querystring-not-generated', .warning),
 
   /// A path item or an operation has its own `servers`; the client sends
-  /// every request to the base URL of the user's Dio.
+  /// every request to the base URL of the user's transport.
   operationServersIgnored('TOA566', 'operation-servers-ignored', .warning),
 
   /// An operation has `callbacks`, or the document has `webhooks`: requests
