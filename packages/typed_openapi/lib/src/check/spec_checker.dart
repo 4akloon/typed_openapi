@@ -14,10 +14,17 @@ import '../diagnostics/severity.dart';
 import '../ir/ir.dart';
 import '../ir/ir_builder.dart';
 import '../ir/ir_json.dart';
+import '../ir/name_lock.dart';
 import '../load/openapi_version.dart';
 import '../load/spec_loader.dart';
 import '../normalize/normalizer.dart';
 import '../overrides/override_loader.dart';
+import '../snapshot/api_lock_names.dart';
+
+/// What one run of [SpecChecker] checks: a spec file with a preset, the
+/// disabled rules, an overrides file, generation settings, the root
+/// client's name and the names of the API lock.
+typedef _RunKey = (String, Preset?, String, String?, String, String?, NameLock);
 
 /// What checking one client found.
 final class ClientCheck {
@@ -92,10 +99,20 @@ final class ClientCheck {
 final class SpecChecker {
   /// Creates a checker that reports to [_diagnostics]; [_paths] names files
   /// in diagnostics.
-  const SpecChecker(this._diagnostics, [this._paths = const DisplayPaths()]);
+  const SpecChecker(this._diagnostics, [this._paths = const DisplayPaths()])
+    : _hasFreshNames = false;
+
+  /// Creates a checker as [SpecChecker.new] does that names types and
+  /// methods from scratch, without the names `typed_openapi.lock` keeps
+  /// (`generate --fresh-names`).
+  const SpecChecker.freshNames(
+    this._diagnostics, [
+    this._paths = const DisplayPaths(),
+  ]) : _hasFreshNames = true;
 
   final DiagnosticBag _diagnostics;
   final DisplayPaths _paths;
+  final bool _hasFreshNames;
 
   /// Checks the spec of every client in [config] and reports what each
   /// client's baseline does not accept; returns what each client found, as
@@ -192,17 +209,21 @@ final class SpecChecker {
   /// [GenerationConfig.key]; each client then gives the diagnostics of that
   /// run its own levels ([ClientConfig.severity]), because levels change how
   /// a finding is reported, not what a run finds. Diagnostics name files
-  /// relative to the working directory (see [DisplayPaths]).
+  /// relative to the working directory (see [DisplayPaths]). Types and
+  /// methods keep the names `typed_openapi.lock` next to the config has
+  /// for the client (M12), so they are part of the run too.
   List<ClientCheck> checkClients(
     ProjectConfig config, {
     Set<String> only = const {},
   }) {
+    final locked = _hasFreshNames
+        ? const <String, NameLock>{}
+        : ApiLockNames(_diagnostics, _paths).of(config);
     // A run is a file with a preset, a set of disabled rules, overrides and
     // generation settings.
     // The root client is named after the client unless naming.client
     // names it, so the name is part of the run.
-    final runs =
-        <(String, Preset?, String, String?, String, String?), ClientCheck>{};
+    final runs = <_RunKey, ClientCheck>{};
     return [
       for (final client in config.clients)
         if (only.isEmpty || only.contains(client.name))
@@ -215,8 +236,10 @@ final class SpecChecker {
               client.overrides,
               client.generation.key,
               client.generation.clientClass == null ? client.name : null,
+              locked[client.name] ?? NameLock.none,
             )] ??= _run(
               client,
+              locked[client.name] ?? NameLock.none,
             ),
           ),
     ];
@@ -236,7 +259,7 @@ final class SpecChecker {
 
   /// Checks the spec of [client] and builds its IR; returns what the run
   /// found, with default levels.
-  ClientCheck _run(ClientConfig client) {
+  ClientCheck _run(ClientConfig client, NameLock names) {
     final found = DiagnosticBag();
     ClientCheck result([AnchorIndex? anchors]) =>
         ClientCheck(client, found.all, anchors ?? AnchorIndex.none());
@@ -257,7 +280,7 @@ final class SpecChecker {
       disabled: client.disabledRules,
       preset: client.preset,
     ).normalize(document, version, overrides: overrides);
-    final ir = IrBuilder(found).build(normalized, client);
+    final ir = IrBuilder(found, names: names).build(normalized, client);
     return ClientCheck(
       client,
       found.all,

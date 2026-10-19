@@ -98,6 +98,7 @@ dart run typed_openapi check --format json | jq '.summary'
 | `--force` | off | Replace files in an output directory that `typed_openapi` did not write or that changed since it wrote them. Each is reported as TOA833. |
 | `--break-lock` | off | Take over a lock when it cannot be told whether the run that holds it still goes. Replaces no file. |
 | `--locked` | off | Check each client against its API snapshot in `typed_openapi.lock` instead of updating the file. A client whose API differs is not written (TOA834). For CI. |
+| `--fresh-names` | off | Name types and methods from the spec alone, not as `typed_openapi.lock` keeps them. Some may be renamed; the change counts say how many. |
 
 ```text
 $ typed_openapi generate
@@ -123,6 +124,8 @@ The second run writes nothing, because the output is the same. Ownership, locks 
 | `docs` | Only doc comments or `@Deprecated` changed. |
 
 A run of some clients keeps the sections of the others, and drops the section of a client the config no longer declares. `generate --locked` changes no lock: a client whose API differs from its section, or has none, is skipped with TOA834, and so is a section of a client the config no longer declares. A lock that cannot be read, such as one with merge-conflict markers, is TOA835 and the run writes no client: resolve the conflict, or delete the file to start from the current API. This file is not the lock of an output directory (`.<output>.typed_openapi.lock`), which only keeps two runs apart.
+
+The lock also keeps names. Without it, a schema added to the spec can take the name of a type that existed: a new component `PetStatus` is named before the inline enum `Pet.status`, which was `PetStatus` and would become `PetStatus2`. With the lock, every command that reads the spec (`check`, `generate`, `diff`, `baseline`) names each model, enum, union and method as the lock has it, and the new one gets the suffix (TOA551). A name the lock keeps that a run without it would not give is reported as TOA570 (info); an override name or a custom type that takes a kept name wins, and the type it belonged to is named anew (TOA569, warning). `generate --fresh-names` names everything from the spec alone and writes those names to the lock; the line of each client counts the renames as `breaking`. Fields, enum values, arguments, group classes and the helper types (status types, event unions, parts classes, variant classes) are not kept yet.
 
 ## diff
 

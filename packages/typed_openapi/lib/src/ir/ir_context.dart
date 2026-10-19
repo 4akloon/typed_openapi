@@ -12,6 +12,7 @@ import '../overrides/override_set.dart';
 import '../overrides/override_snippet.dart';
 import '../resolve/spec_documents.dart';
 import '../resolve/spec_model.dart';
+import 'name_lock.dart';
 import 'names.dart';
 
 /// The generation fields of a client's overrides (M4), by the location of
@@ -88,9 +89,14 @@ final class IrOverrides {
 /// What every step of building the IR of a client reads, and where it
 /// reports.
 final class IrContext {
-  /// Creates a context for [spec] generated as [client] says.
-  IrContext(this.diagnostics, this.spec, this.client)
-    : overrides = IrOverrides(spec);
+  /// Creates a context for [spec] generated as [client] says, keeping the
+  /// names of [names].
+  IrContext(
+    this.diagnostics,
+    this.spec,
+    this.client, {
+    this.names = NameLock.none,
+  }) : overrides = IrOverrides(spec);
 
   /// Where problems go.
   final DiagnosticBag diagnostics;
@@ -100,6 +106,9 @@ final class IrContext {
 
   /// The client.
   final ClientConfig client;
+
+  /// The names the client's API lock keeps (M12).
+  final NameLock names;
 
   /// The generation fields of the client's overrides.
   final IrOverrides overrides;

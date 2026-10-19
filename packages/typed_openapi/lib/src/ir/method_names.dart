@@ -1,5 +1,6 @@
 import '../model/path_template.dart';
 import 'ir_context.dart';
+import 'locked_names.dart';
 import 'names.dart';
 import 'spec_operation.dart';
 
@@ -18,13 +19,17 @@ final class MethodNames {
 
   final IrContext _context;
 
+  LockedNames get _locked => LockedNames(_context);
+
   /// The method names of the operations [entries] of one group, in
   /// [scope]. Names that overrides give are claimed first, so an automatic
-  /// name that is the same gets the suffix, not the override's.
+  /// name that is the same gets the suffix, not the override's; the API
+  /// lock's names win over the automatic ones (M12).
   Map<SpecOperation, String> of(
     List<SpecOperation> entries,
     NameScope scope,
   ) {
+    _locked.lockMethods(scope, entries);
     final overrides = <SpecOperation, String>{};
     for (final entry in entries) {
       final override = _context.overrides.operationAt(entry.operation.location);
@@ -65,7 +70,13 @@ final class MethodNames {
         ? id
         : _withoutPrefix(id, prefix);
     final candidate = override ?? _names.camel(source);
-    final (name, change) = scope.claim(candidate ?? 'operation');
+    final (name, change) = _locked.claimMethod(
+      scope,
+      entry,
+      candidate ?? 'operation',
+      isStream: false,
+      isExplicit: override != null,
+    );
     final at = ['operations', entry.overrideKey];
     if (candidate == null || change != null) {
       _reportChange(entry, candidate, (name, change));

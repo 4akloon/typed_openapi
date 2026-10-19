@@ -87,6 +87,15 @@
   switch-breaking | wire | any` sets the exit code. A schema renamed in the
   spec is removed plus added, with the `name:` override that keeps the old
   Dart name (M12).
+- `typed_openapi.lock` keeps the names of models, enums, unions and
+  methods (M12): `check`, `generate`, `diff`, `baseline` and `ir` name each
+  as the lock has it, so a schema or an operation added to the spec never
+  renames one that existed; the new one gets the suffix. TOA570 (info)
+  names a kept name a run without the lock would not give, TOA569
+  (warning) one an override or a custom type took, TOA571 (info) a type the
+  spec no longer declares. `generate --fresh-names` names everything from
+  the spec alone. `IrBuilder` takes the lock as `names:`; `SpecChecker`
+  reads it next to the config, and `SpecChecker.freshNames` does not.
 - `ApiLibrary` is exported: the files of a whole client from its IR, as
   `generate` writes them (M11). The programmatic guide now writes a whole
   client with it, and a test checks the files equal those of `generate`.

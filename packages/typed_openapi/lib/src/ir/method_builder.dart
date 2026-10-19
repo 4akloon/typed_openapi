@@ -10,6 +10,7 @@ import 'response_builder.dart';
 import 'schema_mapper.dart';
 import 'security_builder.dart';
 import 'spec_operation.dart';
+import 'stream_method_names.dart';
 
 /// Builds the methods of one operation: the method that returns its body
 /// and, when it offers an event stream, the one that returns the events
@@ -21,7 +22,8 @@ final class MethodBuilder {
       _security = SecurityBuilder(context),
       _bodies = RequestBodyBuilder(context, mapper),
       _responses = ResponseBuilder(context, mapper),
-      _streams = EventStreams(context, mapper);
+      _streams = EventStreams(context, mapper),
+      _streamNames = StreamMethodNames(context);
 
   static const _names = DartNames();
 
@@ -30,6 +32,7 @@ final class MethodBuilder {
   final RequestBodyBuilder _bodies;
   final ResponseBuilder _responses;
   final EventStreams _streams;
+  final StreamMethodNames _streamNames;
 
   /// The methods of [entry] with [parameters]: the one named [name], and
   /// for an operation that returns a body or an event stream also one that
@@ -112,7 +115,7 @@ final class MethodBuilder {
   }) {
     final named = methods == null
         ? name
-        : _streams.methodName(entry, name, methods);
+        : _streamNames.of(entry, name, methods);
     final events = _streams.events(
       entry,
       picked,

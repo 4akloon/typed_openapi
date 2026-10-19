@@ -1,5 +1,3 @@
-import 'package:path/path.dart' as p;
-
 import '../config/project_config.dart';
 import '../diagnostics/diagnostic_bag.dart';
 import '../diagnostics/display_paths.dart';
@@ -53,9 +51,7 @@ final class ApiLockRun {
 
   /// The snapshot of [client] with the IR [ir].
   static ApiSnapshot snapshotOf(ClientConfig client, ClientIr ir) =>
-      // The root document's URI as `SpecLoader` makes it, so locations
-      // in it are relative to its directory.
-      SnapshotBuilder(p.toUri(p.normalize(client.input))).build(ir);
+      SnapshotBuilder(SnapshotBuilder.rootOf(client)).build(ir);
 
   /// Whether [client] with [snapshot] may be written: always, unless the
   /// run is `--locked` and the lock has no snapshot of it or another one

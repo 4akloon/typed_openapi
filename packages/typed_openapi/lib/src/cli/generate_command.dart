@@ -26,7 +26,9 @@ import 'client_writer.dart';
 /// each, never the others; `--break-lock` only takes over a lock). The API
 /// snapshot of each client written goes into `typed_openapi.lock` next to
 /// the config, with a line that counts its changes per category; `--locked`
-/// checks the lock instead and skips a client whose API differs (M12). The
+/// checks the lock instead and skips a client whose API differs (M12).
+/// Types and methods keep the names the lock has for them unless
+/// `--fresh-names` is given. The
 /// report and the lines per client go to stdout, and the exit code is the
 /// one `check` gives.
 final class GenerateCommand extends Command<int> {
@@ -61,6 +63,13 @@ final class GenerateCommand extends Command<int> {
             'Check each client against its API snapshot in '
             'typed_openapi.lock instead of updating it; a client whose API '
             'differs is not written (for CI).',
+      )
+      ..addFlag(
+        'fresh-names',
+        negatable: false,
+        help:
+            'Name types and methods from the spec alone, not as '
+            'typed_openapi.lock keeps them; may rename some.',
       );
   }
 
@@ -109,7 +118,10 @@ final class GenerateCommand extends Command<int> {
         'Unknown client: ${(unknown.toList()..sort()).join(', ')}.',
       );
     }
-    final checks = SpecChecker(diagnostics, _paths).check(config, only: only);
+    final checker = results.flag('fresh-names')
+        ? SpecChecker.freshNames(diagnostics, _paths)
+        : SpecChecker(diagnostics, _paths);
+    final checks = checker.check(config, only: only);
     final lock = ApiLockRun.open(
       diagnostics,
       _paths,

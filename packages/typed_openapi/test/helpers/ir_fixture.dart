@@ -6,10 +6,13 @@ import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
 import 'package:typed_openapi/src/ir/ir.dart';
 import 'package:typed_openapi/src/ir/ir_builder.dart';
 import 'package:typed_openapi/src/ir/ir_context.dart';
+import 'package:typed_openapi/src/ir/name_lock.dart';
 import 'package:typed_openapi/src/load/openapi_version.dart';
 import 'package:typed_openapi/src/load/spec_loader.dart';
 import 'package:typed_openapi/src/normalize/normalizer.dart';
 import 'package:typed_openapi/src/overrides/override_loader.dart';
+import 'package:typed_openapi/src/snapshot/snapshot_builder.dart';
+import 'package:typed_openapi/src/snapshot/snapshot_name_lock.dart';
 
 /// A spec read from text, normalized, with an [IrContext] for a client
 /// configured by [generation] and [overrides].
@@ -59,9 +62,15 @@ final class IrFixture {
   /// The diagnostics reported after normalizing, in report order.
   List<Diagnostic> get reported => diagnostics.all.skip(before).toList();
 
-  /// The IR of the client.
-  ClientIr build() =>
-      IrBuilder(diagnostics).build(context.spec, context.client);
+  /// The IR of the client, with the names of [names] kept.
+  ClientIr build({NameLock names = NameLock.none}) =>
+      IrBuilder(diagnostics, names: names).build(context.spec, context.client);
+
+  /// The names the API lock of [ir], an IR of this spec, keeps.
+  NameLock lockOf(ClientIr ir) {
+    final root = context.spec.model.document.location.document;
+    return SnapshotNameLock.of(SnapshotBuilder(root).build(ir), root);
+  }
 
   /// The diagnostics of [reported] with [code].
   List<Diagnostic> reportedOf(DiagnosticCode code) => [

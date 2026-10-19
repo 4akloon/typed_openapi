@@ -1,3 +1,6 @@
+import 'package:path/path.dart' as p;
+
+import '../config/project_config.dart';
 import '../ir/ir.dart';
 import 'api_snapshot.dart';
 import 'declaration_snapshots.dart';
@@ -12,6 +15,10 @@ final class SnapshotBuilder {
   const SnapshotBuilder(this._root);
 
   final Uri _root;
+
+  /// The URI of [client]'s root document as `SpecLoader` makes it, so the
+  /// locations in it are relative to its directory.
+  static Uri rootOf(ClientConfig client) => p.toUri(p.normalize(client.input));
 
   /// The snapshot of [ir], its types sorted by identity.
   ApiSnapshot build(ClientIr ir) {

@@ -157,6 +157,45 @@ void main() {
     });
   });
 
+  group('names', () {
+    /// Adds a component `PetStatus` that `Pet` uses: without the lock it
+    /// would take the name of the enum of `Pet.status`.
+    void addSchema() => dir.write(
+      'specs/pets.yaml',
+      '$_spec'
+          r"        detail: {$ref: '#/components/schemas/PetStatus'}"
+          '\n    PetStatus: {type: object, properties: {code: {}}}\n',
+    );
+
+    test('a new schema renames no type of the lock', () async {
+      await generate(_pets);
+      addSchema();
+      final (code, out) = await generate(_pets);
+      expect(code, 0);
+      expect(out, contains(': 0 breaking, 0 switch-breaking, 0 wire, 2 '));
+      expect(
+        File(
+          p.join(dir.path, 'gen/pets/models/pet_status_2.dart'),
+        ).readAsStringSync(),
+        contains('class PetStatus2 {'),
+      );
+    });
+
+    test('--fresh-names names the types anew', () async {
+      await generate(_pets);
+      addSchema();
+      final (code, out) = await generate(_pets, args: ['--fresh-names']);
+      expect(code, 0);
+      expect(
+        out,
+        contains(
+          'API of pets since typed_openapi.lock: 4 breaking, 0 switch-breaking, '
+          '0 wire, 2 additive, 0 docs.',
+        ),
+      );
+    });
+  });
+
   test('a lock that is not a lock stops the run and is kept', () async {
     lockFile().writeAsStringSync('<<<<<<< HEAD\n');
     final (code, out) = await generate(_pets);

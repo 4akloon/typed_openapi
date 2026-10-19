@@ -10,6 +10,7 @@ import 'group_names.dart';
 import 'ir.dart';
 import 'ir_context.dart';
 import 'method_names.dart';
+import 'name_lock.dart';
 import 'names.dart';
 import 'operation_builder.dart';
 import 'operation_checks.dart';
@@ -24,14 +25,17 @@ import 'schema_mapper.dart';
 /// in one library scope (R5.2). Problems go to the [DiagnosticBag] given to
 /// the constructor; nothing is thrown for any spec.
 final class IrBuilder {
-  /// Creates a builder that reports to [_diagnostics].
-  const IrBuilder(this._diagnostics);
+  /// Creates a builder that reports to [_diagnostics] and keeps the names
+  /// of [names], the client's API lock (M12).
+  const IrBuilder(this._diagnostics, {NameLock names = NameLock.none})
+    : _names = names;
 
   final DiagnosticBag _diagnostics;
+  final NameLock _names;
 
   /// The IR of [spec] generated as [client] says.
   ClientIr build(NormalizedSpec spec, ClientConfig client) {
-    final context = IrContext(_diagnostics, spec, client);
+    final context = IrContext(_diagnostics, spec, client, names: _names);
     // Reads the setting once, so a key that is not in the spec is reported
     // even when no operation is generated.
     final defaultError = context.defaultErrorSchema;

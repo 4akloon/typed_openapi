@@ -1,3 +1,5 @@
+export 'name_scope.dart';
+
 /// What a Dart name is for: types are UpperCamelCase, members (fields,
 /// methods, arguments) lowerCamelCase.
 enum NameKind {
@@ -181,69 +183,4 @@ final class DartNames {
 
   static String _leading(String name) =>
       name.startsWith(RegExp('[0-9]')) ? '\$$name' : name;
-}
-
-/// Why [NameScope.claim] did not give the candidate itself.
-enum NameChange {
-  /// The candidate is a reserved word or a name Dart already has.
-  reserved,
-
-  /// Another declaration of the scope already has the candidate.
-  collision,
-}
-
-/// The names of one scope (a library's types, a class's members, a
-/// method's arguments), given out in the order they are claimed.
-///
-/// Callers claim in a deterministic order (by spec location), so the same
-/// spec always gives the same names.
-final class NameScope {
-  /// Creates a scope where [reserved] names get [reservedSuffix].
-  NameScope({required Set<String> reserved, required this.reservedSuffix})
-    : _reserved = reserved;
-
-  final Set<String> _reserved;
-  final Set<String> _taken = {};
-
-  /// What a reserved name gets appended: `Model` for types, `_` for
-  /// members.
-  final String reservedSuffix;
-
-  /// Whether [name] is given out.
-  bool isTaken(String name) => _taken.contains(name);
-
-  /// The names given out so far, as a snapshot.
-  Set<String> get taken => {..._taken};
-
-  /// Gives [name] to something that is not named in this scope (a type the
-  /// user's code declares), so that a later claim of it is a collision.
-  void reserve(String name) => _taken.add(name);
-
-  /// Gives out [candidate], or a free name made from it: with
-  /// [reservedSuffix] when it is reserved, then the first free of
-  /// [alternatives], then with `2`, `3`, ... appended. Returns the name and
-  /// why it differs from [candidate], if it does.
-  (String, NameChange?) claim(
-    String candidate, {
-    List<String> alternatives = const [],
-  }) {
-    if (_reserved.contains(candidate)) {
-      final name = _free('$candidate$reservedSuffix');
-      return (name, .reserved);
-    }
-    if (_taken.add(candidate)) return (candidate, null);
-    for (final alternative in alternatives) {
-      if (!_reserved.contains(alternative) && _taken.add(alternative)) {
-        return (alternative, .collision);
-      }
-    }
-    return (_free(candidate), .collision);
-  }
-
-  String _free(String base) {
-    if (_taken.add(base)) return base;
-    for (var i = 2; ; i++) {
-      if (_taken.add('$base$i')) return '$base$i';
-    }
-  }
 }

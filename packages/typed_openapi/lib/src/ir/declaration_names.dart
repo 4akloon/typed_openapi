@@ -1,6 +1,7 @@
 import '../model/spec_node.dart';
 import '../overrides/override_set.dart';
 import 'ir_context.dart';
+import 'locked_names.dart';
 import 'names.dart';
 import 'pending_declaration.dart';
 
@@ -8,7 +9,7 @@ import 'pending_declaration.dart';
 /// and reports every name that differs from what the spec says (R5.2).
 final class DeclarationNames {
   /// Names things for the client of [_context].
-  DeclarationNames(this._context);
+  DeclarationNames(this._context) : locked = LockedNames(_context);
 
   static const _names = DartNames();
 
@@ -16,6 +17,9 @@ final class DeclarationNames {
   static const fallbackName = 'Schema';
 
   final IrContext _context;
+
+  /// The names the client's API lock keeps.
+  final LockedNames locked;
 
   /// [pending] in the order their names are claimed: overridden names first,
   /// then component keys, then inline names, each by depth and location.
@@ -62,7 +66,7 @@ final class DeclarationNames {
     if (named != null) return named;
     final candidate = _candidate(scope, pending);
     if (candidate == null) return pending.name = _fallback(scope, pending);
-    final (name, change) = scope.claim(candidate);
+    final (name, change) = locked.claimType(scope, pending, candidate);
     final override = _typeOverride(pending, name);
     if (change != null) {
       _reportChange(pending, candidate, (name, change), override);

@@ -1,10 +1,10 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
-import 'package:path/path.dart' as p;
 
 import '../ir/dart_type.dart';
 import '../ir/ir.dart';
+import '../ir/name_lock.dart';
 import '../model/spec_node.dart';
 
 /// The stable identities of a client's API (M12, decision 1): what an entry
@@ -28,20 +28,11 @@ final class SnapshotIdentities {
   final Set<String> _sharedIds;
 
   /// The identity of a location in the spec.
-  String location(SpecLocation location) {
-    final document = location.document;
-    final file = document == _root
-        ? ''
-        : p.url.relative(document.path, from: p.url.dirname(_root.path));
-    return '$file${location.pointer.value}';
-  }
+  String location(SpecLocation location) =>
+      NameLock.locationKey(location, _root);
 
   /// The identity of the declaration [id].
-  String declaration(DeclId id) => switch (id.variant) {
-    .base => location(id.location),
-    .input => '${location(id.location)}@input',
-    .patch => '${location(id.location)}@patch',
-  };
+  String declaration(DeclId id) => NameLock.declarationKey(id, _root);
 
   /// The identity of the operation of [operation], without the `#stream`
   /// of its event-stream method.

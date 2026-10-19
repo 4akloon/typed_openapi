@@ -402,6 +402,18 @@ enum DiagnosticCode {
   /// with a scheme of the kind unknown.
   securitySchemeUnknown('TOA568', 'security-scheme-unknown', .warning),
 
+  /// `typed_openapi.lock` keeps a name for a type or a method, but an
+  /// override's name or a custom type took it first: it is named anew.
+  lockedNameTaken('TOA569', 'locked-name-taken', .warning),
+
+  /// `typed_openapi.lock` keeps the name of a type or a method that a run
+  /// without the lock would name otherwise.
+  lockedNameKept('TOA570', 'locked-name-kept', .info),
+
+  /// `typed_openapi.lock` keeps a name for a type the spec no longer
+  /// declares: the name is free again.
+  lockedNameReleased('TOA571', 'locked-name-released', .info),
+
   /// `*/*` is used as a media type.
   wildcardMediaType('TOA601', 'wildcard-media-type', .warning),
 

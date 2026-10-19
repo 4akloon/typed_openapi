@@ -164,6 +164,9 @@ Operation ids, parameters, groups and Dart names.
 | TOA566 | `operation-servers-ignored` | warning | A path item or an operation has its own `servers`; the client sends every request to the base URL of the user's transport. | Set the base URL for these requests in an interceptor, or move the servers to the document. |
 | TOA567 | `callbacks-not-generated` | info | An operation has `callbacks`, or the document has `webhooks`: requests the server makes, which the client does not generate. | See the message of the diagnostic. |
 | TOA568 | `security-scheme-unknown` | warning | A security requirement names a scheme that `components.securitySchemes` does not have (or defines without a valid type), or is not an object (a string, `null`; also TOA111): the alternative is left out of the operation's metadata when another one can be described, else it stays with a scheme of the kind unknown. | Write the requirement as an object at the source. |
+| TOA569 | `locked-name-taken` | warning | `typed_openapi.lock` keeps a name for a type or a method, but an override's name or a custom type took it first: it is named anew, which breaks code that used the old name. | Rename the override or the custom type, or accept the new name. |
+| TOA570 | `locked-name-kept` | info | `typed_openapi.lock` keeps the name of a type or a method that a run without the lock would name otherwise, so adding a schema or an operation never renames one that existed. | Run `generate --fresh-names` to take the new names. |
+| TOA571 | `locked-name-released` | info | `typed_openapi.lock` keeps a name for a type the spec no longer declares; the name is free again. | None: the next `generate` drops it from the lock. |
 
 ## Media types, errors and event streams (TOA6xx)
 
