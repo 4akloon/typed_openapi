@@ -11,7 +11,7 @@ void main() {
   const statuses = {'Supported', 'Partly', 'Reported', 'Not supported'};
   final proofPattern = RegExp('`(packages/[^`]+)`');
 
-  List<List<String>> rows() {
+  List<List<String>> tableLines({required bool onlyKnown}) {
     final text = File(
       p.join(root, 'packages/typed_openapi/doc/support_matrix.md'),
     ).readAsStringSync();
@@ -23,10 +23,14 @@ void main() {
           .split(RegExp(r'(?<!\\)\|'))
           .map((c) => c.trim())
           .toList();
-      if (cells.length == 4 && statuses.contains(cells[1])) result.add(cells);
+      if (cells.length != 4 || cells[0] == 'Feature') continue;
+      if (cells[0].startsWith('---')) continue;
+      if (!onlyKnown || statuses.contains(cells[1])) result.add(cells);
     }
     return result;
   }
+
+  List<List<String>> rows() => tableLines(onlyKnown: true);
 
   test('every row has a status and at least one proof', () {
     final all = rows();
@@ -51,5 +55,14 @@ void main() {
         );
       }
     }
+  });
+
+  test('no row has a status that is not one of the four', () {
+    final unknown = [
+      for (final row in tableLines(onlyKnown: false))
+        if (!statuses.contains(row[1])) '${row[0]}: ${row[1]}',
+    ];
+
+    expect(unknown, isEmpty);
   });
 }

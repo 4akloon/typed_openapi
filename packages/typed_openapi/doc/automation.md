@@ -102,7 +102,7 @@ repos:
 
 ## CI with generate --locked
 
-`generate --locked` writes nothing to the lock. It compares each client with its section of `typed_openapi.lock` and refuses a client whose API differs (`TOA834`, an error, exit `1`). In CI that catches a pull request that changed a spec and did not commit the regenerated lock and code. It also checks that the generated code is what the spec produces, as [CI](ci.md#checking-that-generated-code-is-up-to-date) shows with `git status`.
+`generate --locked` writes nothing to the lock. It compares each client with its section of `typed_openapi.lock` and refuses a client whose API differs (`TOA834`, an error, exit `1`). In CI that catches a pull request that changed a spec and did not commit the regenerated lock and code. It compares the API only, not the files: whether the committed generated code is what the spec produces is a separate check, `generate` followed by `git status`, shown in [CI](ci.md#checking-that-generated-code-is-up-to-date).
 
 ```yaml
 name: typed_openapi

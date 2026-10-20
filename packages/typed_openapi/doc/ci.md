@@ -161,7 +161,9 @@ What each step does:
 
 ## Lint in the backend pipeline
 
-The team that writes the spec can run [`lint`](cli.md#lint) on the file its framework generates, with no `typed_openapi.yaml` and no generated code. This job belongs in the backend repository. It assumes the build step before it leaves the spec at `openapi.json`; it needs the Dart SDK to run `typed_openapi`, which the backend project does not otherwise need, and `dart pub global activate --source path` from a checkout is how the CLI is installed until it is published (see [Command line](cli.md)).
+The team that writes the spec can run [`lint`](cli.md#lint) on the file its framework generates, with no `typed_openapi.yaml` and no generated code. This job belongs in the backend repository. It assumes an earlier step leaves the spec at `openapi.json`. It needs the Dart SDK, which the backend project does not otherwise need.
+
+`typed_openapi` is not on pub.dev yet, so the job checks out its repository and activates the package from that checkout; once it is published, those two steps become `dart pub global activate typed_openapi`. The explicit `PATH` step is there so the job does not depend on whether `setup-dart` puts the pub cache on it. Pin `ref:` of the second checkout to a tag or a commit.
 
 ```yaml
 name: openapi-lint
@@ -179,11 +181,16 @@ jobs:
       - uses: actions/checkout@v4
       # Build or export openapi.json here, with the backend's own tool.
       - uses: dart-lang/setup-dart@v1
-      - run: dart pub global activate --source path path/to/typed_openapi/packages/typed_openapi
+      - uses: actions/checkout@v4
+        with:
+          repository: 4akloon/typed_openapi
+          path: typed_openapi_src
+      - run: dart pub global activate --source path typed_openapi_src/packages/typed_openapi
+      - run: echo "${PUB_CACHE:-$HOME/.pub-cache}/bin" >> "$GITHUB_PATH"
       - run: typed_openapi lint --format github-actions --fail-on error openapi.json
 ```
 
-Findings are annotations on the changed files, and an error fails the job; warnings are shown but do not. Use `--fail-on warning` once the spec has none, and `--preset` to name the framework when detection says `generic`. The command line and the annotations were run; the workflow file itself was not run on GitHub.
+Findings are annotations on the changed files, and an error fails the job; warnings are shown but do not. Use `--fail-on warning` once the spec has none, and `--preset` to name the framework when detection says `generic`. The `lint` command line and its annotations were run locally; the workflow file, including the second checkout and the `PATH` step, was not run on GitHub.
 
 ## See also
 
