@@ -113,6 +113,25 @@ void main() {
     },
   );
 
+  test('an onTrace from the client defaults names the operation', () async {
+    final traces = <SseTrace>[];
+    final sender = ClientSender(
+      FakeTransport((_) => stream('data: x\n\n', 204)),
+      defaults: CallOptions(sse: SseOptions(onTrace: traces.add)),
+    );
+    final result = await sender.openEvents<String, Never>(
+      request,
+      (m) => m.data,
+      (r) => r.undocumented(),
+    );
+    await (result as Success<Stream<SseItem<String>>, Never>).data.toList();
+    expect(traces, isNotEmpty);
+    for (final trace in traces) {
+      expect(trace.operation.operationId, 'w');
+      expect(trace.operation.pathTemplate, '/w');
+    }
+  });
+
   test('toString names the operation', () async {
     final traces = <SseTrace>[];
     await run(FakeTransport((_) => stream('', 204)), traces);
