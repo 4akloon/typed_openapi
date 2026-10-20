@@ -91,7 +91,7 @@ M3 review findings that were deliberately deferred (all of them are on invalid s
 | `DiagnosticBag` ignores `fix` during dedup: on a shared file the preset hint of the second client is lost | M5 (baseline and levels) |
 | TOA402 accepts any existing node as a `mapping` target (including `#`) | when needed |
 | URIs with percent-encoding in `SpecDocuments` keys vs `document.uri`; positions shift after list edits; a file that failed to load is re-read on every pass | not needed in either M4 or M6: when needed |
-| Preset hints: aspnet for TOA401 (§D.4.5 instead of §D.4.4), nestjs for TOA303 does not remove defect C-54; several hints are only indirectly based on §D | M13 (recipes) |
+| Preset hints: aspnet for TOA401 (§D.4.5 instead of §D.4.4), nestjs for TOA303 does not remove defect C-54; several hints are only indirectly based on §D | done in M13: both hints rewritten against dotnet/aspnetcore#60469 and the `@nestjs/swagger` 12.0.0 notes; each framework recipe has a Sources section |
 | Test gaps: negative cases for the rules on schema shape, enum, path parameters, `operationId`, discriminator | together with the next changes to these rules |
 
 ## Moved from M4

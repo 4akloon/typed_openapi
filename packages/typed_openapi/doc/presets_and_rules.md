@@ -16,10 +16,10 @@ defaults:
 | Preset | Hints for rules | Other effect |
 | --- | --- | --- |
 | `generic` | none | none (the default) |
-| `nestjs` | `drop-invalid-default`, `array-without-items`, `double-array`, `dedupe-enum-values`, `nullable-enum-one-of` (`@nestjs/swagger` 12 versus 11.x), `duplicate-operation-id` (`operationIdFactory`) | Removes `^[A-Za-z0-9]*Controller_` from every `operationId` unless `naming.operation_prefix` is set |
+| `nestjs` | `drop-invalid-default`, `array-without-items`, `double-array`, `dedupe-enum-values`, `nullable-enum-one-of` (`enumName` with `nullable`; `@nestjs/swagger` 12 writes the null by document version), `duplicate-operation-id` (`operationIdFactory`) | Removes `^[A-Za-z0-9]*Controller_` from every `operationId` unless `naming.operation_prefix` is set |
 | `fastapi` | `duplicate-operation-id` (`generate_unique_id_function`), `discriminator-mapping-target` | none |
 | `springdoc` | `duplicate-operation-id`, `discriminator-mapping-target`, `wildcard-media-type` (`springdoc.default-produces-media-type`), `component-key-characters` (`@Schema(name=...)`) | none |
-| `aspnet` | `missing-operation-id` (`.WithName`, `EndpointName`, Swashbuckle `CustomOperationIds`), `discriminator-property-required` (`[JsonPolymorphic]`), `component-key-characters` (`CustomSchemaIds`) | none |
+| `aspnet` | `missing-operation-id` (`.WithName`, `EndpointName`, Swashbuckle `CustomOperationIds`), `discriminator-property-required` (a schema transformer or an `ISchemaFilter`), `component-key-characters` (`CustomSchemaIds`) | none |
 
 ```text
 warning TOA301 duplicate-enum-value: The enum repeats "toys"; the repeats are removed and the first occurrence of each value is kept.

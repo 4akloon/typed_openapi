@@ -32,7 +32,7 @@ These defects come from the decorators and the Swagger CLI plugin. The sample sp
 | `default` of another type than the schema, or computed at run time | `drop-invalid-default` | `TOA211` (warning), default ignored |
 | `type: array` with no `items` (3.0 only) | `array-without-items` | `TOA202` (warning), reports only |
 | `type: [Item]` together with `isArray: true`: a list of lists | `double-array` | `TOA203` (warning), reports only |
-| A nullable enum as `oneOf: [{enum: [null]}, {$ref}]` (NestJS 11) | `nullable-enum-one-of` | `TOA303` (warning), reports only |
+| A nullable enum as `oneOf: [{enum: [null]}, {$ref}]` (the `oneOf` form that `@nestjs/swagger` 12 replaced) | `nullable-enum-one-of` | `TOA303` (warning), reports only |
 | Several controllers with a method of the same name | none | `TOA551` (info), the second gets `2` |
 | Operations with several tags | none | `TOA553` (info), generated once, in the first tag's group |
 
@@ -121,10 +121,17 @@ and the methods are `ProductsApi.findAll`, `create`, `findOne`, `findOneAdmin` a
 The preset's hints, and the NestJS documentation they point at:
 
 - **Enums:** give each enum its own schema with `enumName`; the Swagger CLI plugin option `autoFillEnumName` does it for all of them.
-- **Arrays:** write `@ApiProperty({ type: [Item] })` and do not add `isArray: true`.
+- **Arrays:** write `@ApiProperty({ type: [Item] })` or `@ApiProperty({ type: Item, isArray: true })`, never both: the documentation accepts either, and both together give a list of lists (`TOA203`).
 - **Defaults:** `excludeDynamicDefaults: true` in `SwaggerModule.createDocument` leaves out defaults computed at run time.
-- **Operation ids:** `operationIdFactory` in `SwaggerModule.createDocument` replaces `controllerKey_methodKey`. If you return the method name, make it unique yourself (`TOA504` reports duplicates).
-- **Nullable enums:** `@nestjs/swagger` 12 writes nullability according to the document version; on 11.x keep the document at OpenAPI 3.0.
+- **Operation ids:** `operationIdFactory` in `SwaggerModule.createDocument` replaces the default `controllerKey_methodKey` (with the version appended when versioning is on). If you return the method name, make it unique yourself (`TOA504` reports duplicates).
+- **Nullable enums:** declare the property with `enum`, `enumName` and `nullable: true`. `@nestjs/swagger` 12 writes the null by the version of the document: the `nullable` keyword in 3.0, a type union, a `null` in the enum or `anyOf` with `{type: 'null'}` in 3.1. Upgrade and regenerate the spec before you override `TOA303`.
+
+## Sources
+
+Checked on 2026-10-20. Versions: `@nestjs/swagger` 12.0.2 (the `master` branch; the nullable change is in 12.0.0).
+
+- NestJS documentation [Types and parameters](https://docs.nestjs.com/openapi/types-and-parameters) (`enumName`, `isArray` or `type: [Item]`) and [CLI plugin](https://docs.nestjs.com/openapi/cli-plugin) (`autoFillEnumName`).
+- `@nestjs/swagger` [`swagger-document-options.interface.ts`](https://github.com/nestjs/swagger/blob/master/lib/interfaces/swagger-document-options.interface.ts) (`operationIdFactory` and its default, `excludeDynamicDefaults`) and [release 12.0.0](https://github.com/nestjs/swagger/releases/tag/12.0.0) (nullable by document version).
 
 ## Caveats
 

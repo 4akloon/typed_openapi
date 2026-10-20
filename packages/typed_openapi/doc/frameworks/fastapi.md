@@ -121,8 +121,15 @@ Apache Airflow's REST API v2 (134 operations, FastAPI, OpenAPI 3.1) is in the re
 - **One schema per model:** `separate_input_output_schemas=False` (FastAPI 0.102+) gives one schema instead of `Item-Input` and `Item-Output`.
 - **Do not force `openapi_version="3.0.x"`:** FastAPI writes 3.1 constructs (`anyOf` with `null`, `const`) anyway, so the document becomes a mix of both. Leave the 3.1 default.
 - **Unique model names across the application.** Same-named models from different modules get renamed keys; `TOA402` reports a `discriminator.mapping` value that points nowhere.
-- **Discriminated unions:** `Annotated[Cat | Dog, Field(discriminator="pet_type")]` with `pet_type: Literal["cat"]` gives the mapping and a `const` per variant. An optional field (`... | None`) loses the discriminator in the output schema; the `structural` override covers it.
+- **Discriminated unions:** `Annotated[Cat | Dog, Field(discriminator="pet_type")]` with `pet_type: Literal["cat"]` gives the mapping and a `const` per variant. Pydantic allows one discriminator per field; where the spec still has an `anyOf` without a mapping, the `structural` override covers it.
 - **Typed errors:** `responses={404: {"model": ErrorOut}}`. The `422` is added automatically.
+
+## Sources
+
+Checked on 2026-10-20. Versions: FastAPI documentation as published on that date (`separate_input_output_schemas` needs FastAPI 0.102.0); Pydantic v2 documentation; Apache Airflow at the commit pinned in the corpus.
+
+- FastAPI [Path operation advanced configuration](https://fastapi.tiangolo.com/advanced/path-operation-advanced-configuration/) (`operation_id`, `generate_unique_id_function`), [Separate OpenAPI schemas for input and output](https://fastapi.tiangolo.com/how-to/separate-openapi-schemas/) (`separate_input_output_schemas=False`, 0.102.0), [Additional responses](https://fastapi.tiangolo.com/advanced/additional-responses/) (`responses` with `model`; the example shows the `422` with `HTTPValidationError`).
+- Pydantic [Unions](https://pydantic.dev/docs/validation/latest/concepts/unions/) (`Field(discriminator=...)` with `Literal` fields, one discriminator per field).
 
 ## Caveats
 
