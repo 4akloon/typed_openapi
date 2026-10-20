@@ -192,7 +192,13 @@ final result = await api.pets.watchPet(
 | `reconnect` | `null` | `true` / `false` as above; `null` keeps the operation's setting |
 | `delay` | 1 s | The first delay when the server sent no `retry` |
 | `maxDelay` | 30 s | The longest delay a doubling reaches |
-| `maxAttempts` | 5 | Attempts in a row that bring no message before the stream ends |
+| `maxAttempts` | 5 | Attempts in a row that bring no message before the stream ends; `null` never gives up |
+| `jitter` | 0 | Share (0 to 1) by which each backoff delay is moved at random either way |
+| `cooldown` | `null` | `SseCooldown(after:, duration:)`: a long pause after many failed attempts in a row |
+| `random` | `null` | The `Random` of the jitter; a seeded one makes delays repeatable |
+| `idleTimeout` | `null` | Longest silence on a connected stream; see [Long-lived streams](#long-lived-streams) |
+| `handshakeTimeout` | `null` | Longest wait for the response headers of an attempt |
+| `onTrace` | `null` | `void Function(SseTrace)`; a step-by-step trace, see [Tracing](#tracing) |
 | `wait` | `null` | `Future<void> Function(Duration)`; a timer when `null`. Tests pass one that does not sleep |
 
 The delay before attempt *n* is the server's last `retry` (else `delay`),
@@ -262,6 +268,90 @@ The stream **ends** with `SseDisconnected` when:
 
 An exception or `Error` thrown on an attempt, by a `wait` or an interceptor,
 is the stream's one error, never the zone's.
+
+### Long-lived streams
+
+A stream that never ends needs bounds the transport cannot give it: a Dio
+with `receiveTimeout` disabled waits forever on a socket that died while the
+app was in the background. These options are opt-in; the defaults are the
+behaviour above.
+
+```dart
+final result = await api.customerEvents.inboxUnreadCount(
+  call: CallOptions(
+    sse: SseOptions(
+      reconnect: true,
+      idleTimeout: Duration(minutes: 3), // above the server's heartbeat
+      handshakeTimeout: Duration(seconds: 30),
+      maxAttempts: null, // never give up
+      delay: Duration(seconds: 1),
+      maxDelay: Duration(seconds: 30),
+      jitter: 0.2, // 80% to 120% of each delay
+      cooldown: SseCooldown(after: 10, duration: Duration(minutes: 5)),
+    ),
+  ),
+);
+```
+
+**Idle timeout.** `idleTimeout` is the longest silence on a connected
+stream. Any received bytes reset it: events, but also comments such as
+`: ping`. When it runs out the connection is treated as dead: the request is
+cancelled and the stream reconnects if reconnection is on, with
+`SseReconnecting.cause` a `TransportException` of kind `timeout`; without
+reconnection it ends with `SseDisconnected` and that `cause`. The timer
+stops while the listener is paused (nothing is read then) and starts again
+on resume. Choose a value above the server's heartbeat interval.
+
+**Handshake timeout.** `handshakeTimeout` bounds the wait for the response
+headers of each attempt, the first and every reconnection. When it runs out
+the request is cancelled and the attempt fails with a `TransportException`
+of kind `timeout`: a failed first attempt is the `TransportError` the method
+returns, a failed reconnection is retried like any refused one. It does not
+limit how long the body takes.
+
+**Unbounded attempts.** `maxAttempts: null` reconnects until the call is
+cancelled, the listener cancels or the server answers with a status that is
+not a stream (or `204`).
+
+**Backoff.** The delay before attempt *n* is computed as above, then moved
+by `jitter`: with `jitter: 0.2` a 4 s delay is a random value from 3.2 to
+4.8 s. `maxDelay` caps the delay before the jitter is applied. The jitter is
+not applied while the server's `retry` is in effect: a server that names a
+time gets that time (and its doublings) exactly. Pass `random: Random(seed)`
+for repeatable delays in tests.
+
+**Cooldown.** After `cooldown.after` failed attempts in a row the next wait
+is `cooldown.duration` instead of the backoff delay (reported as
+`SseReconnecting` with attempt `after + 1`), and the count starts again, so
+the backoff restarts from `delay` and `maxAttempts` counts the attempts of
+one cycle. A message resets the count before that, as always. The cooldown
+is not jittered and does not use the server's `retry`. If `maxAttempts` is
+not larger than `after`, the stream ends before a cooldown.
+
+### Tracing
+
+`SseOptions.onTrace` receives an `SseTrace` for each step of the stream. It
+is meant for a debug panel or a log and never changes the items the stream
+emits.
+
+| `SseTraceKind` | When | Fields set |
+| --- | --- | --- |
+| `connect` | A request is about to be sent | `attempt`: the number of the connection (1, then 2 for the first reconnection) |
+| `open` | The response headers arrived | `statusCode` |
+| `event` | A message arrived, also one that does not decode or that is dropped | `event`, `eventId` |
+| `heartbeat` | A comment line arrived | |
+| `error` | A connection ended with an error, or an attempt failed | `error` (a `TransportException`, or the `Failure` of a status), `stackTrace` |
+| `reconnecting` | The stream waits before an attempt | `attempt`, `delay` |
+| `closed` | The stream is over: its last item went out, or the listener cancelled | |
+
+Every trace has `streamId`, the correlation id of the call: the same on all
+its connections, different for every call in the program. A typical stream:
+`connect 1`, `open 200`, `heartbeat`, `event`, `reconnecting 1`,
+`connect 2`, `open 200`, ..., `closed`.
+
+The callback runs synchronously; keep it short. An `Exception` it throws is
+ignored so that tracing cannot break the stream; an `Error` is a bug of the
+program and is not caught, as elsewhere in the client.
 
 ### `Last-Event-ID`
 
