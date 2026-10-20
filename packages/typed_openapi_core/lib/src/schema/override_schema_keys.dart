@@ -12,7 +12,8 @@ import 'key_type.dart';
 final class OverrideSchemaKeys {
   OverrideSchemaKeys._();
 
-  static const _reason = KeySpec(
+  /// The `reason` key every entry of the overrides file may have.
+  static const reason = KeySpec(
     'reason',
     StringKey(),
     description:
@@ -151,7 +152,7 @@ final class OverrideSchemaKeys {
 
   /// The keys of a property entry.
   static final List<KeySpec> property = [
-    _reason,
+    reason,
     ..._specFields(_requiredFlag),
     _name,
     _exclude,
@@ -167,7 +168,7 @@ final class OverrideSchemaKeys {
 
   /// The keys of a schema entry.
   static final List<KeySpec> schema = [
-    _reason,
+    reason,
     ...specFields,
     _name,
     _exclude,

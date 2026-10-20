@@ -10,14 +10,6 @@ import 'override_schema_keys.dart';
 final class OverrideOperationKeys {
   OverrideOperationKeys._();
 
-  static const _reason = KeySpec(
-    'reason',
-    StringKey(),
-    description:
-        'Why the override exists; kept in the file for the reader, not used.',
-    example: 'The backend names it wrongly.',
-  );
-
   /// The pattern of an operation key: an `operationId`, or `METHOD /path`
   /// with a method OpenAPI has, in either case. Text that starts like
   /// `METHOD /` with another word is rejected, as the loader does.
@@ -38,7 +30,7 @@ final class OverrideOperationKeys {
 
   /// The keys of the body of a request or of a response.
   static const List<KeySpec> content = [
-    _reason,
+    OverrideSchemaKeys.reason,
     KeySpec(
       'contentType',
       StringKey(pattern: '/'),
@@ -58,7 +50,7 @@ final class OverrideOperationKeys {
 
   /// The keys of a parameter entry.
   static final List<KeySpec> parameter = [
-    _reason,
+    OverrideSchemaKeys.reason,
     const KeySpec(
       'required',
       BooleanKey(),
@@ -128,7 +120,7 @@ final class OverrideOperationKeys {
 
   /// The keys of an operation entry.
   static final List<KeySpec> operation = [
-    _reason,
+    OverrideSchemaKeys.reason,
     const KeySpec(
       'name',
       StringKey(),

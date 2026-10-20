@@ -110,7 +110,15 @@ void main() {
   }
 
   test('an operation is addressed by operationId or METHOD /path', () {
-    for (final key in ['getPet', 'GET /pets/{id}', 'get /pets', 'GET']) {
+    for (final key in [
+      'getPet',
+      'GET /pets/{id}',
+      'get /pets',
+      'GET',
+      ' /pets',
+      '',
+      'GET  /x',
+    ]) {
       expectAgreement({
         'operations': {key: <String, Object?>{}},
       }, valid: true);
@@ -192,9 +200,26 @@ void main() {
     expectGap(
       schemaEntry({r'$ref': 'Other', 'type': 'string'}),
     );
+    expectGap(
+      schemaEntry({
+        r'$ref': 'Other',
+        'required': ['id'],
+      }),
+    );
   });
 
-  test(r'what the schema cannot say: properties beside a $ref', () {
+  test(r'a property keeps its required beside a $ref', () {
+    expectAgreement(
+      schemaEntry({
+        'properties': {
+          'id': {r'$ref': 'Other', 'required': true},
+        },
+      }),
+      valid: true,
+    );
+  });
+
+  test(r'known gap: properties beside a $ref', () {
     expectGap(
       schemaEntry({
         r'$ref': 'Other',
@@ -224,6 +249,15 @@ void main() {
     expectGap(
       schemaEntry({
         'dartType': {'type': 'class', 'import': 'package:a/a.dart'},
+      }),
+    );
+    expectGap(
+      schemaEntry({
+        'dartType': {
+          'type': 'Money',
+          'import': 'package:a/a.dart',
+          'converter': 'class',
+        },
       }),
     );
   });

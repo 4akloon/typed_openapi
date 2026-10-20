@@ -12,7 +12,10 @@ import 'schema_writer.dart';
 /// a reserved word of Dart; and a `contentType` that is a text with a slash
 /// but not a media type. Operation and parameter keys are checked as the
 /// loader reads them: `METHOD /path` needs a method OpenAPI has, `in:name`
-/// an `in` it has, and any other key is an `operationId` or a name.
+/// an `in` it has, and any other key is an `operationId` or a name. A key
+/// with a line break is an `operationId` or a name for the loader (`.` does
+/// not match it), but the schema's lookahead rejects it: a gap, in an extreme
+/// edge case.
 final class OverrideSchema {
   /// Creates the schema.
   const OverrideSchema();
