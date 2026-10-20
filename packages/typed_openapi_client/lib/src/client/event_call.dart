@@ -3,6 +3,7 @@ import '../request/raw_response.dart';
 import '../result/result.dart';
 import '../sse/sse_item.dart';
 import '../sse/sse_message.dart';
+import '../sse/sse_tracer.dart';
 import 'call_options.dart';
 import 'connection_signals.dart';
 
@@ -12,7 +13,8 @@ import 'connection_signals.dart';
 final class EventCall<T, E> {
   /// Creates the call; its connections are linked to `call.cancel`.
   EventCall(this.request, this.decodeEvent, this.decodeError, this.call)
-    : signals = ConnectionSignals(call?.cancel);
+    : signals = ConnectionSignals(call?.cancel),
+      tracer = SseTracer.of(call?.sse?.onTrace);
 
   /// The request every connection sends.
   final OperationRequest request;
@@ -29,4 +31,12 @@ final class EventCall<T, E> {
 
   /// The cancel signals of the connections.
   final ConnectionSignals signals;
+
+  /// Where the call's traces go, or null without `SseOptions.onTrace`.
+  final SseTracer? tracer;
+
+  int _connections = 0;
+
+  /// The number of the next connection of the call, from 1.
+  int nextConnection() => ++_connections;
 }

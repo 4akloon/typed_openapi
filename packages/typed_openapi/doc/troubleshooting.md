@@ -177,7 +177,7 @@ Set `baseline:` on the client first; until the file exists `check` reports TOA82
 
 ### The output changed after an upgrade
 
-The manifest `.typed_openapi.json` records the generator version (`"generator": "typed_openapi 0.1.0"`). A new generator can write different code from the same spec and config; that is a change of the generator, not of your API. **Fix:** commit the generated tree, upgrade in a branch, and read the diff. Pin the version of `typed_openapi` and `typed_openapi_client` together with the same `ref`. If the diff is a change you did not expect, see [Reporting a bug](#reporting-a-bug). The same spec and config on the same version always give the same bytes. See [Determinism](generate_output.md#determinism).
+The manifest `.typed_openapi.json` records the generator version (`"generator": "typed_openapi 0.2.0"`). A new generator can write different code from the same spec and config; that is a change of the generator, not of your API. **Fix:** commit the generated tree, upgrade in a branch, and read the diff. Pin the version of `typed_openapi` and `typed_openapi_client` together with the same `ref`. If the diff is a change you did not expect, see [Reporting a bug](#reporting-a-bug). The same spec and config on the same version always give the same bytes. See [Determinism](generate_output.md#determinism).
 
 ## Using the client
 

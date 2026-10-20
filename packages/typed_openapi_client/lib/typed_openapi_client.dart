@@ -39,6 +39,7 @@ export 'src/result/result.dart'
         Success,
         TransportError,
         UndocumentedStatus;
+export 'src/sse/sse_cooldown.dart' show SseCooldown;
 export 'src/sse/sse_decoder.dart' show SseDecoder;
 export 'src/sse/sse_event_ignored.dart' show SseEventIgnored;
 export 'src/sse/sse_item.dart'
@@ -47,6 +48,7 @@ export 'src/sse/sse_item_decoder.dart' show SseItemDecoder;
 export 'src/sse/sse_message.dart' show SseMessage;
 export 'src/sse/sse_options.dart' show SseOptions, SseReconnection;
 export 'src/sse/sse_reconnector.dart' show SseReconnector, SseResume;
+export 'src/sse/sse_trace.dart' show SseTrace, SseTraceKind;
 export 'src/transport/cancel_signal.dart' show CancelSignal;
 export 'src/transport/client_transport.dart' show ClientTransport;
 export 'src/transport/transport_exception.dart'

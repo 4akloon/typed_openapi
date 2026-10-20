@@ -1,3 +1,25 @@
+## 0.2.0 - Unreleased
+
+### Added
+- Event stream resilience, all opt-in in `SseOptions` (the defaults are the
+  0.1.0 behaviour); the generated output does not change.
+  - `idleTimeout`: the longest silence on a connected stream. Any received
+    bytes, comments included, reset it; on expiry the request is cancelled and
+    the stream reconnects (or ends with `SseDisconnected`) with a
+    `TransportException` of kind `timeout` as the cause.
+  - `handshakeTimeout`: bounds the wait for the response headers of each
+    attempt; a failed attempt, like a refused one.
+  - `maxAttempts` may be `null` (never give up); `jitter`, `random` and
+    `cooldown` (`SseCooldown`) shape the backoff: a long pause after many
+    failed attempts in a row, after which the count starts again.
+  - `onTrace` with `SseTrace` and `SseTraceKind`: connect, open, event,
+    heartbeat, error, reconnecting and closed, with a correlation id per call.
+    It does not change the items; an `Exception` it throws is ignored.
+- `SseItemDecoder` takes `onMessage` and `onComment`.
+
+### Changed
+- `SseOptions.maxAttempts` is `int?`.
+
 ## 0.1.0
 
 ### Added

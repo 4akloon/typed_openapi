@@ -25,6 +25,8 @@ final class SseItemDecoder<T>
   const SseItemDecoder(
     this.decode, {
     this.onClose,
+    this.onMessage,
+    this.onComment,
     this.lastEventId = '',
     this.retry,
   });
@@ -37,6 +39,13 @@ final class SseItemDecoder<T>
   /// [decode] threw an [Error]. Never called for a stream nobody listens to.
   /// `openEvents` closes the connection here.
   final void Function()? onClose;
+
+  /// Called with each message before it is decoded, also one the program
+  /// drops or that does not decode.
+  final void Function(SseMessage message)? onMessage;
+
+  /// Called for each comment line (`: ping`).
+  final void Function()? onComment;
 
   /// The last event id before the stream starts.
   final String lastEventId;
@@ -106,6 +115,7 @@ final class _Decoding<T> {
         SseBlockDecoder(
               lastEventId: _owner.lastEventId,
               retry: _owner.retry,
+              onComment: _owner.onComment,
             )
             .bind(stream)
             .listen(
@@ -125,6 +135,7 @@ final class _Decoding<T> {
 
   void _onMessage(SseMessage message) {
     _receivedMessage = true;
+    _owner.onMessage?.call(message);
     final SseItem<T>? item;
     try {
       item = _owner._item(message);

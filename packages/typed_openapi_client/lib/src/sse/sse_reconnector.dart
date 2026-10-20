@@ -4,6 +4,7 @@ import '../result/result.dart';
 import '../transport/cancel_signal.dart';
 import '../transport/transport_exception.dart';
 import 'cancellable_wait.dart';
+import 'reconnection_plan.dart';
 import 'sse_item.dart';
 import 'sse_options.dart';
 
@@ -18,9 +19,9 @@ typedef SseResume = ({String lastEventId, Duration? retry});
 /// and calls [reopen] with the last event id. A new connection's items
 /// follow; a failed attempt (a [TransportError]) is the next attempt. The
 /// stream ends with [SseDisconnected] when [SseOptions.maxAttempts]
-/// attempts in a row bring no message, when the request is cancelled (the
-/// listener cancels, or [cancel] is cancelled, also during a wait), when
-/// the server answers an attempt with a status that is not a stream (the
+/// attempts in a row bring no message (never, when it is null), when the
+/// request is cancelled (the listener cancels, or [cancel] is cancelled, also
+/// during a wait), when the server answers an attempt with a status that is not a stream (the
 /// `Failure` is the cause), or with 204 No Content, which tells a client
 /// to stop reconnecting.
 final class SseReconnector<T>
@@ -54,16 +55,18 @@ final class SseReconnector<T>
 
 /// The state of one reconnecting stream.
 final class _Reconnection<T> {
-  _Reconnection(this._owner) : _sleep = CancellableWait(_owner.options.wait);
+  _Reconnection(this._owner)
+    : _sleep = CancellableWait(_owner.options.wait),
+      _plan = ReconnectionPlan(_owner.options);
 
   final SseReconnector<T> _owner;
   final CancellableWait _sleep;
+  final ReconnectionPlan _plan;
   // Set in start, before anything can listen.
   late final StreamController<SseItem<T>> _out;
   StreamSubscription<SseItem<T>>? _current;
   String _lastEventId = '';
   Duration? _retry;
-  int _attempt = 0;
   bool _closed = false;
   TransportException? _cancel;
   // Read once: every wait races the same future, and a signal is asked for
@@ -130,7 +133,7 @@ final class _Reconnection<T> {
         // progress: the connection worked.
         _lastEventId = item.lastEventId;
         if (item.retry case final retry?) _retry = retry;
-        if (item.receivedMessage) _attempt = 0;
+        if (item.receivedMessage) _plan.reset();
         _current = null;
         unawaited(_reconnect(cause, stackTrace));
     }
@@ -139,7 +142,7 @@ final class _Reconnection<T> {
   void _remember(String id, Duration? retry) {
     _lastEventId = id;
     _retry = retry;
-    _attempt = 0;
+    _plan.reset();
   }
 
   Future<void> _reconnect(Object? cause, StackTrace? stackTrace) async {
@@ -155,14 +158,11 @@ final class _Reconnection<T> {
 
   /// Waits and opens the next connection after the end of one for [cause].
   Future<void> _nextConnection(Object? cause, StackTrace? stackTrace) async {
-    final options = _owner.options;
-    if (_attempt >= options.maxAttempts) {
-      return _end(_disconnected(cause, stackTrace));
-    }
-    _attempt++;
-    final delay = options.delayBefore(_attempt, _retry);
+    final step = _plan.next(_retry);
+    if (step == null) return _end(_disconnected(cause, stackTrace));
+    final (:attempt, :delay) = step;
     _out.add(
-      SseReconnecting(_attempt, delay, cause: cause, stackTrace: stackTrace),
+      SseReconnecting(attempt, delay, cause: cause, stackTrace: stackTrace),
     );
     await _wait(delay);
     if (_closed) return;

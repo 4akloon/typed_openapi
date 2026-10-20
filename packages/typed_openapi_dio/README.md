@@ -13,8 +13,8 @@ sends them through your own `Dio`.
 ```yaml
 dependencies:
   dio: ^5.11.1
-  typed_openapi_client: ^0.1.0
-  typed_openapi_dio: ^0.1.0
+  typed_openapi_client: ^0.2.0
+  typed_openapi_dio: ^0.2.0
 ```
 
 ## Setup

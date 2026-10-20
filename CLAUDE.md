@@ -34,10 +34,10 @@ pub workspace with seven pure-Dart packages (no Flutter):
 Minimum SDK: Dart 3.10 (`>=3.10.0 <4.0.0`), also for generated code.
 
 The four published packages (core, client, `typed_openapi`, Dio transport)
-share one version, `0.1.0`, released by hand with
+share one version, `0.2.0`, released by hand with
 `docs/release-checklist.md` (the tags and the publish follow the merge); their
-CHANGELOGs say `## 0.1.0`. A section titled `## <version> - Unreleased` is a
-version not yet released.
+CHANGELOGs say `## 0.2.0 - Unreleased` until the release (a section titled
+`## <version> - Unreleased` is a version not yet released).
 
 ## Commands
 
@@ -1356,7 +1356,23 @@ like `test/helpers/pets_api.dart` (illustrative, not a contract);
   the count: a stream of ignored heartbeats is not given up), all in
   `SseOptions` with an injectable `wait` (the default is a
   `CancellableWait`, a timer a cancel stops, so a cancelled stream does not
-  keep the program alive). `SseReconnection` is the operation's policy:
+  keep the program alive). Opt-in resilience in `SseOptions` (defaults
+  unchanged): `idleTimeout` (`IdleTimeout` wraps the connection's bytes; any
+  chunk, comments included, resets it; expiry cancels the request and ends
+  the body with a `TransportException` of kind `timeout`, so it is the cause
+  of `SseReconnecting` or `SseDisconnected`; a paused listener stops the
+  timer), `handshakeTimeout` (`Handshake` in `client/`: a timeout of the
+  response headers of each attempt, which cancels the request and fails the
+  attempt), `maxAttempts: null`, `jitter` + `random` + `cooldown`
+  (`ReconnectionPlan` decides every attempt: no jitter while the server's
+  `retry` is in effect, never on the cooldown; the cooldown wait is attempt
+  `after + 1` and resets the count) and `onTrace` (`SseTrace`, sent by
+  `SseTracer`; connect, open, event and heartbeat come from `EventOpener` and
+  the decoder hooks `onMessage`/`onComment`, error, reconnecting and closed
+  from `TracedItems` over the finished stream; an `Exception` from the
+  callback is swallowed). Do not cancel a finished subscription again in a
+  stream transformer: under `fakeAsync` that future completes outside the
+  fake zone. `SseReconnection` is the operation's policy:
   `off` (a POST that does not enable it; the call cannot), `onRequest`
   (GET), `on`. Cancel, an error status (the `Failure` is the cause) and 204
   end the stream; a listener cancel also aborts a request that is in flight
@@ -1398,7 +1414,7 @@ query is built by the client, so interceptors see an empty
 holds `//`, which Dio would collapse. On the web with Dio's default adapter
 an event stream is refused with `webStreamingMessage` (the adapter delivers
 the body only when the connection closes). Inside the workspace its
-`typed_openapi_client: ^0.1.0` resolves to the package next to it
+`typed_openapi_client: ^0.2.0` resolves to the package next to it
 (`resolution: workspace`); a release that needs a new client publishes the
 client first. Tests: `dio_transport_test.dart` (a fake adapter,
 `test/helpers/fake_adapter.dart`), `web_test.dart` (`@TestOn('browser')`),

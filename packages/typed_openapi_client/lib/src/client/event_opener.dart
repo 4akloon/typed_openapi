@@ -4,6 +4,7 @@ import '../json/json_decode_exception.dart';
 import '../request/operation_request.dart';
 import '../request/raw_response.dart';
 import '../result/result.dart';
+import '../sse/idle_timeout.dart';
 import '../sse/sse_item.dart';
 import '../sse/sse_item_decoder.dart';
 import '../sse/sse_message.dart';
@@ -16,9 +17,11 @@ import '../transport/transport_response.dart';
 import 'call_options.dart';
 import 'client_results.dart';
 import 'event_call.dart';
+import 'handshake.dart';
 import 'progress_counter.dart';
 import 'request_builder.dart';
 import 'response_reader.dart';
+import 'traced_result.dart';
 
 /// Opens the event streams of `ClientSender.openEvents`: the first
 /// connection, the reconnections, and the error responses that are read to
@@ -45,6 +48,20 @@ final class EventOpener {
     required SseReconnection reconnection,
   }) async {
     final event = EventCall(request, decodeEvent, decodeError, call);
+    final result = await _openReconnecting(event, reconnection);
+    return switch (event.tracer) {
+      final tracer? => TracedResult(tracer).wrap(result),
+      null => result,
+    };
+  }
+
+  /// The first connection, with reconnection around its stream when the
+  /// call and the operation ask for it.
+  Future<Result<Stream<SseItem<T>>, E>> _openReconnecting<T, E>(
+    EventCall<T, E> event,
+    SseReconnection reconnection,
+  ) async {
+    final call = event.call;
     final first = await _connect(event, (
       lastEventId: RequestBuilder.userLastEventId(call?.headers),
       retry: null,
@@ -76,6 +93,7 @@ final class EventOpener {
     SseResume resume,
   ) async {
     final signal = event.signals.next();
+    event.tracer?.connect(event.nextConnection());
     final sent = builder.build(
       event.request,
       event.call,
@@ -86,10 +104,13 @@ final class EventOpener {
     if (signal.isCancelled) return _results.cancelledBefore(signal);
     final TransportResponse response;
     try {
-      response = await transport.send(sent);
+      response = await Handshake(
+        event.call?.sse?.handshakeTimeout,
+      ).send(transport, sent, signal);
     } on TransportException catch (e, stackTrace) {
       return _results.failure(e, stackTrace);
     }
+    event.tracer?.open(response.statusCode);
     if (!event.request.streamStatuses.contains(response.statusCode)) {
       return _openFailed(response, event);
     }
@@ -105,12 +126,23 @@ final class EventOpener {
     CancelSignal signal,
     SseResume resume,
   ) {
+    final watched = switch (event.call?.sse?.idleTimeout) {
+      final timeout? => IdleTimeout(
+        timeout,
+        onIdle: () => signal.cancel('the event stream was idle'),
+      ).bind(response.body),
+      null => response.body,
+    };
     final body = ProgressCounter(
       event.call?.onReceiveProgress,
-    ).count(response.body, ResponseReader.totalOf(response));
+    ).count(watched, ResponseReader.totalOf(response));
     final items = SseItemDecoder<T>(
       event.decodeEvent,
       onClose: () => signal.cancel('the event stream was closed'),
+      onMessage: event.tracer == null
+          ? null
+          : (message) => event.tracer?.event(message.event, message.id),
+      onComment: event.tracer?.heartbeat,
       lastEventId: resume.lastEventId,
       retry: resume.retry,
     ).bind(body);
