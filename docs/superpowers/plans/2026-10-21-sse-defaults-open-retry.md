@@ -181,7 +181,7 @@ Pure units, no wiring yet.
 
 **Files:**
 - Create: `lib/src/sse/sse_retry.dart`, `lib/src/sse/retry_after.dart`, `lib/src/sse/http_date.dart`
-- Modify: `lib/typed_openapi_client.dart` (`export 'src/sse/sse_retry.dart' show SseRetry;`)
+- Modify: `lib/typed_openapi_client.dart` (`export 'src/sse/sse_retry.dart' show SseRetry;`); `packages/typed_openapi_core/lib/src/ir/names.dart` (`DartNames.takenTypeNames` gains `SseRetry`, so the core's `runtime_names_test` stays green)
 - Test: create `test/sse/sse_retry_test.dart`, `test/sse/retry_after_test.dart`, `test/sse/http_date_test.dart`
 
 **Interfaces:**
@@ -199,11 +199,11 @@ Pure units, no wiring yet.
 
 - [ ] **Step 3: Implement** the three classes with the signatures above. `SseRetry.isTransient` is a `switch` over the sealed `Failure` with the status rule `status == 408 || status == 429 || (status >= 500 && status != 501 && status != 505)`; doc it with the spec table. Pure Dart (`DateTime.utc`, month-name table, no regex backtracking on unbounded input). Keep each file under 300 lines.
 
-- [ ] **Step 4: Run** the three files -> PASS; `dart test test/quality` (size ratchet); analyze/format clean. (The core's `runtime_names_test` fails until T7 adds `SseRetry` to `takenTypeNames`; T7 owns it.)
+- [ ] **Step 4: Run** the three files -> PASS; `dart test test/quality` (size ratchet); `cd packages/typed_openapi_core && dart test test/ir` (`runtime_names_test` passes with `SseRetry` reserved); analyze/format clean.
 
 - [ ] **Step 5: Commit**
 ```bash
-git add packages/typed_openapi_client
+git add packages/typed_openapi_client packages/typed_openapi_core
 git commit -m "feat(typed_openapi_client): SseRetry classifier and Retry-After parser" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
@@ -337,7 +337,7 @@ Two commits: the extraction first, byte-identical.
       : pets = PetsApi(transport, defaults: defaults), ...;
   }
   ```
-  (wrapped by the writer at the line width; the docs say each call's options win over `defaults`, field by field.) `RootNames` reserves `defaults` in `members` (`members.reserve('defaults')`), so a tag `defaults` gets `defaults2` with TOA551. `DartNames.takenTypeNames` gains `SseRetry`.
+  (wrapped by the writer at the line width; the docs say each call's options win over `defaults`, field by field.) `RootNames` reserves `defaults` in `members` (`members.reserve('defaults')`), so a tag `defaults` gets `defaults2` with TOA551. (`DartNames.takenTypeNames` already gained `SseRetry` in T4.)
 
 - [ ] **Step 1: Extract (refactor commit).** Move `_info`/`_use` of `operation_emitter.dart` into `OperationInfoWriter`; `OperationEmitter` calls it. Before: `UPDATE_GOLDENS` is not set; run `cd packages/typed_openapi && dart test` -> PASS; after the move run the same, plus the generated-client test; `git diff --stat` shows no golden or corpus change. Check `wc -l operation_emitter.dart` is lower.
 ```bash
@@ -347,13 +347,12 @@ git add packages/typed_openapi && git commit -m "refactor(typed_openapi): Operat
 - [ ] **Step 2: Write the failing tests.**
   - `client_defaults_test.dart` (using `emitClient('petstore.yaml')` of `test/helpers/emit_fixture.dart`): the root file contains `{CallOptions defaults = const CallOptions()}` and `PetsApi(transport, defaults: defaults)`; a group file contains `ClientSender(transport, defaults: defaults)`; both import `CallOptions` from `typed_openapi_client`.
   - `root_names_test.dart`: `'a tag named defaults gets defaults2'`: the group field is `defaults2`, one `.nameCollision` (TOA551) at the tag.
-  - `runtime_names_test.dart` (existing) fails until `SseRetry` is in `takenTypeNames`.
   - `typed_openapi_client/test/generated_client_test.dart`: `'a group built with defaults merges them into every call'` (a header from `defaults` reaches the transport, an `implements` fake of `PetsApi` still compiles).
   - Generated end-to-end: extend `test/emit/programs/stream_calls.dart.txt` so the root client is built with `defaults: CallOptions(sse: SseOptions(reconnect: true, wait: ...))` and a stream opens after a 503 (prints the extra line); extend `calls.dart.txt` with a `defaults` header check; update the expected-output constants in `generated_client_test.dart` (359 lines, stays < 500).
 
 - [ ] **Step 3: Run** `cd packages/typed_openapi && dart test test/emit` and `cd packages/typed_openapi_core && dart test test/ir` -> FAIL.
 
-- [ ] **Step 4: Implement** `ApiLibrary._constructor` and the group constructor in `OperationEmitter.write` (`fromRuntime('CallOptions')` in both files' imports), `RootNames` and `names.dart`, and the `pets_api.dart` helper (`PetsApi(ClientTransport transport, {CallOptions defaults = const CallOptions()}) : _sender = ClientSender(transport, defaults: defaults);`). Regenerate goldens: `UPDATE_GOLDENS=1 dart test test/emit/api_library_test.dart` in `packages/typed_openapi`, then review the golden diff (two lines per group and the root, nothing else). `cd packages/typed_openapi_tool && dart run bin/corpus.dart update` (network on first fetch) and review `corpus.lock` (hashes of generated files only; `failures` stays 0). Add to the `### Output changes` of `packages/typed_openapi/CHANGELOG.md` (heading `## 0.3.0 - Unreleased` is created in T8): root and group constructors take `defaults`; a schema named `SseRetry` gets a suffix; a tag `defaults` is renamed.
+- [ ] **Step 4: Implement** `ApiLibrary._constructor` and the group constructor in `OperationEmitter.write` (`fromRuntime('CallOptions')` in both files' imports), `RootNames`, and the `pets_api.dart` helper (`PetsApi(ClientTransport transport, {CallOptions defaults = const CallOptions()}) : _sender = ClientSender(transport, defaults: defaults);`). Regenerate goldens: `UPDATE_GOLDENS=1 dart test test/emit/api_library_test.dart` in `packages/typed_openapi`, then review the golden diff (two lines per group and the root, nothing else). `cd packages/typed_openapi_tool && dart run bin/corpus.dart update` (network on first fetch) and review `corpus.lock` (hashes of generated files only; `failures` stays 0). Add to the `### Output changes` of `packages/typed_openapi/CHANGELOG.md` (heading `## 0.3.0 - Unreleased` is created in T8): root and group constructors take `defaults`; a schema named `SseRetry` gets a suffix; a tag `defaults` is renamed.
 
 - [ ] **Step 5: Run** `dart test` in `packages/typed_openapi_core`, `packages/typed_openapi`, `packages/typed_openapi_client`, `packages/typed_openapi_tool`; `dart run bin/corpus.dart check` and `dart run bin/fuzz.dart --seeds 200` in the tool package -> PASS; analyze/format clean.
 
