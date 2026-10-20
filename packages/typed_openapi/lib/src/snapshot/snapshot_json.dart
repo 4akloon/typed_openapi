@@ -33,7 +33,7 @@ final class SnapshotJson {
   }
 
   static final _unsafe = RegExp(
-    '[\u0085\u061c\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]',
+    '[\u007f-\u009f\u061c\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]',
   );
 
   /// [value] as JSON with the characters `jsonEncode` leaves raw but a

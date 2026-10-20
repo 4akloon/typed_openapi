@@ -5,15 +5,16 @@ import 'change_counts.dart';
 /// The `markdown` report of `typed_openapi diff`, for a pull request
 /// comment: a heading per client with the counts and a list of changes
 /// per category, a fix in a fenced YAML block. Spec text is neutralised and
-/// its Markdown characters escaped, so a spec cannot add a link or an image
-/// to the comment.
+/// its Markdown characters escaped (`@` too, so a name does not mention a
+/// user), so a spec cannot add a link or an image to the comment. A bare URL
+/// still autolinks: no escape stops that.
 final class MarkdownDiffReport {
   /// Creates the report.
   const MarkdownDiffReport();
 
   // The text never starts a line, so only the characters that mark up
   // inline text need an escape; `&` would start an entity.
-  static final _special = RegExp(r'[\\`*_\[\]<>|~&]');
+  static final _special = RegExp(r'[\\`*_\[\]<>|~&@]');
   static final _backticks = RegExp('`+');
 
   /// The report of the changes of each client, by client name.

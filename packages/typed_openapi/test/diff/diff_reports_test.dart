@@ -83,6 +83,19 @@ void main() {
     expect(text, contains(r'\u{1b}\[2J\[x\](y)'));
   });
 
+  test('markdown escapes @ so a name mentions nobody', () {
+    final text = const MarkdownDiffReport().format({
+      'a': [
+        const ApiChange(
+          ChangeCategory.wire,
+          'Field Pet.a: renamed to @octocat.',
+          type: '#/components/schemas/Pet',
+        ),
+      ],
+    });
+    expect(text, contains(r'renamed to \@octocat'));
+  });
+
   test('markdown fences a fix with more backticks than it holds', () {
     final text = const MarkdownDiffReport().format({
       'a': [

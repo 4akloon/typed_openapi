@@ -32,6 +32,27 @@ components:
         status: {type: string, enum: [a, b]}
 ''';
 
+/// A stream-only operation `chat` and another operation named `chatStream`.
+const _only = '''
+openapi: 3.0.3
+info: {title: t, version: "1"}
+paths:
+  /chat:
+    get:
+      operationId: chat
+      responses:
+        '200':
+          description: ok
+          content:
+            text/event-stream:
+              schema: {type: string}
+  /other:
+    get:
+      operationId: chatStream
+      responses:
+        '200': {description: ok}
+''';
+
 const _inline = '#/components/schemas/Pet/properties/status';
 
 String _typeAt(ClientIr ir, String pointer) => ir.declarations
@@ -152,6 +173,27 @@ void main() {
     );
     expect(_methods(ir), contains('getPets'));
   });
+
+  test('a stale event-stream name of a stream-only operation is free', () {
+    final fixture = IrFixture(_only);
+    final ir = fixture.build(
+      names: _locking(fixture, methods: {'GET /chat#stream': 'chatStream'}),
+    );
+    expect(_methods(ir), containsAll(['chat', 'chatStream']));
+    expect(_methods(ir), isNot(contains('chatStream2')));
+  });
+
+  for (final name in ['class', 'a b', 'X(); injected()', 'Pet']) {
+    test('a hostile event-stream name "$name" is not used', () {
+      final fixture = IrFixture(_spec);
+      final ir = fixture.build(
+        names: _locking(fixture, methods: {'GET /pets#stream': name}),
+      );
+      expect(_methods(ir), isNot(contains(name)));
+      expect(_methods(ir), contains('getPetsStream'));
+      expect(fixture.reportedOf(DiagnosticCode.lockedNameTaken), hasLength(1));
+    });
+  }
 
   test('an explicit name frees the name the identity had', () {
     final fixture = IrFixture(

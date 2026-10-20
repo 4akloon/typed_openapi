@@ -79,6 +79,17 @@ void main() {
     expect(json.encode(json.decode(text)), text);
   });
 
+  test('DEL and the C1 controls are escaped', () {
+    final text = json.encode({
+      'a': const ApiSnapshot({
+        '#/x': SnapshotType('X\u007f\u0090\u009f', .model),
+      }),
+    });
+    expect(text, isNot(matches(RegExp('[\u007f-\u009f]'))));
+    expect(text, contains(r'X\u007f\u0090\u009f'));
+    expect(json.decode(text)['a']!.types['#/x']!.name, 'X\u007f\u0090\u009f');
+  });
+
   test('an exhaustive that is not a bool is a FormatException', () {
     expect(
       () => json.decode(

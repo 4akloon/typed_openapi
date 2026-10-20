@@ -291,6 +291,24 @@ and stripe lists (breaking/switch-breaking/wire/additive/docs) 9/9/0/25/1,
 breaking changes on the rename probes where `--fresh-names` gives 3, 4 and 8,
 and the fuzz of 200 seeds finds 0 problems.
 
+## Parked from the M12 reviews
+
+Findings of the M12 reviews that the fix rounds did not fix. Everything else
+those reviews found is fixed; the reviews are in
+`.superpowers/sdd/2026-10-13-m12-evolution/`.
+
+| Finding | Why it is parked |
+|---|---|
+| The fuzz `LeakCheck` does not cover the text of `typed_openapi.lock` | the lock codec is not exported; unit tests cover its escapes (bidirectional, line separators, DEL and C1) |
+| The lock is written through a fixed `.tmp` name, and a read-modify-write is not locked | a parallel `generate` on one lock can lose a section; documented in `doc/cli.md`; a lock file needs the output-lock machinery and a real use |
+| The Markdown report escapes inline markup and `@` only, not block markers (`#`, `-`, `+`, `N.`) | the text never starts a line; a bare URL autolinks whatever is escaped |
+| `RenameHints._yamlKey` mishandles control characters, YAML reserved words and keys that start with `@` | the hint is a suggestion to the reader; the keys are component names |
+| Wording of `ApiChange` messages: "a enum", raw fact keys | cosmetic |
+| A relative path in lock ids on Windows across drives; member keys are joined with `/` and can collide with an `operationId` that holds `/` | needs a Windows corpus run and a real spec with such an id |
+| A directory named `typed_openapi.lock` reads as no lock | the write then fails with TOA831; unusual |
+| `diff` ignores a lock client that is no longer in the config | documented in `doc/cli.md`; `--from`/`--to` shows it |
+| `doc/generated/*.md` link to `configuration.md#exhaustive`, and `docs/code-quality-review.md` has stale entries (`config_loader.dart`, `ir_builder.dart`) | documentation only; fix with the next docs pass |
+
 ## Parked from the M10 reviews
 
 Findings of the M10 reviews (`T<n>` is the review of task n, `T9a` and `T9b`

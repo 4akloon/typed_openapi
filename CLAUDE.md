@@ -1374,7 +1374,8 @@ are not, so follow them by hand:
 
 - Nothing is guessed silently: every normalizer fix, fallback or skipped
   construct yields a diagnostic with a stable code and a JSON pointer.
-- Deterministic output: same spec + same config -> byte-identical code. Sort
+- Deterministic output: same spec + same config + same `typed_openapi.lock` ->
+  byte-identical code. Sort
   everything; no hash-ordered iteration when emitting; no network or `dart fix`
   during generation.
 - A change of generated output is a breaking change of the generator.

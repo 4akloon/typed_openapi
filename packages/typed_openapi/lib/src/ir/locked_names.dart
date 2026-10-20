@@ -70,10 +70,14 @@ final class LockedNames {
   void lockMethods(NameScope scope, Iterable<SpecOperation> entries) {
     final kept = <String, (String, SpecLocation)>{};
     for (final entry in entries) {
-      final hasStream = StreamSuccesses.of(
-        _context,
-        entry.operation,
-      ).streams.isNotEmpty;
+      // The shape `both` (see `EventStreams.shapeOf`, which reports and so
+      // is not asked here): the only one with a method for the events next
+      // to the one for the body.
+      final successes = StreamSuccesses.of(_context, entry.operation);
+      final hasStream =
+          successes.streams.isNotEmpty &&
+          successes.alone.isEmpty &&
+          successes.others.isEmpty;
       for (final isStream in [false, if (hasStream) true]) {
         final key = _methodKey(entry, isStream: isStream);
         if (_lock.methods[key] case final name?) {

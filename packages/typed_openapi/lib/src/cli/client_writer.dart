@@ -90,7 +90,9 @@ final class ClientWriter {
   /// The hash of what the code of [check]'s client is generated from: the
   /// content of every file the run read, the client's settings that change
   /// the code, and the generator. The same inputs give the same hash on
-  /// any machine: paths are not part of it.
+  /// any machine: paths are not part of it. `typed_openapi.lock` also
+  /// decides names (M12) but is not in the hash: it is not an input of the
+  /// spec, and a rename it causes shows in the files' hashes.
   static String _inputsOf(ClientCheck check) {
     final client = check.client;
     String hashOf(String path) {
