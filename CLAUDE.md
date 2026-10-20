@@ -34,9 +34,10 @@ pub workspace with seven pure-Dart packages (no Flutter):
 Minimum SDK: Dart 3.10 (`>=3.10.0 <4.0.0`), also for generated code.
 
 The four published packages (core, client, `typed_openapi`, Dio transport)
-share one version, `0.1.0`, which is not tagged or published yet
-(`docs/release-checklist.md` is the way to release it); their CHANGELOGs say
-`## 0.1.0 - Unreleased`.
+share one version, `0.1.0`, released by hand with
+`docs/release-checklist.md` (the tags and the publish follow the merge); their
+CHANGELOGs say `## 0.1.0`. A section titled `## <version> - Unreleased` is a
+version not yet released.
 
 ## Commands
 

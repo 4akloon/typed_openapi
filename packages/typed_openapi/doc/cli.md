@@ -10,7 +10,7 @@ dart run typed_openapi baseline create
 dart run typed_openapi lint openapi.yaml
 ```
 
-`typed_openapi` is not on pub.dev yet, so `dart pub global activate typed_openapi` does not work. From a checkout of the repository, `dart pub global activate --source path packages/typed_openapi` installs the `typed_openapi` executable; then replace `dart run typed_openapi` with `typed_openapi`.
+`dart pub global activate typed_openapi` installs the `typed_openapi` executable; then replace `dart run typed_openapi` with `typed_openapi`. From a checkout of the repository, `dart pub global activate --source path packages/typed_openapi` installs the version on `main`.
 
 ```text
 $ typed_openapi --help

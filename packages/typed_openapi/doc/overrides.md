@@ -168,13 +168,13 @@ Every code is explained in [Diagnostics](diagnostics.md). Rules that only report
 The overrides file has a JSON Schema too, [`typed_openapi.overrides.schema.json`](../schema/typed_openapi.overrides.schema.json), generated and tested like [the one of the config](configuration.md#editor-support) (`override_schema_test.dart` in `typed_openapi_core` checks it against `OverrideLoader`). Put this as the first line of the file:
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/4akloon/typed_openapi/main/packages/typed_openapi/schema/typed_openapi.overrides.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/4akloon/typed_openapi/typed_openapi-v0.1.0/packages/typed_openapi/schema/typed_openapi.overrides.schema.json
 operations:
   listPets:
     group: Pets
 ```
 
-The editor then completes the keys of an operation or a schema and flags a key the loader would call TOA803 or a value it would call TOA802. The URL follows `main`; pin it to a release tag once one exists. The schema cannot know your spec, so an address that matches nothing (`listPet` for `listPets`) is still `TOA804` from `check`. It is not published to SchemaStore.
+The editor then completes the keys of an operation or a schema and flags a key the loader would call TOA803 or a value it would call TOA802. The URL is pinned to the tag of release 0.1.0; use the tag of the version you have. The schema cannot know your spec, so an address that matches nothing (`listPet` for `listPets`) is still `TOA804` from `check`. It is not published to SchemaStore.
 
 ## See also
 

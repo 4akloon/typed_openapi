@@ -4,18 +4,15 @@ This guide takes one NestJS-style spec from file to a working call: install, con
 
 ## Install
 
-`typed_openapi` is not published to pub.dev yet (version 0.1.0). Until it is, depend on it from the repository by git or path. The generator is a dev dependency; the generated client depends only on `typed_openapi_client`; the app adds a transport, here `typed_openapi_dio` and Dio.
+Add the packages with `dart pub add dio typed_openapi_client typed_openapi_dio` and `dart pub add --dev typed_openapi`; the result is below. To follow `main` instead of a release, depend on the repository by git or path. The generator is a dev dependency; the generated client depends only on `typed_openapi_client`; the app adds a transport, here `typed_openapi_dio` and Dio.
 
 ```yaml
 dependencies:
   dio: ^5.11.1
-  typed_openapi_client:
-    path: ../typed_openapi/packages/typed_openapi_client
-  typed_openapi_dio:
-    path: ../typed_openapi/packages/typed_openapi_dio
+  typed_openapi_client: ^0.1.0
+  typed_openapi_dio: ^0.1.0
 dev_dependencies:
-  typed_openapi:
-    path: ../typed_openapi/packages/typed_openapi
+  typed_openapi: ^0.1.0
 ```
 
 The minimum SDK is Dart 3.10, for the generator and for generated code. Run it with `dart run typed_openapi <command>`.

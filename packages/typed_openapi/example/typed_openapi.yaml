@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://raw.githubusercontent.com/4akloon/typed_openapi/main/packages/typed_openapi/schema/typed_openapi.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/4akloon/typed_openapi/typed_openapi-v0.1.0/packages/typed_openapi/schema/typed_openapi.schema.json
 clients:
   petshop:
     input: specs/petshop.yaml

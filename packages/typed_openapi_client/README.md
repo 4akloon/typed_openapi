@@ -13,7 +13,7 @@ the bytes to a `ClientTransport`; [`typed_openapi_dio`](../typed_openapi_dio/REA
 is the transport over your own `Dio`. Its one dependency is `meta`. The
 generator is never a runtime dependency of your app.
 
-> **Status:** in development, not published yet.
+> **Status:** version 0.1.0, the first release, on pub.dev.
 
 ## Contents
 
@@ -34,7 +34,7 @@ and a transport, such as the Dio one (the generator does not edit your
 ```yaml
 dependencies:
   dio: ^5.11.1
-  typed_openapi_client: ^0.1.0   # not on pub.dev yet; use a path or git dependency
+  typed_openapi_client: ^0.1.0
   typed_openapi_dio: ^0.1.0
 ```
 

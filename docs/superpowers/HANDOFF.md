@@ -14,12 +14,12 @@ Last updated: 2026-10-20 (M13 done on its branch). Read this first on a new devi
 
 ## M13: where it stands
 
-M13 is implemented on `feat/m13-product` (worktree `.claude/worktrees/m13-impl`). Nothing is merged to `main`, pushed, tagged or published. It adds: the `x-` registry and the config and overrides key catalogs with their generated JSON Schemas; the generated diagnostics and extensions references (`docs.dart`); `typed_openapi lint` with preset detection; the support matrix, the four framework recipes, the automation and grund guides; the release binaries, the composite action and `release.yml`; release readiness for `0.1.0` (pubspecs, examples, CHANGELOGs headed `## 0.1.0 - Unreleased`). Counts of the last full run: core +1961, generator +364 ~1, client +305, dio +54, tool +280.
+M13 is implemented on `feat/m13-product` (worktree `.claude/worktrees/m13-impl`). Nothing is merged to `main`, pushed, tagged or published. It adds: the `x-` registry and the config and overrides key catalogs with their generated JSON Schemas; the generated diagnostics and extensions references (`docs.dart`); `typed_openapi lint` with preset detection; the support matrix, the four framework recipes, the automation and grund guides; the release binaries, the composite action and `release.yml`; release readiness for `0.1.0` (pubspecs, examples, CHANGELOGs headed `## 0.1.0`; the release commit has dropped `Unreleased`, rewritten the install text for pub.dev and pinned the schema URLs to `typed_openapi-v0.1.0`). Counts of the last full run: core +1961, generator +364 ~1, client +305, dio +54, tool +280.
 
 **What remains for the owner** (all outward actions need an explicit yes):
 
 1. Merge `feat/m13-product` into `main` (or open the pull request).
-2. Release `0.1.0` by hand with [docs/release-checklist.md](../release-checklist.md): version and `Unreleased` headings, the "not on pub.dev" text (a grep step), the schema URLs pinned to the tag, the dry runs, the first publish by hand in the order core, client, `typed_openapi`, Dio, the tags, and the check of the binaries. Nothing in the repository tags or publishes by itself.
+2. Release `0.1.0` by hand with [docs/release-checklist.md](../release-checklist.md): the version, headings, install text and schema URLs are done in the release commit; what remains is the dry runs on the merge commit, the first publish by hand in the order core, client, `typed_openapi`, Dio, the tags, and the check of the binaries. Nothing in the repository tags or publishes by itself.
 3. The SchemaStore submission (the text is in the checklist) is the owner's outward action; it waits for the tag.
 4. The vendored YAML scanner: the linear-time fix is proposed upstream as dart-lang/tools#2658. A maintainer approved it, it waits for the upstream merge, and the CLA is signed. After the merge and a release, update `packages/typed_openapi_core/lib/src/load/yaml/` and the note in its `analysis_options.yaml`.
 5. Required status checks: the ruleset "Protect main" has none yet; add the CI job names (now also `docs`, `actionlint` and `binary`).
@@ -32,9 +32,9 @@ M13 is implemented on `feat/m13-product` (worktree `.claude/worktrees/m13-impl`)
 2. The NestJS `oneOf` plus `enum: [null]` shape (TOA303): its origin in `@nestjs/swagger` 11.2.0 was not verified in the source, so the hint states only what the 12.0.0 notes and the documentation say.
 3. The `JsonReader.constant` version gate is parked again after `0.1.0`, with the reason in the roadmap. Lockstep versions are pinned by `lockstep_versions_test`.
 4. The recipe-coverage test has no generic allowlist: every code that fires on a framework spec of the corpus is named in its recipe.
-5. Schema URLs point at `main` in the docs and are pinned to the tag at release (a checklist step). `schema/` ships in the pub tarball.
-6. CHANGELOG headings are `## 0.1.0 - Unreleased`; the checklist drops ` - Unreleased` at tagging.
-7. "Not on pub.dev yet" stays in the docs; flipping it is a checklist step with a grep command.
+5. Schema URLs are pinned to the tag `typed_openapi-v0.1.0` (they answer 404 until the tag is pushed). `schema/` ships in the pub tarball.
+6. CHANGELOG headings are `## 0.1.0`.
+7. The docs now say the packages are on pub.dev; that is true only after the publish.
 8. The first publish is manual (automated publishing needs an existing package). For the first release only the tag `typed_openapi-v0.1.0` is pushed, for the binaries; its `publish.yml` run fails harmlessly.
 9. Every archive is a `.tar.gz`, Windows included.
 10. `linux-arm64` is cross-compiled on `ubuntu-24.04`; its smoke test is skipped.

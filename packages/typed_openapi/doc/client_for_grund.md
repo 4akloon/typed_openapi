@@ -61,14 +61,14 @@ components:
 
 ## Install
 
-`typed_openapi` and its runtime packages are not on pub.dev yet, so `dart pub add` cannot find them; add them from git as in the [README](../README.md#install). Once published, the commands are:
+Add the packages from pub.dev (to follow `main` instead, use git dependencies as in the [README](../README.md#install)):
 
 ```sh
 dart pub add typed_openapi_client typed_openapi_dio
 dart pub add --dev typed_openapi
 ```
 
-The first line adds the packages the app runs with: `typed_openapi_client` is what the generated code imports, `typed_openapi_dio` sends the requests through your `Dio`. The second adds the generator, which is only a development tool. The sample project of this page used path dependencies on a checkout, because the packages are not published; the commands that follow were run there.
+The first line adds the packages the app runs with: `typed_openapi_client` is what the generated code imports, `typed_openapi_dio` sends the requests through your `Dio`. The second adds the generator, which is only a development tool. The sample project of this page used path dependencies on a checkout, before the packages were published; the commands that follow were run there.
 
 ## Config
 
