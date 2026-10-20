@@ -93,7 +93,7 @@ jobs:
           EXT: ${{ matrix.ext }}
         run: release/package.sh "$TARGET" "$VERSION" "build/typed_openapi${EXT}" dist
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: typed_openapi-${{ matrix.target }}
           path: dist/*
@@ -107,7 +107,7 @@ jobs:
     permissions:
       contents: write # create the release and attach the files
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           path: dist
           merge-multiple: true
