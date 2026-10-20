@@ -3,6 +3,7 @@ import 'dart:math';
 import '../result/result.dart';
 import 'sse_cooldown.dart';
 import 'sse_options.dart';
+import 'sse_retry.dart';
 import 'sse_trace.dart';
 
 /// The [SseOptions] of one call with the built-in defaults applied: nothing
@@ -90,6 +91,22 @@ final class SseSettings {
 
   /// The classifier of transient failures, or null for the built-in one.
   final bool Function(Failure<Object?, Object?> failure)? retryWhen;
+
+  /// Whether a failed attempt to open a stream is worth another try.
+  ///
+  /// A [Cancelled] is never retried and never shown to `retryWhen`. An
+  /// [Exception] that `retryWhen` throws counts as final; an `Error` is not
+  /// caught.
+  bool shouldRetry(Failure<Object?, Object?> failure) {
+    if (failure is Cancelled) return false;
+    final classifier = retryWhen;
+    if (classifier == null) return SseRetry.isTransient(failure);
+    try {
+      return classifier(failure);
+    } on Exception {
+      return false;
+    }
+  }
 
   /// The delay before [attempt] (1 for the first), given the server's last
   /// [retry], without jitter.

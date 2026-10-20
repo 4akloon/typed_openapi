@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import '../result/result.dart';
+import 'retry_after.dart';
 import 'sse_settings.dart';
 
 /// One reconnection attempt the plan allows: its number and the wait before
@@ -23,11 +25,22 @@ final class ReconnectionPlan {
 
   /// The next attempt, given the server's last [retry], or null when
   /// [SseSettings.maxAttempts] attempts in a row have failed.
-  ReconnectionStep? next(Duration? retry) {
-    final max = _options.maxAttempts;
-    if (max != null && _failed >= max) return null;
+  ///
+  /// When the [failure] that ends the last attempt carries a valid
+  /// `Retry-After`, the delay is at least that long, whatever `maxDelay`
+  /// says, for this attempt only.
+  ReconnectionStep? next(
+    Duration? retry, {
+    Failure<Object?, Object?>? failure,
+  }) {
+    final limit = _options.maxAttempts;
+    if (limit != null && _failed >= limit) return null;
+    final asked = failure == null ? null : RetryAfter.of(failure);
     if (_options.cooldown case final cooldown? when _failed >= cooldown.after) {
-      final step = (attempt: _failed + 1, delay: cooldown.duration);
+      final step = (
+        attempt: _failed + 1,
+        delay: _atLeast(cooldown.duration, asked),
+      );
       _failed = 0;
       return step;
     }
@@ -36,9 +49,12 @@ final class ReconnectionPlan {
     // The server asked for that timing: it is not spread.
     return (
       attempt: _failed,
-      delay: retry == null ? _spread(base) : base,
+      delay: _atLeast(retry == null ? _spread(base) : base, asked),
     );
   }
+
+  static Duration _atLeast(Duration delay, Duration? asked) =>
+      asked != null && asked > delay ? asked : delay;
 
   /// [base] moved by a random share of at most [SseSettings.jitter] either
   /// way.

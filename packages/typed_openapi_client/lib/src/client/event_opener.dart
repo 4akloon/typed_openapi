@@ -74,7 +74,8 @@ final class EventOpener {
     ) when statusCode != 204 && reconnection.reconnects(options)) {
       return Success(
         SseReconnector<T>(
-          options,
+          event.settings,
+          event.plan,
           (resume) => _connect(event, resume),
           cancel: call?.cancel,
           onCancel: event.signals.cancel,

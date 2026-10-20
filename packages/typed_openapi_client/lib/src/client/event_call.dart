@@ -1,6 +1,7 @@
 import '../request/operation_request.dart';
 import '../request/raw_response.dart';
 import '../result/result.dart';
+import '../sse/reconnection_plan.dart';
 import '../sse/sse_item.dart';
 import '../sse/sse_message.dart';
 import '../sse/sse_settings.dart';
@@ -13,9 +14,27 @@ import 'connection_signals.dart';
 /// connections' cancel signals.
 final class EventCall<T, E> {
   /// Creates the call; its connections are linked to `call.cancel`.
-  EventCall(this.request, this.decodeEvent, this.decodeError, this.call)
-    : signals = ConnectionSignals(call?.cancel),
-      settings = SseSettings.of(call?.sse),
+  EventCall(
+    OperationRequest request,
+    T Function(SseMessage message) decodeEvent,
+    Result<Stream<SseItem<T>>, E> Function(RawResponse response) decodeError,
+    CallOptions? call,
+  ) : this._(
+        request,
+        decodeEvent,
+        decodeError,
+        call,
+        SseSettings.of(call?.sse),
+      );
+
+  EventCall._(
+    this.request,
+    this.decodeEvent,
+    this.decodeError,
+    this.call,
+    this.settings,
+  ) : plan = ReconnectionPlan(settings),
+      signals = ConnectionSignals(call?.cancel),
       tracer = SseTracer.of(call?.sse?.onTrace, request.operation);
 
   /// The request every connection sends.
@@ -33,6 +52,10 @@ final class EventCall<T, E> {
 
   /// The call's [SseOptions] with the built-in defaults applied.
   final SseSettings settings;
+
+  /// The failed attempts of the call, counted for the opening and the
+  /// reconnections together.
+  final ReconnectionPlan plan;
 
   /// The cancel signals of the connections.
   final ConnectionSignals signals;

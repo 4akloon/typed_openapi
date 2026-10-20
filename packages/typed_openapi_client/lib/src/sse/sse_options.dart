@@ -18,7 +18,9 @@ import 'sse_trace.dart';
 /// [maxDelay] (a server `retry` longer than [maxDelay] is kept as it is).
 /// After [maxAttempts] attempts in a row without a message, the stream ends
 /// with `SseDisconnected`; a null [maxAttempts] never gives up. [jitter]
-/// spreads the delays and [cooldown] pauses for long after many failures.
+/// spreads the delays and [cooldown] pauses for long after many failures. A
+/// failed reconnection is retried when it is transient (`SseRetry`, or
+/// `retryWhen`), and a `Retry-After` of its response lengthens the wait.
 /// The server's `retry` replaces [delay] as the first delay and, while it is
 /// in effect, the delays are not spread; [cooldown] is not affected by it.
 final class SseOptions {
@@ -74,8 +76,8 @@ final class SseOptions {
   /// only comments, or blocks with just an `id:` or a `retry:` (they move
   /// the last event id and the delay, but are no message), does not. A
   /// written `null` never gives up: the stream reconnects until the call is
-  /// cancelled, the listener cancels or the server answers with a status
-  /// that is not a stream. Omitted leaves it unset (5). This field reads
+  /// cancelled, the listener cancels or an attempt fails in a way that
+  /// retrying cannot fix (`SseRetry`, or `retryWhen`). Omitted leaves it unset (5). This field reads
   /// null both when it was omitted and when `null` was written; [merge]
   /// keeps the difference. A negative number counts as omitted.
   final int? maxAttempts;
