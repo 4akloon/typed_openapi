@@ -79,6 +79,7 @@ final class SseTracer {
   void failed(Failure<Object?, Object?> failure) {
     // One trace per failure: an opening that ends on the failure it already
     // traced before a wait must not trace it again as the end of the call.
+    // This relies on every attempt producing a new Failure: never cache one.
     if (identical(failure, _lastFailed)) return;
     _lastFailed = failure;
     _traceFailure(failure);

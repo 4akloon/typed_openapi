@@ -40,8 +40,8 @@ final class CallOptions {
 
   /// Headers added to the request; a call's win over the headers the
   /// operation sends for its header parameters, case-insensitively, while a
-  /// client's defaults (`ClientSender.defaults`) go under them. A value that is a
-  /// list is sent as one value per item; a `null` value is not sent. The
+  /// client's defaults (`ClientSender.defaults`) go under them. A value that
+  /// is a list is sent as one value per item; a `null` value is not sent. The
   /// one exception is `Content-Type`: the operation's own content type
   /// (`OperationRequest.contentType`, set for a request body) wins over a
   /// `Content-Type` given here, so it cannot be used to pick another media
@@ -51,7 +51,8 @@ final class CallOptions {
   /// last event id starts, as it would for `EventSource`: it goes with the
   /// first request and with a reconnection until an event's `id` replaces
   /// it, and an empty `id:` removes it. It is sent only when it is a valid
-  /// header value (printable ASCII).
+  /// header value (printable ASCII). A `Last-Event-ID` among a client's
+  /// defaults is ignored on an event stream.
   final Map<String, Object?> headers;
 
   /// Data for the transport (`TransportRequest.extra`); `typed_openapi_dio`

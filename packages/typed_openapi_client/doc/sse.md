@@ -274,8 +274,8 @@ The stream **ends** with `SseDisconnected` when:
   That is six requests: the first and five reconnections.
 
 An `Exception` thrown by `SseOptions.wait` ends the stream with a last
-`SseDisconnected` whose `cause` is that exception, as it ends an opening. An
-`Error` thrown on an attempt, by a `wait`, the transport or an interceptor,
+`SseDisconnected` whose `cause` is that exception; during the opening the
+method returns the failure it was waiting after instead. An `Error` thrown on an attempt, by a `wait`, the transport or an interceptor,
 is the stream's one error, never the zone's.
 
 ### Long-lived streams
