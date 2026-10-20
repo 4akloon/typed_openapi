@@ -35,7 +35,7 @@ undocumented status 503
 | `UndocumentedStatus(statusCode, rawBody, headers)` | a status the spec does not document |
 | `DecodeError(error, statusCode, rawBody, headers)` | the body did not decode; `error.pointer` says where |
 | `TransportError(exception, stackTrace)` | network failure, timeout |
-| `Cancelled(exception, stackTrace)` | the `CancelToken` was cancelled |
+| `Cancelled(exception, stackTrace)` | the `CancelSignal` of `CallOptions.cancel` fired |
 
 `Failure` is the sealed base of the last five. If a method has no documented errors, `E` is `Never`, but you still write `case Failure()`. The runtime reference is the [results and errors guide](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/doc/results_and_errors.md).
 
