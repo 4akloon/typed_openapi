@@ -118,6 +118,8 @@ import 'package:typed_openapi_dio/typed_openapi_dio.dart';
 Future<void> main() async {
   final dio = Dio(BaseOptions(baseUrl: 'http://localhost:3000'));
   final client = ShopClient(DioTransport(dio));
+  // Options for every call go once into the constructor:
+  // ShopClient(DioTransport(dio), defaults: CallOptions(sse: SseOptions(reconnect: true)))
 
   final result = await client.products.findOne(id: '42');
   switch (result) {

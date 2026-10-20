@@ -6,7 +6,9 @@ import '../transport/cancel_signal.dart';
 ///
 /// One object instead of many named parameters, so that a new option does
 /// not change the signature of generated methods (and of user fakes that
-/// implement them). Base URL, timeouts and retries belong to the transport.
+/// implement them). The base URL and the timeouts and retries of plain
+/// requests belong to the transport; an event stream retries its opening and
+/// its reconnections itself (see [SseOptions]).
 ///
 /// A client can hold default options (`ClientSender.defaults`); each call's
 /// options are merged over them with [merge]: a value the call sets wins,

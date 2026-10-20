@@ -306,6 +306,8 @@ info TOA665 event-stream-reconnect-off: sse.reconnect in the config applies to G
   fix: Enable it for this operation if the request can be repeated. Override: ...
 ```
 
+Options you give every stream (reconnection, jitter, timeouts, `onTrace`) go once into the constructor of the client, `PetstoreClient(transport, defaults: CallOptions(sse: SseOptions(...)))`; a call's own options win field by field. A GET stream that reconnects also retries its opening on transient failures (408, 429, most 5xx, a refused or timed-out connection), and a `Retry-After` header lengthens the wait. A stream whose reconnection is `.off` is never retried. See the runtime guide, "Defaults for every call" and "Retrying the opening".
+
 A listener cancel, an error status (the `Failure` is the stream's `cause`) and a `204` end the stream instead of reconnecting.
 
 ## The `sse` overrides

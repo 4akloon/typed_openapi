@@ -39,6 +39,8 @@ final dio = Dio(
   ),
 );
 final api = PetshopClient(DioTransport(dio));
+// Options for every call, for example for event streams, go in `defaults`:
+// PetshopClient(DioTransport(dio), defaults: CallOptions(sse: SseOptions(reconnect: true)))
 ```
 
 `DioTransport` uses your `Dio` as it is. It never sets a base URL, an
@@ -140,7 +142,7 @@ cannot use it to pick another media type such as
 
 ### Per-call timeouts
 
-Timeouts, the base URL and retries belong to the transport, here your Dio. For a value that differs per
+Timeouts, the base URL and retries of plain requests belong to the transport, here your Dio (event streams retry their opening themselves, see [Server-Sent Events](sse.md)). For a value that differs per
 call, pass it in `extra` and apply it in an interceptor:
 
 ```dart
