@@ -96,6 +96,35 @@ void main() {
     expect(schema.accepts(document), isTrue);
   });
 
+  test('known gap: equal input_suffix and patch_suffix', () {
+    final document = withDefaults({
+      'naming': {'input_suffix': 'Same', 'patch_suffix': 'Same'},
+    });
+    expect(loaderAccepts(document), isFalse);
+    expect(schema.accepts(document), isTrue);
+  });
+
+  test('known gap: an operation_prefix that is not a regular expression', () {
+    final document = withDefaults({
+      'naming': {'operation_prefix': '('},
+    });
+    expect(loaderAccepts(document), isFalse);
+    expect(schema.accepts(document), isTrue);
+  });
+
+  test('severity: a fixed code is only raised, a config code is absent', () {
+    final levels = _properties(const ConfigSchema().toJson(), 'severity');
+    List<Object?> of(DiagnosticCode code) =>
+        (levels[code.id]! as Map)['enum']! as List<Object?>;
+    expect(of(DiagnosticCode.parseError), ['error']);
+    expect(of(DiagnosticCode.outputFileReplaced), isNot(contains('off')));
+    expect(of(DiagnosticCode.outputFileReplaced).length, lessThan(4));
+    for (final code in DiagnosticCode.configCodes) {
+      expect(levels, isNot(contains(code.id)));
+      expect(levels, isNot(contains(code.slug)));
+    }
+  });
+
   test('severity: the schema lists every code that can be changed', () {
     final levels = _properties(const ConfigSchema().toJson(), 'severity');
     for (final code in DiagnosticCode.values) {

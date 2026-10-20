@@ -43,7 +43,8 @@ final class ConfigGenerationKeys {
       'type',
       StringKey(pattern: r'^[A-Za-z$][A-Za-z0-9_$]*$'),
       description:
-          'The Dart type, written as it is: no prefix and no type arguments.',
+          'The Dart type, written as it is: no prefix and no type arguments, and '
+          'not a reserved word (the schema cannot check the last).',
       example: 'Money',
       isRequired: true,
       invalidExamples: ['1Money', 'List<int>'],

@@ -14,7 +14,8 @@ final class ConfigNamingKeys {
       StringKey(pattern: r'^[A-Z$][A-Za-z0-9_$]*$'),
       description:
           'The name of the root client class. It must be a Dart class name '
-          'that starts with an uppercase letter and is not a reserved word. '
+          'that starts with an uppercase letter and is not a reserved word '
+          '(the schema cannot check the last). '
           'When unset it is made from the client name with Client.',
       example: 'PetstoreClient',
       invalidExamples: ['lower', '1Client'],
@@ -37,7 +38,8 @@ final class ConfigNamingKeys {
       StringKey(pattern: _identifier),
       description:
           'The class of operations without a group. It is the name of a '
-          'class, so a reserved word cannot be it.',
+          'class, so a reserved word cannot be it (the schema cannot check '
+          'this).',
       example: 'DefaultApi',
       defaultValue: 'DefaultApi',
       invalidExamples: ['1Group', 'two words'],
@@ -47,7 +49,7 @@ final class ConfigNamingKeys {
       StringKey(pattern: _identifier),
       description:
           'The suffix of the request model of a schema that is split by '
-          'direction. It must differ from patch_suffix.',
+          'direction. It must differ from patch_suffix (the schema cannot check this).',
       example: 'Input',
       defaultValue: 'Input',
       invalidExamples: ['1Input', 'two words'],
@@ -57,7 +59,7 @@ final class ConfigNamingKeys {
       StringKey(pattern: _identifier),
       description:
           'The suffix of the PATCH body model of a schema that is also used '
-          'elsewhere. It must differ from input_suffix.',
+          'elsewhere. It must differ from input_suffix (the schema cannot check this).',
       example: 'Patch',
       defaultValue: 'Patch',
       invalidExamples: ['1Patch', 'two words'],
@@ -68,7 +70,8 @@ final class ConfigNamingKeys {
       description:
           'A regular expression removed from the start of an operationId '
           'before the method name is made. It applies only where its match '
-          'starts at the first character.',
+          'starts at the first character. It must be a valid regular '
+          'expression (the schema cannot check this).',
       example: 'api_',
     ),
     const KeySpec(

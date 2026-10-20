@@ -43,13 +43,16 @@ final class KeyCases {
   /// Puts a container into a whole document.
   final Map<String, Object?> Function(Map<String, Object?> container) wrap;
 
-  /// The cases, each name once.
+  /// The cases; a name used twice is a [StateError].
   Iterable<KeyCase> all() {
     final seen = <String>{};
-    return [
-      for (final probe in _probes())
-        if (seen.add(probe.name)) probe,
-    ];
+    final cases = _probes().toList();
+    for (final probe in cases) {
+      if (!seen.add(probe.name)) {
+        throw StateError('Two cases are named "${probe.name}".');
+      }
+    }
+    return cases;
   }
 
   Iterable<KeyCase> _probes() sync* {
@@ -101,7 +104,15 @@ final class KeyCases {
 
 /// A value put in place of a key's example, and whether it is valid there.
 final class _Variant {
-  const _Variant(this.path, this.label, this.value, {required this.isValid});
+  const _Variant._(this.path, this.label, this.value, {required this.isValid});
+
+  /// A value the key allows.
+  const _Variant.valid(List<Object> path, String label, Object? value)
+    : this._(path, label, value, isValid: true);
+
+  /// A value the key must reject.
+  const _Variant.invalid(List<Object> path, String label, Object? value)
+    : this._(path, label, value, isValid: false);
 
   final List<Object> path;
   final String label;
@@ -119,45 +130,69 @@ final class _Variants {
     KeySpec spec, [
     List<Object> path = const [],
   ]) sync* {
-    _Variant at(String label, Object? value, {required bool isValid}) =>
-        _Variant(path, label, value, isValid: isValid);
     switch (type) {
-      case BooleanKey():
-        yield at('is text', 'text', isValid: false);
-        if (example case final bool flag) {
-          yield at('is ${!flag}', !flag, isValid: true);
-        }
-      case StringKey(:final allowsEmpty):
-        yield at('is a number', 1, isValid: false);
-        if (!allowsEmpty) yield at('is empty', '', isValid: false);
-        for (final bad in spec.invalidExamples) {
-          yield at('is "$bad"', bad, isValid: false);
-        }
-      case IntegerKey(:final minimum):
-        yield at('is text', 'text', isValid: false);
-        yield at('is ${minimum - 1}', minimum - 1, isValid: false);
-        yield at('is $minimum', minimum, isValid: true);
-      case ChoiceKey(:final values):
-        for (final value in values) {
-          yield at('is $value', value, isValid: true);
-        }
-        yield at('is an unknown choice', 'bogus', isValid: false);
-        yield at('is a number', 1, isValid: false);
-      case ListKey(:final item, :final minItems):
-        yield at('is text', 'text', isValid: false);
-        yield at('is empty', <Object?>[], isValid: minItems == 0);
-        if (example case [final first, ...]) {
-          yield* of(item, first, spec, [...path, 0]);
-        }
+      case BooleanKey() || StringKey() || IntegerKey() || ChoiceKey():
+        yield* _scalar(type, example, spec, path);
+      case ListKey():
+        yield* _list(type, example, spec, path);
       case ObjectKey(:final keys):
         yield* _object(keys, example, spec, path);
       case MapKey():
         yield* _map(type, example, spec, path);
       case CodeLevelsKey() || RuleFlagsKey():
-        yield at('is text', 'text', isValid: false);
-        yield at('is empty', <String, Object?>{}, isValid: true);
+        yield _Variant.invalid(path, 'is text', 'text');
+        yield _Variant.valid(path, 'is empty', <String, Object?>{});
       case NullableKey() || OneOfKey() || FreeObjectKey() || AnyKey():
         break;
+    }
+  }
+
+  static Iterable<_Variant> _scalar(
+    KeyType type,
+    Object? example,
+    KeySpec spec,
+    List<Object> path,
+  ) sync* {
+    switch (type) {
+      case BooleanKey():
+        yield _Variant.invalid(path, 'is text', 'text');
+        if (example case final bool flag) {
+          yield _Variant.valid(path, 'is ${!flag}', !flag);
+        }
+      case StringKey(:final allowsEmpty):
+        yield _Variant.invalid(path, 'is a number', 1);
+        if (!allowsEmpty) yield _Variant.invalid(path, 'is empty', '');
+        for (final bad in spec.invalidExamples) {
+          yield _Variant.invalid(path, 'is "$bad"', bad);
+        }
+      case IntegerKey(:final minimum):
+        yield _Variant.invalid(path, 'is text', 'text');
+        yield _Variant.invalid(path, 'is ${minimum - 1}', minimum - 1);
+        yield _Variant.valid(path, 'is $minimum', minimum);
+      case ChoiceKey(:final values):
+        for (final value in values) {
+          yield _Variant.valid(path, 'is $value', value);
+        }
+        yield _Variant.invalid(path, 'is an unknown choice', 'bogus');
+        yield _Variant.invalid(path, 'is a number', 1);
+      default:
+        break;
+    }
+  }
+
+  static Iterable<_Variant> _list(
+    ListKey type,
+    Object? example,
+    KeySpec spec,
+    List<Object> path,
+  ) sync* {
+    yield _Variant.invalid(path, 'is text', 'text');
+    final empty = <Object?>[];
+    yield type.minItems == 0
+        ? _Variant.valid(path, 'is empty', empty)
+        : _Variant.invalid(path, 'is empty', empty);
+    if (example case [final first, ...]) {
+      yield* of(type.item, first, spec, [...path, 0]);
     }
   }
 
@@ -168,19 +203,20 @@ final class _Variants {
     List<Object> path,
   ) sync* {
     if (example is! Map<String, Object?>) return;
-    _Variant at(String label, Object? value, {required bool isValid}) =>
-        _Variant(path, label, value, isValid: isValid);
-    yield at('is text', 'text', isValid: false);
-    yield at('has an unknown key', {...example, 'bogus': 1}, isValid: false);
+    yield _Variant.invalid(path, 'is text', 'text');
+    yield _Variant.invalid(path, 'has an unknown key', {
+      ...example,
+      'bogus': 1,
+    });
     final required = keys.where((key) => key.isRequired).toList();
     if (required.isEmpty) {
-      yield at('is empty', <String, Object?>{}, isValid: true);
+      yield _Variant.valid(path, 'is empty', <String, Object?>{});
     }
     for (final key in required) {
-      yield at(
+      yield _Variant.invalid(
+        path,
         'without ${key.name}',
         {...example}..remove(key.name),
-        isValid: false,
       );
     }
     for (final key in keys) {
@@ -195,16 +231,17 @@ final class _Variants {
     List<Object> path,
   ) sync* {
     if (example is! Map<String, Object?>) return;
-    _Variant at(String label, Object? value, {required bool isValid}) =>
-        _Variant(path, label, value, isValid: isValid);
-    yield at('is text', 'text', isValid: false);
-    yield at('is empty', <String, Object?>{}, isValid: type.minProperties == 0);
+    yield _Variant.invalid(path, 'is text', 'text');
+    final empty = <String, Object?>{};
+    yield type.minProperties == 0
+        ? _Variant.valid(path, 'is empty', empty)
+        : _Variant.invalid(path, 'is empty', empty);
     if (example.entries.firstOrNull case final first?) {
       for (final bad in type.invalidKeys) {
-        yield at('has the key "$bad"', {
+        yield _Variant.invalid(path, 'has the key "$bad"', {
           ...example,
           bad: first.value,
-        }, isValid: false);
+        });
       }
       yield* of(type.value, first.value, spec, [...path, first.key]);
     }

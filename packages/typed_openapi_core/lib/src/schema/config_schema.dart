@@ -5,9 +5,13 @@ import 'schema_writer.dart';
 
 /// The JSON Schema of `typed_openapi.yaml`, made from [ConfigCatalog].
 ///
-/// The schema says what the loader accepts, with two gaps: it cannot say
-/// that one diagnostic code is written under its id and its name, and it
-/// cannot say that a name is not a reserved word of Dart.
+/// The schema says what the loader accepts, with these gaps, where the
+/// loader rejects more than the schema does: one diagnostic code written
+/// under both its id and its name; a reserved word or built-in identifier of
+/// Dart as a class name (`naming.client`, `naming.default_group`) or as a
+/// custom `type` or `converter`; equal `naming.input_suffix` and
+/// `naming.patch_suffix`; and a `naming.operation_prefix` that is not a
+/// valid regular expression.
 final class ConfigSchema {
   /// Creates the schema.
   const ConfigSchema();

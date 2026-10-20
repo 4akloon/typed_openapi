@@ -4,8 +4,8 @@ import 'dart:convert';
 /// SARIF 2.1.0 schema and the config schema use: `type`, `enum` and `const`
 /// (compared by value), `properties`, `patternProperties`,
 /// `additionalProperties`, `propertyNames`, `required`, `minProperties`,
-/// `items`, `minItems`, `minLength`, `uniqueItems`, `minimum`, `maximum`, `pattern`,
-/// `anyOf`, `oneOf` and local `$ref`s (`#/definitions/...`). `format`,
+/// `items`, `minItems`, `minLength`, `uniqueItems`, `minimum`, `maximum`,
+/// `pattern`, `anyOf`, `oneOf` and local `$ref`s (`#/definitions/...`). `format`,
 /// `default` and the annotations are not checked. Tests only: nothing ships
 /// it.
 final class JsonSchema {
