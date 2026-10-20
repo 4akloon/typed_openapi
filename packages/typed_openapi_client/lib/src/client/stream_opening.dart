@@ -84,8 +84,9 @@ final class _Backoff {
     final cancelled = _cancelled ??= _cancel?.whenCancelled.then(
       (_) => _sleep.cancel(),
     );
-    final sleeping = _sleep.wait(delay);
     try {
+      // Inside the try: an injected wait may throw before it returns.
+      final sleeping = _sleep.wait(delay);
       await (cancelled == null ? sleeping : Future.any([sleeping, cancelled]));
     } on Exception {
       return false;

@@ -110,6 +110,48 @@ void main() {
       expect(traces, ['connect 1', 'open 404', 'error', 'closed']);
     });
 
+    test('of a cancel during the backoff', () async {
+      final traces = <String>[];
+      final cancel = CancelSignal();
+      final pending = open(
+        script([WatchOpening.status(503)]),
+        cancel: cancel,
+        sse: SseOptions(reconnect: true, wait: (_) => Completer<void>().future),
+        onTrace: (t) => traces.add(describe(t)),
+      );
+      await Future<void>.delayed(Duration.zero);
+      cancel.cancel();
+      await pending;
+      expect(traces, [
+        'connect 1',
+        'open 503',
+        'error',
+        'reconnecting 1 1s',
+        'error',
+        'closed',
+      ]);
+    });
+
+    test('of a wait that throws an Exception', () async {
+      final traces = <String>[];
+      await open(
+        script([WatchOpening.status(503)]),
+        sse: SseOptions(
+          reconnect: true,
+          wait: (_) => throw const FormatException('x'),
+        ),
+        onTrace: (t) => traces.add(describe(t)),
+      );
+      expect(traces, [
+        'connect 1',
+        'open 503',
+        'error',
+        'reconnecting 1 1s',
+        'error',
+        'closed',
+      ]);
+    });
+
     test('when the attempts are used up', () async {
       final traces = <String>[];
       await open(

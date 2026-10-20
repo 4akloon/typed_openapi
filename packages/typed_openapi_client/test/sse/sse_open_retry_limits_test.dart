@@ -202,4 +202,52 @@ void main() {
       expect(transport.requests, hasLength(1));
     },
   );
+
+  test('a wait that throws an Exception at once ends the opening', () async {
+    final transport = script([status(503), ok('data: a\n\n')]);
+    final result = await runZonedGuarded(
+      () => watch.open(
+        transport,
+        sse: SseOptions(
+          reconnect: true,
+          wait: (_) => throw const FormatException('x'),
+        ),
+      ),
+      (error, _) => fail('escaped to the zone: $error'),
+    );
+    expect(result, isA<UndocumentedStatus<Object?, Object?>>());
+    expect(transport.requests, hasLength(1));
+  });
+
+  test('a wait that throws an Error at once completes the Future', () async {
+    final transport = script([status(503)]);
+    await expectLater(
+      watch.open(
+        transport,
+        sse: SseOptions(
+          reconnect: true,
+          wait: (_) => throw StateError('bug'),
+        ),
+      ),
+      throwsA(isA<StateError>()),
+    );
+  });
+
+  test('a wait that throws an Error at once is the single error of a '
+      'reconnecting stream', () async {
+    final transport = script([ok('data: a\n\n')]);
+    final result = await watch.open(
+      transport,
+      sse: SseOptions(
+        reconnect: true,
+        wait: (_) => throw StateError('bug'),
+      ),
+    );
+    final errors = <Object>[];
+    await (result as Success<Stream<SseItem<String>>, String>).data
+        .handleError(errors.add)
+        .toList();
+    expect(errors, hasLength(1));
+    expect(errors.single, isA<StateError>());
+  });
 }
