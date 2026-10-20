@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
-import '../config/project_config.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
 
 /// The output of a run: the client's directory, and the input files of the
 /// run that it must not hold.

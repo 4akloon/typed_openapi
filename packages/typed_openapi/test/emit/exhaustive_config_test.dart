@@ -2,11 +2,11 @@
 library;
 
 import 'package:test/test.dart';
-import 'package:typed_openapi/src/config/generation_config.dart';
 import 'package:typed_openapi/src/emit/model_library.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 import '../helpers/emit_fixture.dart';
-import '../helpers/ir_fixture.dart';
 
 void main() {
   const open = GenerationConfig(exhaustive: false);
@@ -44,7 +44,7 @@ void main() {
   });
 
   test('a schema override exhaustive: true wins over the config', () {
-    final fixture = IrFixture(
+    final fixture = NormalizedFixture(
       r'''
 openapi: 3.1.0
 info: {title: t, version: "1"}

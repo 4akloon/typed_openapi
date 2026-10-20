@@ -3,8 +3,7 @@ import 'dart:math';
 
 import 'package:path/path.dart' as p;
 
-import '../diagnostics/diagnostic_bag.dart';
-import '../diagnostics/display_paths.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
 import 'generated_tree.dart';
 import 'output_manifest.dart';
 import 'process_runner.dart';

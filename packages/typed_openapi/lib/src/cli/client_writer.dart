@@ -3,13 +3,9 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 
-import '../check/spec_checker.dart';
-import '../config/project_config.dart';
-import '../diagnostics/display_paths.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
 import '../emit/api_library.dart';
 import '../generate/output_writer.dart';
-import '../ir/ir.dart';
-import '../snapshot/api_lock.dart';
 import 'api_lock_run.dart';
 
 /// Writes each client a `generate` run checked into its output directory

@@ -1,12 +1,7 @@
 import 'package:args/command_runner.dart';
 import 'package:io/io.dart' show ExitCode;
 
-import '../check/spec_checker.dart';
-import '../config/config_loader.dart';
-import '../diagnostics/diagnostic_bag.dart';
-import '../diagnostics/display_paths.dart';
-import '../diagnostics/reporters.dart';
-import '../diagnostics/sarif_reporter.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
 
 /// `typed_openapi check`: analyzes specs without generating code.
 final class CheckCommand extends Command<int> {

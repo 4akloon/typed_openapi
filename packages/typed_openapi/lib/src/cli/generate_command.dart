@@ -1,15 +1,8 @@
 import 'package:args/command_runner.dart';
 import 'package:io/io.dart' show ExitCode;
 
-import '../check/spec_checker.dart';
-import '../config/config_loader.dart';
-import '../config/project_config.dart';
-import '../diagnostics/diagnostic_bag.dart';
-import '../diagnostics/display_paths.dart';
-import '../diagnostics/reporters.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
 import '../generate/output_writer.dart';
-import '../paths/real_paths.dart';
-import '../snapshot/api_lock.dart';
 import 'api_lock_run.dart';
 import 'check_command.dart';
 import 'client_writer.dart';

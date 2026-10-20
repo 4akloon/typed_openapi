@@ -1,7 +1,4 @@
-import '../ir/dart_type.dart';
-import '../ir/ir.dart';
-import '../model/media_type_name.dart';
-import '../model/operation.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
 import 'dart_code.dart';
 import 'dart_writer.dart';
 import 'type_codec.dart';

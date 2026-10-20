@@ -1,9 +1,7 @@
 import 'package:test/test.dart';
-import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
 import 'package:typed_openapi/src/emit/api_library.dart';
-import 'package:typed_openapi/src/ir/ir_builder.dart';
-
-import '../helpers/ir_fixture.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 /// A spec with a GET `watch` that streams text and a `plain` without a
 /// stream.
@@ -26,11 +24,11 @@ paths:
 ''';
 
 /// The code of the API file of [_spec] with [overrides], and the fixture.
-(String, IrFixture) _generate(String overrides) {
-  final fixture = IrFixture(_spec, overrides: overrides);
+(String, NormalizedFixture) _generate(String overrides) {
+  final fixture = NormalizedFixture(_spec, overrides: overrides);
   final ir = IrBuilder(
     fixture.diagnostics,
-  ).build(fixture.context.spec, fixture.context.client);
+  ).build(fixture.spec, fixture.client);
   final files = const ApiLibrary().files(ir, client: 'api');
   return (files['api/t_api.dart']!, fixture);
 }

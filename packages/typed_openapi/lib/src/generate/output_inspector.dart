@@ -2,9 +2,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
-import '../diagnostics/diagnostic_bag.dart';
-import '../diagnostics/display_paths.dart';
-import '../paths/real_paths.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
 import 'existing_output.dart';
 import 'generated_tree.dart';
 import 'output_manifest.dart';

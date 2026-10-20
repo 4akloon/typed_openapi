@@ -4,14 +4,7 @@ import 'package:args/command_runner.dart';
 import 'package:io/io.dart' show ExitCode;
 import 'package:path/path.dart' as p;
 
-import '../baseline/baseline.dart';
-import '../baseline/baseline_loader.dart';
-import '../check/spec_checker.dart';
-import '../config/config_loader.dart';
-import '../config/project_config.dart';
-import '../diagnostics/diagnostic_bag.dart';
-import '../diagnostics/display_paths.dart';
-import '../diagnostics/reporters.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
 
 /// `typed_openapi baseline`: writes and updates the clients' baseline files.
 final class BaselineCommand extends Command<int> {

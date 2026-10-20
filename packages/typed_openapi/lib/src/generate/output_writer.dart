@@ -3,9 +3,7 @@ import 'dart:io';
 import 'package:meta/meta.dart';
 import 'package:path/path.dart' as p;
 
-import '../config/project_config.dart';
-import '../diagnostics/diagnostic_bag.dart';
-import '../diagnostics/display_paths.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
 import 'existing_output.dart';
 import 'generated_tree.dart';
 import 'lock_acquirer.dart';

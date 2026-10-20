@@ -1,6 +1,4 @@
-import '../ir/ir.dart';
-import '../ir/names.dart';
-import '../model/path_template.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
 import 'dart_code.dart';
 import 'dart_writer.dart';
 import 'imports.dart';

@@ -6,7 +6,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:typed_openapi/src/cli/cli.dart';
-import 'package:typed_openapi/src/snapshot/snapshot_json.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
 import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 const _spec = r'''
