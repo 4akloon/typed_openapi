@@ -111,12 +111,18 @@ fail while a generated file is stale.
   literal.
 - **A framework recipe.** The recipe of a framework is
   `packages/typed_openapi/doc/frameworks/<name>.md`, and its advice in the
-  tool is `NormalizerRule.hint(code, preset)`. A recipe ends with a
+  core is `NormalizerRule.hint(code, preset)` (in
+  `packages/typed_openapi_core/lib/src/normalize/rules/`). A recipe ends with a
   `## Sources` section that has at least three links, `Checked on <date>.`
   and `Versions:`; a hint states only what a source says.
   `framework_recipes_test` also fails when a code that fires on a corpus spec
   of that framework (`framework:` in `corpus.yaml`, counts in `corpus.lock`)
-  is not named in the recipe. A finding whose text offers an override also
+  is not named in the recipe. For a **new** framework, also add a `Preset`
+  value (`project_config.dart`; the config schema, `lint --preset` and
+  `framework:` take their names from it), its marks in `PresetDetector`, a
+  `framework:` entry on at least one spec of `corpus.yaml` (and `detects:
+  false` where its marks are absent), and its recipe file in the `recipes`
+  map of `framework_recipes_test`. A finding whose text offers an override also
   needs a `backendFix:` that does not (`backend_fixes_test`), because
   `typed_openapi lint` never tells a backend team to write an override.
 

@@ -375,7 +375,9 @@ Engine folders under `packages/typed_openapi_core/lib/src/`, generator folders
   (`JsonSchema` of the test support package) and the loader, which must
   agree. The published files are `packages/typed_openapi/schema/*.json`,
   written by `docs.dart`. A new config or overrides key goes into the catalog;
-  the reader, the schema and the tests follow from it.
+  the allowed keys (`ConfigKeys`), the schema and the schema tests follow
+  from it; the code that reads the value is still written by hand, through
+  `ConfigSources.resolve`.
 - `extensions/` (M13) - `SpecExtension` (`key`, `appliesTo`, `effect`,
   `example`, `diagnostics`) and `SpecExtensions`, the registry of the `x-`
   keys the generator reads (`enumVarnames`, `enumDescriptions`, `triState`;
@@ -1053,7 +1055,7 @@ Rules of the pipeline:
 
 The corpus, golden tests and fuzz of M11 (R15.3, R15.4); the tool uses the
 public APIs of the core and the generator only. Its network use is the `SpecCache` download
-(`corpus fetch`, and `update`/`check` for what the cache lacks) and the
+(`corpus fetch`, and `update`/`check`/`lint` for what the cache lacks) and the
 `dart pub get` of `PackageGate`; no test touches the network.
 
 - `corpus.yaml` pins each public spec (a URL fixed to a commit, a tag or a
@@ -1078,8 +1080,8 @@ public APIs of the core and the generator only. Its network use is the `SpecCach
   must write nothing; `PackageGate` runs `dart analyze --fatal-infos` and
   `dart format --set-exit-if-changed`; then a `RoundTrip` per client),
   `CorpusLock`/`ClientLock`, and the commands `fetch` (a name that is
-  neither a spec nor a schema is a usage error, exit 64), `update` and
-  `check`, which `CorpusCli` runs with `semver`. `update` and `check` give
+  neither a spec nor a schema is a usage error, exit 64), `update`,
+  `check` and `lint`, which `CorpusCli` runs with `semver`. `update` and `check` give
   an unknown name the same usage error; `update` takes no names (a partial
   update would drop the other clients from the lock), and `check` with
   names compares only the clients of those specs (`CorpusLock.only`).
@@ -1160,8 +1162,10 @@ public APIs of the core and the generator only. Its network use is the `SpecCach
   scripts are tested on Linux by `release_scripts_test` through
   `ReleaseFixture`; `release_readiness_test` pins the pub.dev metadata, an
   example and the CHANGELOG head of each published package, and
-  `lockstep_versions_test` the shared version. The macOS and Windows jobs and
-  `release.yml` itself have never run on GitHub.
+  `lockstep_versions_test` the shared version. The macOS, Windows and arm64 builds of
+  `release.yml`, and `release.yml` itself, have never run on GitHub (they run
+  only on a real `typed_openapi-v*` tag), and the CI jobs added in M13 (`docs`,
+  `actionlint`, `binary` and the corpus lint step) have not run there yet.
 - `lib/src/roundtrip/` - `ExampleReader` (the `example`/`examples` of each
   declaration's schema and of JSON responses, at the locations the IR
   names; what it cannot read, such as a `null`, a `$ref` to another file, an
