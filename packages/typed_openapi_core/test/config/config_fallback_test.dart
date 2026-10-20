@@ -7,34 +7,37 @@ import 'package:typed_openapi_core/src/diagnostics/diagnostic_code.dart';
 import 'package:typed_openapi_core/src/overrides/override_set.dart';
 import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
-List<ClientConfig> load(String text, DiagnosticBag bag) =>
-    ConfigLoader(bag).load(TempDir().write('c.yaml', text))!.clients;
+/// Builders and readers the fallback tests share.
+class Fallbacks {
+  /// Creates the reader.
+  const Fallbacks();
 
-String config(String defaults, String client) =>
-    '''
-defaults:
-$defaults
-clients:
-  a:
-    input: a.json
-    output: lib/a
-$client
-''';
+  List<ClientConfig> load(String text, DiagnosticBag bag) =>
+      ConfigLoader(bag).load(TempDir().write('c.yaml', text))!.clients;
 
-List<(String, String?)> problems(DiagnosticBag bag) => [
-  for (final d in bag.all)
-    if (d.code == DiagnosticCode.configInvalid) (d.message, d.pointer?.value),
-];
+  String config(String defaults, String client) =>
+      'defaults:\n$defaults\n'
+      'clients:\n'
+      '  a:\n'
+      '    input: a.json\n'
+      '    output: lib/a\n'
+      '$client\n';
+
+  List<(String, String?)> problems(DiagnosticBag bag) => [
+    for (final d in bag.all)
+      if (d.code == DiagnosticCode.configInvalid) (d.message, d.pointer?.value),
+  ];
+}
 
 void main() {
   test('an invalid client value falls back to the value of defaults', () {
     final bag = DiagnosticBag();
-    final clients = load(
-      config('  union: structural', '    union: maybe'),
+    final clients = const Fallbacks().load(
+      const Fallbacks().config('  union: structural', '    union: maybe'),
       bag,
     );
     expect(clients.single.generation.union, UnionMode.structural);
-    expect(problems(bag), [
+    expect(const Fallbacks().problems(bag), [
       (
         '"union" must be one of raw, structural. '
             'The value from "defaults" (structural) is used.',
@@ -45,11 +48,14 @@ void main() {
 
   test('an invalid client value and an invalid default use the built-in', () {
     final bag = DiagnosticBag();
-    final clients = load(config('  union: nope', '    union: maybe'), bag);
+    final clients = const Fallbacks().load(
+      const Fallbacks().config('  union: nope', '    union: maybe'),
+      bag,
+    );
     expect(clients.single.generation.union, UnionMode.raw);
     const message =
         '"union" must be one of raw, structural. The default (raw) is used.';
-    expect(problems(bag), [
+    expect(const Fallbacks().problems(bag), [
       (message, '#/clients/a/union'),
       (message, '#/defaults/union'),
     ]);
@@ -57,28 +63,30 @@ void main() {
 
   test('an invalid default alone is reported at defaults', () {
     final bag = DiagnosticBag();
-    final clients = load(
-      config('  tri_state: nope', '    union: structural'),
+    final clients = const Fallbacks().load(
+      const Fallbacks().config('  tri_state: nope', '    union: structural'),
       bag,
     );
     expect(clients.single.generation.triState, TriStateRule.patch);
-    expect(problems(bag).map((p) => p.$2), ['#/defaults/tri_state']);
+    expect(const Fallbacks().problems(bag).map((p) => p.$2), [
+      '#/defaults/tri_state',
+    ]);
   });
 
   test('a valid client value wins and nothing is reported', () {
     final bag = DiagnosticBag();
-    final clients = load(
-      config('  exhaustive: false', '    exhaustive: true'),
+    final clients = const Fallbacks().load(
+      const Fallbacks().config('  exhaustive: false', '    exhaustive: true'),
       bag,
     );
     expect(clients.single.generation.exhaustive, isTrue);
-    expect(problems(bag), isEmpty);
+    expect(const Fallbacks().problems(bag), isEmpty);
   });
 
   test('every setting falls back to defaults, key by key', () {
     final bag = DiagnosticBag();
-    final clients = load(
-      config(
+    final clients = const Fallbacks().load(
+      const Fallbacks().config(
         '''
   group_by: path
   tri_state: optional
@@ -111,7 +119,7 @@ void main() {
     expect(generation.streamReconnect, isTrue);
     expect(
       [
-        for (final (message, at) in problems(bag))
+        for (final (message, at) in const Fallbacks().problems(bag))
           if (message.contains('The value from "defaults" (')) at,
       ],
       unorderedEquals([
@@ -132,18 +140,30 @@ void main() {
 
   test('the message names a built-in that is not a plain word', () {
     final bag = DiagnosticBag();
-    load(config('  {}', '    naming: {stream_suffix: bad suffix}'), bag);
-    expect(problems(bag).single.$1, endsWith('The default (Stream) is used.'));
+    const Fallbacks().load(
+      const Fallbacks().config(
+        '  {}',
+        '    naming: {stream_suffix: bad suffix}',
+      ),
+      bag,
+    );
+    expect(
+      const Fallbacks().problems(bag).single.$1,
+      endsWith('The default (Stream) is used.'),
+    );
   });
 
   test('an invalid include filter falls back to the filter of defaults', () {
     final bag = DiagnosticBag();
-    final clients = load(
-      config('  include: {tags: [a]}', '    include: {tags: nope}'),
+    final clients = const Fallbacks().load(
+      const Fallbacks().config(
+        '  include: {tags: [a]}',
+        '    include: {tags: nope}',
+      ),
       bag,
     );
     expect(clients.single.generation.include.tags.map((t) => t.value), ['a']);
-    expect(problems(bag), [
+    expect(const Fallbacks().problems(bag), [
       (
         '"tags" must be a list of strings. '
             'The value from "defaults" (tags: a) is used.',
@@ -154,20 +174,23 @@ void main() {
 
   test('an invalid exclude filter without defaults leaves no filter', () {
     final bag = DiagnosticBag();
-    final clients = load(
-      config('  {}', '    exclude: {paths: nope}'),
+    final clients = const Fallbacks().load(
+      const Fallbacks().config('  {}', '    exclude: {paths: nope}'),
       bag,
     );
     expect(clients.single.generation.exclude.paths, isEmpty);
     expect(
-      problems(bag).single.$1,
+      const Fallbacks().problems(bag).single.$1,
       endsWith('The default (no filter) is used.'),
     );
   });
 
   test('an unknown key of a rejected filter is still reported', () {
     final bag = DiagnosticBag();
-    load(config('  {}', '    include: {tags: nope, bogus: 1}'), bag);
+    const Fallbacks().load(
+      const Fallbacks().config('  {}', '    include: {tags: nope, bogus: 1}'),
+      bag,
+    );
     expect(
       bag.all.map((d) => d.pointer?.value),
       containsAll(['#/clients/a/include/tags', '#/clients/a/include/bogus']),
@@ -178,8 +201,11 @@ void main() {
     'an unknown key of a filter a valid client filter shadows is silent',
     () {
       final bag = DiagnosticBag();
-      load(
-        config('  include: {bogus: 1}', '    include: {tags: [a]}'),
+      const Fallbacks().load(
+        const Fallbacks().config(
+          '  include: {bogus: 1}',
+          '    include: {tags: [a]}',
+        ),
         bag,
       );
       expect(bag.all.map((d) => d.pointer?.value), isEmpty);
@@ -188,8 +214,8 @@ void main() {
 
   test('naming settings fall back to defaults', () {
     final bag = DiagnosticBag();
-    final clients = load(
-      config(
+    final clients = const Fallbacks().load(
+      const Fallbacks().config(
         '  naming: {group: "{Tag}Service", default_group: Misc, '
             'client: MyClient, operation_prefix: "^api_"}',
         '    naming: {group: Nope, default_group: class, client: lower, '
@@ -202,7 +228,7 @@ void main() {
     expect(generation.defaultGroup, 'Misc');
     expect(generation.clientClass, 'MyClient');
     expect(generation.operationPrefix?.pattern, '^api_');
-    final messages = problems(bag).map((p) => p.$1);
+    final messages = const Fallbacks().problems(bag).map((p) => p.$1);
     expect(
       messages,
       containsAll([
@@ -223,7 +249,7 @@ void main() {
       contains(endsWith('The value from "defaults" ({Tag}Service) is used.')),
     );
     expect(
-      [for (final (_, at) in problems(bag)) at],
+      [for (final (_, at) in const Fallbacks().problems(bag)) at],
       unorderedEquals([
         for (final key in [
           'group',
@@ -238,15 +264,15 @@ void main() {
 
   test('errors and types messages show the value of defaults', () {
     final bag = DiagnosticBag();
-    load(
-      config(
+    const Fallbacks().load(
+      const Fallbacks().config(
         '  errors: {default_schema: Problem}\n  types: {number: int}',
         '    errors: {default_schema: ""}\n    types: {number: x}',
       ),
       bag,
     );
     expect(
-      problems(bag).map((p) => p.$1),
+      const Fallbacks().problems(bag).map((p) => p.$1),
       unorderedEquals([
         '"default_schema" must be a non-empty string. '
             'The value from "defaults" (Problem) is used.',
@@ -258,15 +284,15 @@ void main() {
 
   test('errors and types messages show the applied value', () {
     final bag = DiagnosticBag();
-    load(
-      config(
+    const Fallbacks().load(
+      const Fallbacks().config(
         '  {}',
         '    errors: {default_schema: ""}\n    types: {number: x}',
       ),
       bag,
     );
     expect(
-      problems(bag).map((p) => p.$1),
+      const Fallbacks().problems(bag).map((p) => p.$1),
       unorderedEquals([
         '"default_schema" must be a non-empty string. '
             'The default (none) is used.',
@@ -277,12 +303,15 @@ void main() {
 
   test('equal suffixes revert both to the defaults, as before', () {
     final bag = DiagnosticBag();
-    final clients = load(
-      config('  {}', '    naming: {input_suffix: Same, patch_suffix: Same}'),
+    final clients = const Fallbacks().load(
+      const Fallbacks().config(
+        '  {}',
+        '    naming: {input_suffix: Same, patch_suffix: Same}',
+      ),
       bag,
     );
     expect(clients.single.generation.inputSuffix, 'Input');
     expect(clients.single.generation.patchSuffix, 'Patch');
-    expect(problems(bag), hasLength(1));
+    expect(const Fallbacks().problems(bag), hasLength(1));
   });
 }

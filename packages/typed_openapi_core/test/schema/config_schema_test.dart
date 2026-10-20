@@ -113,7 +113,10 @@ void main() {
   });
 
   test('severity: a fixed code is only raised, a config code is absent', () {
-    final levels = _properties(const ConfigSchema().toJson(), 'severity');
+    final levels = const _SchemaReader().properties(
+      const ConfigSchema().toJson(),
+      'severity',
+    );
     List<Object?> of(DiagnosticCode code) =>
         (levels[code.id]! as Map)['enum']! as List<Object?>;
     expect(of(DiagnosticCode.parseError), ['error']);
@@ -126,7 +129,10 @@ void main() {
   });
 
   test('severity: the schema lists every code that can be changed', () {
-    final levels = _properties(const ConfigSchema().toJson(), 'severity');
+    final levels = const _SchemaReader().properties(
+      const ConfigSchema().toJson(),
+      'severity',
+    );
     for (final code in DiagnosticCode.values) {
       if (DiagnosticCode.fixedCodes.contains(code)) continue;
       for (final name in [code.id, code.slug]) {
@@ -140,7 +146,10 @@ void main() {
   });
 
   test('rules: every normalizer rule, and nothing else', () {
-    final rules = _properties(const ConfigSchema().toJson(), 'rules');
+    final rules = const _SchemaReader().properties(
+      const ConfigSchema().toJson(),
+      'rules',
+    );
     expect(rules.keys.toSet(), Normalizer.ruleNames);
     final first = Normalizer.ruleNames.first;
     expectAgreement(
@@ -201,8 +210,17 @@ void main() {
   });
 }
 
-Map<String, Object?> _properties(Map<String, Object?> schema, String key) {
-  final definitions = schema['definitions']! as Map<String, Object?>;
-  final shared = definitions[key]! as Map<String, Object?>;
-  return shared['properties']! as Map<String, Object?>;
+/// Reads schemas for the tests above.
+class _SchemaReader {
+  /// Creates the reader.
+  const _SchemaReader();
+
+  Map<String, Object?> properties(
+    Map<String, Object?> schema,
+    String key,
+  ) {
+    final definitions = schema['definitions']! as Map<String, Object?>;
+    final shared = definitions[key]! as Map<String, Object?>;
+    return shared['properties']! as Map<String, Object?>;
+  }
 }

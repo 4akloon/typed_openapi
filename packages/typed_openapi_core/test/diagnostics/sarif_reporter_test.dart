@@ -153,7 +153,7 @@ void main() {
     expect(DiagnosticCode.parseError.docsAnchor, 'toa001-parse-error');
     expect(
       DiagnosticCode.missingPathParameter.helpUri,
-      'https://github.com/4akLoon/typed_openapi/blob/main/packages/'
+      'https://github.com/4akloon/typed_openapi/blob/main/packages/'
       'typed_openapi/doc/diagnostics.md#toa501-missing-path-parameter',
     );
   });

@@ -1414,6 +1414,6 @@ enum DiagnosticCode {
 
   /// The link to this code's entry in the diagnostics reference.
   String get helpUri =>
-      'https://github.com/4akLoon/typed_openapi/blob/main/packages/'
+      'https://github.com/4akloon/typed_openapi/blob/main/packages/'
       'typed_openapi/doc/diagnostics.md#$docsAnchor';
 }

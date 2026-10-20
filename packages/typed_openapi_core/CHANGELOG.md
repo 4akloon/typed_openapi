@@ -1,6 +1,12 @@
 ## 0.1.0 - Unreleased
 
 ### Added
+- SARIF rules carry a `helpUri` that links the code's entry in the generated
+  diagnostics catalog (`DiagnosticCode.helpUri`) (M13).
+- `Diagnostic.backendFix`, the fix at the source of the spec, which `lint`
+  prints in place of the config fix; `SpecLinter` runs the checks of a single
+  spec without a config and `PresetDetector` guesses the framework preset
+  from the spec (M13).
 - The package, split from `typed_openapi` (M12b): the engine that loads,
   normalizes and checks an OpenAPI spec and builds the semantic IR, with
   the diagnostics, the config, the baseline, the API snapshot and the diff.

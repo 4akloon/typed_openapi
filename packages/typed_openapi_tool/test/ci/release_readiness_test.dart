@@ -4,10 +4,16 @@ import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:yaml/yaml.dart';
 
-/// The parsed `pubspec.yaml` of the package [name] next to the tool.
-YamlMap pubspecOf(String name) =>
-    loadYaml(File(p.join('..', name, 'pubspec.yaml')).readAsStringSync())
-        as YamlMap;
+/// Reads the pubspecs of the packages next to the tool.
+class _Pubspecs {
+  /// Creates the reader.
+  const _Pubspecs();
+
+  /// The parsed `pubspec.yaml` of the package [name].
+  YamlMap of(String name) =>
+      loadYaml(File(p.join('..', name, 'pubspec.yaml')).readAsStringSync())
+          as YamlMap;
+}
 
 void main() {
   const published = [
@@ -25,10 +31,10 @@ void main() {
   for (final name in published) {
     group(name, () {
       test('has the pub.dev metadata', () {
-        final pubspec = pubspecOf(name);
+        final pubspec = const _Pubspecs().of(name);
         expect(
           pubspec['issue_tracker'],
-          'https://github.com/4akLoon/typed_openapi/issues',
+          'https://github.com/4akloon/typed_openapi/issues',
         );
         expect(pubspec['repository'], isNotNull);
         final topics = (pubspec['topics'] as YamlList).cast<String>();
@@ -49,15 +55,18 @@ void main() {
         final changelog = File(
           p.join('..', name, 'CHANGELOG.md'),
         ).readAsStringSync();
-        expect(changelog, startsWith('## ${pubspecOf(name)['version']}'));
+        expect(
+          changelog,
+          startsWith('## ${const _Pubspecs().of(name)['version']}'),
+        );
       });
     });
   }
 
   test('dev dependencies on a sibling ask for its version too', () {
-    final version = pubspecOf('typed_openapi')['version'];
+    final version = const _Pubspecs().of('typed_openapi')['version'];
     for (final name in published) {
-      final dev = pubspecOf(name)['dev_dependencies'] as YamlMap;
+      final dev = const _Pubspecs().of(name)['dev_dependencies'] as YamlMap;
       for (final other in published.where((other) => other != name)) {
         if (!dev.containsKey(other)) continue;
         expect(dev[other], '^$version', reason: '$name dev-depends on $other');
@@ -67,7 +76,8 @@ void main() {
 
   test('a published package asks no unpublished package for anything', () {
     for (final name in published) {
-      final dependencies = pubspecOf(name)['dependencies'] as YamlMap;
+      final dependencies =
+          const _Pubspecs().of(name)['dependencies'] as YamlMap;
       for (final other in unpublished) {
         expect(dependencies.containsKey(other), isFalse, reason: name);
       }

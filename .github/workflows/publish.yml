@@ -10,7 +10,7 @@
 # Auth is pub.dev's GitHub Actions OIDC flow (no secrets): `dart-lang/setup-dart`
 # mints a temporary pub.dev credential from the job's `id-token`. For it to be
 # accepted, each package must have automated publishing enabled on pub.dev
-# (Admin → Automated publishing): repository `4akLoon/typed_openapi`, tag pattern
+# (Admin → Automated publishing): repository `4akloon/typed_openapi`, tag pattern
 # `<package>-v{{version}}`, and the `pub.dev` GitHub environment required.
 # NOTE: pub.dev only allows this for *existing* packages — the very first
 # version of each package has to be published manually (`dart pub publish`).

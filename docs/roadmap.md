@@ -261,7 +261,7 @@ skipped client has no counts.
 | The fuzz does not use hostile component names (a `$ref` pointer needs `~1` and percent escaping) and checks server URLs and defaults only with `LeakCheck` | when needed |
 | GitHub Actions are pinned by tag, not by commit SHA (a download has a time limit and a 256 MiB size cap) | before 1.0 (no secrets in CI, `permissions: contents: read`) |
 | The generated code needs `JsonReader.constant` to return a `bool`, but no gate ties the runtime version to the generator version ("release together" is CHANGELOG prose only) | After 0.1.0: the four packages are versioned in lockstep (`lockstep_versions_test` and the guides), so a generated client and the client core it was built for share a version; a gate is needed only when they can differ |
-| The SARIF rule help does not link a diagnostics catalog | M13 (the catalog is the generated documentation) |
+| The SARIF rule help does not link a diagnostics catalog | done in M13: `helpUri` links the generated catalog |
 | `workflows_test.dart` still carries top-level helpers, against "no top-level functions except `main`" | when that file is touched |
 | `size_limits.dart` (three copies) ends an expression-bodied member by a heuristic: a multi-line string at low indentation can end it early (a false negative only) | when needed |
 

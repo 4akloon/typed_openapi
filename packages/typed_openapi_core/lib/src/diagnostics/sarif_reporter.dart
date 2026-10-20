@@ -77,7 +77,7 @@ final class SarifReporter implements DiagnosticReporter {
           'tool': {
             'driver': {
               'name': 'typed_openapi',
-              'informationUri': 'https://github.com/4akLoon/typed_openapi',
+              'informationUri': 'https://github.com/4akloon/typed_openapi',
               'rules': [for (final code in codes) _rule(code)],
             },
           },

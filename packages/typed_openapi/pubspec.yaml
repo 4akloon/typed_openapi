@@ -4,9 +4,9 @@ description: >
   named normalizer rules, diagnostics with stable codes, overrides,
   open enums, unions with an unknown variant and typed errors.
 version: 0.1.0
-homepage: https://github.com/4akLoon/typed_openapi
-repository: https://github.com/4akLoon/typed_openapi
-issue_tracker: https://github.com/4akLoon/typed_openapi/issues
+homepage: https://github.com/4akloon/typed_openapi
+repository: https://github.com/4akloon/typed_openapi
+issue_tracker: https://github.com/4akloon/typed_openapi/issues
 topics:
   - openapi
   - swagger

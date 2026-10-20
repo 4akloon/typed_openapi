@@ -18,7 +18,7 @@ final class ConfigSchema {
 
   /// Where the published copy of the schema is.
   static const url =
-      'https://raw.githubusercontent.com/4akLoon/typed_openapi/main/packages/'
+      'https://raw.githubusercontent.com/4akloon/typed_openapi/main/packages/'
       'typed_openapi/schema/typed_openapi.schema.json';
 
   static const _writer = SchemaWriter();

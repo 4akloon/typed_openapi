@@ -45,6 +45,8 @@ errors: 0, warnings: 0, infos: 1, baselined: 2
 
 `--format sarif` prints SARIF 2.1.0 for [GitHub code scanning](https://docs.github.com/en/code-security/code-scanning). Alerts then appear in the Security tab and on pull requests, and a fixed problem closes its alert.
 
+Every rule has a `helpUri` that links its entry in [the diagnostics catalog](diagnostics.md), and the rule help of a `lint` run speaks of the fix at the source of the spec.
+
 ```sh
 dart run typed_openapi check --format sarif > typed_openapi.sarif
 ```

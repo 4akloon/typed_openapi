@@ -108,7 +108,7 @@ one that depends on it: `typed_openapi` needs `typed_openapi_core` and
 
 Then, for each of the four packages on pub.dev (Admin, Automated
 publishing), enable publishing from GitHub Actions: repository
-`4akLoon/typed_openapi`, tag pattern `<package>-v{{version}}` (for example
+`4akloon/typed_openapi`, tag pattern `<package>-v{{version}}` (for example
 `typed_openapi_core-v{{version}}`), and require the GitHub environment
 `pub.dev` (the environment must exist in the repository settings).
 `.github/workflows/publish.yml` publishes with the OIDC credential on a tag
@@ -156,7 +156,7 @@ Check the release:
    directory, run `sha256sum --check --ignore-missing SHA256SUMS`, unpack the
    archive and run `./typed_openapi --help`.
 3. In a scratch repository, a workflow that uses the action
-   (`4akLoon/typed_openapi/action@typed_openapi-v<version>` with
+   (`4akloon/typed_openapi/action@typed_openapi-v<version>` with
    `version: <version>` and a `spec:` file) runs `lint` and reports.
 
 If a build fails: fix the cause on `main` through a pull request, then move
@@ -214,7 +214,7 @@ the SchemaStore repository, is `node ./cli.js check --schema-name=<name>.json`
 from the catalog may need a different check; verify.
 
 Text for the pull request: "Add typed_openapi, the configuration file of an
-OpenAPI to Dart client generator (https://github.com/4akLoon/typed_openapi).
+OpenAPI to Dart client generator (https://github.com/4akloon/typed_openapi).
 The schema is generated from the key catalog the tool reads and a test in
 the repository checks that the tool accepts what the schema accepts and
 rejects what it rejects. The URLs are pinned to the release tag. The
@@ -227,7 +227,7 @@ by the maintainer at release.
 
 - **`helpUri` is not pinned to a tag.** `DiagnosticCode.helpUri` (core)
   hard-codes
-  `https://github.com/4akLoon/typed_openapi/blob/main/packages/typed_openapi/doc/diagnostics.md#...`,
+  `https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi/doc/diagnostics.md#...`,
   so SARIF logs written by any version link to the guide on `main`. Decide
   at release whether to pin it to the tag (the URL would then need the
   version at build time) or accept that old logs follow `main`.

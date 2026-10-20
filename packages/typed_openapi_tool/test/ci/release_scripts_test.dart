@@ -11,9 +11,16 @@ import '../helpers/release_fixture.dart';
 
 const _archive = 'typed_openapi-0.1.0-linux-x64.tar.gz';
 
-List<String> _listing(String archive) {
-  final result = Process.runSync('tar', ['-tzf', archive]);
-  return (result.stdout as String).trim().split('\n')..sort();
+/// Reads release archives.
+class _Archives {
+  /// Creates the reader.
+  const _Archives();
+
+  /// The sorted entry names of [archive].
+  List<String> listing(String archive) {
+    final result = Process.runSync('tar', ['-tzf', archive]);
+    return (result.stdout as String).trim().split('\n')..sort();
+  }
 }
 
 void main() {
@@ -21,7 +28,7 @@ void main() {
     test('packs the executable and the licence with a matching checksum', () {
       final fixture = ReleaseFixture()..pack('linux-x64');
       final archive = p.join(fixture.releaseDirectory, _archive);
-      expect(_listing(archive), ['LICENSE', 'typed_openapi']);
+      expect(const _Archives().listing(archive), ['LICENSE', 'typed_openapi']);
       final bytes = File(archive).readAsBytesSync();
       expect(
         File('$archive.sha256').readAsStringSync(),
@@ -35,7 +42,7 @@ void main() {
         fixture.releaseDirectory,
         'typed_openapi-0.1.0-windows-x64.tar.gz',
       );
-      expect(_listing(archive), contains('typed_openapi.exe'));
+      expect(const _Archives().listing(archive), contains('typed_openapi.exe'));
     });
 
     test('with the wrong number of arguments exits 64', () {

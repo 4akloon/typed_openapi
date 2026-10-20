@@ -4,9 +4,9 @@ description: >
   defects with named rules, checks them with stable diagnostic codes and
   builds the semantic IR that the Dart client generator writes from.
 version: 0.1.0
-homepage: https://github.com/4akLoon/typed_openapi
-repository: https://github.com/4akLoon/typed_openapi
-issue_tracker: https://github.com/4akLoon/typed_openapi/issues
+homepage: https://github.com/4akloon/typed_openapi
+repository: https://github.com/4akloon/typed_openapi
+issue_tracker: https://github.com/4akloon/typed_openapi/issues
 topics:
   - openapi
   - swagger
