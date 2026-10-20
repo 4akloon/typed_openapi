@@ -12,6 +12,7 @@ const _plain = '''
 openapi: 3.1.0
 info: {title: Plain, version: '1'}
 paths: {}
+bogus: 1
 ''';
 
 const _fastapi = '''
@@ -72,11 +73,39 @@ $plainFramework  marked:
   test('prints a line per spec, the counts by framework and exits 0', () async {
     final run = await lint(corpus(), []);
     expect(run.code, 0, reason: run.err);
-    expect(run.out, contains('spec'));
-    expect(run.out, contains('detected'));
-    expect(run.out, contains('plain'));
-    expect(run.out, contains('By framework:'));
-    expect(run.out, contains('Detection: 2 of 2 as the corpus expects.'));
+    expect(run.out, '''
+spec    framework  detected  errors  warnings  infos
+plain     generic   generic       0         1      0  TOA110:1
+marked    fastapi   fastapi       0         0      0
+
+By framework:
+framework  specs  detected  errors  warnings  infos
+generic        1         1       0         1      0
+fastapi        1         1       0         0      0
+
+Detection: 2 of 2 as the corpus expects.
+''');
+  });
+
+  test('a spec with detects: false is expected as generic and not counted '
+      'as detected in its framework', () async {
+    final file = corpus(
+      plainFramework: '    framework: aspnet\n    detects: false\n',
+    );
+    final run = await lint(file, []);
+    expect(run.code, 0, reason: run.err);
+    expect(run.out, '''
+spec    framework  detected  errors  warnings  infos
+plain      aspnet   generic       0         1      0  TOA110:1
+marked    fastapi   fastapi       0         0      0
+
+By framework:
+framework  specs  detected  errors  warnings  infos
+fastapi        1         1       0         0      0
+aspnet         1         0       0         1      0
+
+Detection: 2 of 2 as the corpus expects.
+''');
   });
 
   test('a framework the detector misses fails and names why', () async {

@@ -18,6 +18,11 @@ final class CorpusLintReport {
   ];
 
   /// The whole report.
+  ///
+  /// In the `By framework:` table a spec belongs to the framework the corpus
+  /// declares, and its `detected` column counts the specs detected as that
+  /// framework; a spec with `detects: false` is expected as generic, so it
+  /// is not counted there, while the `Detection:` line counts it as expected.
   String format() {
     final lines = <String>[
       ..._table(

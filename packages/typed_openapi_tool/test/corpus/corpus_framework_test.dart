@@ -57,6 +57,7 @@ $extra''';
       '    framework: nestjs\n    detects: 3\n',
       '    framework: nestjs\n    detects: maybe\n',
       '    detects: false\n',
+      '    framework: generic\n    detects: false\n',
     ]) {
       expect(() => read(extra), throwsA(isA<CorpusException>()), reason: extra);
     }
