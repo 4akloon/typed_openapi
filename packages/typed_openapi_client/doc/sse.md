@@ -312,11 +312,11 @@ on resume. Choose a value above the server's heartbeat interval.
 **Handshake timeout.** `handshakeTimeout` bounds the wait for the response
 headers of each attempt, the first and every reconnection. When it runs out
 the request is cancelled and the attempt fails with a `TransportException`
-of kind `timeout`: a failed attempt is retried like a refused connection (kind `timeout` is
-transient; see [Retrying the opening](#retrying-the-opening)). Only when the
-opening is not retried is a failed first attempt the `TransportError` the
-method returns. It does not
-limit how long the body takes.
+of kind `timeout`: a failed attempt is retried like a refused connection
+(kind `timeout` is transient; see
+[Retrying the opening](#retrying-the-opening)). Only when the opening is not
+retried is a failed first attempt the `TransportError` the method returns. It
+does not limit how long the body takes.
 
 **Unbounded attempts.** `maxAttempts: null` reconnects until the call is
 cancelled, the listener cancels or the server answers with a final status
@@ -505,9 +505,9 @@ An `Exception` thrown by `retryWhen` counts as final; an `Error` propagates.
 
 ### Retry-After
 
-On a failure that is retried (the classifier, or `retryWhen`, accepts it) and carries `Retry-After` (delta-seconds or an HTTP
-date in IMF-fixdate, RFC 850 or asctime form) the delay of that attempt is the
-larger of the header and the backoff delay, jitter included. A date is
+On a failure that is retried (the classifier, or `retryWhen`, accepts it)
+and carries `Retry-After` (delta-seconds or an HTTP date in IMF-fixdate,
+RFC 850 or asctime form) the delay of that attempt is the larger of the header and the backoff delay, jitter included. A date is
 measured against the response's `Date` header, else the clock. `maxDelay`
 does not cap it, and it does not stick to later attempts. A value that
 cannot be parsed, or that is zero or past, falls back to the backoff.
