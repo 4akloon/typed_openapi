@@ -143,6 +143,8 @@ export 'src/model/spec_node.dart'
 export 'src/normalize/normalizer.dart' show NormalizedSpec, Normalizer;
 export 'src/normalize/normalizer_rule.dart'
     show Finding, NormalizerRule, RuleContext;
+export 'src/normalize/preset_detection.dart' show PresetDetection;
+export 'src/normalize/preset_detector.dart' show PresetDetector;
 export 'src/normalize/spec_edit.dart' show EditOperation, SpecEdit;
 export 'src/overrides/override_loader.dart' show OverrideLoader;
 export 'src/overrides/override_set.dart'
