@@ -57,6 +57,15 @@ void main() {
     expect(settings.idleTimeout, const Duration(seconds: 60));
   });
 
+  test('maxAttempts: every negative value counts as omitted', () {
+    expect(SseSettings.of(const SseOptions(maxAttempts: -2)).maxAttempts, 5);
+    expect(const SseOptions(maxAttempts: -2).maxAttempts, isNull);
+    final merged = const SseOptions(maxAttempts: 2).merge(
+      const SseOptions(maxAttempts: -2),
+    );
+    expect(merged.maxAttempts, 2);
+  });
+
   test('merge: an omitted maxAttempts inherits the default, unlimited '
       'included', () {
     const call = SseOptions(reconnect: true);

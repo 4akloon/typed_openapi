@@ -40,15 +40,17 @@ final class SseOptions {
     this.wait,
     this.retryOpen,
     this.retryWhen,
-  }) : maxAttempts = maxAttempts == _omitted ? null : maxAttempts,
-       _hasMaxAttempts = maxAttempts != _omitted,
+  }) : maxAttempts = maxAttempts != null && maxAttempts < 0
+           ? null
+           : maxAttempts,
+       _hasMaxAttempts = maxAttempts == null || maxAttempts >= 0,
        assert(
          jitter == null || (jitter >= 0 && jitter <= 1),
          'jitter is a ratio from 0 to 1',
        );
 
-  /// The value of an omitted [maxAttempts]; a negative number is no attempt
-  /// count, so it is documented as "omitted".
+  /// The value of an omitted [maxAttempts]; any negative number is no
+  /// attempt count and counts as omitted.
   static const int _omitted = -1;
 
   /// Whether the stream reconnects; null keeps the operation's setting
