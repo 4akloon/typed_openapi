@@ -1,9 +1,7 @@
-import 'dart:io';
-
-import 'package:path/path.dart' as p;
 import 'package:typed_openapi/src/config/generation_config.dart';
 import 'package:typed_openapi/src/snapshot/api_snapshot.dart';
 import 'package:typed_openapi/src/snapshot/snapshot_builder.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 import 'ir_fixture.dart';
 
@@ -19,11 +17,11 @@ ApiSnapshot snapshotOf(
   return SnapshotBuilder(root).build(fixture.build());
 }
 
-/// The API snapshot of the fixture spec [name] in `test/emit/fixtures`.
+/// The API snapshot of the fixture spec [name] in `typed_openapi_test_support/lib/fixtures`.
 ApiSnapshot snapshotOfFixture(
   String name, {
   GenerationConfig generation = const GenerationConfig(),
 }) => snapshotOf(
-  File(p.join('test', 'emit', 'fixtures', name)).readAsStringSync(),
+  Fixtures.read(name),
   generation: generation,
 );

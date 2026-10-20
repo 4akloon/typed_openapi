@@ -5,8 +5,7 @@ import 'package:typed_openapi/src/diagnostics/severity.dart';
 import 'package:typed_openapi/src/model/operation.dart';
 import 'package:typed_openapi/src/overrides/override_loader.dart';
 import 'package:typed_openapi/src/overrides/override_set.dart';
-
-import '../helpers/temp_dir.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 void main() {
   OverrideSet? parse(

@@ -3,8 +3,7 @@ import 'package:test/test.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_bag.dart';
 import 'package:typed_openapi/src/diagnostics/json_pointer.dart';
 import 'package:typed_openapi/src/load/spec_loader.dart';
-
-import '../helpers/temp_dir.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 void main() {
   final doc = SpecLoader(DiagnosticBag()).parse(

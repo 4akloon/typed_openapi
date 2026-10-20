@@ -9,8 +9,7 @@ import 'package:typed_openapi/src/parse/parse_context.dart';
 import 'package:typed_openapi/src/resolve/ref_resolver.dart';
 import 'package:typed_openapi/src/resolve/spec_documents.dart';
 import 'package:typed_openapi/src/resolve/spec_model.dart';
-
-import '../helpers/temp_dir.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 void main() {
   late TempDir dir;

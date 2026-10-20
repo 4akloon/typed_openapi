@@ -12,8 +12,7 @@ import 'package:typed_openapi/src/normalize/normalizer.dart';
 import 'package:typed_openapi/src/overrides/override_loader.dart';
 import 'package:typed_openapi/src/overrides/override_snippet.dart';
 import 'package:typed_openapi/src/resolve/spec_reader.dart';
-
-import '../helpers/temp_dir.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 /// Normalizes [spec] with the overrides in [overrides], if any.
 DiagnosticBag _normalize(String spec, {String? overrides}) {

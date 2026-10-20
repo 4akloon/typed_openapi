@@ -1,9 +1,9 @@
 import 'dart:convert';
 
 import 'package:test/test.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 import '../helpers/cli_runner.dart';
-import '../helpers/temp_dir.dart';
 
 void main() {
   test('ir prints the IR of clients as JSON and is hidden', () async {

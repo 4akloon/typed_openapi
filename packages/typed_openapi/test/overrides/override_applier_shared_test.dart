@@ -1,9 +1,9 @@
 import 'package:test/test.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
 import 'package:typed_openapi/src/diagnostics/json_pointer.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 import '../helpers/override_run.dart';
-import '../helpers/temp_dir.dart';
 
 const _header30 = OverrideRun.header30;
 

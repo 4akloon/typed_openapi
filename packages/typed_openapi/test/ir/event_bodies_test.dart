@@ -1,9 +1,7 @@
-import 'dart:io';
-
-import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:typed_openapi/src/ir/dart_type.dart';
 import 'package:typed_openapi/src/ir/ir.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 import '../helpers/ir_fixture.dart';
 
@@ -17,9 +15,7 @@ BodyKind _kind(OperationIr operation) => operation.successes.single.kind;
 
 void main() {
   final fixture = IrFixture(
-    File(
-      p.join('test', 'emit', 'fixtures', 'event_bodies.yaml'),
-    ).readAsStringSync(),
+    Fixtures.read('event_bodies.yaml'),
   );
   final ir = fixture.build();
   final methods = _methods(ir);
@@ -86,9 +82,7 @@ void main() {
 
   test('sse method none keeps the bytes of an operation that offers both', () {
     final none = IrFixture(
-      File(
-        p.join('test', 'emit', 'fixtures', 'event_bodies.yaml'),
-      ).readAsStringSync(),
+      Fixtures.read('event_bodies.yaml'),
       overrides: 'operations:\n  download: {sse: {method: none}}\n',
     );
     final download = _methods(none.build())['download']!;

@@ -11,8 +11,7 @@ import 'package:typed_openapi/src/diagnostics/severity.dart';
 import 'package:typed_openapi/src/load/openapi_version.dart';
 import 'package:typed_openapi/src/load/spec_loader.dart';
 import 'package:typed_openapi/src/normalize/normalizer.dart';
-
-import '../helpers/temp_dir.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 void main() {
   /// Checks [spec] written to `api.yaml` (and [files] next to it) and

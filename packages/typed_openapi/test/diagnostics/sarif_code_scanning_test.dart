@@ -6,9 +6,9 @@ import 'package:typed_openapi/src/diagnostics/diagnostic_bag.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
 import 'package:typed_openapi/src/diagnostics/json_pointer.dart';
 import 'package:typed_openapi/src/diagnostics/sarif_reporter.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 import '../helpers/cli_runner.dart';
-import '../helpers/temp_dir.dart';
 
 /// The single run of the SARIF log [text].
 Map<String, Object?> runOf(String text) =>

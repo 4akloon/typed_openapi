@@ -4,8 +4,7 @@ import 'package:typed_openapi/src/config/generation_config.dart';
 import 'package:typed_openapi/src/config/project_config.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_bag.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
-
-import '../helpers/temp_dir.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 void main() {
   List<ClientConfig> load(String text, DiagnosticBag bag) =>

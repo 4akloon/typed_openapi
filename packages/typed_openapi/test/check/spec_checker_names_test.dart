@@ -10,8 +10,7 @@ import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
 import 'package:typed_openapi/src/diagnostics/display_paths.dart';
 import 'package:typed_openapi/src/ir/ir.dart';
 import 'package:typed_openapi/src/ir/name_lock.dart';
-
-import '../helpers/temp_dir.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 const _spec = r'''
 openapi: 3.0.3

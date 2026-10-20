@@ -2,9 +2,9 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 import '../helpers/cli_runner.dart';
-import '../helpers/temp_dir.dart';
 
 void main() {
   group('baseline', () {

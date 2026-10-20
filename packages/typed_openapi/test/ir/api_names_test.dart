@@ -8,9 +8,9 @@ import 'package:typed_openapi/src/diagnostics/severity.dart';
 import 'package:typed_openapi/src/ir/api_names.dart';
 import 'package:typed_openapi/src/ir/ir.dart';
 import 'package:typed_openapi/src/ir/ir_builder.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 import '../helpers/ir_fixture.dart';
-import '../helpers/temp_dir.dart';
 
 ClientIr build(IrFixture fixture) => IrBuilder(
   fixture.diagnostics,

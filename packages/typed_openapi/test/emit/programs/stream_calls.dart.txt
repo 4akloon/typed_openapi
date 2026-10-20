@@ -1,5 +1,5 @@
 // A program that calls the event-stream methods of the client generated
-// from test/emit/fixtures/chat.yaml through a Dio whose adapter answers from
+// from typed_openapi_test_support/lib/fixtures/chat.yaml through a Dio whose adapter answers from
 // memory, and prints what was sent and every item each stream gave.
 // The test reads what the program prints, so it prints.
 // ignore_for_file: avoid_print

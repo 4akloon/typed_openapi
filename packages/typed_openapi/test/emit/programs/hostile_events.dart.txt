@@ -1,5 +1,5 @@
 // A program that feeds the events of the client generated from
-// test/emit/fixtures/events_hostile.yaml, whose event names collide or are
+// typed_openapi_test_support/lib/fixtures/events_hostile.yaml, whose event names collide or are
 // hostile, through a Dio whose adapter answers from memory, and prints the
 // variant each one reached. The test reads what the program prints.
 // ignore_for_file: avoid_print

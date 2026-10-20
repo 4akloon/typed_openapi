@@ -12,8 +12,7 @@ import 'package:typed_openapi/src/normalize/normalizer_rule.dart';
 import 'package:typed_openapi/src/normalize/rules/drop_invalid_default.dart';
 import 'package:typed_openapi/src/normalize/rules/path_param_rules.dart';
 import 'package:typed_openapi/src/normalize/spec_edit.dart';
-
-import '../helpers/temp_dir.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 /// Renames the title "old" to "new": a fix that holds after one pass.
 final class _RenameTitle extends NormalizerRule {

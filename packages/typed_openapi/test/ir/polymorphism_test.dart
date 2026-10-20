@@ -4,10 +4,10 @@ import 'package:typed_openapi/src/config/config_loader.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_bag.dart';
 import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
 import 'package:typed_openapi/src/ir/ir.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 import '../helpers/ir_fixture.dart';
 import '../helpers/mapping.dart';
-import '../helpers/temp_dir.dart';
 
 T declaration<T extends Declaration>(ClientIr ir, String name) =>
     ir.declarations.firstWhere((d) => d.name == name) as T;

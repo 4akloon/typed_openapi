@@ -1,5 +1,5 @@
 // A program that calls the clients generated from
-// test/emit/fixtures/discriminator_scalars.yaml and optional_constant.yaml
+// typed_openapi_test_support/lib/fixtures/discriminator_scalars.yaml and optional_constant.yaml
 // through a Dio whose adapter answers from memory, and prints what each
 // call decoded and what it writes back.
 // The test reads what the program prints, so it prints.

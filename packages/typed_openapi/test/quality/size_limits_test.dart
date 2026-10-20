@@ -10,8 +10,7 @@
 library;
 
 import 'package:test/test.dart';
-
-import '../helpers/size_limits.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 /// Files over their limit, with the number of lines (`wc -l`) they had when
 /// they were listed. Keep the entries sorted.

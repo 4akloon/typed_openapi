@@ -30,6 +30,8 @@ dev_dependencies:
   # A test checks that the generator reads path templates as the runtime
   # does.
   typed_openapi_client: ^0.0.1
+  # The fixture specs and helpers the tests share (not published).
+  typed_openapi_test_support: any
   # Tests compare the composer with package:yaml's loader.
   yaml: ^3.1.4
 

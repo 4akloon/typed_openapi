@@ -6,10 +6,10 @@ import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
 import 'package:typed_openapi/src/ir/ir.dart';
 import 'package:typed_openapi/src/overrides/override_loader.dart';
 import 'package:typed_openapi/src/overrides/override_set.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 import '../helpers/ir_fixture.dart';
 import '../helpers/mapping.dart';
-import '../helpers/temp_dir.dart';
 
 UnionDecl union(ClientIr ir, String name) =>
     ir.declarations.firstWhere((d) => d.name == name) as UnionDecl;
