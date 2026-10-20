@@ -1,9 +1,11 @@
+import 'package:typed_openapi_core/typed_openapi_core.dart';
+
 import 'generated_notice.dart';
 
 /// The fixed prose around the entries of the diagnostics reference.
 final class DiagnosticsIntro {
   /// Creates the prose for a reference of [count] codes.
-  const DiagnosticsIntro(this.count);
+  DiagnosticsIntro(this.count);
 
   /// The number of codes in the reference.
   final int count;
@@ -28,7 +30,8 @@ A code never changes meaning once released. The slug (`missing-path-parameter`) 
 
 ''';
 
-  static const _severity = '''
+  String get _severity =>
+      '''
 ## Severity and levels
 
 Every code has a default severity: `error`, `warning` or `info`. Errors make `check` and `generate` exit with `1`; warnings and infos do not (see [CLI](cli.md#exit-codes)). A client changes the level of a code in `severity:` of the config, by id or by slug, and `off` removes the code from the report (see [Configuration](configuration.md#severity)).
@@ -48,7 +51,7 @@ Three groups of codes are limited:
 
 | Group | Codes | Rule |
 | --- | --- | --- |
-| Config codes | TOA901, TOA902, TOA903, TOA904 | The level cannot be changed at all, because the config is read before levels apply. Setting one is TOA902. Marked `config` below. |
+| Config codes | $_configCodes | The level cannot be changed at all, because the config is read before levels apply. Setting one is TOA902. Marked `config` below. |
 | Fixed codes | Marked `fixed` below | The level can be raised but not lowered, and they cannot be turned off. |
 | Everything else | All other codes | Any of `error`, `warning`, `info`, `off`. |
 
@@ -60,19 +63,38 @@ The "Default" column is the severity before `severity:` applies.
 
 ''';
 
+  /// The ids of the config codes, such as `TOA901, TOA902`.
+  String get _configCodes {
+    final ids = [for (final code in DiagnosticCode.configCodes) code.id]
+      ..sort();
+    return ids.join(', ');
+  }
+
+  /// Codes with a number from [from] to [to], as `TOA001-TOA022`.
+  static String _span(int from, int to) {
+    final ids = [
+      for (final code in DiagnosticCode.values)
+        if (int.parse(code.id.substring(3)) case final n
+            when n >= from && n <= to)
+          code.id,
+    ]..sort();
+    return ids.length == 1 ? ids.single : '${ids.first}-${ids.last}';
+  }
+
   /// The sections after the last area.
-  String get closing => '''
+  String get closing =>
+      '''
 ## Where codes are reported
 
 | Stage | Codes | Reported by |
 | --- | --- | --- |
-| Reading files | TOA001-TOA022 | `check`, `generate`, `baseline` |
+| Reading files | ${_span(0, 99)} | `check`, `generate`, `baseline` |
 | Normalizer rules | TOA106, TOA201-TOA208, TOA211, TOA301, TOA303, TOA401, TOA402, TOA501-TOA504, TOA601 | one of the normalizer rules, see [Presets and rules](presets_and_rules.md) |
 | Mapping to Dart | the other TOA2xx-TOA6xx | the IR builder while it names and types the client |
-| Overrides | TOA560, TOA800-TOA809 | the overrides file, see [Overrides](overrides.md) |
-| Baseline | TOA820-TOA823 | see [Baseline](baseline.md) |
-| Generate | TOA830-TOA835 | see [Generated output](generate_output.md) and [the API lock](cli.md#the-api-lock) |
-| Config | TOA901-TOA904 | see [Configuration](configuration.md) |
+| Overrides | ${_span(560, 560)}, ${_span(800, 819)} | the overrides file, see [Overrides](overrides.md) |
+| Baseline | ${_span(820, 829)} | see [Baseline](baseline.md) |
+| Generate | ${_span(830, 839)} | see [Generated output](generate_output.md) and [the API lock](cli.md#the-api-lock) |
+| Config | ${_span(900, 999)} | see [Configuration](configuration.md) |
 
 ## See also
 

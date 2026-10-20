@@ -58,4 +58,10 @@ void main() {
     expect(code, 64);
     expect(err, contains('Usage:'));
   });
+
+  test('--root without a command is a usage error', () async {
+    final (code, _, err) = await run(['--root', TempDir().path]);
+    expect(code, 64);
+    expect(err, contains('Usage:'));
+  });
 }

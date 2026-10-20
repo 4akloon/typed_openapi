@@ -56,4 +56,28 @@ void main() {
     }
     expect(text, contains('(diagnostics.md#toa351-enum-varnames-invalid)'));
   });
+
+  test('the stage table matches the codes of the enum', () {
+    int number(DiagnosticCode c) => int.parse(c.id.substring(3));
+    String row(String stage) =>
+        page.split('\n').singleWhere((l) => l.startsWith('| $stage |'));
+    expect(row('Reading files'), contains('| TOA001-TOA022 |'));
+    expect(row('Overrides'), contains('| TOA560, TOA800-TOA809 |'));
+    expect(row('Baseline'), contains('| TOA820-TOA823 |'));
+    expect(row('Generate'), contains('| TOA830-TOA835 |'));
+    expect(row('Config'), contains('| TOA901-TOA904 |'));
+    expect(row('Config codes'), contains('TOA901, TOA902, TOA903, TOA904'));
+    final all = DiagnosticCode.values.map(number).toSet();
+    // The prose list of the normalizer rules: each code must still exist.
+    final listed = RegExp(r'TOA(\d{3})(?:-TOA(\d{3}))?').allMatches(
+      row('Normalizer rules').split('|')[2],
+    );
+    for (final m in listed) {
+      final from = int.parse(m.group(1)!);
+      final to = int.parse(m.group(2) ?? m.group(1)!);
+      expect(all.where((n) => n >= from && n <= to), isNotEmpty);
+      expect(all, contains(from));
+      expect(all, contains(to));
+    }
+  });
 }

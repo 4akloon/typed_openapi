@@ -76,6 +76,9 @@ enum DiagnosticArea {
   /// The area that holds [code].
   static DiagnosticArea of(DiagnosticCode code) {
     final hundred = int.parse(code.id[3]);
-    return values.singleWhere((area) => area.hundred == hundred);
+    for (final area in values) {
+      if (area.hundred == hundred) return area;
+    }
+    throw StateError('${code.id} belongs to no DiagnosticArea.');
   }
 }
