@@ -6,6 +6,14 @@ set -euo pipefail
 command=${INPUT_COMMAND:-lint}
 args=("$command" --format "${INPUT_FORMAT:-github-actions}")
 
+for option in PRESET FAIL_ON CONFIG FORMAT; do
+  name=INPUT_$option
+  if [[ ${!name:-} == -* ]]; then
+    echo "::error::The '$(echo "$option" | tr 'A-Z_' 'a-z-')' input must not start with '-'."
+    exit 64
+  fi
+done
+
 case "$command" in
   lint)
     if [ -z "${INPUT_SPEC:-}" ]; then
@@ -14,7 +22,7 @@ case "$command" in
     fi
     [ -z "${INPUT_PRESET:-}" ] || args+=(--preset "$INPUT_PRESET")
     [ -z "${INPUT_FAIL_ON:-}" ] || args+=(--fail-on "$INPUT_FAIL_ON")
-    args+=("$INPUT_SPEC")
+    args+=(-- "$INPUT_SPEC")
     ;;
   check)
     if [ -n "${INPUT_SPEC:-}" ] || [ -n "${INPUT_PRESET:-}" ] || [ -n "${INPUT_FAIL_ON:-}" ]; then

@@ -44,8 +44,12 @@ base="$releases/typed_openapi-v$version"
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
+# Real releases are fetched over https only; a test overrides the URL.
+proto=(--proto '=https' --tlsv1.2)
+[ -z "${TYPED_OPENAPI_RELEASES:-}" ] || proto=()
+
 download() {
-  curl --fail --silent --show-error --location --output "$2" "$1" \
+  curl ${proto[@]+"${proto[@]}"} --fail --silent --show-error --location --output "$2" "$1" \
     || fail "could not download $1"
 }
 download "$base/$asset" "$work/$asset"
@@ -62,10 +66,7 @@ fi
 [ "$actual" = "$expected" ] || fail "$asset does not match SHA256SUMS"
 
 mkdir -p "$directory"
-tar -xzf "$work/$asset" -C "$directory"
+if [ "$os" = windows ]; then binary=typed_openapi.exe; else binary=typed_openapi; fi
+tar -xzf "$work/$asset" -C "$directory" "$binary" LICENSE
 
-if [ "$os" = windows ]; then
-  echo "$directory/typed_openapi.exe"
-else
-  echo "$directory/typed_openapi"
-fi
+echo "$directory/$binary"

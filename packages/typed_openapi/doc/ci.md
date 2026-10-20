@@ -225,7 +225,7 @@ Each archive holds the executable (`typed_openapi.exe` on Windows) and the `LICE
 | `executable` | | A binary to run instead of downloading one. |
 | `working-directory` | `.` | Where the command runs. |
 
-`version` or `executable` is required: there is no "latest", so a pipeline never changes under you. The first release is not out yet, so this step does not run until it is. The scripts and the action are tested on Linux with a fake executable and validated by actionlint; macOS and Windows are first exercised by the first release.
+A relative `executable` is resolved against `working-directory`. `SHA256SUMS` is published in the same release as the archives, so the check detects a corrupt or mismatched download but does not protect against a compromised release. `version` or `executable` is required: there is no "latest", so a pipeline never changes under you. The first release is not out yet, so this step does not run until it is. The scripts and the action are tested on Linux with a fake executable and validated by actionlint; macOS and Windows are first exercised by the first release.
 
 ## See also
 

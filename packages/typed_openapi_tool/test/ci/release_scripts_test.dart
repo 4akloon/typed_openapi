@@ -65,6 +65,24 @@ void main() {
       expect(result.stderr, contains('does not match SHA256SUMS'));
     });
 
+    test('with the wrong number of arguments exits 64', () {
+      final result = Process.runSync(
+        p.absolute('..', '..', 'action', 'install.sh'),
+        ['0.1.0'],
+      );
+      expect(result.exitCode, 64);
+    });
+
+    test('refuses an archive that SHA256SUMS does not list', () {
+      final fixture = ReleaseFixture()..pack('linux-x64');
+      File(
+        p.join(fixture.releaseDirectory, 'SHA256SUMS'),
+      ).writeAsStringSync('');
+      final result = fixture.install('Linux', 'X64');
+      expect(result.exitCode, 1);
+      expect(result.stderr, contains('is not in SHA256SUMS'));
+    });
+
     test('refuses a target the release does not build', () {
       final fixture = ReleaseFixture()..pack('linux-x64');
       final result = fixture.install('Windows', 'ARM64');
@@ -92,7 +110,7 @@ void main() {
       expect(
         (result.stdout as String).trim(),
         'fake typed_openapi lint --format text --preset nestjs '
-        '--fail-on warning openapi.json',
+        '--fail-on warning -- openapi.json',
       );
     });
 
@@ -115,8 +133,31 @@ void main() {
       });
       expect(
         (result.stdout as String).trim(),
-        r'fake typed_openapi lint --format text my spec; echo $HOME.yaml',
+        r'fake typed_openapi lint --format text -- my spec; echo $HOME.yaml',
       );
+    });
+
+    test('puts -- before the spec and ignores empty preset and level', () {
+      final result = ReleaseFixture().run({
+        'INPUT_COMMAND': 'lint',
+        'INPUT_SPEC': '-x.yaml',
+        'INPUT_PRESET': '',
+        'INPUT_FAIL_ON': '',
+      });
+      expect(
+        (result.stdout as String).trim(),
+        'fake typed_openapi lint --format text -- -x.yaml',
+      );
+    });
+
+    test('refuses an option value that starts with a dash', () {
+      final result = ReleaseFixture().run({
+        'INPUT_COMMAND': 'lint',
+        'INPUT_SPEC': 'a.yaml',
+        'INPUT_PRESET': '--help',
+      });
+      expect(result.exitCode, 64);
+      expect(result.stdout, startsWith('::error::'));
     });
 
     test('refuses lint without a spec and check with lint options', () {

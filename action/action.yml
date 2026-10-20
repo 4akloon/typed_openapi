@@ -10,10 +10,10 @@ inputs:
     description: The OpenAPI file to lint. Required for lint, refused for check.
     default: ""
   preset:
-    description: The framework preset for lint (for example nestjs, fastapi, spring, aspnet).
+    description: The framework preset for lint (generic, nestjs, fastapi, springdoc or aspnet).
     default: ""
   fail-on:
-    description: The lowest severity that fails lint (error, warning or info).
+    description: The lowest severity that fails lint (error or warning).
     default: ""
   config:
     description: The typed_openapi config for check.
@@ -45,6 +45,10 @@ runs:
         VERSION: ${{ inputs.version }}
       run: |
         if [ -n "$EXECUTABLE" ]; then
+          if [ ! -x "$EXECUTABLE" ]; then
+            echo "::error::The 'executable' input '$EXECUTABLE' is not an executable file."
+            exit 64
+          fi
           path=$(cd "$(dirname "$EXECUTABLE")" && pwd)/$(basename "$EXECUTABLE")
         elif [ -n "$VERSION" ]; then
           path=$("$ACTION_PATH/install.sh" "$VERSION" "$RUNNER_OS" "$RUNNER_ARCH" "$RUNNER_TEMP/typed_openapi")
