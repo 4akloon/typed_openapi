@@ -153,13 +153,17 @@ Exit code `0` means no errors, `1` errors, `64` a usage error and `78` a config 
 | Guide | What it covers |
 | --- | --- |
 | [Getting started](doc/getting_started.md) | From a spec to a working call, step by step. |
-| [Command line](doc/cli.md) | `check`, `generate`, `baseline`, formats and exit codes. |
+| [Command line](doc/cli.md) | `check`, `generate`, `diff`, `baseline`, `lint`, formats and exit codes. |
 | [Configuration](doc/configuration.md) | Every key of `typed_openapi.yaml`. |
 | [Overrides](doc/overrides.md) | Fixing a spec by location without editing it. |
 | [Presets and rules](doc/presets_and_rules.md) | The normalizer rules and the framework presets. |
 | [Diagnostics](doc/diagnostics.md) | Every `TOAnnn` code and how to fix it. |
 | [Baseline](doc/baseline.md) | Accepting existing problems; adopting on a large spec. |
 | [Generated output](doc/generate_output.md) | Ownership, manifest, locks, determinism, what to commit. |
+| [Support matrix](doc/support_matrix.md) | What is read, generated, reported or not supported, with the test that shows it. |
+| [Automation](doc/automation.md) | `diff` and `generate --locked` in a Makefile, a git hook and CI. |
+| [Client for a 3.1 service](doc/client_for_grund.md) | A 3.1 sample from install to a typed call, and what happens when the spec changes. |
+| [Extensions](doc/extensions.md) | The `x-` keys that are read. |
 | [CI](doc/ci.md) | Exit codes, annotations, SARIF, a GitHub Actions workflow. |
 | [The generated client](doc/generated/overview.md) | Layout and shape of what `generate` writes. |
 | [Models](doc/generated/models.md), [Enums](doc/generated/enums.md), [Unions](doc/generated/unions.md) | Generated types. |

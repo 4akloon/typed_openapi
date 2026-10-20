@@ -159,9 +159,36 @@ What each step does:
 | `upload-sarif` | Sends it to code scanning (needs `security-events: write`; on a private repository, code scanning must be enabled). |
 | `generate` + `git status` | Fails when the committed client is not what the spec generates. |
 
+## Lint in the backend pipeline
+
+The team that writes the spec can run [`lint`](cli.md#lint) on the file its framework generates, with no `typed_openapi.yaml` and no generated code. This job belongs in the backend repository. It assumes the build step before it leaves the spec at `openapi.json`; it needs the Dart SDK to run `typed_openapi`, which the backend project does not otherwise need, and `dart pub global activate --source path` from a checkout is how the CLI is installed until it is published (see [Command line](cli.md)).
+
+```yaml
+name: openapi-lint
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Build or export openapi.json here, with the backend's own tool.
+      - uses: dart-lang/setup-dart@v1
+      - run: dart pub global activate --source path path/to/typed_openapi/packages/typed_openapi
+      - run: typed_openapi lint --format github-actions --fail-on error openapi.json
+```
+
+Findings are annotations on the changed files, and an error fails the job; warnings are shown but do not. Use `--fail-on warning` once the spec has none, and `--preset` to name the framework when detection says `generic`. The command line and the annotations were run; the workflow file itself was not run on GitHub.
+
 ## See also
 
 - [Command line](cli.md): options and exit codes.
 - [Baseline](baseline.md): accepting existing problems.
 - [Generated output](generate_output.md): ownership, locks and what to commit.
 - [Diagnostics](diagnostics.md): every code and how to set its level.
+- [Automation](automation.md): `diff`, `generate --locked`, a Makefile and a git hook.

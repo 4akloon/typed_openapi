@@ -179,25 +179,38 @@ Without a `baseline:` key on any selected client, `baseline create` prints `No c
 
 ## lint
 
-`lint` checks one spec file for the team that writes it, with no config and no generated code. It names the framework (detected from the spec, or set with `--preset`), then lists each finding with the change to make at the source and, for a framework, its recipe. It never suggests a generator override.
+`typed_openapi lint [options] <spec>` checks one spec file for the team that writes it, with no config and no generated code. It names the framework (detected from the spec, or set with `--preset`), then lists each finding with the change to make at the source and, for a framework, its recipe. It never suggests a generator override.
+
+`lint` runs the loader, the version check and the normalizer's rules, and stops there: it builds no IR, so the codes of the IR stage (naming, unions, media types, operations that cannot be generated) belong to [`check`](#check). It exits `0` however many findings there are, so a first run in a pipeline cannot break it; `--fail-on` turns the findings into a gate.
 
 | Option | What it does |
 | --- | --- |
 | `--preset` | The backend framework (`generic`, `nestjs`, `fastapi`, `springdoc`, `aspnet`), instead of detecting it. |
-| `--format` | `text` (default), `json`, `sarif` or `github-actions`. With `json` and `sarif` the preset line goes to stderr, so stdout stays one document. |
+| `--format` | `text` (default), `json`, `sarif` or `github-actions`. |
 | `--fail-on` | `error` or `warning`: exit `1` when a finding of that level or a more serious one is found. By default `lint` only reports and exits `0`. |
+
+The first line says which preset was used and why (`Preset: nestjs (detected: ...)`, `Preset: nestjs (set with --preset).`, or `Preset: generic (no framework marks were found; ...)`). In the `text` format it is the first line of stdout; in `json`, `sarif` and `github-actions` it goes to stderr, so stdout stays one document that a tool can read. This is the start of the output of `lint` on the fixture `backend_defects.yaml`, a spec with several defects and no framework marks (the full run reports `errors: 3, warnings: 11, infos: 1`):
 
 ```text
 $ typed_openapi lint openapi.yaml
-Preset: nestjs (detected: info.contact is the empty object that the DocumentBuilder of @nestjs/swagger writes).
-warning TOA202 array-without-items: This array has no "items", which OpenAPI 3.0 requires; its elements are read as any JSON value.
-  --> openapi.yaml:24:10
-  at #/components/schemas/Arr
-  fix: Add "items" with the element schema at the source. In NestJS, give the element type: @ApiProperty({ type: [Item] }).
-errors: 0, warnings: 1, infos: 0
+Preset: generic (no framework marks were found; name the framework with --preset to get its recipes).
+warning TOA501 missing-path-parameter: The path /pets/{petId} has {petId}, but this operation declares no path parameter "petId"; it is added as a required string path parameter.
+  --> openapi.yaml:6:7
+  at #/paths/~1pets~1{petId}/get
+  fix: Declare each at the source as {name: <name>, in: path, required: true, schema: {type: string}}.
+info TOA503 missing-operation-id: This operation has no "operationId", so its method is named after the HTTP method and the path.
+  --> openapi.yaml:6:7
+  at #/paths/~1pets~1{petId}/get
+  fix: Add an operationId at the source.
+error TOA502 path-parameter-not-in-template: Path parameter "id" is not in the path template /pets/{petId}.
+  --> openapi.yaml:7:11
+  at #/paths/~1pets~1{petId}/get/parameters/0
+  fix: Make the parameter name and the template variable the same at the source.
+...
+errors: 3, warnings: 11, infos: 1
 ```
 
-A spec that cannot be read exits `1`; a wrong option or other than one path exits `64`.
+`--fail-on error` on this spec exits `1` (it has three errors), and `--fail-on warning` exits `1` too. A spec that cannot be read is reported as an error (TOA004 for a missing file) and exits `1`; a wrong option value, a missing path or more than one path is a usage error, exit `64`.
 
 ## Exit codes
 
