@@ -16,7 +16,7 @@ suite for any transport. Security is metadata only, in
 `TransportRequest.operation` (`OperationInfo`; the Dio transport also puts it
 in `RequestOptions.extra`). `ProblemDetail` exists only as a Spring recipe.
 Since M12b the engine (read, normalize, check, the IR) is the package `typed_openapi_core`, and `typed_openapi` is the generator and CLI on top of it.
-Nothing is published. M12 (diff and lock file) is being planned.
+Nothing is published. M12 (diff and lock file) is implemented.
 
 ## Stages
 

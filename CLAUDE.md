@@ -10,7 +10,7 @@ pub workspace with seven pure-Dart packages (no Flutter):
 
 - `packages/typed_openapi_core` - the engine (M12b): load, normalize, check,
   the IR, baselines, the API snapshot and the diff. A tool that only checks
-  specs (grund's CI) depends on it alone; no emitter, no `dart:io` output.
+  specs (grund's CI) depends on it alone; no emitter, no code output.
 - `packages/typed_openapi` - the generator: the emitters, the output writer
   and the CLI, on top of the core (it depends on `typed_openapi_core`). Never
   a runtime dependency of user apps.
