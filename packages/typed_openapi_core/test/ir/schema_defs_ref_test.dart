@@ -5,7 +5,7 @@ import '../helpers/mapping.dart';
 
 void main() {
   test(
-    'a \$ref into the \$defs of a schema is a typed field, no diagnostics',
+    r'a $ref into the $defs of a schema is a typed field, no diagnostics',
     () {
       final fixture = IrFixture(r'''
 openapi: 3.1.0
@@ -33,7 +33,7 @@ components:
     },
   );
 
-  test('a \$ref into \$defs at the document root resolves too', () {
+  test(r'a $ref into $defs at the document root resolves too', () {
     final fixture = IrFixture(r'''
 openapi: 3.1.0
 info: {title: t, version: "1"}

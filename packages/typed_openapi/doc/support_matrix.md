@@ -31,6 +31,7 @@ What `typed_openapi` does with each part of an OpenAPI document. The table is wr
 | PATCH bodies (tri-state) | Supported | A PATCH body field is absent, `null` or a value (`Patch<T>`); `tri_state` in the [configuration](configuration.md) sets the rule. | `packages/typed_openapi_core/test/ir/patch_models_test.dart` |
 | Constraints (`minLength`, `maximum`, `pattern` and the like) | Partly | Written into the doc comment of the field; the generated code does not validate them. | `packages/typed_openapi/test/emit/model_library_test.dart` |
 | `default` values | Partly | Written into the doc comment of the field or parameter; the client does not send or apply them. | `packages/typed_openapi/test/emit/model_library_test.dart` |
+| `$defs` and a `$ref` into them | Supported | A `$ref` to `#/components/schemas/X/$defs/Y` or to a `$defs` at the document root resolves to a model or a typed field with no diagnostic. | `packages/typed_openapi_core/test/ir/schema_defs_ref_test.dart` |
 | `const` | Supported | A property fixed by `const` is a constant of the model; an optional one is read with `JsonReader.constant`, so a decoded value is written back as it came. | `packages/typed_openapi/test/emit/optional_constant_test.dart`, `packages/typed_openapi_test_support/lib/fixtures/optional_constant.yaml` |
 
 ## Operations
