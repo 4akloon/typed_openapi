@@ -1,27 +1,52 @@
 # Handoff: where typed_openapi stands and how to continue
 
-Last updated: 2026-10-13 (M11 merged). Read this first on a new device or in a new Claude session. Session memory and scratch directories do not travel; this file and the repository hold everything needed.
+Last updated: 2026-10-20 (M13 done on its branch). Read this first on a new device or in a new Claude session. Session memory and scratch directories do not travel; this file and the repository hold everything needed.
 
 ## State
 
 | Milestone | Design | Plan | Code |
 |---|---|---|---|
-| M1–M11 | merged | merged | **merged** (M10: `bd1cdc3`, M11: `3842bd7`) |
-| M11b transport split: client core, `typed_openapi_dio`, conformance suite | [spec](specs/2026-10-19-m11b-transport-split-design.md) | [plan](plans/2026-10-19-m11b-transport-split.md) | implemented on branch `feat/m11b-transport-split` (merge pending) |
-| M12b core split: `typed_openapi_core` (engine), `typed_openapi` (generator, CLI), `typed_openapi_test_support` | [spec](specs/2026-10-20-m12b-core-split-design.md) | [plan](plans/2026-10-20-m12b-core-split.md) | merged into `main` (7de073d) |
-| M12 evolution: API snapshot, change report, name lock | [spec](specs/2026-10-13-m12-evolution-design.md) | brief ready: [briefs/m12-plan.md](briefs/m12-plan.md); M12's spec still says `typed_openapi_runtime` (the spec: "the runtime package's own API", line 77) and need updating to `typed_openapi_client` before planning | next |
-| M13 documentation, lint, distribution, 0.1.0 readiness | [spec](specs/2026-10-13-m13-product-design.md) | brief ready: [briefs/m13-plan.md](briefs/m13-plan.md) | after M12 |
+| M1–M11 | merged | merged | **merged** |
+| M11b transport split: client core, `typed_openapi_dio`, conformance suite | [spec](specs/2026-10-19-m11b-transport-split-design.md) | [plan](plans/2026-10-19-m11b-transport-split.md) | merged (`6d1d7d2`) |
+| M12 evolution: API snapshot, change report, name lock | [spec](specs/2026-10-13-m12-evolution-design.md) | [plan](plans/2026-10-13-m12-evolution.md) | merged (`92007c1`) |
+| M12b core split: `typed_openapi_core` (engine), `typed_openapi` (generator, CLI), `typed_openapi_test_support` | [spec](specs/2026-10-20-m12b-core-split-design.md) | [plan](plans/2026-10-20-m12b-core-split.md) | merged (`7de073d`) |
+| M13 documentation, lint, distribution, 0.1.0 readiness | [spec](specs/2026-10-13-m13-product-design.md) | [plan](plans/2026-10-20-m13-product.md) | **done on branch `feat/m13-product`; not merged until the owner says so** |
 
-**Other open work:**
-- **Branch `fix/m9-residuals`** (pushed to origin) fixes three parked findings of the M9 final re-review:
-  - a multipart media type with control characters;
-  - a `security` field that is not a list;
-  - date and date-time default ranges.
+## M13: where it stands
 
-  It was reviewed and is clean. It branches from `1f6ee26`. Merge it now that M11 is merged, and resolve the roadmap rows if they conflict.
-- **Branch `docs/full-guides`** (local, not pushed; worktree `../typed_openapi-docs`) holds the full user documentation: both package READMEs, the generator and runtime guides, the framework guides, the troubleshooting guide and the root README. It was checked against the code by two reviewers. Merging it is the user's decision; `README.ua.md` is not translated yet. Open points: `ApiLibrary` is not exported, so the programmatic API cannot write a whole client; `sse.md` and `event_streams.md` are over 300 lines; the real defects the writers found (TOA504 cannot be cleared by an override, the TOA203 hint is glued to the last line of a multi-line fix, `additionalProperties: true` makes no field, a `name` override on a multipart-only schema is ignored silently, internal id "R6.8" in the date-time decode hint, the `SseOptions.wait` doc comment says `Future.delayed`) are not fixed.
+M13 is implemented on `feat/m13-product` (worktree `.claude/worktrees/m13-impl`). Nothing is merged to `main`, pushed, tagged or published. It adds: the `x-` registry and the config and overrides key catalogs with their generated JSON Schemas; the generated diagnostics and extensions references (`docs.dart`); `typed_openapi lint` with preset detection; the support matrix, the four framework recipes, the automation and grund guides; the release binaries, the composite action and `release.yml`; release readiness for `0.1.0` (pubspecs, examples, CHANGELOGs headed `## 0.1.0 - Unreleased`). Counts of the last full run: core +1961, generator +364 ~1, client +305, dio +54, tool +280.
+
+**What remains for the owner** (all outward actions need an explicit yes):
+
+1. Merge `feat/m13-product` into `main` (or open the pull request).
+2. Release `0.1.0` by hand with [docs/release-checklist.md](../release-checklist.md): version and `Unreleased` headings, the "not on pub.dev" text (a grep step), the schema URLs pinned to the tag, the dry runs, the first publish by hand in the order core, client, `typed_openapi`, Dio, the tags, and the check of the binaries. Nothing in the repository tags or publishes by itself.
+3. The SchemaStore submission (the text is in the checklist) is the owner's outward action; it waits for the tag.
+4. The vendored YAML scanner: the linear-time fix is proposed upstream as dart-lang/tools#2658. A maintainer approved it, it waits for the upstream merge, and the CLA is signed. After the merge and a release, update `packages/typed_openapi_core/lib/src/load/yaml/` and the note in its `analysis_options.yaml`.
+5. Required status checks: the ruleset "Protect main" has none yet; add the CI job names (now also `docs`, `actionlint` and `binary`).
+
+**Verified and not verified.** Checked on Linux, by the test suites and by running the commands (the whole-branch gates run once more before the merge): the analyzer and formatter, the five test suites, `corpus check` and `corpus lint`, the fuzz, `docs.dart check`, the publish dry runs of the four packages, actionlint 1.7.12 (a pinned container image), `package.sh`, `install.sh` and `run.sh` through `release_scripts_test`. Never exercised: the macOS and Windows jobs of CI and `release.yml` (it runs only on a real `typed_openapi-v*` tag), the composite action on GitHub, `install.sh` on macOS, the pub.dev sign-in and automated-publishing flow, the git-dependency install text, and the Chrome suites for this branch (only pubspecs and examples changed in the client and Dio packages). The framework hints cite sources read once on 2026-10-20 (dotnet/aspnetcore#60469, `@nestjs/swagger` 12.0.0 notes); re-read them before the release. `helpUri` is a fixed URL on `main`, not pinned to a tag. The `README.ua.md` files lack the new guides.
+
+**Open questions of the plan (the default adopted in each case; the owner can overrule):**
+
+1. Lint reports the codes of the loader, the version detector and the normalizer; the IR-stage codes (TOA453, TOA553, TOA651 ...) need a config and belong to `check`.
+2. The NestJS `oneOf` plus `enum: [null]` shape (TOA303): its origin in `@nestjs/swagger` 11.2.0 was not verified in the source, so the hint states only what the 12.0.0 notes and the documentation say.
+3. The `JsonReader.constant` version gate is parked again after `0.1.0`, with the reason in the roadmap. Lockstep versions are pinned by `lockstep_versions_test`.
+4. The recipe-coverage test has no generic allowlist: every code that fires on a framework spec of the corpus is named in its recipe.
+5. Schema URLs point at `main` in the docs and are pinned to the tag at release (a checklist step). `schema/` ships in the pub tarball.
+6. CHANGELOG headings are `## 0.1.0 - Unreleased`; the checklist drops ` - Unreleased` at tagging.
+7. "Not on pub.dev yet" stays in the docs; flipping it is a checklist step with a grep command.
+8. The first publish is manual (automated publishing needs an existing package). For the first release only the tag `typed_openapi-v0.1.0` is pushed, for the binaries; its `publish.yml` run fails harmlessly.
+9. Every archive is a `.tar.gz`, Windows included.
+10. `linux-arm64` is cross-compiled on `ubuntu-24.04`; its smoke test is skipped.
+11. The action needs `version` or `executable`; there is no "latest".
+12. The SchemaStore overrides entry has an empty `fileMatch`, because the file can have any name.
+13. The Chrome suites were not rerun for the release-readiness task.
+14. The Swashbuckle corpus spec has no `ProblemDetails` schema, so it is not detected (`detects: false`); ASP.NET detection is 1 of 2, as the corpus expects.
+15. Upload size: the dry runs include each package's `test/` directory (about 455 KB for the core); whether a `.pubignore` should leave it out is undecided (see the checklist).
+
+**Other open work.**
 - **M11 plan, Task 14.** The SARIF schema is fetched and pinned by hash, never vendored, because its OASIS license does not clearly allow redistribution.
-- **Required status checks.** The GitHub ruleset "Protect main" has none yet. M11 is merged: add its CI job names as required checks.
+- **`README.ua.md`** is not translated for the new guides.
 
 ## How a milestone is done
 
@@ -52,7 +77,7 @@ This process worked for M8–M10. It uses the superpowers skills: `writing-plans
 
 ## Repository
 
-- **Public repo:** https://github.com/4akloon/typed_openapi. Only `main` and `fix/m9-residuals` are pushed.
+- **Public repo:** https://github.com/4akloon/typed_openapi. `main` is pushed; `feat/m13-product` is not.
 - **Ruleset "Protect main":**
   - deleting `main` and force-pushing to it are blocked;
   - changes go through a PR: 0 approvals required, review threads must be resolved, merge or squash only;

@@ -12,8 +12,11 @@ pub workspace with seven pure-Dart packages (no Flutter):
   the IR, baselines, the API snapshot and the diff. A tool that only checks
   specs (grund's CI) depends on it alone; no emitter, no code output.
 - `packages/typed_openapi` - the generator: the emitters, the output writer
-  and the CLI, on top of the core (it depends on `typed_openapi_core`). Never
-  a runtime dependency of user apps.
+  and the CLI (`check`, `generate`, `baseline`, `diff` and, for the team that
+  writes a spec, `lint`), on top of the core (it depends on
+  `typed_openapi_core`). Never a runtime dependency of user apps. It also
+  ships the two JSON Schemas under `schema/`, the guides under `doc/` and the
+  `example/`.
 - `packages/typed_openapi_client` - the client core, the only package
   generated clients depend on (typed errors, `Result`, `Patch`, JSON decoding
   with paths, encoders, request bodies, SSE, the `ClientTransport` contract).
@@ -21,13 +24,19 @@ pub workspace with seven pure-Dart packages (no Flutter):
   user's `Dio` (M11b).
 - `packages/typed_openapi_transport_tests` - the transport conformance suite
   and its loopback server. `publish_to: none`.
-- `packages/typed_openapi_tool` - repository tools (M11): the public-spec
-  corpus and the escaping fuzz. `publish_to: none`; nothing depends on it.
+- `packages/typed_openapi_tool` - repository tools (M11, M13): the
+  public-spec corpus and the escaping fuzz, and the docs generated from the
+  code (`bin/docs.dart`). `publish_to: none`; nothing depends on it.
 - `packages/typed_openapi_test_support` - the fixtures and test helpers the
-  core, the generator and the tool share (`TempDir`, `NormalizedFixture`, the
-  size-limit measuring code). `publish_to: none`; only dev dependencies use it.
+  core, the generator and the tool share (`TempDir`, `NormalizedFixture`,
+  `JsonSchema`, the size-limit measuring code). `publish_to: none`; only dev dependencies use it.
 
 Minimum SDK: Dart 3.10 (`>=3.10.0 <4.0.0`), also for generated code.
+
+The four published packages (core, client, `typed_openapi`, Dio transport)
+share one version, `0.1.0`, which is not tagged or published yet
+(`docs/release-checklist.md` is the way to release it); their CHANGELOGs say
+`## 0.1.0 - Unreleased`.
 
 ## Commands
 
@@ -45,10 +54,22 @@ cd packages/<package> && dart pub publish --dry-run # before publishing (the cor
 cd packages/typed_openapi_tool && dart test
 cd packages/typed_openapi_tool && dart format lib test bin # the same
 cd packages/typed_openapi_tool && dart run bin/corpus.dart check  # network on first fetch
+cd packages/typed_openapi_tool && dart run bin/corpus.dart lint   # lint the corpus, check the framework detection
+cd packages/typed_openapi_tool && dart run bin/docs.dart check    # the generated docs are current (exit 1 when stale)
+cd packages/typed_openapi_tool && dart run bin/docs.dart generate # rewrites the four generated files
+cd packages/typed_openapi && dart run bin/typed_openapi.dart lint <spec>  # a spec checked without a config
 cd packages/typed_openapi_tool && dart run bin/corpus.dart update # rewrites corpus.lock
 cd packages/typed_openapi_tool && dart run bin/fuzz.dart --seeds 200
 cd packages/typed_openapi_tool && dart run bin/corpus.dart semver --base main
 ```
+
+**Documentation that is generated.** Never edit `packages/typed_openapi/doc/diagnostics.md`,
+`doc/extensions.md` or `schema/*.json` by hand: change the doc comment of the
+`DiagnosticCode` entry, the `x-` registry or the key catalog and run
+`docs.dart generate` (a test and the CI job `docs` fail while a file is stale).
+The other guides under `doc/` are written by hand; a test checks their
+relative links, and the proofs of `support_matrix.md` and the `Sources` of the
+framework recipes.
 
 Git commands run from the repo root. Commit messages are Conventional Commits
 (`feat(typed_openapi): ...`, `refactor(...)`, `docs: ...`).
@@ -59,7 +80,11 @@ Engine folders under `packages/typed_openapi_core/lib/src/`, generator folders
 (`emit/`, `generate/`, `cli/`) under `packages/typed_openapi/lib/src/`, one folder per stage:
 
 - `diagnostics/` - `Diagnostic` (with `RelatedLocation`s, preset `hints` as
-  `(preset, text)` and fingerprint `args`), `DiagnosticCode` (stable `TOAnnn`
+  `(preset, text)`, fingerprint `args` and `backendFix`, the fix for a reader
+  who owns the spec and cannot use an override; `forBackend()` is the
+  diagnostic `lint` prints: its fix is `backendFix`, else the plain fix when it
+  names no override, `typed_openapi.yaml`, severity, baseline or `rules:`, else
+  none, and the hints stay), `DiagnosticCode` (stable `TOAnnn`
   catalog; the config codes TOA901-TOA904 cannot be changed at all, and
   `fixedCodes` - read errors, TOA801-TOA803, TOA820/821/823, TOA830-TOA835 -
   can be raised but not lowered), `Severity` (declared from most to least
@@ -83,8 +108,15 @@ Engine folders under `packages/typed_openapi_core/lib/src/`, generator folders
   rule descriptions and help (the help says whether the level can be
   lowered), a partial fingerprint per result, a region for every physical
   location, line 1 for a file without a position, and `defaultFile`, the
-  config `check` passes, for a result without a file),
-  `GitHubActionsReporter`, `ReportFormat`).
+  config `check` passes, for a result without a file; every rule has a
+  `helpUri`, `DiagnosticCode.helpUri`, a fixed URL on `main` to its entry in
+  `doc/diagnostics.md` (`docsAnchor`, such as `toa001-parse-error`), not
+  pinned to a tag; `isLint: true`, which `lint` passes, writes rule help that
+  says nothing of the config file),
+  `GitHubActionsReporter`, `ReportFormat`). The doc comment of every
+  `DiagnosticCode` entry is meaning paragraphs, then `Example:` and `Fix:`
+  paragraphs that end with a full stop: `doc/diagnostics.md` is generated
+  from them.
 - `load/` - `SpecLoader` reads JSON/YAML into a `SpecDocument` (plain tree,
   absolute file URI, source spans by JSON pointer, `valueAt(pointer)`,
   `withRoot`) through `YamlComposer`, which `ConfigLoader` uses too.
@@ -165,7 +197,20 @@ Engine folders under `packages/typed_openapi_core/lib/src/`, generator folders
   `Normalizer.rules` order) never change the model and never read text;
   presets only add framework recipes (`NormalizerRule.hint`). Config
   `rules: {<name>: false}` in `defaults` or a client turns a rule off
-  (unknown names are TOA903). Rule behaviour worth knowing:
+  (unknown names are TOA903). `PresetDetector.detect` (on the plain tree;
+  only `SpecLinter` uses it, a config's `preset` is never replaced) finds
+  the framework from its marks, as a `PresetDetection` (`preset`, `reason`,
+  `isFramework`), and only when no other framework's marks are there (marks
+  of two give `generic`, naming both; a value of the wrong type is no
+  mark): NestJS (an `operationId` shaped `<Name>Controller_<method>`, or
+  `info.contact` the empty object), FastAPI (`components.schemas` has
+  `HTTPValidationError` and `ValidationError`), springdoc (`info.title` is
+  `OpenAPI definition`, or a server described `Generated server url`),
+  ASP.NET (a `ProblemDetails` schema and a `text/json` media type
+  somewhere). `RuleContext.finding(backendFix:)` gives the fix without an
+  override for a finding that offers one; `backend_fixes_test` scans the
+  `finding(` calls of `rules/` and fails when one that mentions an override
+  has no `backendFix:`. Rule behaviour worth knowing:
   `bool-required-to-array` leaves a parent whose `required` is not a list
   alone (TOA201 without an edit); TOA401 is not reported when the
   discriminator holder itself requires the property; a TOA402 mapping value
@@ -288,17 +333,57 @@ Engine folders under `packages/typed_openapi_core/lib/src/`, generator folders
   is unchanged); a client's key wins over `defaults`,
   `naming`/`types`/`errors` key by key). `ConfigLoader` reads the file and
   its clients through `ConfigReader` (typed access, `severityAt`),
-  `ConfigKeys` (the allowed keys, TOA902) and `GenerationReader` (with
-  `CustomTypesReader`, `OperationFilterReader` and `TypeSettingsReader`:
-  `types.number` and `exhaustive`).
-  A bad value is TOA902 and the default is used: a `default_group` that is a
-  reserved word, equal `input_suffix` and `patch_suffix` (both go back to
-  their defaults). `operation_prefix` applies only where its match starts at
+  `ConfigKeys` (the allowed keys, TOA902; derived from `ConfigCatalog` in
+  `schema/`, so the loader and the JSON Schema cannot differ) and
+  `GenerationReader` (with `CustomTypesReader`, `NamingSettingsReader`,
+  `OperationFilterReader` and `TypeSettingsReader`: `types.number` and
+  `exhaustive`). `ConfigSources.resolve` reads a setting from the last of
+  the sources (`defaults` first, the client last) whose value the setting's
+  `ConfigReading` accepts (`ValidValue`, or `InvalidValue` with the problem
+  and, for a bad item, the `child` key): an invalid client value acts as if
+  it were absent, so the setting falls back to the value of `defaults`, then
+  to the built-in default, and each TOA902 names the value applied ("The
+  value from "defaults" (...) is used." or "The default (...) is used.") at
+  the rejected value; the unknown keys of an `include`/`exclude` filter are
+  reported for the filters up to the applied one.
+  A bad value is TOA902 and falls back like that (a `default_group` that is
+  a reserved word is one); equal `input_suffix` and `patch_suffix` are the
+  exception: both go back to their built-in defaults. `operation_prefix` applies only where its match starts at
   index 0 and is not empty. `GenerationConfig.key` is the run key: custom
   types are sorted, and a client with a filter or an `errors.default_schema`
   is keyed by where the config has it, so TOA557, TOA558, TOA652 and TOA563
   are reported at its own place, not at that of a client with equal
   settings.
+- `schema/` (M13) - the catalogs of the two files users write, and their JSON
+  Schemas (draft-07). `KeySpec` is one key (name, `KeyType`, description,
+  `example`, `defaultValue`, `isRequired`, `invalidExamples`;
+  `KeySpec.object` for a section) and the sealed `KeyType` its kind of value
+  (`BooleanKey`, `StringKey`, `IntegerKey`, `ChoiceKey`, `ListKey`,
+  `ObjectKey`, `MapKey`, `NullableKey`, `OneOfKey`, `FreeObjectKey`,
+  `AnyKey`, and `CodeLevelsKey` and `RuleFlagsKey` for `severity` and
+  `rules`). `ConfigCatalog` (with `ConfigGenerationKeys` and
+  `ConfigNamingKeys`) lists every key of `typed_openapi.yaml`, and
+  `OverrideCatalog` (with `OverrideOperationKeys` and `OverrideSchemaKeys`)
+  every key of an overrides file. `SchemaWriter` turns a key type into
+  schema JSON, `ConfigSchema` and `OverrideSchema` assemble the schemas
+  (`toJson`, `toText`, the published `url`; their doc comments list the gaps,
+  where the loader rejects more than the schema says). `ConfigKeys` and
+  `OverrideKeys` (the keys the loaders allow, TOA902/TOA803) are derived from
+  the catalogs, so a reader cannot allow a key the schema lacks. The schema
+  tests are under the core (`test/schema/`, with the case tables of
+  `test/helpers/key_cases.dart`) and judge each case with both the schema
+  (`JsonSchema` of the test support package) and the loader, which must
+  agree. The published files are `packages/typed_openapi/schema/*.json`,
+  written by `docs.dart`. A new config or overrides key goes into the catalog;
+  the reader, the schema and the tests follow from it.
+- `extensions/` (M13) - `SpecExtension` (`key`, `appliesTo`, `effect`,
+  `example`, `diagnostics`) and `SpecExtensions`, the registry of the `x-`
+  keys the generator reads (`enumVarnames`, `enumDescriptions`, `triState`;
+  `all` is the order the documentation lists them). Code that reads or
+  names an extension uses `SpecExtensions.<name>.key`, and
+  `spec_extensions_test` fails when another file of `lib/` (outside
+  `load/yaml/`) writes an `x-` literal. `doc/extensions.md` is generated from
+  the registry.
 - `ir/` - the semantic IR (M6): `ir.dart` (`ClientIr`, sealed `Declaration`
   = `ModelDecl` | `EnumDecl` | `UnionDecl`, `FieldIr`, `GroupIr`; it
   exports the node files: `operation_ir.dart` (`OperationIr`),
@@ -806,6 +891,13 @@ Engine folders under `packages/typed_openapi_core/lib/src/`, generator folders
   `typed_openapi.lock` keeps them (`ApiLockNames`; the `NameLock` is part
   of the run key); an unreadable lock is TOA835 (an error, exit `1`) for `check`,
   `ir`, `baseline` and `diff` too, since every command reads it; `SpecChecker.freshNames` ignores the lock.
+  `SpecLinter.lint(path, preset:)` (M13) checks one spec file with no config,
+  no overrides, no baseline and no IR: it loads, detects the version, runs
+  `Normalizer` with the chosen preset or the one `PresetDetector` found, and
+  returns a `LintResult` (the diagnostics, each through
+  `Diagnostic.forBackend`, the `PresetDetection`, `isChosen`, `isRead`).
+  Codes that only the IR stage reports (TOA453, TOA553, TOA651 ...) belong
+  to `check`, not to lint.
 - `snapshot/` (M12) - the API snapshot of a client (decision 1):
   `ApiSnapshot` (`SnapshotType`s by identity, each with a `TypeKind`,
   `exhaustive`, facts and `SnapshotMember`s), built from the IR only by
@@ -866,7 +958,17 @@ Engine folders under `packages/typed_openapi_core/lib/src/`, generator folders
   nothing) and the hidden `IrCommand` (`ir_command.dart`, prints the IR of
   clients as JSON alone on stdout; the errors and warnings of the run go to
   stderr as text with the count of the infos, a client with no IR is named
-  there, and the exit code is the one `check` gives);
+  there, and the exit code is the one `check` gives) and `LintCommand`
+  (`lint_command.dart`, M13: `typed_openapi lint [options] <spec>`, exactly
+  one spec file, no config; options `--preset` (`generic`, `nestjs`,
+  `fastapi`, `springdoc`, `aspnet`; else the framework is detected),
+  `--format` (as `check`) and `--fail-on` (`error` | `warning`); a note
+  `Preset: <name> (...)` says what was used, as the first line of the text
+  report and on stderr for `json`, `sarif` and `github-actions` so the
+  document stays whole; SARIF is written with `isLint` and the spec as
+  `defaultFile`; exit `0` for any findings unless `--fail-on` is reached,
+  `1` for a spec that cannot be read or a reached `--fail-on`, `64` for
+  usage, as for every command);
   `bin/typed_openapi.dart` only calls `TypedOpenApiCli().run(args)` and sets
   `exitCode`.
 - `packages/typed_openapi_core/lib/typed_openapi_core.dart` exports the public
@@ -898,7 +1000,11 @@ Engine folders under `packages/typed_openapi_core/lib/src/`, generator folders
   `ApiSnapshot`, `SnapshotBuilder`, `SnapshotJson`, `ApiDiff`, `ApiChange`,
   `ChangeCategory`, `ChangeCounts`, `TextDiffReport`, `JsonDiffReport`,
   `MarkdownDiffReport`, `DartNames`, `NameScope`, `MediaTypeName`,
-  `PathTemplate`, `JsonKind` (16) and `RealPaths`. Not
+  `PathTemplate`, `JsonKind` (16) and `RealPaths`. M13 adds `SpecLinter`,
+  `LintResult`, `PresetDetector`, `PresetDetection`, `SpecExtension`,
+  `SpecExtensions`, `ConfigSchema` and `OverrideSchema`; the catalogs
+  (`KeySpec`, `KeyType`, `SchemaWriter`, `ConfigCatalog`, `OverrideCatalog`)
+  stay inside. Not
   exported: `LockedNames`, the rest of `snapshot/` and `diff/` (the lock's
   format is the file, not a Dart API), the
   internals of `parse/` (`OpenApiParser`, `OperationParser`, `SchemaParser`,
@@ -996,6 +1102,66 @@ public APIs of the core and the generator only. Its network use is the `SpecCach
   difference and `check` exits 1, naming the client and the count. A client
   that is skipped (artemis) has no counts, and gaining or losing them is a
   difference too.
+  A spec may name its `framework` (a `Preset` name, default `generic`) and
+  `detects: false` (only for a spec with a framework: its marks are not the
+  ones `PresetDetector` reads, so the corpus expects `generic`;
+  `CorpusSpec.expectedPreset`). `CorpusListReader` rejects an unknown
+  framework and any other `detects`. `corpus lint [names]`
+  (`CorpusLintCommand`, `SpecLintRow`, `CorpusLintReport`) runs `SpecLinter`
+  on each spec of the cache (fetching what it lacks), prints a row per spec
+  (framework, detected preset, counts of errors, warnings and infos, codes),
+  the totals `By framework:` and `Detection: N of M as the corpus expects.`,
+  and exits `1` when a detected preset differs from the expected one (or on a
+  `CorpusException`); CI runs it in the corpus job after `corpus check`.
+  `framework_recipes_test` reads `framework` and `corpus.lock`: every code
+  that a framework's spec reports (the `raw/<name>` entry) must be named in
+  that framework's recipe.
+- `lib/src/docs/` (M13) - the docs generated from the code, run by
+  `bin/docs.dart` (`DocsCli`: `generate` writes what differs and prints
+  `Wrote <path>`; `check` prints `The generated docs are current.` or names
+  the stale files and exits `1`; `--root <packages directory>` defaults to
+  `..`; a usage error is `64`; a doc comment that breaks the convention is
+  `1`). `GeneratedDocs.files()` gives the four files by path under
+  `packages/`: `typed_openapi/doc/diagnostics.md` (`DiagnosticsPage`, with
+  `DiagnosticsIntro` and `DiagnosticArea`), `typed_openapi/doc/extensions.md`
+  (`ExtensionsPage`, from `SpecExtensions.all`) and the two files
+  `typed_openapi/schema/typed_openapi.schema.json` and
+  `typed_openapi.overrides.schema.json` (`ConfigSchema.toText`,
+  `OverrideSchema.toText`); each Markdown file starts with
+  `GeneratedNotice`. `DiagnosticSource` reads the text of the
+  `DiagnosticCode` enum (no `analyzer`): the doc comment of each entry is
+  meaning paragraphs, then `Example: ...` and `Fix: ...`, each ending with a
+  full stop; a missing or incomplete one, an entry the enum lacks or an enum
+  entry with no comment is a `DocsProblems` entry, and the page counts its
+  codes. Tests (`test/docs/`): `docs_cli_test` fails while a generated file
+  of the repository is stale (this is also the CI job `docs`),
+  `doc_links_test` checks the relative links and anchors of every `.md`
+  under a `doc/` directory and every README under `packages/` (`DocLinks`;
+  `CLAUDE.md`, `CONTRIBUTING.md` and `docs/` are outside it),
+  `support_matrix_test` (every row of `doc/support_matrix.md` has one of
+  four statuses and at least one proof path that exists and is a test, a
+  fixture or `corpus.yaml`) and `framework_recipes_test` (each recipe has a
+  `## Sources` section with at least three links and the date they were
+  read).
+- `release/package.sh` (packs a binary and the licence into
+  `typed_openapi-<version>-<target>.tar.gz` and writes its `.sha256`; exit 64
+  for the wrong arguments), `action/` (the composite action: `action.yml`
+  with the inputs `command` (`lint` | `check`), `spec`, `preset`, `fail-on`,
+  `config`, `format`, `version`, `executable`, `working-directory`;
+  `install.sh` downloads a release archive and checks it against
+  `SHA256SUMS`; `run.sh` builds the argument array from the `INPUT_*`
+  variables, with `--` before the spec, and refuses an option value that
+  starts with a dash; there is no "latest": `version` or `executable` is
+  required) and `.github/workflows/release.yml` (tag `typed_openapi-v*`:
+  checks the tag against the generator's pubspec, compiles five targets
+  (linux-x64, linux-arm64 cross-compiled and not smoke-tested, macos-x64,
+  macos-arm64, windows-x64), packs them and creates a GitHub release with
+  the archives and `SHA256SUMS`; only the `release` job may write). The
+  scripts are tested on Linux by `release_scripts_test` through
+  `ReleaseFixture`; `release_readiness_test` pins the pub.dev metadata, an
+  example and the CHANGELOG head of each published package, and
+  `lockstep_versions_test` the shared version. The macOS and Windows jobs and
+  `release.yml` itself have never run on GitHub.
 - `lib/src/roundtrip/` - `ExampleReader` (the `example`/`examples` of each
   declaration's schema and of JSON responses, at the locations the IR
   names; what it cannot read, such as a `null`, a `$ref` to another file, an
@@ -1030,24 +1196,32 @@ public APIs of the core and the generator only. Its network use is the `SpecCach
   enough. Files are read at HEAD and at the base; a dirty working tree does
   not count.
 - `test/sarif/` - the SARIF output of `SarifReporter` against the SARIF
-  2.1.0 JSON schema (`JsonSchema`, a test helper for the draft-04 subset the
-  schema uses) and against GitHub code scanning's required properties
+  2.1.0 JSON schema (`JsonSchema`, in `typed_openapi_test_support`, a validator for
+  the draft-04 and draft-07 subset the SARIF and config schemas use) and against GitHub code scanning's required properties
   (`CodeScanningRules`). The schema is not in the repository: `CachedSchema`
   reads it from the corpus cache (`corpus fetch sarif_schema`), checks its
   SHA-256 against the pin, skips the test when the cache lacks it locally
   and fails it in CI (`CI=true`), so a missing or altered schema never
   passes CI. The rule help differs by code: a fixed code can be raised but
   not lowered, a config code (TOA901-TOA904) cannot be changed.
-- CI (`.github/workflows/ci.yml`, every PR, top-level `permissions:
-  contents: read`): tests on ubuntu with 3.10.0 and stable, on macOS and
-  Windows with stable (format and analyze on ubuntu/stable only); the
-  client and the Dio transport (with the conformance suite) in Chrome with
-  dart2js and dart2wasm; publish dry-runs of the generator, the client and
-  the Dio transport; the corpus job (both SDKs:
-  `corpus check`, then `corpus fetch sarif_schema` and the SARIF test); 200
-  fuzz seeds; semver (pull requests only, full history). Long jobs have
-  `timeout-minutes`. `nightly.yml`: the beta SDK (steps with `if: always()`,
-  a warning only), the corpus on Windows, 6000 seeds.
+- CI (`.github/workflows/ci.yml`, every PR and push to `main`, top-level
+  `permissions: contents: read`): tests on ubuntu with 3.10.0 and stable, on
+  macOS and Windows with stable (format and analyze on ubuntu/stable only);
+  the client and the Dio transport (with the conformance suite) in Chrome with
+  dart2js and dart2wasm; publish dry-runs of the core, the generator, the
+  client and the Dio transport; the corpus job (both SDKs: `corpus check`,
+  then `corpus lint`, then `corpus fetch sarif_schema` and the SARIF test);
+  200 fuzz seeds; `docs` (`docs.dart check` on stable: the generated
+  references and schemas are committed); `actionlint` (the pinned
+  `rhysd/actionlint:1.7.12` image over the workflows); `binary` (compiles
+  `typed_openapi`, packs it with `release/package.sh linux-x64 0.0.0-ci`,
+  and runs the local `./action` with `command: lint` on the
+  `backend_defects.yaml` fixture and `executable:`); semver (pull requests
+  only, full history). Long jobs have `timeout-minutes`. `nightly.yml`: the
+  beta SDK (steps with `if: always()`, a warning only), the corpus on
+  Windows, 6000 seeds. `publish.yml` publishes one package on a tag
+  `<package>-v<version>` (pub.dev OIDC, environment `pub.dev`); only
+  `typed_openapi-v*` also starts `release.yml`.
   `test/ci/workflows_test.dart` pins these layers.
 
 ## Client core (`packages/typed_openapi_client/lib/src/`)
@@ -1429,6 +1603,14 @@ are not, so follow them by hand:
 
 - `docs/requirements.md` - requirements R0-R15 and decisions on open questions.
 - `docs/roadmap.md` - milestones M1-M13.
+- `docs/release-checklist.md` - how to release the four packages and the
+  binaries by hand, the SchemaStore text and the open items nobody could
+  verify before the first release.
+- `packages/typed_openapi/doc/` - the user guides (`support_matrix.md`,
+  `frameworks/`, `automation.md`, `client_for_grund.md`, the generated
+  `diagnostics.md` and `extensions.md`, ...) and `schema/`, the generated
+  JSON Schemas; the package READMEs and `example/` directories are the
+  pub.dev pages.
 - `docs/code-quality-review.md` - quality review, the exemption list of files
   over the size limits, and the refactoring order.
 - `docs/research/` - competitor research (`README.md` summary, `01`-`07`
