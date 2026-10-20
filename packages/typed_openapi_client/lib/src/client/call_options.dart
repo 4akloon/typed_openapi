@@ -1,3 +1,5 @@
+import 'package:meta/meta.dart';
+
 import '../sse/sse_options.dart';
 import '../transport/cancel_signal.dart';
 
@@ -36,8 +38,9 @@ final class CallOptions {
   /// that lives as long as the app and makes unbounded calls.
   final CancelSignal? cancel;
 
-  /// Headers added to the request; they win over the headers the operation
-  /// sends for its header parameters, case-insensitively. A value that is a
+  /// Headers added to the request; a call's win over the headers the
+  /// operation sends for its header parameters, case-insensitively, while a
+  /// client's defaults (`ClientSender.defaults`) go under them. A value that is a
   /// list is sent as one value per item; a `null` value is not sent. The
   /// one exception is `Content-Type`: the operation's own content type
   /// (`OperationRequest.contentType`, set for a request body) wins over a
@@ -98,6 +101,7 @@ final class CallOptions {
 
   /// These options without their [headers]: what a client merges its call
   /// into when it sends the default headers under the operation's.
+  @internal
   CallOptions withoutHeaders() => CallOptions(
     cancel: cancel,
     extra: extra,
