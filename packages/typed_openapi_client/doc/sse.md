@@ -312,8 +312,10 @@ on resume. Choose a value above the server's heartbeat interval.
 **Handshake timeout.** `handshakeTimeout` bounds the wait for the response
 headers of each attempt, the first and every reconnection. When it runs out
 the request is cancelled and the attempt fails with a `TransportException`
-of kind `timeout`: a failed first attempt is the `TransportError` the method
-returns, a failed reconnection is retried like any refused one. It does not
+of kind `timeout`: a failed attempt is retried like a refused connection (kind `timeout` is
+transient; see [Retrying the opening](#retrying-the-opening)). Only when the
+opening is not retried is a failed first attempt the `TransportError` the
+method returns. It does not
 limit how long the body takes.
 
 **Unbounded attempts.** `maxAttempts: null` reconnects until the call is
@@ -503,7 +505,7 @@ An `Exception` thrown by `retryWhen` counts as final; an `Error` propagates.
 
 ### Retry-After
 
-On a transient status that carries `Retry-After` (delta-seconds or an HTTP
+On a failure that is retried (the classifier, or `retryWhen`, accepts it) and carries `Retry-After` (delta-seconds or an HTTP
 date in IMF-fixdate, RFC 850 or asctime form) the delay of that attempt is the
 larger of the header and the backoff delay, jitter included. A date is
 measured against the response's `Date` header, else the clock. `maxDelay`
@@ -524,8 +526,9 @@ cannot be parsed, or that is zero or past, falls back to the backoff.
 
 - **Pausing** the listener pauses the connection. A pause during a wait or a
   reopen holds the next connection until you resume.
-- An error status at open (`401`) is not a stream: it is decoded by
-  `decodeError`, here `UndocumentedStatus(401)`.
+- A final error status at open (`401`) is not a stream: it is decoded by
+  `decodeError`, here `UndocumentedStatus(401)`. A transient one (408, 429,
+  5xx) is retried first when the opening is retried.
 
 ## Web
 

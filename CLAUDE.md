@@ -1346,7 +1346,7 @@ like `test/helpers/pets_api.dart` (illustrative, not a contract);
   tried again on the call's one `ReconnectionPlan`, which `SseReconnector`
   shares; `retryOpen` unset follows the reconnection policy, `.off` wins
   silently, and a body that cannot be sent twice (`ReplayableBody`) is never
-  retried or reconnected. `RetryAfter` (`sse/`, web-safe, no `HttpDate`)
+  retried or reconnected. `RetryAfter` (`sse/`, web-safe, its own `HttpDate` in `sse/http_date.dart`, not `dart:io`'s)
   reads delta-seconds or an HTTP date against the response `Date`; the
   delay is `max(Retry-After, backoff)`, uncapped, for that attempt only.
   `SseTrace.operation` names the stream's `OperationInfo`.
@@ -1398,8 +1398,8 @@ like `test/helpers/pets_api.dart` (illustrative, not a contract);
   stream transformer: under `fakeAsync` that future completes outside the
   fake zone. `SseReconnection` is the operation's policy:
   `off` (a POST that does not enable it; the call cannot), `onRequest`
-  (GET), `on`. Cancel, an error status (the `Failure` is the cause) and 204
-  end the stream; a listener cancel also aborts a request that is in flight
+  (GET), `on`. Cancel, a final error status (the `Failure` is the cause) and 204
+  end the stream (a transient status, `SseRetry`/`retryWhen`, is retried); a listener cancel also aborts a request that is in flight
   (`SseReconnector.onCancel`); a pause of the listener, also during a wait
   or a reopen, holds the next connection; an exception or `Error` thrown on
   an attempt, by a `wait` or the transport, is the stream's one error,

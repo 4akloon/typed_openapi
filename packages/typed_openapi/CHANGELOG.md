@@ -1,10 +1,8 @@
 ## 0.3.0 - Unreleased
 
-### Changed
+### Output changes
 - The manifest `.typed_openapi.json` records `typed_openapi 0.3.0` as the
   generator.
-
-### Output changes
 - The constructors of the root client and of every group take
   `{CallOptions defaults = const CallOptions()}` and hand it to their
   `ClientSender`: an app sets its headers, cancel signal and SSE options once,

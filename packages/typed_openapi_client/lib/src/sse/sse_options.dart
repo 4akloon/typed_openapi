@@ -100,8 +100,9 @@ final class SseOptions {
   /// and every reconnection), or null (unset) for no limit; [Duration.zero]
   /// switches a default off. The request is cancelled when it runs out and
   /// the attempt fails with a `TransportException` of kind timeout: a failed
-  /// first attempt is a `TransportError`, a failed reconnection is retried
-  /// like any other.
+  /// attempt is retried like a refused connection; when the opening is not
+  /// retried, a failed first attempt is the `TransportError` the method
+  /// returns.
   final Duration? handshakeTimeout;
 
   /// The share, from 0 to 1, by which each backoff delay is moved at random
