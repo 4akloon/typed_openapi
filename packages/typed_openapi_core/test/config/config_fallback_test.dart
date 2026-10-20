@@ -174,6 +174,18 @@ void main() {
     );
   });
 
+  test(
+    'an unknown key of a filter a valid client filter shadows is silent',
+    () {
+      final bag = DiagnosticBag();
+      load(
+        config('  include: {bogus: 1}', '    include: {tags: [a]}'),
+        bag,
+      );
+      expect(bag.all.map((d) => d.pointer?.value), isEmpty);
+    },
+  );
+
   test('naming settings fall back to defaults', () {
     final bag = DiagnosticBag();
     final clients = load(
@@ -190,6 +202,26 @@ void main() {
     expect(generation.defaultGroup, 'Misc');
     expect(generation.clientClass, 'MyClient');
     expect(generation.operationPrefix?.pattern, '^api_');
+    final messages = problems(bag).map((p) => p.$1);
+    expect(
+      messages,
+      containsAll([
+        contains('"group" must contain {Tag}'),
+        contains('"default_group" is the name of a class'),
+      ]),
+    );
+    expect(
+      messages.where((m) => m.contains('The value from "defaults" (')),
+      hasLength(4),
+    );
+    expect(
+      messages,
+      contains(endsWith('The value from "defaults" (Misc) is used.')),
+    );
+    expect(
+      messages,
+      contains(endsWith('The value from "defaults" ({Tag}Service) is used.')),
+    );
     expect(
       [for (final (_, at) in problems(bag)) at],
       unorderedEquals([
@@ -200,6 +232,26 @@ void main() {
           'operation_prefix',
         ])
           '#/clients/a/naming/$key',
+      ]),
+    );
+  });
+
+  test('errors and types messages show the value of defaults', () {
+    final bag = DiagnosticBag();
+    load(
+      config(
+        '  errors: {default_schema: Problem}\n  types: {number: int}',
+        '    errors: {default_schema: ""}\n    types: {number: x}',
+      ),
+      bag,
+    );
+    expect(
+      problems(bag).map((p) => p.$1),
+      unorderedEquals([
+        '"default_schema" must be a non-empty string. '
+            'The value from "defaults" (Problem) is used.',
+        '"number" must be num, double or int. '
+            'The value from "defaults" (int) is used.',
       ]),
     );
   });

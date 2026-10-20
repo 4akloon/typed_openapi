@@ -37,7 +37,6 @@ final class OperationFilterReader {
 
   /// The filter under [key]: `include` or `exclude`.
   OperationFilter read(String key) {
-    _checkUnknownKeys(key);
     final (:value, :at) = _sources.resolve<Map<String, Object?>>(
       key,
       builtIn: const {},
@@ -45,6 +44,7 @@ final class OperationFilterReader {
       report: _invalid,
       read: (value) => _mapping(key, value),
     );
+    _checkUnknownKeys(key, appliedAt: at);
     if (at == null) return const OperationFilter();
     return OperationFilter(
       tags: _patterns(value, 'tags', at),
@@ -53,13 +53,16 @@ final class OperationFilterReader {
     );
   }
 
-  /// Reports the unknown keys of every source's filter, also one that is
-  /// rejected for another reason.
-  void _checkUnknownKeys(String key) {
-    for (final (map, at) in _sources) {
+  /// Reports the unknown keys of the filters that were rejected or applied,
+  /// from the client outward to the source at [appliedAt] (all of them when
+  /// that is null); a filter a valid later source shadows is not read.
+  void _checkUnknownKeys(String key, {required JsonPointer? appliedAt}) {
+    for (final (map, mapAt) in _sources.reversed) {
+      final at = mapAt.child(key);
       if (map[key] case final Map<String, Object?> filter) {
-        _checkKeys(filter, _filterKeys, at.child(key));
+        _checkKeys(filter, _filterKeys, at);
       }
+      if (at.value == appliedAt?.value) return;
     }
   }
 
