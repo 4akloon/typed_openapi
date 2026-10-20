@@ -70,9 +70,10 @@ final class LockedNames {
   void lockMethods(NameScope scope, Iterable<SpecOperation> entries) {
     final kept = <String, (String, SpecLocation)>{};
     for (final entry in entries) {
-      // The shape `both` (see `EventStreams.shapeOf`, which reports and so
-      // is not asked here): the only one with a method for the events next
-      // to the one for the body.
+      // Close to the shape `both` (see `EventStreams.shapeOf`, which reports
+      // and so is not asked here): the only one with a method for the events
+      // next to the one for the body. An `sse.method` override can still
+      // leave the method out; the stale key then goes after one run.
       final successes = StreamSuccesses.of(_context, entry.operation);
       final hasStream =
           successes.streams.isNotEmpty &&

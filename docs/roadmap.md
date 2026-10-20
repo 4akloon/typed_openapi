@@ -293,8 +293,12 @@ and the fuzz of 200 seeds finds 0 problems.
 
 ## Parked from the M12 reviews
 
-Findings of the M12 reviews that the fix rounds did not fix. Everything else
-those reviews found is fixed; the reviews are in
+Findings of the M12 reviews that the fix rounds did not fix. The reviews also
+found smaller notes (a missing tie-break in `ApiChange.compareTo`, rename hints
+that repeat for two removed types and one added, rule tests that assert 5 of
+15 wire facts directly, a few missing negative tests of `snapshot_json` and
+of the `diff` command, an unused `ChangeCounts.isEmpty`, the client name in
+the `API of` line not neutralised) that are not listed here. The reviews are in
 `.superpowers/sdd/2026-10-13-m12-evolution/`.
 
 | Finding | Why it is parked |
@@ -305,8 +309,9 @@ those reviews found is fixed; the reviews are in
 | `RenameHints._yamlKey` mishandles control characters, YAML reserved words and keys that start with `@` | the hint is a suggestion to the reader; the keys are component names |
 | Wording of `ApiChange` messages: "a enum", raw fact keys | cosmetic |
 | A relative path in lock ids on Windows across drives; member keys are joined with `/` and can collide with an `operationId` that holds `/` | needs a Windows corpus run and a real spec with such an id |
-| A directory named `typed_openapi.lock` reads as no lock | the write then fails with TOA831; unusual |
+| A directory named `typed_openapi.lock` reads as no lock | the write then fails with TOA835; unusual |
 | `diff` ignores a lock client that is no longer in the config | documented in `doc/cli.md`; `--from`/`--to` shows it |
+| `sse.method: none` or `only`, and an event union that disagrees, still let a stale `#stream` key of the lock reserve a method name | needs a prior `both` shape and a name clash; the stale key goes after one run |
 | `doc/generated/*.md` link to `configuration.md#exhaustive`, and `docs/code-quality-review.md` has stale entries (`config_loader.dart`, `ir_builder.dart`) | documentation only; fix with the next docs pass |
 
 ## Parked from the M10 reviews
