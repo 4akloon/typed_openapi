@@ -22,6 +22,8 @@ final class SseOptions {
     this.delay = const Duration(seconds: 1),
     this.maxDelay = const Duration(seconds: 30),
     this.maxAttempts = 5,
+    this.idleTimeout,
+    this.handshakeTimeout,
     this.jitter = 0,
     this.cooldown,
     this.random,
@@ -50,6 +52,23 @@ final class SseOptions {
   /// listener cancels or the server answers with a status that is not a
   /// stream.
   final int? maxAttempts;
+
+  /// The longest silence on a connected stream, or null for no limit. Any
+  /// received bytes reset it: events, but also comments and heartbeats such
+  /// as `: ping`. When it runs out the connection is dead (a half-open
+  /// socket): the request is cancelled and the stream reconnects when
+  /// reconnection is on, with a `TransportException` of kind timeout as the
+  /// cause of `SseReconnecting`, else it ends with `SseDisconnected` and
+  /// that cause. Choose a value above the server's heartbeat interval. Not
+  /// counted while the listener is paused.
+  final Duration? idleTimeout;
+
+  /// The longest wait for the response headers of each attempt (the first
+  /// and every reconnection), or null for no limit. The request is
+  /// cancelled when it runs out and the attempt fails with a
+  /// `TransportException` of kind timeout: a failed first attempt is a
+  /// `TransportError`, a failed reconnection is retried like any other.
+  final Duration? handshakeTimeout;
 
   /// The share, from 0 to 1, by which each backoff delay is moved at random
   /// either way: 0.2 gives 80% to 120% of the delay. 0 (the default) adds no
