@@ -9,7 +9,8 @@ enum DiagnosticCode {
   /// Example: A YAML file with a tab in its indentation, or a JSON file with a
   /// trailing comma.
   ///
-  /// Fix: Correct the syntax at the source; the message gives the line and column.
+  /// Fix: Correct the syntax at the source; the message gives the line and
+  /// column.
   parseError('TOA001', 'parse-error', .error),
 
   /// A mapping repeats a key.
@@ -47,9 +48,10 @@ enum DiagnosticCode {
   /// The input file exists but cannot be read as UTF-8 text.
   ///
   /// Example: `input:` points at a directory, or at a file that is not UTF-8
-  /// text.
+  /// text or cannot be opened.
   ///
-  /// Fix: Point `input` at the spec file itself.
+  /// Fix: Point `input` at the spec file itself if it is a directory; otherwise
+  /// save the spec as UTF-8 and check the file permissions.
   inputUnreadable('TOA006', 'input-unreadable', .error),
 
   /// The document nests deeper than the parser can follow, in its text or
@@ -63,8 +65,8 @@ enum DiagnosticCode {
   /// YAML aliases expand to far more nodes than the text has, or the JSON
   /// pointers of the document's nodes add up to more than the budget.
   ///
-  /// Example: A YAML anchor that is aliased many times inside itself, so that
-  /// expanding it takes millions of nodes.
+  /// Example: A chain of YAML anchors in which each one aliases the previous
+  /// anchor several times, so that a short file expands to millions of nodes.
   ///
   /// Fix: Write the repeated part out once and refer to it with `$ref` instead
   /// of YAML aliases.
@@ -280,13 +282,16 @@ enum DiagnosticCode {
   /// Fix: Quote the key, for example `"null":`.
   nullKey('TOA114', 'null-key', .warning),
 
-  /// A property schema says `required: true` or `false` (OpenAPI 2 style);
-  /// the name is moved into the object's `required` list.
+  /// A property schema says `required: true` or `false` (OpenAPI 2 style); for
+  /// `true` the name is moved into the object's `required` list, for `false`
+  /// the flag is only removed. When the `required` of the object is not a list,
+  /// nothing is changed.
   ///
   /// Example: A property schema with `required: true`, as OpenAPI 2 writes it.
   ///
   /// Fix: Add the name to `required` of the object schema and remove `required`
-  /// from the property at the source; until then the tool applies this for you.
+  /// from the property at the source; until then the tool applies this for you,
+  /// except when `required` of the object is not a list.
   boolRequired('TOA201', 'bool-required', .warning),
 
   /// An array has no `items` in an OpenAPI 3.0 document, which requires it.
@@ -393,13 +398,17 @@ enum DiagnosticCode {
   allOfPartIgnored('TOA253', 'allof-part-ignored', .warning),
 
   /// A schema an override excludes is used by a generated type; the use is
-  /// generated as `JsonValue`. An excluded `allOf` part is the exception: it
-  /// is merged into the flat model all the same, and this says so.
+  /// generated as `JsonValue`. An excluded `allOf` part is the exception: it is
+  /// merged into the flat model all the same, and this says so. Also reported
+  /// when an excluded schema has a custom Dart type: the type is used and the
+  /// exclude has no effect.
   ///
   /// Example: An override `exclude: true` on a schema that a property of
-  /// another schema refers to.
+  /// another schema refers to, or on a schema that also has a custom Dart type.
   ///
-  /// Fix: Remove the `exclude`, or give the schema a custom Dart type.
+  /// Fix: Exclude what uses the schema too, or give the schema a custom Dart
+  /// type instead of excluding it; when it has both, remove the `exclude` or
+  /// the custom type.
   excludedSchemaReferenced('TOA254', 'excluded-schema-referenced', .info),
 
   /// An object with `properties` has a `oneOf` or `anyOf` whose branches
@@ -490,11 +499,13 @@ enum DiagnosticCode {
   /// Fix: Make the variant a component schema and `$ref` it.
   discriminatorValueMissing('TOA450', 'discriminator-value-missing', .warning),
 
-  /// A `discriminator.mapping` value names a schema that is not a variant of
-  /// the union; it is ignored.
+  /// A `discriminator.mapping` value, or the `defaultMapping`, names a schema
+  /// that is not a variant of the union; it is ignored. A value that maps to
+  /// the base schema itself, which is generated as the union of its subtypes,
+  /// is decoded as the unknown variant with its JSON kept.
   ///
   /// Example: A `mapping` value that names a schema the union's `oneOf` does
-  /// not list.
+  /// not list, or one that maps to the base schema itself.
   ///
   /// Fix: Map the value to a variant of the union, or to a schema that extends
   /// the base.
@@ -659,10 +670,10 @@ enum DiagnosticCode {
   /// method's name with an override.
   duplicateOperationId('TOA504', 'duplicate-operation-id', .error),
 
-  /// A name from the spec is a Dart reserved word or a name Dart already
-  /// has (`class`, `List`); the generated name gets a suffix.
+  /// A name from the spec is a Dart reserved word or a name Dart already has
+  /// (`class`, `List`); the generated name gets a suffix.
   ///
-  /// Example: A schema named `Class` or a property named `class`.
+  /// Example: A schema named `List` or a property named `class`.
   ///
   /// Fix: Rename it at the source if the suffix is unwelcome, or name it with
   /// an override.
@@ -759,8 +770,9 @@ enum DiagnosticCode {
   overrideNameInvalid('TOA560', 'override-name-invalid', .warning),
 
   /// No operation of a client is generated: all are filtered out, all are
-  /// written as a `$ref` (TOA107), or all have an unbound path variable
-  /// (TOA556). The message says why.
+  /// written as a `$ref` (TOA107), all have an unbound path variable (TOA556),
+  /// all are event streams the client cannot express (TOA654) or all are left
+  /// out by overrides. The message says why.
   ///
   /// Example: A client whose `include` filter leaves no operation.
   ///
@@ -781,21 +793,21 @@ enum DiagnosticCode {
   parameterStyleInvalid('TOA564', 'parameter-style-invalid', .warning),
 
   /// A parameter is `in: querystring` (OpenAPI 3.2), which the client cannot
-  /// send yet: the parameter is not generated (TOA564 until M9).
+  /// send yet: the parameter is not generated.
   ///
   /// Example: A parameter with `in: querystring`.
   ///
   /// Fix: Describe the query string as query parameters at the source.
   querystringNotGenerated('TOA565', 'querystring-not-generated', .warning),
 
-  /// A path item or an operation has its own `servers`; the client sends
-  /// every request to the base URL of the user's transport.
+  /// A path item or an operation has its own `servers`; the client sends every
+  /// request to the base URL of the user's transport.
   ///
   /// Example: An operation with its own `servers: [{url:
   /// https://upload.example.com}]`.
   ///
-  /// Fix: Set the base URL for these requests in an interceptor of the
-  /// transport, or move the servers to the document.
+  /// Fix: Send these requests through a transport with that base URL, or move
+  /// the servers to the document.
   operationServersIgnored('TOA566', 'operation-servers-ignored', .warning),
 
   /// An operation has `callbacks`, or the document has `webhooks`: requests
@@ -821,12 +833,15 @@ enum DiagnosticCode {
   securitySchemeUnknown('TOA568', 'security-scheme-unknown', .warning),
 
   /// `typed_openapi.lock` keeps a name for a type or a method, but an
-  /// override's name or a custom type took it first: it is named anew.
+  /// override's name or a custom type took it first, or the kept name is not a
+  /// usable Dart name for what it names (a hand-edited lock): it is named anew.
   ///
   /// Example: `typed_openapi.lock` keeps the name `Pet`, and an override now
-  /// names another type `Pet`.
+  /// names another type `Pet`; or a lock edited by hand keeps the name `my
+  /// pet`.
   ///
-  /// Fix: Rename the override or the custom type, or accept the new name.
+  /// Fix: Rename the override or the custom type, or accept the new name; run
+  /// `generate --fresh-names` to write new names to the lock.
   lockedNameTaken('TOA569', 'locked-name-taken', .warning),
 
   /// `typed_openapi.lock` keeps the name of a type or a method that a run
@@ -857,7 +872,7 @@ enum DiagnosticCode {
   /// A request or response body has a media type that is not JSON, a form,
   /// `multipart/form-data`, `text/*` or `text/event-stream` (or is a form or
   /// multipart response): it is sent or read as bytes and its schema is not
-  /// used (TOA561 until M9).
+  /// used.
   ///
   /// Example: A response in `application/pdf`, or a request body in
   /// `application/xml`.
@@ -865,9 +880,8 @@ enum DiagnosticCode {
   /// Fix: Use a JSON media type at the source if the schema matters.
   mediaTypeAsBytes('TOA650', 'media-type-as-bytes', .info),
 
-  /// A request body, a response or a parameter offers several media types;
-  /// the client uses one and the message names the ones it drops (TOA561
-  /// until M9).
+  /// A request body, a response or a parameter offers several media types; the
+  /// client uses one and the message names the ones it drops.
   ///
   /// Example: A request body that offers both `application/json` and
   /// `application/xml`.
@@ -876,8 +890,8 @@ enum DiagnosticCode {
   /// for `sse.method: only`, remove it to keep the body in a method too.
   mediaTypesDropped('TOA651', 'media-types-dropped', .info),
 
-  /// `errors.default_schema` names a key that is not in
-  /// `components.schemas`; the setting is ignored (TOA562 until M9).
+  /// `errors.default_schema` names a key that is not in `components.schemas`;
+  /// the setting is ignored.
   ///
   /// Example: `errors: {default_schema: ApiError}` in the config when
   /// `components.schemas` has no `ApiError`.
@@ -898,16 +912,22 @@ enum DiagnosticCode {
   successUndocumented('TOA653', 'success-undocumented', .warning),
 
   /// An event-stream operation has a shape the client cannot express: its
-  /// event-stream successes have different event types, or another success
-  /// has a body that is not an event stream. The operation is not
-  /// generated when some of its successes are only a stream; when each
-  /// stream offers a body too, only the event-stream method is left out and
-  /// the method that returns the body is generated.
+  /// event-stream successes have different event types, or another success has
+  /// a body that is not an event stream. The operation is not generated when
+  /// some of its successes are only a stream; when each stream offers a body
+  /// too, only the event-stream method is left out and the method that returns
+  /// the body is generated. Also reported when an `sse` override of the event
+  /// types does not reach a shared `$ref`'d response, so the event types still
+  /// differ.
   ///
   /// Example: An operation whose `200` is `text/event-stream` and whose `201`
-  /// is `application/json` only.
+  /// is `application/json` only; or two event-stream successes with different
+  /// `itemSchema`s.
   ///
-  /// Fix: Offer `text/event-stream` on every success with a body.
+  /// Fix: Offer `text/event-stream` on every success with a body and give the
+  /// event-stream successes one event type; for a shared `$ref`'d response,
+  /// override the schema it uses by its component name, or write the response
+  /// in the operation.
   eventStreamNotGenerated('TOA654', 'event-stream-not-generated', .warning),
 
   /// The schema of a multipart body is not an object with properties (a
@@ -1114,14 +1134,17 @@ enum DiagnosticCode {
   /// Fix: Create the file, or fix `overrides` of this client in the config.
   overridesNotFound('TOA801', 'overrides-not-found', .error),
 
-  /// The overrides file cannot be read, or an override has a value of the
-  /// wrong type; the value is ignored.
+  /// The overrides file cannot be read, or an override has a value of the wrong
+  /// type, or a field that cannot be set where it is (on a schema that is a
+  /// reference, or together with `nullable` on a schema that is nullable
+  /// through `anyOf` or `oneOf`); the value is ignored.
   ///
-  /// Example: An overrides file that is a list, or an override with `exclude:
-  /// "yes"`.
+  /// Example: An overrides file that is a list, an override with `exclude:
+  /// "yes"`, or a field other than `nullable` on a schema that is a `$ref`.
   ///
-  /// Fix: Point `overrides` of this client at the overrides file itself, and
-  /// give each field the type the message names.
+  /// Fix: Point `overrides` of this client at the overrides file itself, give
+  /// each field the type the message names, and override `nullable` alone, or
+  /// the schema by its name, where other fields cannot be set.
   invalidOverride('TOA802', 'invalid-override', .error),
 
   /// An override has a key this tool does not know, such as a misspelled
@@ -1160,7 +1183,7 @@ enum DiagnosticCode {
   /// Example: Two override entries for `getPets`, one by `operationId` and one
   /// by `GET /pets`.
   ///
-  /// Fix: Keep one of them.
+  /// Fix: Merge them into one override.
   overrideConflict('TOA806', 'override-conflict', .error),
 
   /// An override sets a value the spec already has, or a generation field
@@ -1184,14 +1207,14 @@ enum DiagnosticCode {
   /// each operation's own parameter.
   overrideSharedTarget('TOA808', 'override-shared-target', .info),
 
-  /// An override removes the `type` of a nullable 3.1 schema, so the schema
-  /// is no longer nullable: nullability is the `null` in that `type`.
+  /// An override removes the `type` of a nullable 3.1 schema, so the schema is
+  /// no longer nullable: nullability is the `null` in that `type`.
   ///
   /// Example: An override `type: null` on a schema with `type: [string,
   /// "null"]`.
   ///
-  /// Fix: Nothing to do if the schema should stop being nullable; override
-  /// `nullable` instead to keep the type.
+  /// Fix: Nothing to do if the schema should stop being nullable; remove the
+  /// override if it should stay nullable.
   overrideNullabilityDropped(
     'TOA809',
     'override-nullability-dropped',
@@ -1262,15 +1285,17 @@ enum DiagnosticCode {
 
   /// An earlier `generate` was killed while it replaced the output directory
   /// and left the previous tree or a half-built one in sibling directories
-  /// named `.<output>.typed_openapi-*`. The run put the previous output
-  /// back, when the output was missing, and removed the leftovers. Also
-  /// reported when a run takes over the lock of a process that is gone, or
-  /// breaks a lock whose owner cannot be told with `--break-lock`.
+  /// named `.<output>.typed_openapi-*`. The run put the previous output back,
+  /// when the output was missing, and removed the leftovers. Also reported when
+  /// a run takes over the lock of a process that is gone, or breaks a lock
+  /// whose owner cannot be told with `--break-lock`.
   ///
   /// Example: A `generate` that was killed halfway through replacing the
   /// output.
   ///
-  /// Fix: Nothing to do; the output is back as it was before the killed run.
+  /// Fix: Nothing to do after a recovery: the output is back as it was before
+  /// the killed run. After a lock take-over, check that no other `generate`
+  /// still runs on this output.
   outputRecovered('TOA832', 'output-recovered', .info),
 
   /// `generate --force` overwrote or deleted a file that it did not write or
@@ -1281,10 +1306,10 @@ enum DiagnosticCode {
   /// Fix: Nothing to do; keep hand-written code outside the output directory.
   outputFileReplaced('TOA833', 'output-file-replaced', .info),
 
-  /// `generate --locked` found that a client's API differs from its
-  /// snapshot in `typed_openapi.lock`, or that the lock has no snapshot of
-  /// it, or one of a client the config no longer declares. The client is
-  /// not written and the lock is not changed (M12, decision 6).
+  /// `generate --locked` found that a client's API differs from its snapshot in
+  /// `typed_openapi.lock`, or that the lock has no snapshot of it, or one of a
+  /// client the config no longer declares. The client is not written and the
+  /// lock is not changed.
   ///
   /// Example: `generate --locked` in CI after the spec changed a type without a
   /// committed lock.
