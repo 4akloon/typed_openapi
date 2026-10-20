@@ -34,9 +34,9 @@ In the commands below `<version>` is the release, such as `0.1.0`.
    unpublished packages that depend on a sibling, so the workspace
    resolves) and in `OutputManifest.generator`
    (`packages/typed_openapi/lib/src/generate/output_manifest.dart`,
-   `typed_openapi <version>`). A change of that string changes the manifest
-   `.typed_openapi.json` of every generated client; `corpus.lock` and the
-   golden files must then be updated with the release (see the open items).
+   `typed_openapi <version>`). The manifest is not part of the `corpus.lock`
+   hashes, so the generator string changes no lock or golden file (checked
+   at 0.1.0: 0 differences).
    `lockstep_versions_test` and `release_readiness_test` in the tool package
    fail when the pubspecs disagree.
 3. **Drop ` - Unreleased`** from the top heading of each of the four
@@ -69,7 +69,8 @@ In the commands below `<version>` is the release, such as `0.1.0`.
    not exist yet when the pull request is merged, so the URL answers 404
    until the tag is pushed; push the tag soon after the merge.
 6. **Dry-run each package in publish order**, from its own directory, on the
-   clean tree of step 7 (a dirty tree adds a warning that is not a defect):
+   PR branch, and again on the merge commit before the first
+   `dart pub publish` (a dirty tree adds a warning that is not a defect):
 
    ```sh
    cd packages/typed_openapi_core   && dart pub publish --dry-run
@@ -123,17 +124,22 @@ git tag typed_openapi_core-v<version>
 git tag typed_openapi_client-v<version>
 git tag typed_openapi-v<version>
 git tag typed_openapi_dio-v<version>
-git push origin typed_openapi_core-v<version> typed_openapi_client-v<version> typed_openapi-v<version> typed_openapi_dio-v<version>
+git push origin typed_openapi_core-v<version>
+# wait until typed_openapi_core <version> shows on pub.dev, then:
+git push origin typed_openapi_client-v<version>
+# and so on, one tag at a time, in this order
 ```
 
 For the first release (published by hand) only `typed_openapi-v<version>` is
 needed: it starts `release.yml`, which builds the binaries. Its
 `publish.yml` run fails because the version already exists on pub.dev; that
 failure is expected and ignored. Pushing the other three tags is optional
-for the first release. From the second release on, push the four tags and
-let `publish.yml` publish (in order, waiting for each package to appear).
-For a push of several tags at once GitHub may not start every workflow run;
-push them one at a time if a run is missing.
+for the first release. From the second release on, push the tags one at a
+time, in publish order, each only after the previous package shows on
+pub.dev. `publish.yml` does not order the runs (one parallel run per tag), so
+a dependent package's run started early can fail because its dependency is
+not on pub.dev yet. GitHub may also not start every run when several tags
+are pushed at once.
 
 `release.yml` (tag `typed_openapi-v*`) checks the tag against
 `packages/typed_openapi/pubspec.yaml`, compiles `typed_openapi` with
@@ -219,12 +225,6 @@ overrides file has no fixed name, so its entry has an empty fileMatch."
 These could not be verified while preparing 0.1.0 and are decided or checked
 by the maintainer at release.
 
-- **`corpus.lock` and the version string.** `OutputManifest.generator` is
-  `typed_openapi 0.1.0`, so the manifest of every generated client differs
-  from a lock made at 0.0.1. See the report of Task 14 for what
-  `corpus check` printed; if it reports differences, `corpus.lock` is
-  updated with `corpus update` by a maintainer in the release pull request,
-  and `corpus semver` needs a CHANGELOG entry under `### Output changes`.
 - **`helpUri` is not pinned to a tag.** `DiagnosticCode.helpUri` (core)
   hard-codes
   `https://github.com/4akLoon/typed_openapi/blob/main/packages/typed_openapi/doc/diagnostics.md#...`,
@@ -243,7 +243,8 @@ by the maintainer at release.
   pub.dev setup, which is harmless).
 - **`install.sh` on macOS.** The `curl` flags and the bsdtar member
   extraction in `action/install.sh` are unexercised on macOS.
-- **`README.ua.md` lacks the new guides.** The Ukrainian READMEs do not link
+- **`README.ua.md` lacks the new guides.** `packages/typed_openapi/README.ua.md` and
+  `packages/typed_openapi_client/README.ua.md` do not link
   the guides added in M13; update them or leave them marked as older.
 - **The git-dependency install path is untested** until the first
   publication: the install text that tells users to depend on the

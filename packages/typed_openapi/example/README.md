@@ -3,11 +3,16 @@
 A small pet shop: one OpenAPI 3.1 spec (`specs/petshop.yaml`) and the config
 that generates a client from it (`typed_openapi.yaml`).
 
+The example is not a package: to run the commands, make it one with
+`typed_openapi` as a dev dependency (or run them with a `typed_openapi`
+executable on your path). `example_test.dart` copies the directory and runs
+`check` and `generate` in the copy.
+
 Run these in this directory:
 
 ```sh
 dart run typed_openapi check      # errors: 0, warnings: 0, infos: 0
-dart run typed_openapi generate   # writes lib/src/petshop
+dart run typed_openapi generate   # writes lib/src/petshop and typed_openapi.lock
 dart run typed_openapi diff       # what changed in the API since the last generate
 ```
 

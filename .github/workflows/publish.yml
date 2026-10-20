@@ -14,7 +14,8 @@
 # `<package>-v{{version}}`, and the `pub.dev` GitHub environment required.
 # NOTE: pub.dev only allows this for *existing* packages — the very first
 # version of each package has to be published manually (`dart pub publish`).
-# The tag `typed_openapi-v<version>` also starts release.yml, which builds the command-line binaries. The steps are in docs/release-checklist.md.
+# The tag `typed_openapi-v<version>` also starts release.yml, which builds the
+# command-line binaries. The steps are in docs/release-checklist.md.
 name: Publish
 
 on:
