@@ -1,4 +1,5 @@
 import '../request/operation_info.dart';
+import '../result/result.dart';
 import 'sse_trace.dart';
 
 /// Sends the [SseTrace]s of one event-stream call to `SseOptions.onTrace`.
@@ -71,6 +72,21 @@ final class SseTracer {
       stackTrace: stackTrace,
     ),
   );
+
+  /// A failed attempt or the end of a call: a [TransportError] or
+  /// [Cancelled] traces its exception and stack trace, any other failure
+  /// itself.
+  void failed(Failure<Object?, Object?> failure) => switch (failure) {
+    TransportError(:final exception, :final stackTrace) => error(
+      exception,
+      stackTrace,
+    ),
+    Cancelled(:final exception, :final stackTrace) => error(
+      exception,
+      stackTrace,
+    ),
+    _ => error(failure, null),
+  };
 
   /// A wait of [delay] before attempt [attempt].
   void reconnecting(int attempt, Duration delay) => _send(

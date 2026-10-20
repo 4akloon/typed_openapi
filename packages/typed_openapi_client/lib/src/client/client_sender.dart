@@ -94,6 +94,16 @@ final class ClientSender {
   /// so (see [SseReconnection], [SseOptions] and `SseReconnector`); a 204
   /// No Content never reconnects.
   ///
+  /// A transient failure of the opening is retried in the same cases, with
+  /// the same delays, `Retry-After` and traces ([SseOptions.retryOpen]). The
+  /// returned [Future] waits meanwhile: it completes when the stream opens,
+  /// when a failure is final, when the attempts are used up (the last
+  /// [Failure]) or with [Cancelled] when `call.cancel` fires, also during a
+  /// wait. There is no listener to cancel before it completes, so cancel
+  /// through `call.cancel`. [SseReconnection.off] and a request body that
+  /// can be read once (`FileUpload.stream`) are never sent twice, whatever
+  /// `retryOpen` says.
+  ///
   /// [OperationRequest.streamStatuses] must not be empty (checked by an
   /// `assert`): a generated method always sets it.
   Future<Result<Stream<SseItem<T>>, E>> openEvents<T, E>(

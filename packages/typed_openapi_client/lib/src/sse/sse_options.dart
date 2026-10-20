@@ -134,8 +134,13 @@ final class SseOptions {
   /// sleep.
   final Future<void> Function(Duration delay)? wait;
 
-  /// Whether a failure to open the stream is retried; null leaves it unset
-  /// and follows the reconnection policy. `false` switches a default off.
+  /// Whether a transient failure to open the stream is retried, with the
+  /// delays of the reconnections; null leaves it unset and follows the
+  /// reconnection policy. `false` switches a default off (the opening fails
+  /// fast). The call's `Future` waits while it retries; cancel it through
+  /// `CallOptions.cancel`. An operation whose reconnection is
+  /// [SseReconnection.off], or whose body cannot be sent twice, is never
+  /// retried, even with `true`, and without an error.
   final bool? retryOpen;
 
   /// Decides whether a failure is transient and worth another attempt;

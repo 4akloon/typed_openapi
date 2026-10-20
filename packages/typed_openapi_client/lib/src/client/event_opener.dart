@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import '../json/json_decode_exception.dart';
 import '../request/operation_request.dart';
 import '../request/raw_response.dart';
+import '../request/replayable_body.dart';
 import '../result/result.dart';
 import '../sse/idle_timeout.dart';
 import '../sse/sse_item.dart';
@@ -21,6 +22,7 @@ import 'handshake.dart';
 import 'progress_counter.dart';
 import 'request_builder.dart';
 import 'response_reader.dart';
+import 'stream_opening.dart';
 import 'traced_result.dart';
 
 /// Opens the event streams of `ClientSender.openEvents`: the first
@@ -55,23 +57,26 @@ final class EventOpener {
     };
   }
 
-  /// The first connection, with reconnection around its stream when the
-  /// call and the operation ask for it.
+  /// The first connection, retried while the call and the operation allow
+  /// it, with reconnection around its stream when they ask for it.
   Future<Result<Stream<SseItem<T>>, E>> _openReconnecting<T, E>(
     EventCall<T, E> event,
     SseReconnection reconnection,
   ) async {
     final call = event.call;
-    final first = await _connect(event, (
-      lastEventId: RequestBuilder.userLastEventId(call?.headers),
-      retry: null,
-    ));
     final options = call?.sse ?? const SseOptions();
+    final reconnects = reconnection.reconnects(options);
+    final isReplayable = ReplayableBody.isReplayable(event.request.body);
+    final canRepeat = reconnection != SseReconnection.off && isReplayable;
+    final first = await StreamOpening<T, E>(
+      event,
+      (resume) => _connect(event, resume),
+    ).open(retries: canRepeat && (event.settings.retryOpen ?? reconnects));
     if (first case Success(
       :final data,
       :final statusCode,
       :final headers,
-    ) when statusCode != 204 && reconnection.reconnects(options)) {
+    ) when statusCode != 204 && reconnects && isReplayable) {
       return Success(
         SseReconnector<T>(
           event.settings,
