@@ -6,8 +6,8 @@
   (M12b). `package:typed_openapi/typed_openapi.dart` exports only
   `TypedOpenApiCli`, `ApiLibrary`, `ModelLibrary`, `OutputWriter` and
   `OutputChanges`; import `package:typed_openapi_core/typed_openapi_core.dart`
-  for `SpecChecker`, `ConfigLoader`, `DiagnosticBag` and the rest. The
-  generated output did not change.
+  for `SpecChecker`, `ConfigLoader`, `DiagnosticBag` and the rest.
+  This change does not alter the generated output.
 
 ### Output changes
 - Generated files import `package:typed_openapi_client/typed_openapi_client.dart`

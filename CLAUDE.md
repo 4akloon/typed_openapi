@@ -39,7 +39,8 @@ cd packages/typed_openapi_client && dart test -p chrome                        #
 cd packages/typed_openapi_client && dart test -p chrome --compiler dart2wasm   # dart2wasm; also typed_openapi_dio
 cd packages/typed_openapi && dart format lib test bin   # a second run must change 0 files
 cd packages/typed_openapi_core && dart format lib test  # the same
-cd packages/typed_openapi_client && dart format lib test # the same; also typed_openapi_dio, typed_openapi_transport_tests, typed_openapi_test_support
+cd packages/typed_openapi_client && dart format lib test # the same; also typed_openapi_dio, typed_openapi_transport_tests
+cd packages/typed_openapi_test_support && dart format lib # the same
 cd packages/<package> && dart pub publish --dry-run # before publishing (the core before the generator, the client before the Dio transport)
 cd packages/typed_openapi_tool && dart test
 cd packages/typed_openapi_tool && dart format lib test bin # the same
@@ -133,6 +134,9 @@ Engine folders under `packages/typed_openapi_core/lib/src/`, generator folders
   `BundlerConstructs`; `OperationParser` reads servers through `ServerParser` and the `security` field
   through `SecurityParser` (a field that is not a list is one malformed
   requirement, `SecurityRequirement.isNotList`, with TOA111 kept).
+- `paths/` - `RealPaths` compares paths with symbolic links resolved and case
+  ignored where the file system ignores it; `ConfigLoader` (TOA904) and the
+  generator's `OutputWriter` use it.
 - `resolve/` - `RefTarget` reads a `$ref` value (a query, a bad fragment or a
   file name that is not UTF-8 after percent-decoding -> TOA100, a host ->
   TOA102), `SpecDocuments` loads other local files once by
@@ -904,8 +908,8 @@ Engine folders under `packages/typed_openapi_core/lib/src/`, generator folders
   `OverrideSnippet`), `ir/` internals (`IrContext`, `IrOverrides`,
   `SchemaMapper` and its collaborators, `SchemaShapes` and its collaborators,
   `RefFollower`, `Decimal`, `NameHint`, `DirectionIndex`,
-  `OperationSelector`, `OperationBuilder`, `SpecOperation`, `DartNames`,
-  `NameScope`, `MediaTypePicker`, `RootNames`, `TypeClaims`, `PartsBuilder`,
+  `OperationSelector`, `OperationBuilder`, `SpecOperation`,
+  `MediaTypePicker`, `RootNames`, `TypeClaims`, `PartsBuilder`,
   `BodyEncoding`, `SchemaDefaults`, `DefaultMatcher`), `YamlComposer` and `load/yaml/`.
 - `packages/typed_openapi/lib/typed_openapi.dart` exports five symbols and
   re-exports nothing from the core: `TypedOpenApiCli`, `ApiLibrary` (M11:
