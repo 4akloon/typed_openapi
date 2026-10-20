@@ -1,3 +1,5 @@
+import '../request/operation_info.dart';
+
 /// What a traced event stream just did (`SseTrace.kind`).
 enum SseTraceKind {
   /// A connection attempt is about to be sent.
@@ -27,12 +29,15 @@ enum SseTraceKind {
 /// One step of an event stream, handed to `SseOptions.onTrace`.
 ///
 /// For a debug panel or a log. It reports what the stream does and never
-/// changes the items it emits. Which fields are set depends on [kind].
+/// changes the items it emits. Which fields are set depends on [kind]. A
+/// trace names the [operation], so one shared `onTrace` can tell streams
+/// apart.
 final class SseTrace {
-  /// Creates a trace of [kind] for the stream [streamId].
+  /// Creates a trace of [kind] for the stream [streamId] of [operation].
   const SseTrace(
     this.kind, {
     required this.streamId,
+    required this.operation,
     this.attempt,
     this.statusCode,
     this.event,
@@ -48,6 +53,9 @@ final class SseTrace {
   /// The correlation id of the stream: one per call, the same on every
   /// connection of it, different for every call in the program.
   final int streamId;
+
+  /// The operation the stream calls.
+  final OperationInfo operation;
 
   /// [SseTraceKind.connect]: the number of the connection, 1 for the first
   /// request and 2 for the first reconnection. [SseTraceKind.reconnecting]:
@@ -83,7 +91,7 @@ final class SseTrace {
       if (delay != null) 'delay: $delay',
       if (error != null) 'error: $error',
     ];
-    return 'SseTrace(#$streamId ${kind.name}'
+    return 'SseTrace(#$streamId ${operation.operationId} ${kind.name}'
         '${fields.isEmpty ? '' : ' ${fields.join(', ')}'})';
   }
 }

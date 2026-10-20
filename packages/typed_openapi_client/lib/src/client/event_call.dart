@@ -16,7 +16,7 @@ final class EventCall<T, E> {
   EventCall(this.request, this.decodeEvent, this.decodeError, this.call)
     : signals = ConnectionSignals(call?.cancel),
       settings = SseSettings.of(call?.sse),
-      tracer = SseTracer.of(call?.sse?.onTrace);
+      tracer = SseTracer.of(call?.sse?.onTrace, request.operation);
 
   /// The request every connection sends.
   final OperationRequest request;
