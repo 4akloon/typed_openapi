@@ -1,0 +1,105 @@
+# Builds the typed_openapi binaries for the tag typed_openapi-v<version> (the
+# tag publish.yml uses too) and attaches them, with SHA256SUMS, to a GitHub
+# release. Nothing runs until such a tag is pushed.
+name: Release binaries
+
+on:
+  push:
+    tags: ['typed_openapi-v*']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    timeout-minutes: 20
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - target: linux-x64
+            os: ubuntu-24.04
+            flags: ''
+          - target: linux-arm64
+            os: ubuntu-24.04
+            flags: '--target-os linux --target-arch arm64'
+          - target: macos-x64
+            os: macos-15-intel
+            flags: ''
+          - target: macos-arm64
+            os: macos-15
+            flags: ''
+          - target: windows-x64
+            os: windows-2025
+            flags: ''
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Read the version from the tag
+        id: meta
+        run: echo "version=${GITHUB_REF_NAME##*-v}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify the pubspec version matches the tag
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          grep -qx "version: $VERSION" packages/typed_openapi/pubspec.yaml
+
+      - name: Install dependencies (workspace)
+        run: dart pub get
+
+      - name: Compile
+        env:
+          FLAGS: ${{ matrix.flags }}
+        run: |
+          # The flags are separate words on purpose.
+          # shellcheck disable=SC2086
+          dart compile exe $FLAGS packages/typed_openapi/bin/typed_openapi.dart -o build/typed_openapi
+
+      - name: Smoke test
+        if: matrix.flags == ''
+        run: |
+          build/typed_openapi --help
+          build/typed_openapi lint packages/typed_openapi_test_support/lib/fixtures/pets.yaml
+
+      - name: Package
+        run: release/package.sh '${{ matrix.target }}' '${{ steps.meta.outputs.version }}' build/typed_openapi dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: typed_openapi-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: Create the release
+    needs: build
+    timeout-minutes: 10
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # create the release and attach the files
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Write SHA256SUMS
+        run: cat dist/*.sha256 > dist/SHA256SUMS
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "typed_openapi ${GITHUB_REF_NAME##*-v}" --generate-notes

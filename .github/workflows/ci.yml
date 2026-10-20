@@ -200,6 +200,44 @@ jobs:
         run: dart run bin/docs.dart check
         working-directory: packages/typed_openapi_tool
 
+  actionlint:
+    name: Workflows are valid
+    timeout-minutes: 10
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      # Pinned: 1.7.7 does not know the label macos-15-intel.
+      - name: Run actionlint
+        run: docker run --rm --volume "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.12 -color
+
+  binary:
+    name: Release binary works
+    timeout-minutes: 15
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Install dependencies (workspace)
+        run: dart pub get
+
+      - name: Compile and pack
+        run: |
+          dart compile exe packages/typed_openapi/bin/typed_openapi.dart -o build/typed_openapi
+          release/package.sh linux-x64 0.0.0-ci build/typed_openapi dist
+
+      - name: Run the action on a fixture spec
+        uses: ./action
+        with:
+          command: lint
+          spec: packages/typed_openapi_test_support/lib/fixtures/backend_defects.yaml
+          executable: build/typed_openapi
+          format: text
+
   semver:
     name: Output changes are versioned
     timeout-minutes: 10

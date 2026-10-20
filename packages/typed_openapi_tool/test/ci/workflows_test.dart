@@ -146,7 +146,7 @@ void main() {
   });
 
   test('workflows can only read the repository', () {
-    for (final name in ['ci.yml', 'nightly.yml']) {
+    for (final name in ['ci.yml', 'nightly.yml', 'release.yml']) {
       expect(at(name, ['permissions']), {'contents': 'read'}, reason: name);
     }
   });
@@ -169,5 +169,55 @@ void main() {
       ];
       expect(lenient, name == 'nightly.yml' ? ['beta'] : isEmpty);
     }
+  });
+
+  test('a generator tag builds the five binaries and one job may write', () {
+    expect(at('release.yml', ['on', 'push', 'tags']), ['typed_openapi-v*']);
+    final matrix =
+        at('release.yml', ['jobs', 'build', 'strategy', 'matrix'])
+            as Map<Object?, Object?>;
+    expect(
+      [
+        for (final entry in matrix['include'] as List<Object?>)
+          (entry as Map<Object?, Object?>)['target'],
+      ],
+      ['linux-x64', 'linux-arm64', 'macos-x64', 'macos-arm64', 'windows-x64'],
+    );
+    expect(at('release.yml', ['jobs', 'release', 'needs']), 'build');
+    expect(at('release.yml', ['jobs', 'release', 'permissions']), {
+      'contents': 'write',
+    });
+    expect(at('release.yml', ['jobs', 'build', 'permissions']), isNull);
+  });
+
+  test('every PR validates the workflows and tries the action', () {
+    expect(
+      runsOf('ci.yml', 'actionlint').single,
+      contains('rhysd/actionlint:1.7.12'),
+    );
+    expect(at('ci.yml', ['jobs', 'binary', 'steps', 4, 'uses']), './action');
+    expect(
+      runsOf('ci.yml', 'binary').last,
+      contains('release/package.sh linux-x64'),
+    );
+  });
+
+  test('the action is a composite with the inputs run.sh reads', () {
+    final file = File(p.join('..', '..', 'action', 'action.yml'));
+    final action = loadYaml(file.readAsStringSync()) as Map<Object?, Object?>;
+    expect((action['runs'] as Map<Object?, Object?>)['using'], 'composite');
+    expect(
+      (action['inputs'] as Map<Object?, Object?>).keys,
+      containsAll([
+        'command',
+        'spec',
+        'preset',
+        'fail-on',
+        'config',
+        'format',
+        'version',
+        'executable',
+      ]),
+    );
   });
 }

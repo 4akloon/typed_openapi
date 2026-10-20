@@ -192,6 +192,41 @@ jobs:
 
 Findings are annotations on the changed files, and an error fails the job; warnings are shown but do not. Use `--fail-on warning` once the spec has none, and `--preset` to name the framework when detection says `generic`. The `lint` command line and its annotations were run locally; the workflow file, including the second checkout and the `PATH` step, was not run on GitHub.
 
+### Without Dart: the action and the binaries
+
+A backend project that has no Dart SDK can run the same `lint` from a release binary. Each release `typed_openapi-v<version>` (the tag of the generator) attaches five archives and the file `SHA256SUMS`:
+
+- `typed_openapi-<version>-linux-x64.tar.gz`
+- `typed_openapi-<version>-linux-arm64.tar.gz`
+- `typed_openapi-<version>-macos-x64.tar.gz`
+- `typed_openapi-<version>-macos-arm64.tar.gz`
+- `typed_openapi-<version>-windows-x64.tar.gz`
+
+Each archive holds the executable (`typed_openapi.exe` on Windows) and the `LICENSE`. The action downloads the archive of the runner, checks its SHA-256 against `SHA256SUMS` and runs the command:
+
+```yaml
+      - uses: 4akloon/typed_openapi/action@typed_openapi-v0.1.0
+        with:
+          command: lint
+          spec: openapi.json
+          version: 0.1.0
+          fail-on: error
+```
+
+| Input | Default | Meaning |
+| --- | --- | --- |
+| `command` | `lint` | `lint` (one spec) or `check` (the specs of a config). |
+| `spec` | | The file to lint. Required for `lint`, refused for `check`. |
+| `preset` | | The framework preset for `lint`. Refused for `check`. |
+| `fail-on` | | The lowest level that fails `lint`. Refused for `check`. |
+| `config` | `typed_openapi.yaml` | The config for `check`. |
+| `format` | `github-actions` | `text`, `json`, `sarif` or `github-actions`. |
+| `version` | | The release to download, such as `0.1.0`. |
+| `executable` | | A binary to run instead of downloading one. |
+| `working-directory` | `.` | Where the command runs. |
+
+`version` or `executable` is required: there is no "latest", so a pipeline never changes under you. The first release is not out yet, so this step does not run until it is. The scripts and the action are tested on Linux with a fake executable and validated by actionlint; macOS and Windows are first exercised by the first release.
+
 ## See also
 
 - [Command line](cli.md): options and exit codes.
