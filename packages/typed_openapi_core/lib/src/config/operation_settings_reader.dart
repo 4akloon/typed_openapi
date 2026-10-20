@@ -1,12 +1,13 @@
 import '../diagnostics/json_pointer.dart';
+import 'config_reading.dart';
 import 'config_sources.dart';
 import 'generation_config.dart';
 
 /// Reads the settings of how a client's operations are generated:
 /// `naming.operation_prefix`, `naming.stream_suffix` and `sse.reconnect`,
 /// each from the last source that has it (`defaults` first). A bad value
-/// is reported through the `invalid` function (TOA902) and the default is
-/// used.
+/// is reported through the `invalid` function (TOA902) and the next source
+/// is tried.
 final class OperationSettingsReader {
   /// Creates a reader of [_sources] that reports through [_invalid].
   const OperationSettingsReader(this._sources, this._invalid);
@@ -21,50 +22,61 @@ final class OperationSettingsReader {
 
   /// `naming.operation_prefix`: what is removed from the start of an
   /// `operationId`; null when not set or not a valid regular expression.
-  RegExp? operationPrefix() {
-    final picked = _sources.pick('operation_prefix', 'naming');
-    if (picked == null) return null;
-    final (value, at) = picked;
+  RegExp? operationPrefix() => _sources
+      .resolve<RegExp?>(
+        'operation_prefix',
+        section: 'naming',
+        builtIn: null,
+        show: (prefix) => prefix?.pattern ?? 'none',
+        report: _invalid,
+        read: _prefix,
+      )
+      .value;
+
+  ConfigReading<RegExp?> _prefix(Object? value) {
     if (value is! String || value.isEmpty) {
-      _invalid('"operation_prefix" must be a non-empty string.', at);
-      return null;
+      return const InvalidValue(
+        '"operation_prefix" must be a non-empty string.',
+      );
     }
     try {
-      return RegExp(value);
+      return ValidValue(RegExp(value));
     } on FormatException catch (e) {
-      _invalid(
+      return InvalidValue(
         '"operation_prefix" is not a valid regular expression: '
         '${e.message}.',
-        at,
       );
-      return null;
     }
   }
 
   /// `naming.stream_suffix`: what the name of the event-stream method of an
   /// operation that also returns JSON ends with.
-  String streamSuffix() {
-    final picked = _sources.pick('stream_suffix', 'naming');
-    if (picked == null) return GenerationConfig.defaultStreamSuffix;
-    final (value, at) = picked;
-    if (value is String && _suffix.hasMatch(value)) return value;
-    _invalid(
-      '"stream_suffix" must be letters and digits that start with an '
-      'uppercase letter or a digit, such as Stream; '
-      '${GenerationConfig.defaultStreamSuffix} is used.',
-      at,
-    );
-    return GenerationConfig.defaultStreamSuffix;
-  }
+  String streamSuffix() => _sources
+      .resolve<String>(
+        'stream_suffix',
+        section: 'naming',
+        builtIn: GenerationConfig.defaultStreamSuffix,
+        report: _invalid,
+        read: (value) => value is String && _suffix.hasMatch(value)
+            ? ValidValue(value)
+            : const InvalidValue(
+                '"stream_suffix" must be letters and digits that start with '
+                'an uppercase letter or a digit, such as Stream.',
+              ),
+      )
+      .value;
 
   /// `sse.reconnect`: whether the event streams of GET operations
   /// reconnect unless a call says no.
-  bool streamReconnect() {
-    final picked = _sources.pick('reconnect', 'sse');
-    if (picked == null) return false;
-    final (value, at) = picked;
-    if (value is bool) return value;
-    _invalid('"reconnect" must be true or false.', at);
-    return false;
-  }
+  bool streamReconnect() => _sources
+      .resolve<bool>(
+        'reconnect',
+        section: 'sse',
+        builtIn: false,
+        report: _invalid,
+        read: (value) => value is bool
+            ? ValidValue(value)
+            : const InvalidValue('"reconnect" must be true or false.'),
+      )
+      .value;
 }

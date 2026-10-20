@@ -276,16 +276,19 @@ clients:
   b: {input: b.json, output: lib/b, union: maybe}
 '''),
     )!;
-    // An invalid value falls back to the built-in default (M13 documents
-    // this for every key).
+    // An invalid value falls back to the value of defaults.
     expect(config.clients.map((c) => c.generation.union), [
       UnionMode.structural,
-      UnionMode.raw,
+      UnionMode.structural,
     ]);
     expect(
-      [for (final d in configBag.all) d.pointer?.value],
+      [for (final d in configBag.all) (d.message, d.pointer?.value)],
       [
-        '#/clients/b/union',
+        (
+          '"union" must be one of raw, structural. '
+              'The value from "defaults" (structural) is used.',
+          '#/clients/b/union',
+        ),
       ],
     );
   });

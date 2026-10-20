@@ -160,7 +160,6 @@ M6 review findings and items deferred in the plan, which were deliberately left.
 | A very long `$ref` chain (~1300) — stack depth and O(N²); unrealistic | when needed |
 | `NameScope.claim('')`, gaps in the `dart:core` list in `takenTypeNames` (`RuneIterator`, `UriData`, …) | when needed |
 | IR hygiene: nested lists are not `unmodifiable` (const constructors), `PatchType(String?)` is not enforced, a duplicate `DeclId` — the last one wins, `IrJson` does not print `import` | when needed (statuses and default values are printed since M9, 10c) |
-| An invalid value in a client falls back to the built-in default value, not to `defaults` | M13 (config documentation) |
 | `DirectionIndex` cached "not directional" inside a loop depending on the order of queries | done in M6 (10a): the answer depends only on the set of reachable schemas |
 | `deprecated: false` next to `$ref` does not cancel the target's mark (in the model it is a plain `bool`); a description of the target written in its own annotations-only `allOf` part does not reach the field | when needed (doc comments only) |
 | `IrJson` does not print descriptions, so the effect of annotations next to `$ref` is visible only in tests | M8 (if the dump is needed for doc comments) |

@@ -130,7 +130,7 @@ defaults:
 | `operation_prefix` | none | A regular expression. When its match starts at index 0 and is not empty, it is removed from `operationId` before the method name is made. |
 | `stream_suffix` | `Stream` | Suffix of the second method of an operation that returns a body or an event stream. Letters and digits, starting with an uppercase letter or a digit. |
 
-If `input_suffix` and `patch_suffix` are equal, both return to their defaults and TOA902 is reported. A bad value of any other key is TOA902 and the default is used.
+If `input_suffix` and `patch_suffix` are equal, both return to their defaults and TOA902 is reported. A bad value of any other key is TOA902, and the setting is read as if the client had not set it: the value from `defaults` applies, and when that is missing or bad too, the built-in default. The message names the value that is applied, for example `"union" must be one of raw, structural. The value from "defaults" (structural) is used.` or, without a usable `defaults`, `... The default (raw) is used.`
 
 > **Note:** With `preset: nestjs` and no `operation_prefix`, the pattern `^[A-Za-z0-9]*Controller_` is removed from every `operationId`, so `ProductsController_findOne` becomes the method `findOne`. Set `operation_prefix` to replace that.
 
@@ -186,7 +186,7 @@ So a converter is a class with a `const` constructor and no required arguments, 
 
 ## Exhaustive
 
-`exhaustive` decides whether the bases of enums, unions, the status types of an operation and event unions are `sealed` (`true`, the default) or `abstract interface` (`false`). A `switch` over a sealed type must name every variant, so a value the API adds later breaks it at compile time; over an interface it needs a default case, and a new value is no breaking change for the code that uses the client (see `typed_openapi diff`). An override `exhaustive` on a schema wins. A value that is not `true` or `false` is TOA902 and `true` is used.
+`exhaustive` decides whether the bases of enums, unions, the status types of an operation and event unions are `sealed` (`true`, the default) or `abstract interface` (`false`). A `switch` over a sealed type must name every variant, so a value the API adds later breaks it at compile time; over an interface it needs a default case, and a new value is no breaking change for the code that uses the client (see `typed_openapi diff`). An override `exhaustive` on a schema wins. A value that is not `true` or `false` is TOA902 and falls back like any other setting (to `defaults`, then `true`).
 
 ## Errors
 

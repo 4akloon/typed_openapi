@@ -2,6 +2,7 @@ import '../diagnostics/json_pointer.dart';
 import '../overrides/override_set.dart';
 import 'config_keys.dart';
 import 'config_reader.dart';
+import 'config_reading.dart';
 import 'config_sources.dart';
 import 'custom_types_reader.dart';
 import 'generation_config.dart';
@@ -33,34 +34,33 @@ final class GenerationReader {
     final naming = NamingSettingsReader(_sources, _reader.invalid);
     final suffixes = naming.suffixes();
     final client = _sources.last.$2;
-    final errorSchema = _string('errors', 'default_schema');
+    final errorSchema = _errorSchema();
     final operations = OperationSettingsReader(_sources, _reader.invalid);
     final types = TypeSettingsReader(_sources, _reader.invalid);
     return GenerationConfig(
-      groupTemplate:
-          naming.groupTemplate() ?? GenerationConfig.defaultGroupTemplate,
-      defaultGroup:
-          naming.defaultGroup() ?? GenerationConfig.defaultDefaultGroup,
+      groupTemplate: naming.groupTemplate(),
+      defaultGroup: naming.defaultGroup(),
       inputSuffix: suffixes.$1,
       patchSuffix: suffixes.$2,
       operationPrefix: operations.operationPrefix(),
       streamSuffix: operations.streamSuffix(),
       streamReconnect: operations.streamReconnect(),
       clientClass: naming.clientClass(),
-      groupBy: _choice('group_by', GroupBy.values) ?? .tag,
+      groupBy: _choice('group_by', GroupBy.values, .tag),
       include: _filters.read('include'),
       exclude: _filters.read('exclude'),
       numberType: types.numberType(),
       formats: _customTypes.read('formats'),
       schemas: _customTypes.read('schemas'),
-      triState: _choice('tri_state', TriStateRule.values) ?? .patch,
-      union: _choice('union', UnionMode.values) ?? .raw,
+      triState: _choice('tri_state', TriStateRule.values, .patch),
+      union: _choice('union', UnionMode.values, .raw),
       exhaustive: types.exhaustive(),
-      defaultErrorSchema: errorSchema?.$1,
-      defaultErrorSchemaPointer: errorSchema?.$2,
-      defaultErrorSchemaSpan: errorSchema == null
-          ? null
-          : _reader.spanAt(errorSchema.$2),
+      defaultErrorSchema: errorSchema.value,
+      defaultErrorSchemaPointer: errorSchema.at,
+      defaultErrorSchemaSpan: switch (errorSchema.at) {
+        final at? => _reader.spanAt(at),
+        null => null,
+      },
       file: _reader.file,
       client: client,
       clientSpan: _reader.spanAt(client),
@@ -92,30 +92,37 @@ final class GenerationReader {
     }
   }
 
-  (String, JsonPointer)? _string(String section, String key) {
-    final picked = _sources.pick(key, section);
-    if (picked == null) return null;
-    final (value, at) = picked;
-    if (value is String && value.isNotEmpty) return (value, at);
-    return _invalid('"$key" must be a non-empty string.', at);
-  }
+  T _choice<T extends Enum>(String key, List<T> values, T builtIn) => _sources
+      .resolve<T>(
+        key,
+        builtIn: builtIn,
+        show: (choice) => choice.name,
+        report: _reader.invalid,
+        read: (value) {
+          for (final choice in values) {
+            if (value == choice.name) return ValidValue(choice);
+          }
+          return InvalidValue(
+            '"$key" must be one of '
+            '${values.map((v) => v.name).join(', ')}.',
+          );
+        },
+      )
+      .value;
 
-  T? _choice<T extends Enum>(String key, List<T> values) {
-    final picked = _sources.pick(key);
-    if (picked == null) return null;
-    final (value, at) = picked;
-    for (final choice in values) {
-      if (value == choice.name) return choice;
-    }
-    return _invalid(
-      '"$key" must be one of ${values.map((v) => v.name).join(', ')}.',
-      at,
-    );
-  }
-
-  /// Reports an invalid value at [at]; returns null.
-  Null _invalid(String message, JsonPointer at) {
-    _reader.invalid(message, at);
-    return null;
-  }
+  /// `errors.default_schema`: the component schema for statuses without a
+  /// body, with its pointer; null when not set.
+  ({String? value, JsonPointer? at}) _errorSchema() =>
+      _sources.resolve<String?>(
+        'default_schema',
+        section: 'errors',
+        builtIn: null,
+        show: (name) => name ?? 'none',
+        report: _reader.invalid,
+        read: (value) => value is String && value.isNotEmpty
+            ? ValidValue(value)
+            : const InvalidValue(
+                '"default_schema" must be a non-empty string.',
+              ),
+      );
 }
