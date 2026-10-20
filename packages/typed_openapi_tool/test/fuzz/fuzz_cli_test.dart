@@ -2,9 +2,8 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 import 'package:typed_openapi_tool/src/fuzz/fuzz_cli.dart';
-
-import '../helpers/temp_dir.dart';
 
 void main() {
   for (final args in const [

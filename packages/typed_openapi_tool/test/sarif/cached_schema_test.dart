@@ -6,9 +6,9 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 import '../helpers/cached_schema.dart';
-import '../helpers/temp_dir.dart';
 
 const _json = '{"type": "object"}';
 

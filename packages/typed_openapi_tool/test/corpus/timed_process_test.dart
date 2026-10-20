@@ -4,10 +4,9 @@ library;
 import 'dart:io';
 
 import 'package:test/test.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 import 'package:typed_openapi_tool/src/corpus/corpus_exception.dart';
 import 'package:typed_openapi_tool/src/corpus/timed_process.dart';
-
-import '../helpers/temp_dir.dart';
 
 void main() {
   late String script;

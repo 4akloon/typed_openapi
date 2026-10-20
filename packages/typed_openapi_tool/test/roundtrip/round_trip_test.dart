@@ -4,12 +4,12 @@ library;
 import 'dart:io';
 
 import 'package:test/test.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 import 'package:typed_openapi_tool/src/roundtrip/example_reader.dart';
 import 'package:typed_openapi_tool/src/roundtrip/round_trip.dart';
 import 'package:typed_openapi_tool/src/roundtrip/roundtrip_program.dart';
 
 import '../helpers/client_ir.dart';
-import '../helpers/temp_dir.dart';
 
 const _spec = r'''
 openapi: 3.1.0

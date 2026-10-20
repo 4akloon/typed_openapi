@@ -3,13 +3,12 @@ library;
 
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 import 'package:typed_openapi_tool/src/fuzz/fuzz_build.dart';
 import 'package:typed_openapi_tool/src/fuzz/fuzz_run.dart';
 import 'package:typed_openapi_tool/src/fuzz/fuzz_spec.dart';
 import 'package:typed_openapi_tool/src/fuzz/literal_check.dart';
 import 'package:typed_openapi_tool/src/fuzz/seed_builds.dart';
-
-import '../helpers/temp_dir.dart';
 
 void main() {
   test('a seed always gives the same spec, and hostile strings', () {

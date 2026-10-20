@@ -1,5 +1,5 @@
 import 'package:path/path.dart' as p;
-import 'package:typed_openapi/typed_openapi.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
 
 import '../roundtrip/example_reader.dart';
 import '../roundtrip/round_trip.dart';

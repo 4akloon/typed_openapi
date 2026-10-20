@@ -1,6 +1,5 @@
-import 'package:typed_openapi/typed_openapi.dart';
-
-import 'temp_dir.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 /// The IR of the spec [spec] (YAML), checked as the client `api` of a config
 /// in a temp directory, as `generate` would build it.
