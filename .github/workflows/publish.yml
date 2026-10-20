@@ -30,7 +30,7 @@ jobs:
   publish:
     name: Publish to pub.dev
     timeout-minutes: 15
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: pub.dev
     permissions:
       id-token: write # pub.dev OIDC token exchange
