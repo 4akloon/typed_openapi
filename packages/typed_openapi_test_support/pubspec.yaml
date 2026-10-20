@@ -1,7 +1,8 @@
 name: typed_openapi_test_support
 description: >
   What the tests of the typed_openapi packages share: the OpenAPI fixture
-  specs, a spec pipeline, a temp directory and the size-limit ratchet. Contains no tests.
+  specs, a spec pipeline, a temp directory and the size-limit ratchet.
+  Contains no tests.
   Never published.
 publish_to: none
 
