@@ -45,6 +45,8 @@ export 'src/diff/change_counts.dart' show ChangeCounts;
 export 'src/diff/json_diff_report.dart' show JsonDiffReport;
 export 'src/diff/markdown_diff_report.dart' show MarkdownDiffReport;
 export 'src/diff/text_diff_report.dart' show TextDiffReport;
+export 'src/extensions/spec_extension.dart' show SpecExtension;
+export 'src/extensions/spec_extensions.dart' show SpecExtensions;
 export 'src/ir/api_ir.dart'
     show
         EncodingIr,

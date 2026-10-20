@@ -1,3 +1,4 @@
+import '../extensions/spec_extensions.dart';
 import '../model/schema.dart';
 import '../model/spec_node.dart';
 import 'declaration_names.dart';
@@ -34,8 +35,13 @@ final class EnumMapper {
     SchemaObject schema,
     List<Object?> values,
   ) => (
-    _labelsOf(schema, values, 'x-enum-varnames')?.cast<String>(),
-    _labelsOf(schema, values, 'x-enum-descriptions', allowNull: true),
+    _labelsOf(schema, values, SpecExtensions.enumVarnames.key)?.cast<String>(),
+    _labelsOf(
+      schema,
+      values,
+      SpecExtensions.enumDescriptions.key,
+      allowNull: true,
+    ),
   );
 
   List<String?>? _labelsOf(

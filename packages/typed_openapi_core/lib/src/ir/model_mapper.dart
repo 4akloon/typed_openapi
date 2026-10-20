@@ -1,3 +1,4 @@
+import '../extensions/spec_extensions.dart';
 import '../model/schema.dart';
 import '../overrides/override_set.dart';
 import 'allof_merger.dart';
@@ -30,7 +31,7 @@ final class ModelMapper {
 
   /// The extension that makes a property tri-state with
   /// `tri_state: extension` (R7.2).
-  static const triStateExtension = 'x-typed-tri-state';
+  static final triStateExtension = SpecExtensions.triState.key;
 
   final MappingTools _tools;
   final TypeRecursion _types;
