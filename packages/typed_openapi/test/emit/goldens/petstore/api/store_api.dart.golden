@@ -25,8 +25,12 @@ import '../models/send_note_error.dart';
 
 /// The operations of the `StoreApi` group.
 class StoreApi {
-  /// Sends the requests through [transport].
-  StoreApi(ClientTransport transport) : _sender = ClientSender(transport);
+  /// Sends the requests through [transport]. The options of each call win over
+  /// [defaults], field by field.
+  StoreApi(
+    ClientTransport transport, {
+    CallOptions defaults = const CallOptions(),
+  }) : _sender = ClientSender(transport, defaults: defaults);
 
   final ClientSender _sender;
 

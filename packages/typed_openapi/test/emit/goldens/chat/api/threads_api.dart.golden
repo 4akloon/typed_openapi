@@ -20,8 +20,12 @@ import '../models/thread.dart';
 
 /// The operations of the `ThreadsApi` group.
 class ThreadsApi {
-  /// Sends the requests through [transport].
-  ThreadsApi(ClientTransport transport) : _sender = ClientSender(transport);
+  /// Sends the requests through [transport]. The options of each call win over
+  /// [defaults], field by field.
+  ThreadsApi(
+    ClientTransport transport, {
+    CallOptions defaults = const CallOptions(),
+  }) : _sender = ClientSender(transport, defaults: defaults);
 
   final ClientSender _sender;
 

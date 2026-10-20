@@ -1,3 +1,16 @@
+## 0.3.0 - Unreleased
+
+### Output changes
+- The constructors of the root client and of every group take
+  `{CallOptions defaults = const CallOptions()}` and hand it to their
+  `ClientSender`: an app sets its headers, cancel signal and SSE options once,
+  and the options of each call win over them, field by field. The generated
+  files import `CallOptions` from `typed_openapi_client`.
+- A schema named `SseRetry` gets a suffix: the name is now taken by a type of
+  `typed_openapi_client`.
+- A tag named `defaults` gets the group field `defaults2` (TOA551): the root
+  client's constructor takes a parameter of that name.
+
 ## 0.2.0
 
 ### Output changes

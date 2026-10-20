@@ -128,7 +128,12 @@ final class PetChange {
 /// The `pets` tag: a plain class, so `implements PetsApi` mocks it (R10.7).
 class PetsApi {
   /// Calls the API through [transport].
-  PetsApi(ClientTransport transport) : _sender = ClientSender(transport);
+  ///
+  /// Each call's options win over [defaults], field by field.
+  PetsApi(
+    ClientTransport transport, {
+    CallOptions defaults = const CallOptions(),
+  }) : _sender = ClientSender(transport, defaults: defaults);
 
   final ClientSender _sender;
 

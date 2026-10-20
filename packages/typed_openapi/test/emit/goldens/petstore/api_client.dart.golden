@@ -3,7 +3,7 @@
 // ignore_for_file: deprecated_member_use_from_same_package
 
 import 'package:typed_openapi_client/typed_openapi_client.dart'
-    show ClientTransport;
+    show CallOptions, ClientTransport;
 
 import 'api/default_api.dart';
 import 'api/pets_api.dart';
@@ -15,11 +15,15 @@ export 'models.dart';
 /// The client of the API: a field for each group of operations, and the servers
 /// of the spec. The transport sets the base URL.
 class ApiClient {
-  /// Creates the client: every group sends through [transport].
-  ApiClient(ClientTransport transport)
-    : defaultApi = DefaultApi(transport),
-      pets = PetsApi(transport),
-      store = StoreApi(transport);
+  /// Creates the client: every group sends through [transport]. The options of
+  /// each call win over [defaults], field by field.
+  ApiClient(
+    ClientTransport transport, {
+    CallOptions defaults = const CallOptions(),
+  })
+    : defaultApi = DefaultApi(transport, defaults: defaults),
+      pets = PetsApi(transport, defaults: defaults),
+      store = StoreApi(transport, defaults: defaults);
 
   /// The operations of [DefaultApi].
   final DefaultApi defaultApi;

@@ -84,6 +84,7 @@ final class ApiLibrary {
   String _root(ClientIr ir, Map<String, String> groupFiles) {
     final root = ir.root;
     final imports = Imports(rootFile(root.name))
+      ..fromRuntime('CallOptions')
       ..fromRuntime('ClientTransport');
     for (final group in ir.groups) {
       imports.file('$directory/${groupFiles[group.name]}');
@@ -115,17 +116,21 @@ final class ApiLibrary {
     return out.text;
   }
 
-  /// The constructor of the root client: a group per field, on one line
-  /// when it fits.
+  /// The constructor of the root client: a group per field, each given the
+  /// transport and the default call options.
   void _constructor(DartWriter out, ClientIr ir) {
     out.prose(
-      'Creates the client: every group sends through [transport].',
+      'Creates the client: every group sends through [transport]. The '
+      'options of each call win over [defaults], field by field.',
     );
     final initializers = [
       for (final group in ir.groups)
-        '${group.field} = ${group.name}(transport)',
+        '${group.field} = ${group.name}(transport, defaults: defaults)',
     ];
-    final head = '${ir.root.name}(ClientTransport transport)';
+    const parameters =
+        'ClientTransport transport, '
+        '{CallOptions defaults = const CallOptions()}';
+    final head = '${ir.root.name}($parameters)';
     final flat = initializers.isEmpty
         ? '$head;'
         : '$head : ${initializers.join(', ')};';
@@ -133,7 +138,11 @@ final class ApiLibrary {
       out.line(flat);
       return;
     }
-    out.line(head);
+    out
+      ..line('${ir.root.name}(')
+      ..line('  ClientTransport transport, {')
+      ..line('  CallOptions defaults = const CallOptions(),')
+      ..line(initializers.isEmpty ? '});' : '})');
     out.indented(() {
       for (final (i, initializer) in initializers.indexed) {
         final last = i == initializers.length - 1;

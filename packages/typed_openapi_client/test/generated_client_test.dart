@@ -72,6 +72,24 @@ void main() {
     );
   });
 
+  test('a group built with defaults merges them into every call', () async {
+    final adapter = FakeTransport.json(200, petJson);
+    final api = PetsApi(
+      adapter,
+      defaults: const CallOptions(headers: {'x-app': 'one'}),
+    );
+    await api.getPetById(petId: 7);
+    await api.getPetById(
+      petId: 7,
+      call: const CallOptions(headers: {'x-call': 'two'}),
+    );
+    expect(adapter.requests[0].headers['x-app'], ['one']);
+    expect(adapter.requests[1].headers['x-app'], ['one']);
+    expect(adapter.requests[1].headers['x-call'], ['two']);
+    final PetsApi mock = FakePetsApi();
+    expect(mock, isA<PetsApi>());
+  });
+
   test('a date property decodes and encodes as a full-date', () async {
     final adapter = FakeTransport.json(200, {
       ...petJson,

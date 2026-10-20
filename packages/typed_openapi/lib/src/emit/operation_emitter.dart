@@ -42,16 +42,21 @@ final class OperationEmitter {
   void write(GroupIr group, DartWriter out) {
     final name = group.name;
     _codec.imports
+      ..fromRuntime('CallOptions')
       ..fromRuntime('ClientSender')
       ..fromRuntime('ClientTransport');
     final members = _privateNames(group);
     out.prose('The operations of the `${_code.docSpan(name)}` group.');
     out.block('class $name', () {
       out
-        ..prose('Sends the requests through [transport].')
-        ..line(
-          '$name(ClientTransport transport) : _sender = ClientSender(transport);',
+        ..prose(
+          'Sends the requests through [transport]. The options of each '
+          'call win over [defaults], field by field.',
         )
+        ..line('$name(')
+        ..line('  ClientTransport transport, {')
+        ..line('  CallOptions defaults = const CallOptions(),')
+        ..line('}) : _sender = ClientSender(transport, defaults: defaults);')
         ..line()
         ..line('final ClientSender _sender;');
       for (final (operation, info, _) in members) {
