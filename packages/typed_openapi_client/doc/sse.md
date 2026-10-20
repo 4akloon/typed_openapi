@@ -326,7 +326,9 @@ is `cooldown.duration` instead of the backoff delay (reported as
 the backoff restarts from `delay` and `maxAttempts` counts the attempts of
 one cycle. A message resets the count before that, as always. The cooldown
 is not jittered and does not use the server's `retry`. If `maxAttempts` is
-not larger than `after`, the stream ends before a cooldown.
+not larger than `after`, the stream ends before a cooldown; a `maxAttempts`
+larger than `after` is inert, because the cooldown resets the count and the
+stream never ends.
 
 ### Tracing
 

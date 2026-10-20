@@ -1,7 +1,9 @@
 ## 0.2.0 - Unreleased
 
-No changes; the version moves with `typed_openapi_client` 0.2.0 (the four
-published packages share one version).
+### Output changes
+- A schema named `SseCooldown`, `SseTrace` or `SseTraceKind` gets a suffix:
+  the names are now taken by types of `typed_openapi_client` 0.2.0. Other
+  specs generate the same code.
 
 ## 0.1.0
 

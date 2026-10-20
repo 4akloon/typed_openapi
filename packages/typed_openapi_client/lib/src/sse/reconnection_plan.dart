@@ -43,7 +43,9 @@ final class ReconnectionPlan {
   /// [base] moved by a random share of at most [SseOptions.jitter] either
   /// way.
   Duration _spread(Duration base) {
-    final jitter = _options.jitter;
+    // The constructor asserts the range; a release build must not give a
+    // negative Duration for a value outside it.
+    final jitter = _options.jitter.clamp(0.0, 1.0);
     if (jitter == 0) return base;
     final factor = 1 + (_random.nextDouble() * 2 - 1) * jitter;
     return Duration(microseconds: (base.inMicroseconds * factor).round());

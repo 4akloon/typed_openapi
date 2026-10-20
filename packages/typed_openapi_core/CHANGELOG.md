@@ -1,7 +1,9 @@
 ## 0.2.0 - Unreleased
 
-No changes; the version moves with `typed_openapi_client` 0.2.0 (the four
-published packages share one version).
+### Changed
+- `DartNames.takenTypeNames` reserves `SseCooldown`, `SseTrace` and
+  `SseTraceKind`, the new types of `typed_openapi_client` 0.2.0: a schema
+  with one of these names gets a suffix, as the other runtime types do.
 
 ## 0.1.0
 

@@ -19,9 +19,9 @@ typedef SseResume = ({String lastEventId, Duration? retry});
 /// and calls [reopen] with the last event id. A new connection's items
 /// follow; a failed attempt (a [TransportError]) is the next attempt. The
 /// stream ends with [SseDisconnected] when [SseOptions.maxAttempts]
-/// attempts in a row bring no message (never, when it is null), when the request is cancelled (the
-/// listener cancels, or [cancel] is cancelled, also during a wait), when
-/// the server answers an attempt with a status that is not a stream (the
+/// attempts in a row bring no message (never, when it is null), when the
+/// request is cancelled (the listener cancels, or [cancel] is cancelled, also
+/// during a wait), when the server answers an attempt with a status that is not a stream (the
 /// `Failure` is the cause), or with 204 No Content, which tells a client
 /// to stop reconnecting.
 final class SseReconnector<T>

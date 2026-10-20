@@ -80,7 +80,8 @@ final class SseOptions {
 
   /// A long pause after many failed attempts in a row, or null for none.
   /// The count of failed attempts then starts again, so [maxAttempts] counts
-  /// the attempts of one cycle.
+  /// the attempts of one cycle: a [maxAttempts] larger than `cooldown.after`
+  /// is inert, the stream never ends because the cooldown resets the count.
   final SseCooldown? cooldown;
 
   /// The source of [jitter]; a fresh `Random()` per stream when null. Tests

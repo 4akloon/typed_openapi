@@ -34,10 +34,10 @@ pub workspace with seven pure-Dart packages (no Flutter):
 Minimum SDK: Dart 3.10 (`>=3.10.0 <4.0.0`), also for generated code.
 
 The four published packages (core, client, `typed_openapi`, Dio transport)
-share one version, `0.1.0`, released by hand with
+share one version, `0.2.0`, released by hand with
 `docs/release-checklist.md` (the tags and the publish follow the merge); their
-CHANGELOGs say `## 0.1.0`. A section titled `## <version> - Unreleased` is a
-version not yet released.
+CHANGELOGs say `## 0.2.0 - Unreleased` until the release (a section titled
+`## <version> - Unreleased` is a version not yet released).
 
 ## Commands
 
@@ -1414,7 +1414,7 @@ query is built by the client, so interceptors see an empty
 holds `//`, which Dio would collapse. On the web with Dio's default adapter
 an event stream is refused with `webStreamingMessage` (the adapter delivers
 the body only when the connection closes). Inside the workspace its
-`typed_openapi_client: ^0.1.0` resolves to the package next to it
+`typed_openapi_client: ^0.2.0` resolves to the package next to it
 (`resolution: workspace`); a release that needs a new client publishes the
 client first. Tests: `dio_transport_test.dart` (a fake adapter,
 `test/helpers/fake_adapter.dart`), `web_test.dart` (`@TestOn('browser')`),

@@ -9,10 +9,20 @@ final class ScriptedConnection {
   /// A connection whose headers arrive at once; the body is [body].
   ScriptedConnection.open({int status = 200})
     : _status = status,
-      _headers = null;
+      _headers = null,
+      honoursCancel = false;
 
   /// A connection whose headers never arrive.
-  ScriptedConnection.hanging() : _status = 0, _headers = Completer();
+  ///
+  /// A transport that [honoursCancel] fails the request when its cancel
+  /// signal fires; one that does not keeps waiting, as a transport that
+  /// ignores the cancel would.
+  ScriptedConnection.hanging({this.honoursCancel = false})
+    : _status = 0,
+      _headers = Completer();
+
+  /// Whether a hanging request fails when it is cancelled.
+  final bool honoursCancel;
 
   final int _status;
   final Completer<TransportResponse>? _headers;
@@ -23,9 +33,31 @@ final class ScriptedConnection {
   /// Writes [text] to the body.
   void write(String text) => body.add(utf8.encode(text));
 
+  /// Answers a hanging request now, as a transport that was too late.
+  void answerNow() => _headers?.complete(
+    TransportResponse(
+      statusCode: 200,
+      headers: const {
+        'content-type': ['text/event-stream'],
+      },
+      body: body.stream,
+    ),
+  );
+
   Future<TransportResponse> _response(CancelSignal? cancel) {
     final pending = _headers;
-    if (pending != null) return pending.future;
+    if (pending != null) {
+      if (honoursCancel) {
+        cancel?.whenCancelled.then((_) {
+          if (!pending.isCompleted) {
+            pending.completeError(
+              const TransportException(.cancelled, 'cancelled'),
+            );
+          }
+        });
+      }
+      return pending.future;
+    }
     return Future.value(
       TransportResponse(
         statusCode: _status,

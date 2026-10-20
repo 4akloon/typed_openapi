@@ -74,5 +74,16 @@ final class SseTrace {
   final StackTrace? stackTrace;
 
   @override
-  String toString() => 'SseTrace(#$streamId ${kind.name})';
+  String toString() {
+    final fields = [
+      if (attempt != null) 'attempt: $attempt',
+      if (statusCode != null) 'status: $statusCode',
+      if (event != null) 'event: $event',
+      if (eventId != null) 'id: $eventId',
+      if (delay != null) 'delay: $delay',
+      if (error != null) 'error: $error',
+    ];
+    return 'SseTrace(#$streamId ${kind.name}'
+        '${fields.isEmpty ? '' : ' ${fields.join(', ')}'})';
+  }
 }

@@ -60,6 +60,7 @@ void main() {
           TransportExceptionKind.timeout,
         );
         expect(transport.cancelsFired, [true]);
+        expect(async.nonPeriodicTimerCount, 0);
       });
     });
 
@@ -168,6 +169,30 @@ void main() {
         expect(stream.items.last, isA<SseDisconnected<String>>());
         async.elapse(idle * 2);
         expect(transport.requests, hasLength(1));
+        expect(async.nonPeriodicTimerCount, 0);
+      });
+    });
+
+    test('a listener that cancels leaves no timer', () {
+      fakeAsync((async) {
+        final transport = ScriptedTransport([ScriptedConnection.open()]);
+        late StreamSubscription<SseItem<String>> subscription;
+        ClientSender(transport)
+            .openEvents<String, Never>(
+              request,
+              (m) => m.data,
+              (r) => r.undocumented(),
+              call: const CallOptions(sse: SseOptions(idleTimeout: idle)),
+            )
+            .then((r) {
+              subscription = (r as Success<Stream<SseItem<String>>, Never>).data
+                  .listen((_) {});
+            });
+        async.elapse(const Duration(seconds: 5));
+        unawaited(subscription.cancel());
+        async.flushMicrotasks();
+        expect(transport.cancelsFired, [true]);
+        expect(async.nonPeriodicTimerCount, 0);
       });
     });
   });
@@ -189,6 +214,110 @@ void main() {
         final error = result as TransportError;
         expect(error.exception.kind, TransportExceptionKind.timeout);
         expect(transport.cancelsFired, [true]);
+        expect(async.nonPeriodicTimerCount, 0);
+      });
+    });
+
+    for (final honours in [false, true]) {
+      test(
+        'a cancel during the first handshake ends it at once '
+        '(transport honours the cancel: $honours)',
+        () {
+          fakeAsync((async) {
+            final cancel = CancelSignal();
+            final transport = ScriptedTransport([
+              ScriptedConnection.hanging(honoursCancel: honours),
+            ]);
+            Result<Stream<SseItem<String>>, Never>? result;
+            open(
+              transport,
+              const SseOptions(handshakeTimeout: handshake),
+              cancel: cancel,
+            ).result.then((r) => result = r);
+            async.elapse(const Duration(seconds: 2));
+            cancel.cancel('stop');
+            async.flushMicrotasks();
+            expect(result, isA<Cancelled<Stream<SseItem<String>>, Never>>());
+            expect(async.nonPeriodicTimerCount, 0);
+          });
+        },
+      );
+
+      test(
+        'a cancel during a reconnect handshake ends the stream '
+        '(transport honours the cancel: $honours)',
+        () {
+          fakeAsync((async) {
+            final cancel = CancelSignal();
+            final first = ScriptedConnection.open();
+            final transport = ScriptedTransport([
+              first,
+              ScriptedConnection.hanging(honoursCancel: honours),
+            ]);
+            final stream = open(
+              transport,
+              const SseOptions(reconnect: true, handshakeTimeout: handshake),
+              cancel: cancel,
+            );
+            first.body.close();
+            async.elapse(const Duration(seconds: 2));
+            expect(transport.requests, hasLength(2));
+            cancel.cancel('stop');
+            async.flushMicrotasks();
+            expect(stream.items.last, isA<SseDisconnected<String>>());
+            expect(
+              causeOf(stream.items.last)?.kind,
+              TransportExceptionKind.cancelled,
+            );
+            expect(async.nonPeriodicTimerCount, 0);
+          });
+        },
+      );
+    }
+
+    test('a response after the timeout has its body cancelled', () {
+      fakeAsync((async) {
+        final late = ScriptedConnection.hanging();
+        var isCancelled = false;
+        late.body.onCancel = () => isCancelled = true;
+        final transport = ScriptedTransport([late]);
+        open(transport, const SseOptions(handshakeTimeout: handshake));
+        async.elapse(handshake);
+        late.answerNow();
+        async.flushMicrotasks();
+        expect(isCancelled, isTrue);
+        expect(async.nonPeriodicTimerCount, 0);
+      });
+    });
+
+    test('failed handshakes count toward maxAttempts', () {
+      fakeAsync((async) {
+        final first = ScriptedConnection.open();
+        final transport = ScriptedTransport([
+          first,
+          ScriptedConnection.hanging(),
+          ScriptedConnection.hanging(),
+        ]);
+        final stream = open(
+          transport,
+          const SseOptions(
+            reconnect: true,
+            maxAttempts: 2,
+            handshakeTimeout: handshake,
+          ),
+        );
+        first.body.close();
+        async.elapse(const Duration(minutes: 5));
+        expect(transport.requests, hasLength(3));
+        final last = stream.items.last as SseDisconnected<String>;
+        expect(causeOf(last)?.kind, TransportExceptionKind.timeout);
+        expect(
+          stream.items.whereType<SseReconnecting<String>>().map(
+            (r) => r.attempt,
+          ),
+          [1, 2],
+        );
+        expect(async.nonPeriodicTimerCount, 0);
       });
     });
 
@@ -229,6 +358,40 @@ void main() {
         );
         async.elapse(handshake * 2);
         expect(stream.items, isEmpty);
+      });
+    });
+  });
+
+  group('cooldown', () {
+    test('a cancel during the cooldown wait leaves no timer', () {
+      fakeAsync((async) {
+        final cancel = CancelSignal();
+        final first = ScriptedConnection.open();
+        final transport = ScriptedTransport([
+          first,
+          ScriptedConnection.hanging(),
+        ]);
+        final stream = open(
+          transport,
+          const SseOptions(
+            reconnect: true,
+            handshakeTimeout: Duration(seconds: 10),
+            cooldown: SseCooldown(after: 1, duration: Duration(minutes: 5)),
+          ),
+          cancel: cancel,
+        );
+        first.body.close();
+        // Attempt 1 never answers and fails by the handshake timeout; the
+        // next wait is the cooldown.
+        async.elapse(const Duration(seconds: 15));
+        expect(
+          stream.items.whereType<SseReconnecting<String>>().last.delay,
+          const Duration(minutes: 5),
+        );
+        cancel.cancel('stop');
+        async.flushMicrotasks();
+        expect(stream.items.last, isA<SseDisconnected<String>>());
+        expect(async.nonPeriodicTimerCount, 0);
       });
     });
   });
