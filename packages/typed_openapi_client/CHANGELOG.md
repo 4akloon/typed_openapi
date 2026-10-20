@@ -1,4 +1,4 @@
-## 0.2.0 - Unreleased
+## 0.2.0
 
 ### Added
 - Event stream resilience, all opt-in in `SseOptions` (the defaults are the
@@ -15,6 +15,11 @@
   - `onTrace` with `SseTrace` and `SseTraceKind`: connect, open, event,
     heartbeat, error, reconnecting and closed, with a correlation id per call.
     It does not change the items; an `Exception` it throws is ignored.
+  - A delay that comes from the server's `retry` and the `cooldown` pause are
+    not jittered. A `maxAttempts` larger than `cooldown.after` never ends the
+    stream, because the cooldown starts the count again.
+  - A cancel while the response headers are awaited ends the stream at once,
+    also when the transport does not honour the cancel.
 - `SseItemDecoder` takes `onMessage` and `onComment`.
 
 ### Changed

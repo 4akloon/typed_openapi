@@ -1,4 +1,4 @@
-## 0.2.0 - Unreleased
+## 0.2.0
 
 ### Changed
 - `DartNames.takenTypeNames` reserves `SseCooldown`, `SseTrace` and

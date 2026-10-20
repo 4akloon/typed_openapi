@@ -1,9 +1,11 @@
-## 0.2.0 - Unreleased
+## 0.2.0
 
 ### Output changes
 - A schema named `SseCooldown`, `SseTrace` or `SseTraceKind` gets a suffix:
   the names are now taken by types of `typed_openapi_client` 0.2.0. Other
   specs generate the same code.
+- The manifest `.typed_openapi.json` names the generator `typed_openapi 0.2.0`:
+  every generated tree changes by that one line, and no other file does.
 
 ## 0.1.0
 
