@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'package:meta/meta.dart';
+
 import '../result/result.dart';
 import 'sse_cooldown.dart';
 import 'sse_trace.dart';
@@ -22,7 +24,8 @@ import 'sse_trace.dart';
 final class SseOptions {
   /// Creates the options of one call or of a client's defaults.
   ///
-  /// An omitted [maxAttempts] is unset, a written `null` is "never give up".
+  /// An omitted [maxAttempts] is unset, a written `null` is "never give up";
+  /// a negative number counts as omitted.
   const SseOptions({
     this.reconnect,
     this.delay,
@@ -70,8 +73,9 @@ final class SseOptions {
   /// the last event id and the delay, but are no message), does not. A
   /// written `null` never gives up: the stream reconnects until the call is
   /// cancelled, the listener cancels or the server answers with a status
-  /// that is not a stream. Omitted leaves it unset (5); this field reads
-  /// null for both, `SseSettings` tells them apart.
+  /// that is not a stream. Omitted leaves it unset (5). This field reads
+  /// null both when it was omitted and when `null` was written; [merge]
+  /// keeps the difference. A negative number counts as omitted.
   final int? maxAttempts;
 
   final bool _hasMaxAttempts;
@@ -157,7 +161,9 @@ final class SseOptions {
     );
   }
 
-  /// Whether [maxAttempts] was written, `null` included.
+  /// Whether [maxAttempts] was written, `null` included. For the package's
+  /// own use.
+  @internal
   bool get hasMaxAttempts => _hasMaxAttempts;
 }
 

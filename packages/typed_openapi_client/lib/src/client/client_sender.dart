@@ -36,13 +36,21 @@ import 'response_reader.dart';
 ///   caught: an [Error] thrown by the decoder or the transport reaches the
 ///   caller.
 final class ClientSender {
-  /// Sends requests through [transport]; [boundary] makes the boundary of
-  /// each multipart body (random by default, fixed in tests).
-  ClientSender(this.transport, {String Function()? boundary})
-    : _builder = RequestBuilder(BodyEncoder(boundary ?? _randomBoundary));
+  /// Sends requests through [transport]; [defaults] are merged under the
+  /// options of every call ([CallOptions.merge]); [boundary] makes the
+  /// boundary of each multipart body (random by default, fixed in tests).
+  ClientSender(
+    this.transport, {
+    this.defaults = const CallOptions(),
+    String Function()? boundary,
+  }) : _builder = RequestBuilder(BodyEncoder(boundary ?? _randomBoundary));
 
   /// The transport every request goes through.
   final ClientTransport transport;
+
+  /// The options every call starts from; a call's own options win field by
+  /// field.
+  final CallOptions defaults;
 
   final RequestBuilder _builder;
 
@@ -54,8 +62,9 @@ final class ClientSender {
     Result<T, E> Function(RawResponse response) decode, {
     CallOptions? call,
   }) async {
-    final sent = _builder.build(request, call);
-    if (call?.cancel case final cancel? when cancel.isCancelled) {
+    final merged = defaults.merge(call);
+    final sent = _builder.build(request, merged);
+    if (merged.cancel case final cancel? when cancel.isCancelled) {
       return _results.cancelledBefore(cancel);
     }
     final TransportResponse response;
@@ -64,7 +73,7 @@ final class ClientSender {
     } on TransportException catch (e, stackTrace) {
       return _results.failure(e, stackTrace);
     }
-    return _read(response, request.responseKind, call, decode);
+    return _read(response, request.responseKind, merged, decode);
   }
 
   /// Opens a `text/event-stream` operation. A status in
@@ -105,7 +114,7 @@ final class ClientSender {
       request,
       decodeEvent,
       decodeError,
-      call: call,
+      call: defaults.merge(call),
       reconnection: reconnection,
     );
   }
