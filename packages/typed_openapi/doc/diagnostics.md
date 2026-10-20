@@ -164,6 +164,9 @@ Operation ids, parameters, groups and Dart names.
 | TOA566 | `operation-servers-ignored` | warning | A path item or an operation has its own `servers`; the client sends every request to the base URL of the user's transport. | Set the base URL for these requests in an interceptor, or move the servers to the document. |
 | TOA567 | `callbacks-not-generated` | info | An operation has `callbacks`, or the document has `webhooks`: requests the server makes, which the client does not generate. | See the message of the diagnostic. |
 | TOA568 | `security-scheme-unknown` | warning | A security requirement names a scheme that `components.securitySchemes` does not have (or defines without a valid type), or is not an object (a string, `null`; also TOA111): the alternative is left out of the operation's metadata when another one can be described, else it stays with a scheme of the kind unknown. | Write the requirement as an object at the source. |
+| TOA569 | `locked-name-taken` | warning | `typed_openapi.lock` keeps a name for a type or a method, but an override's name or a custom type took it first, or the name read from the lock is not a usable Dart name here (a reserved word, a name the library has, text that is not an identifier): it is named anew, which breaks code that used the old name. | Rename the override or the custom type, or accept the new name. |
+| TOA570 | `locked-name-kept` | info | `typed_openapi.lock` keeps the name of a type or a method that a run without the lock would name otherwise, so adding a schema or an operation never renames one that existed. | Run `generate --fresh-names` to take the new names. |
+| TOA571 | `locked-name-released` | info | `typed_openapi.lock` keeps a name for a type the spec no longer declares; the name is free again. | None: the next `generate` drops it from the lock. |
 
 ## Media types, errors and event streams (TOA6xx)
 
@@ -219,6 +222,8 @@ Applying fixes and overrides, baselines, and writing the output.
 | TOA831 | `output-not-written` | error (fixed) | `generate` cannot write a client's output directory, or another run holds its lock (`.<output>.typed_openapi.lock` next to the output; a lock of a process that is gone is taken over, and `--break-lock` takes over one whose owner cannot be told). | Check whether another generate runs on this output. |
 | TOA832 | `output-recovered` | info (fixed) | An earlier `generate` was killed while it replaced the output directory and left the previous tree or a half-built one in sibling directories named `.<output>.typed_openapi-*`. The run put the previous output back, when the output was missing, and removed the leftovers. Also reported when a run takes over the lock of a process that is gone, or breaks a lock whose owner cannot be told with `--break-lock`. | See the message of the diagnostic. |
 | TOA833 | `output-file-replaced` | info (fixed) | `generate --force` overwrote or deleted a file that it did not write or that changed since it wrote it; one report for each file. | See the message of the diagnostic. |
+| TOA834 | `api-lock-differs` | error (fixed) | `generate --locked` found that a client's API differs from its snapshot in `typed_openapi.lock`, or that the lock has no snapshot of it, or one of a client the config no longer declares. The client is not written and the lock is not changed. | Run `generate` without `--locked` and commit the lock; `typed_openapi diff` lists the changes. |
+| TOA835 | `api-lock-unusable` | error (fixed) | `typed_openapi.lock` cannot be read, is not a lock of version 1, or cannot be written. A run that cannot read it writes no client. | Resolve a merge conflict in the file, or delete it to start from the current API. |
 
 ## Config (TOA9xx)
 
@@ -239,7 +244,7 @@ Reading `typed_openapi.yaml`.
 | Mapping to Dart | the other TOA2xx-TOA6xx | the IR builder while it names and types the client |
 | Overrides | TOA560, TOA800-TOA809 | the overrides file, see [Overrides](overrides.md) |
 | Baseline | TOA820-TOA823 | see [Baseline](baseline.md) |
-| Generate | TOA830-TOA833 | see [Generated output](generate_output.md) |
+| Generate | TOA830-TOA835 | see [Generated output](generate_output.md) and [the API lock](cli.md#the-api-lock) |
 | Config | TOA901-TOA904 | see [Configuration](configuration.md) |
 
 ## See also

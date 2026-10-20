@@ -29,6 +29,7 @@ defaults:
         converter: UuidConverter
   tri_state: patch
   union: raw
+  exhaustive: true
   errors:
     default_schema: Problem
   sse:
@@ -68,6 +69,7 @@ The file is a mapping with two keys, `defaults` and `clients`. `clients` is requ
 | `types` | both | no | Dart types for numbers, formats and schemas, see [Types](#types). |
 | `tri_state` | both | no | `patch` (default), `optional` or `extension`. |
 | `union` | both | no | `raw` (default) or `structural`. |
+| `exhaustive` | both | no | `true` (default) or `false`, see [Exhaustive](#exhaustive). |
 | `errors` | both | no | `default_schema`, see [Errors](#errors). |
 | `sse` | both | no | `reconnect`, see [Event streams](#event-streams). |
 
@@ -77,7 +79,7 @@ Relative paths in `input`, `output`, `overrides` and `baseline` are resolved aga
 warning TOA903 config-unknown-key: Unknown key "colour".
   --> bad.yaml:3:62
   at #/clients/b/colour
-  fix: Allowed keys here: baseline, errors, exclude, group_by, include, input, line_width, naming, output, overrides, preset, rules, severity, sse, tri_state, types, union.
+  fix: Allowed keys here: baseline, errors, exclude, exhaustive, group_by, include, input, line_width, naming, output, overrides, preset, rules, severity, sse, tri_state, types, union.
 ```
 
 ## Precedence
@@ -90,7 +92,7 @@ A client's key wins over `defaults`. Most keys are replaced as a whole; these ar
 | `naming` | Key by key (`client`, `group`, and so on). |
 | `types.formats`, `types.schemas` | Entry by entry. |
 
-`types.number`, `errors.default_schema`, `sse.reconnect`, `group_by`, `tri_state` and `union` take the value of the last source that has them (the client, else `defaults`). `include` and `exclude` take the whole key from the last source that has it: a client `include:` replaces the `defaults` one, it does not extend it. `preset` and `line_width` come from the client, else `defaults`.
+`types.number`, `errors.default_schema`, `sse.reconnect`, `group_by`, `tri_state`, `union` and `exhaustive` take the value of the last source that has them (the client, else `defaults`). `include` and `exclude` take the whole key from the last source that has it: a client `include:` replaces the `defaults` one, it does not extend it. `preset` and `line_width` come from the client, else `defaults`.
 
 > **Gotcha:** A client that sets `include: {tags: [pets]}` forgets a `defaults.include` completely. Repeat what you still want.
 
@@ -181,6 +183,10 @@ So a converter is a class with a `const` constructor and no required arguments, 
 ## Union
 
 `union` decides how a `oneOf` or `anyOf` with no discriminator whose variants share a JSON type is generated: `raw` keeps the value as `JsonValue` (TOA453), `structural` tries each variant in order. An override can set it for one schema.
+
+## Exhaustive
+
+`exhaustive` decides whether the bases of enums, unions, the status types of an operation and event unions are `sealed` (`true`, the default) or `abstract interface` (`false`). A `switch` over a sealed type must name every variant, so a value the API adds later breaks it at compile time; over an interface it needs a default case, and a new value is no breaking change for the code that uses the client (see `typed_openapi diff`). An override `exhaustive` on a schema wins. A value that is not `true` or `false` is TOA902 and `true` is used.
 
 ## Errors
 

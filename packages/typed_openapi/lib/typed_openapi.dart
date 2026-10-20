@@ -98,6 +98,7 @@ export 'src/ir/ir.dart'
         UnionVariantIr;
 export 'src/ir/ir_builder.dart' show IrBuilder;
 export 'src/ir/ir_json.dart' show IrJson;
+export 'src/ir/name_lock.dart' show NameLock;
 export 'src/load/openapi_version.dart'
     show OpenApiVersion, OpenApiVersionDetector;
 export 'src/load/spec_document.dart' show SpecDocument;

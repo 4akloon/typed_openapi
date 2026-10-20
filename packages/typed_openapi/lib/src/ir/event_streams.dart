@@ -5,7 +5,6 @@ import 'event_data.dart';
 import 'ir.dart';
 import 'ir_context.dart';
 import 'media_type_picker.dart';
-import 'names.dart';
 import 'response_statuses.dart';
 import 'schema_mapper.dart';
 import 'spec_operation.dart';
@@ -51,8 +50,6 @@ final class EventStreams {
       _agreement = EventAgreement(_context),
       _written = WrittenStreams(_context),
       _checks = SseOverrideChecks(_context);
-
-  static final _reservedSuffix = RegExp(r'_+$');
 
   final IrContext _context;
   final ResponseStatuses _statuses;
@@ -148,41 +145,6 @@ final class EventStreams {
       );
     }
     return .only;
-  }
-
-  /// The name of the second method of an operation named [name] that also
-  /// returns a body: [name] with `naming.stream_suffix`, claimed in the
-  /// group's [methods] after every other method (TOA663, and TOA550 or
-  /// TOA551 when taken).
-  String methodName(SpecOperation entry, String name, NameScope methods) {
-    // A reserved word's suffix (`class_`) gives way to the stream suffix,
-    // so the name stays lowerCamelCase (`classStream`).
-    final base = name.replaceFirst(_reservedSuffix, '');
-    final candidate =
-        '${base.isEmpty ? name : base}${_context.config.streamSuffix}';
-    final (claimed, change) = methods.claim(candidate);
-    final location = entry.operation.location;
-    _context.report(
-      .eventStreamMethodAdded,
-      'This operation returns a body or an event stream; "$name" returns the '
-      'body and "$claimed" the events.',
-      location,
-      fix: 'Set naming.stream_suffix in the config to name it otherwise.',
-    );
-    if (change != null) {
-      _context.report(
-        change == .reserved ? .nameReserved : .nameCollision,
-        change == .reserved
-            ? '"$candidate" is a name Dart already has; the event-stream '
-                  'method of ${entry.overrideKey} is named "$claimed".'
-            : 'Another method of the group is named "$candidate"; the '
-                  'event-stream method of ${entry.overrideKey} is named '
-                  '"$claimed".',
-        location,
-        fix: 'Set naming.stream_suffix in the config, or rename the method.',
-      );
-    }
-    return claimed;
   }
 
   /// Whether the event-stream successes of [picked] (their media types are

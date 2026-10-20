@@ -70,6 +70,32 @@
   missing config) at the config file. `SarifReporter` takes `defaultFile`.
 
 ### Added
+- Config `exhaustive` (M12, R14.2), in `defaults` or a client: with
+  `false` the bases of enums, unions, status types and event unions are
+  `abstract interface` in place of `sealed`, so a new value is not a
+  breaking change for a `switch` with a default case. The default `true`
+  changes nothing; an override `exhaustive` on a schema wins.
+- `generate` keeps the API snapshot of every client it writes in
+  `typed_openapi.lock` next to the config and prints, for each client, the
+  count of its changes since the lock per category (breaking,
+  switch-breaking, wire, additive, docs). `generate --locked` checks the
+  lock instead of updating it and skips a client whose API differs
+  (TOA834); a lock that cannot be read is TOA835 (M12).
+- `typed_openapi diff [client...]` reports how the API of each client
+  changed since `typed_openapi.lock`, or between two lock files (`--from`,
+  `--to`), as `text`, `json` or `markdown`; `--fail-on breaking |
+  switch-breaking | wire | any` sets the exit code. A schema renamed in the
+  spec is removed plus added, with the `name:` override that keeps the old
+  Dart name (M12).
+- `typed_openapi.lock` keeps the names of models, enums, unions and
+  methods (M12): `check`, `generate`, `diff`, `baseline` and `ir` name each
+  as the lock has it, so a schema or an operation added to the spec never
+  renames one that existed; the new one gets the suffix. TOA570 (info)
+  names a kept name a run without the lock would not give, TOA569
+  (warning) one an override or a custom type took, or that is not a usable Dart name (a lock is a file anyone edits), TOA571 (info) a type the
+  spec no longer declares. `generate --fresh-names` names everything from
+  the spec alone. `IrBuilder` takes the lock as `names:`; `SpecChecker`
+  reads it next to the config, and `SpecChecker.freshNames` does not.
 - `ApiLibrary` is exported: the files of a whole client from its IR, as
   `generate` writes them (M11). The programmatic guide now writes a whole
   client with it, and a test checks the files equal those of `generate`.

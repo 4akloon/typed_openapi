@@ -167,6 +167,7 @@ void main() {
     {
       "name": "PetsApi",
       "field": "api",
+      "key": "",
       "operations": [
         {
           "name": "getPet",

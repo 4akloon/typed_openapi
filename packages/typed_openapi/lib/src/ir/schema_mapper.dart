@@ -141,9 +141,10 @@ final class SchemaMapper {
   }
 
   /// Names the declarations created so far in [scope]: overridden names
-  /// first, then component keys, then inline names, each by location. A
-  /// declaration named already keeps its name.
+  /// first, then component keys, then inline names, each by location; the
+  /// API lock's names win (M12). A declaration named already keeps its name.
   void nameDeclarations(NameScope scope) {
+    _declNames.locked.lockTypes(scope, _pending.values);
     for (final pending in _ordered) {
       _declNames.claim(scope, pending);
     }

@@ -98,6 +98,7 @@ final class GenerationConfig {
     this.schemas = const {},
     this.triState = .patch,
     this.union = .raw,
+    this.exhaustive = true,
     this.defaultErrorSchema,
     this.defaultErrorSchemaPointer,
     this.defaultErrorSchemaSpan,
@@ -186,6 +187,12 @@ final class GenerationConfig {
   /// `union` wins.
   final UnionMode union;
 
+  /// `exhaustive` (R14.2): whether the bases of enums, unions, status types
+  /// and event unions are `sealed`; with false they are `abstract
+  /// interface`, so a `switch` over one needs a default case and a new
+  /// value does not break it. A schema's override `exhaustive` wins.
+  final bool exhaustive;
+
   /// `errors.default_schema`: the `components.schemas` key of the body of
   /// error responses that document none.
   final String? defaultErrorSchema;
@@ -234,6 +241,9 @@ final class GenerationConfig {
     'schemas': _sorted(schemas),
     'tri_state': triState.name,
     'union': union.name,
+    // Only when set, so the key, and the inputs hash of the manifest, of a
+    // config without it stays as it was.
+    if (!exhaustive) 'exhaustive': false,
     'default_schema': defaultErrorSchema == null
         ? null
         : [defaultErrorSchema, defaultErrorSchemaPointer?.value],

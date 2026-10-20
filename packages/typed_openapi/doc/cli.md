@@ -1,10 +1,11 @@
 # Command line
 
-`typed_openapi` has three commands: `check` reads specs and reports problems, `generate` writes the Dart clients, and `baseline` records the problems you accept. All of them read `typed_openapi.yaml` from the working directory, and none of them calls the network.
+`typed_openapi` has four commands: `check` reads specs and reports problems, `generate` writes the Dart clients, `diff` reports how their API changed, and `baseline` records the problems you accept. All of them read `typed_openapi.yaml` from the working directory, and none of them calls the network.
 
 ```sh
 dart run typed_openapi check
 dart run typed_openapi generate
+dart run typed_openapi diff
 dart run typed_openapi baseline create
 ```
 
@@ -22,6 +23,7 @@ Global options:
 Available commands:
   baseline   Accept the current diagnostics, or remove entries that no longer match.
   check      Check specs and report diagnostics without generating code.
+  diff       Report how the API of the clients changed since typed_openapi.lock.
   generate   Check specs and generate the clients without errors.
 ```
 
@@ -95,15 +97,63 @@ dart run typed_openapi check --format json | jq '.summary'
 | `-c`, `--config` | `typed_openapi.yaml` | Path to the config file. |
 | `--force` | off | Replace files in an output directory that `typed_openapi` did not write or that changed since it wrote them. Each is reported as TOA833. |
 | `--break-lock` | off | Take over a lock when it cannot be told whether the run that holds it still goes. Replaces no file. |
+| `--locked` | off | Check each client against its API snapshot in `typed_openapi.lock` instead of updating the file. A client whose API differs is not written (TOA834). For CI. |
+| `--fresh-names` | off | Name types and methods from the spec alone, not as `typed_openapi.lock` keeps them. Some may be renamed; the change counts say how many. |
 
 ```text
 $ typed_openapi generate
 Generated shop in lib/src/api/shop: 7 files, 7 written, 0 deleted.
+API of shop: first snapshot in typed_openapi.lock.
 $ typed_openapi generate
 Generated shop in lib/src/api/shop: 7 files, 0 written, 0 deleted.
+API of shop since typed_openapi.lock: 0 breaking, 0 switch-breaking, 0 wire, 0 additive, 0 docs.
 ```
 
 The second run writes nothing, because the output is the same. Ownership, locks and `--force` are explained in [Generated output](generate_output.md).
+
+### The API lock
+
+`generate` keeps the public API of every client it writes in `typed_openapi.lock`, next to `typed_openapi.yaml`: one section per client, with every type, field, enum value, variant, method and argument under a stable identity (the spec location of a schema, the `operationId` or `METHOD /path` of an operation). Commit the file, also when the generated code is git-ignored, as you would `pubspec.lock`. Each run prints, for each client written, how many changes since the lock fall in each category:
+
+| Category | Meaning |
+| --- | --- |
+| `breaking` | Code that uses the client may no longer compile: a type, member or method was removed or renamed, a type changed, or something became required. |
+| `switch-breaking` | A new enum value, union variant, status variant or event appeared; only an exhaustive `switch` over a sealed type breaks. With `exhaustive: false` this is `additive`. |
+| `wire` | The Dart API is the same, but a JSON key, a path, a parameter style, a media type or the statuses changed. |
+| `additive` | A new type, method, or optional field or argument. |
+| `docs` | Only doc comments or `@Deprecated` changed. |
+
+A run of some clients keeps the sections of the others, and drops the section of a client the config no longer declares. `generate --locked` changes no lock: a client whose API differs from its section, or has none, is TOA834, an error, and so is a section of a client the config no longer declares; the client is not written, and the exit code is `1`. A lock that cannot be read, such as one with merge-conflict markers, is TOA835 and the run writes no client: resolve the conflict, or delete the file to start from the current API. This file is not the lock of an output directory (`.<output>.typed_openapi.lock`), which only keeps two runs apart. Nor is it the manifest `.typed_openapi.json` inside an output, which lists the files `generate` wrote so that it replaces only those: the manifest is rewritten with the output and goes when the output is deleted, while `typed_openapi.lock` records what the code declares and stays. The inputs hash of the manifest covers the spec and the config, not `typed_openapi.lock`, although the lock also decides names. Two cautions: `generate` runs in parallel on one lock can lose a section (the next `--locked` then reports no snapshot for that client), so run them one after another; and a lock that is a symbolic link is replaced by a regular file when it is written. Renaming a client in the config loses its names: the new name has no section, so its first run is a first snapshot (and names from scratch), and the old section is dropped.
+
+The lock also keeps names. Without it, a schema added to the spec can take the name of a type that existed: a new component `PetStatus` is named before the inline enum `Pet.status`, which was `PetStatus` and would become `PetStatus2`. With the lock, every command that reads the spec (`check`, `generate`, `diff`, `baseline`) names each model, enum, union and method as the lock has it, and the new one gets the suffix (TOA551). A name the lock keeps that a run without it would not give is reported as TOA570 (info); an override name or a custom type that takes a kept name wins, and the type it belonged to is named anew (TOA569, warning). `generate --fresh-names` names everything from the spec alone and writes those names to the lock; the line of each client counts the renames as `breaking`. Fields, enum values, arguments, group classes and the helper types (status types, event unions, parts classes, variant classes) are not kept yet.
+
+## diff
+
+`typed_openapi diff [options] [client...]` compares the API of each client in `typed_openapi.lock` with the API the current spec and config give, and lists every change with its category. It writes nothing: run it before `generate` to see what a spec update does to code that uses the client. A client the lock does not have reports every type as `additive`; a client whose spec cannot be read is named on stderr and the exit code is `1`.
+
+Without `--to`, `diff` names the current snapshot with the names of the lock next to the config, not those of the `--from` file, and compares the clients the config declares: a client that is in the lock but no longer in the config is ignored. With `--from` and `--to` it compares two lock files and includes a client that only one of them has (a removed client reports every type as removed). A `--from` file that does not exist is a usage error (`64`). The Markdown report escapes markup, but a lock you did not write is untrusted text: read a report made from someone else's lock as such.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `-c`, `--config` | `typed_openapi.yaml` | Path to the config file. |
+| `--format` | `text` | `text`, `json`, or `markdown` (for a pull request comment). |
+| `--fail-on` | none | Exit `1` when a change of this category or a more serious one is found: `breaking`, `switch-breaking` (also breaking), `wire` (also both breaking kinds), or `any` (every change, `additive` and `docs` included). Without it the command only reports. |
+| `--from` | the lock next to the config | The lock file to compare from, such as the lock of the main branch (`git show main:typed_openapi.lock > base.lock`). |
+| `--to` | the current spec | A second lock file to compare to; with it no config or spec is read. Needs `--from`. |
+
+```text
+$ typed_openapi diff
+shop: 1 breaking, 1 switch-breaking, 0 wire, 1 additive, 0 docs.
+  breaking: Model Pet was removed.
+    Keep the old name with this override:
+      schemas:
+        Animal:
+          name: Pet
+  switch-breaking: Enum value PetStatus.sold was added.
+  additive: Model Animal was added.
+```
+
+A schema renamed in the spec has a new spec location, so it is a new type: `diff` reports the old one as removed and the new one as added, and does not guess that they are the same. When one schema of the same kind was added in the same file, the report gives the override that keeps the old Dart name; otherwise its key is `<NewKey>`. The text and Markdown reports escape control characters from the spec, and the Markdown report also escapes the characters that would mark up the comment.
 
 ## baseline
 
@@ -130,7 +180,7 @@ Without a `baseline:` key on any selected client, `baseline create` prints `No c
 | Code | Meaning |
 | --- | --- |
 | `0` | No errors. Warnings and infos do not change it. |
-| `1` | At least one error that a baseline does not accept (also: a client was skipped by `generate`, or a spec could not be read by `baseline`). |
+| `1` | At least one error that a baseline does not accept (also: a client was skipped by `generate`, a spec could not be read by `baseline` or `diff`, the API lock could not be read (TOA835, by any command that reads a spec), or `diff --fail-on` found a change of that category). |
 | `64` | Usage error: unknown client, unknown option, missing subcommand, or no client with a baseline. |
 | `78` | The config file could not be loaded (not found, or not readable as a config at all). |
 

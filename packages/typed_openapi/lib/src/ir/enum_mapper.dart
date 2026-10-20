@@ -92,7 +92,8 @@ final class EnumMapper {
       name: name,
       kind: draft.kind,
       exhaustive:
-          _context.overrides.schemaAt(schema.location)?.exhaustive ?? true,
+          _context.overrides.schemaAt(schema.location)?.exhaustive ??
+          _context.config.exhaustive,
       knownName: _declNames.helperName(
         types,
         '${name}Known',

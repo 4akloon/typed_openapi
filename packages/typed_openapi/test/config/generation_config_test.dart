@@ -136,6 +136,53 @@ clients:
     expect(clients[4].generation.patchSuffix, 'Changes');
   });
 
+  group('exhaustive', () {
+    test('is true by default; a client overrides defaults', () {
+      final bag = DiagnosticBag();
+      final clients = load('''
+defaults: {exhaustive: false}
+clients:
+  a: {input: a.json, output: lib/a}
+  b: {input: a.json, output: lib/b, exhaustive: true}
+  c: {input: a.json, output: lib/c}
+''', bag);
+      expect(bag.all, isEmpty);
+      expect(
+        [for (final c in clients) c.generation.exhaustive],
+        [
+          false,
+          true,
+          false,
+        ],
+      );
+      expect(const GenerationConfig().exhaustive, isTrue);
+    });
+
+    test('a value that is not a bool is TOA902 and true is used', () {
+      final bag = DiagnosticBag();
+      final config = load('''
+clients:
+  a: {input: a.json, output: lib/a, exhaustive: maybe}
+''', bag).single.generation;
+      expect(bag.all.map((d) => (d.code, d.pointer?.value)), [
+        (DiagnosticCode.configInvalid, '#/clients/a/exhaustive'),
+      ]);
+      expect(config.exhaustive, isTrue);
+    });
+
+    test('changes the key only when false', () {
+      final clients = load('''
+clients:
+  a: {input: a.json, output: lib/a}
+  b: {input: a.json, output: lib/b, exhaustive: true}
+  c: {input: a.json, output: lib/c, exhaustive: false}
+''', DiagnosticBag());
+      expect(clients[0].generation.key, clients[1].generation.key);
+      expect(clients[0].generation.key, isNot(clients[2].generation.key));
+      expect(clients[0].generation.key, isNot(contains('exhaustive')));
+    });
+  });
+
   group('key', () {
     test('does not depend on the order of custom types', () {
       final bag = DiagnosticBag();

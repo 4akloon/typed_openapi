@@ -108,6 +108,7 @@ final class ApiNames {
                 name(operation, inlineBodies),
             ],
             field: _root.groupField(word, group, _locationOf(group)),
+            key: word,
           ),
       ],
       root: RootIr(root, servers: _root.servers()),
@@ -195,7 +196,7 @@ final class ApiNames {
       operation.location,
       override: operation,
     );
-    return StatusTypeIr(name, [
+    return StatusTypeIr(name, exhaustive: _context.config.exhaustive, [
       for (final (status, type) in cases)
         StatusCaseIr(
           status,

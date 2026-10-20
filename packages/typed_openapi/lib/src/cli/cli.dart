@@ -6,6 +6,7 @@ import 'package:io/io.dart' show ExitCode;
 import '../diagnostics/display_paths.dart';
 import 'baseline_command.dart';
 import 'check_command.dart';
+import 'diff_command.dart';
 import 'generate_command.dart';
 import 'ir_command.dart';
 
@@ -28,6 +29,7 @@ final class TypedOpenApiCli {
       ..addCommand(CheckCommand(out ?? stdout, paths))
       ..addCommand(BaselineCommand(out ?? stdout, paths))
       ..addCommand(GenerateCommand(out ?? stdout, paths))
+      ..addCommand(DiffCommand(out ?? stdout, _err, paths))
       ..addCommand(IrCommand(out ?? stdout, _err, paths));
   }
 

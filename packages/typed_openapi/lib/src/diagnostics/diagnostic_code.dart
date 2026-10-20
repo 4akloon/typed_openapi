@@ -402,6 +402,18 @@ enum DiagnosticCode {
   /// with a scheme of the kind unknown.
   securitySchemeUnknown('TOA568', 'security-scheme-unknown', .warning),
 
+  /// `typed_openapi.lock` keeps a name for a type or a method, but an
+  /// override's name or a custom type took it first: it is named anew.
+  lockedNameTaken('TOA569', 'locked-name-taken', .warning),
+
+  /// `typed_openapi.lock` keeps the name of a type or a method that a run
+  /// without the lock would name otherwise.
+  lockedNameKept('TOA570', 'locked-name-kept', .info),
+
+  /// `typed_openapi.lock` keeps a name for a type the spec no longer
+  /// declares: the name is free again.
+  lockedNameReleased('TOA571', 'locked-name-released', .info),
+
   /// `*/*` is used as a media type.
   wildcardMediaType('TOA601', 'wildcard-media-type', .warning),
 
@@ -620,6 +632,16 @@ enum DiagnosticCode {
   /// that changed since it wrote it; one report for each file.
   outputFileReplaced('TOA833', 'output-file-replaced', .info),
 
+  /// `generate --locked` found that a client's API differs from its
+  /// snapshot in `typed_openapi.lock`, or that the lock has no snapshot of
+  /// it, or one of a client the config no longer declares. The client is
+  /// not written and the lock is not changed (M12, decision 6).
+  apiLockDiffers('TOA834', 'api-lock-differs', .error),
+
+  /// `typed_openapi.lock` cannot be read, is not a lock of version 1, or
+  /// cannot be written. A run that cannot read it writes no client.
+  apiLockUnusable('TOA835', 'api-lock-unusable', .error),
+
   /// The configuration file does not exist.
   configNotFound('TOA901', 'config-not-found', .error),
 
@@ -667,6 +689,8 @@ enum DiagnosticCode {
     outputNotWritten,
     outputRecovered,
     outputFileReplaced,
+    apiLockDiffers,
+    apiLockUnusable,
     ...configCodes,
   };
 

@@ -16,14 +16,11 @@ import '../helpers/size_limits.dart';
 /// Files over their limit, with the number of lines (`wc -l`) they had when
 /// they were listed. Keep the entries sorted.
 const Map<String, int> _fileAllowlist = {
-  // M9: naming.client is read with the other naming keys.
-  'lib/src/config/config_loader.dart': 782,
   'lib/src/emit/union_emitter.dart': 333,
   // The declarations, enums, the client and its groups; the operation's
   // parameter, body and response nodes have files of their own.
-  'lib/src/ir/ir.dart': 496,
+  'lib/src/ir/ir.dart': 477,
   // M9: event streams in the empty-client report; webhooks checked.
-  'lib/src/ir/ir_builder.dart': 537,
   'test/cli/generate_command_test.dart': 771,
   'test/emit/model_library_test.dart': 887,
   'test/ir/emitter_contract_test.dart': 576,
@@ -42,10 +39,8 @@ const Map<String, int> _methodAllowlist = {
   'lib/src/baseline/baseline_loader.dart#BaselineLoader._entry': 45,
   'lib/src/baseline/baseline_loader.dart#BaselineLoader._read': 53,
   'lib/src/check/spec_checker.dart#SpecChecker.check': 65,
-  'lib/src/cli/generate_command.dart#GenerateCommand.run': 73,
   'lib/src/config/config_loader.dart#ConfigLoader.load': 128,
-  'lib/src/config/config_loader.dart#_ConfigReader.severityAt': 63,
-  'lib/src/config/config_loader.dart#_GenerationReader._customType': 41,
+  'lib/src/config/config_reader.dart#ConfigReader.severityAt': 63,
   'lib/src/diagnostics/github_actions_reporter.dart#GitHubActionsReporter.format':
       41,
   'lib/src/emit/enum_emitter.dart#EnumEmitter.write': 94,
@@ -53,8 +48,6 @@ const Map<String, int> _methodAllowlist = {
   'lib/src/emit/model_emitter.dart#ModelEmitter.write': 46,
   'lib/src/emit/union_emitter.dart#UnionEmitter._byStructure': 41,
   'lib/src/emit/union_emitter.dart#UnionEmitter._variant': 78,
-  'lib/src/ir/ir_builder.dart#IrBuilder._group': 112,
-  'lib/src/ir/ir_builder.dart#IrBuilder._methodName': 50,
   // M9: event streams are a reason a client is empty.
   'lib/src/ir/ir_builder.dart#IrBuilder._reportEmpty': 55,
   'lib/src/ir/ir_builder.dart#IrBuilder.build': 93,
