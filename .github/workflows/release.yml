@@ -73,6 +73,7 @@ jobs:
           FLAGS: ${{ matrix.flags }}
           EXT: ${{ matrix.ext }}
         run: |
+          mkdir -p build
           # The flags are separate words on purpose.
           # shellcheck disable=SC2086
           dart compile exe $FLAGS packages/typed_openapi/bin/typed_openapi.dart -o "build/typed_openapi${EXT}"
