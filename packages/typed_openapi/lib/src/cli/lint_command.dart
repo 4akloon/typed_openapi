@@ -70,7 +70,7 @@ final class LintCommand extends Command<int> {
     (format == .text ? _out : _err).writeln(note);
     // Code scanning needs a file for every result.
     final reporter = format == .sarif
-        ? SarifReporter(defaultFile: _paths.of(input))
+        ? SarifReporter(defaultFile: _paths.of(input), isLint: true)
         : format.reporter;
     _out.writeln(reporter.format(result.diagnostics));
     return _exitCode(result, results.option('fail-on'));

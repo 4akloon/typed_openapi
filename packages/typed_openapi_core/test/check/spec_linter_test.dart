@@ -1,6 +1,7 @@
 import 'package:test/test.dart';
 import 'package:typed_openapi_core/src/check/spec_linter.dart';
 import 'package:typed_openapi_core/src/config/project_config.dart';
+import 'package:typed_openapi_core/src/diagnostics/diagnostic.dart';
 import 'package:typed_openapi_core/src/diagnostics/diagnostic_bag.dart';
 import 'package:typed_openapi_core/src/diagnostics/diagnostic_code.dart';
 import 'package:typed_openapi_core/src/diagnostics/display_paths.dart';
@@ -10,7 +11,10 @@ import 'package:typed_openapi_core/src/normalize/normalizer.dart';
 import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 void main() {
-  final override = RegExp('override', caseSensitive: false);
+  final override = RegExp(
+    r'override|typed_openapi\.yaml|severity:',
+    caseSensitive: false,
+  );
 
   LintResult lintFixture({Preset? preset}) => const SpecLinter().lint(
     Fixtures.path('backend_defects.yaml'),
@@ -104,5 +108,52 @@ void main() {
       ],
       isEmpty,
     );
+  });
+
+  test('no hint of any rule and preset names the config', () {
+    final config = RegExp(
+      r'override|typed_openapi\.yaml|severity|baseline|rules:',
+      caseSensitive: false,
+    );
+    for (final rule in Normalizer.rules) {
+      for (final code in rule.codes) {
+        for (final preset in Preset.values) {
+          final hint = rule.hint(code, preset);
+          final backend = Diagnostic(
+            code: code,
+            severity: .warning,
+            message: 'm',
+            fix: 'Fix it at the source, or override it.',
+            backendFix: 'Fix it at the source.',
+            hints: [?hint == null ? null : (preset.name, hint)],
+          ).forBackend();
+          expect(
+            backend.fix,
+            isNot(matches(config)),
+            reason: '${code.id} ${preset.name}',
+          );
+        }
+      }
+    }
+  });
+
+  test('a hint of a preset does not appear under another preset', () {
+    final hints = {
+      for (final preset in Preset.values)
+        preset: {
+          for (final rule in Normalizer.rules)
+            for (final code in rule.codes) ?rule.hint(code, preset),
+        },
+    };
+    for (final preset in Preset.values) {
+      final fixes = lintFixture(
+        preset: preset,
+      ).diagnostics.all.map((d) => d.fix ?? '').join('\n');
+      for (final other in Preset.values.where((o) => o != preset)) {
+        for (final hint in hints[other]!.difference(hints[preset]!)) {
+          expect(fixes, isNot(contains(hint)), reason: '$preset has $hint');
+        }
+      }
+    }
   });
 }

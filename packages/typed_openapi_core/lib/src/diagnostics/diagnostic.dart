@@ -97,7 +97,11 @@ final class Diagnostic implements Comparable<Diagnostic> {
   /// [forBackend].
   final String? backendFix;
 
-  static final RegExp _overrideWord = RegExp('override', caseSensitive: false);
+  /// What a fix for a reader without the generator's config cannot say.
+  static final RegExp _configWords = RegExp(
+    r'override|typed_openapi\.yaml|severity|baseline|rules:',
+    caseSensitive: false,
+  );
 
   /// How to fix the finding in the code of a framework: the preset's name
   /// and the hint, one per preset of the clients that share the finding.
@@ -124,13 +128,14 @@ final class Diagnostic implements Comparable<Diagnostic> {
   }
 
   /// This diagnostic for a reader who owns the spec, not the generator
-  /// config: the fix is [backendFix], else the plain fix when it does not
-  /// mention an override, else none. The [hints] stay.
+  /// config: the fix is [backendFix], else the plain fix when it names
+  /// no config (an override, the config file, a severity, a baseline, rules),
+  /// else none. The [hints] stay.
   Diagnostic forBackend() {
     final plain = _fix;
     final own =
         backendFix ??
-        (plain != null && !_overrideWord.hasMatch(plain) ? plain : null);
+        (plain != null && !_configWords.hasMatch(plain) ? plain : null);
     return Diagnostic(
       code: code,
       severity: severity,

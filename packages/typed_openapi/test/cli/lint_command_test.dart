@@ -43,9 +43,18 @@ components:
   });
 
   test('the report never tells the reader to write an override', () async {
-    final override = RegExp('override', caseSensitive: false);
+    final override = RegExp(
+      r'override|typed_openapi\.yaml|severity:',
+      caseSensitive: false,
+    );
     for (final format in ['text', 'json', 'sarif', 'github-actions']) {
-      for (final preset in ['generic', 'nestjs', 'fastapi', 'springdoc']) {
+      for (final preset in [
+        'generic',
+        'nestjs',
+        'fastapi',
+        'springdoc',
+        'aspnet',
+      ]) {
         final (_, out, err) = await lint([
           fixture,
           '--format',
