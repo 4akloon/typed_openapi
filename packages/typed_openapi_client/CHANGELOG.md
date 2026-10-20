@@ -1,3 +1,34 @@
+## 0.3.0 - Unreleased
+
+### Added
+- Default call options: `ClientSender(transport, defaults:)` and
+  `CallOptions.merge`. A value the call sets wins, one it leaves unset falls
+  back to the default; headers and `extra` are merged key by key. The
+  generated root and group classes pass `defaults` down.
+- `SseOptions.merge`, `SseOptions.retryOpen` and `SseOptions.retryWhen`,
+  `SseCooldown.none`, and `SseRetry.isTransient`, the classifier of transient
+  and final failures.
+- A stream that fails to open is retried on transient failures, with the
+  backoff, jitter, cooldown and attempt limit of a reconnection. The `Future`
+  waits; a cancel through `CallOptions.cancel` ends it at once. `Retry-After`
+  (delta-seconds or an HTTP date) lengthens the delay of one attempt.
+- `SseTrace.operation`: the `OperationInfo` of the stream, so one shared
+  `onTrace` can tell the streams apart.
+
+### Changed
+- Every `SseOptions` field is nullable, `null` meaning unset; the built-in
+  values apply after the merge. `maxAttempts: null` still means never give
+  up, and leaving the argument out means unset.
+- `SseOptions.delayBefore` is internal, and `SseReconnector` and `SseResume`
+  are no longer exported.
+- A GET stream with `reconnect: true` also retries its opening.
+- A reconnection retries 408, 429 and 5xx statuses and stops on a
+  `TransportError` of kind `other` (it retried every `TransportError`
+  before); other statuses still end the stream.
+- A request body that cannot be sent twice (`FileUpload.stream`, or a
+  multipart part with a stream file) is never retried, and its stream no
+  longer reconnects after it opened.
+
 ## 0.2.0
 
 ### Added

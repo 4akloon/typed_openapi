@@ -13,8 +13,8 @@ in [Results and errors](results_and_errors.md).
 ```yaml
 dependencies:
   dio: ^5.11.1
-  typed_openapi_client: ^0.2.0
-  typed_openapi_dio: ^0.2.0      # the transport over your Dio
+  typed_openapi_client: ^0.3.0
+  typed_openapi_dio: ^0.3.0      # the transport over your Dio
 ```
 
 Generated files import only

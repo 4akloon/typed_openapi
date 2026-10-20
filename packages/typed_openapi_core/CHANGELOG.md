@@ -1,3 +1,12 @@
+## 0.3.0 - Unreleased
+
+### Changed
+- `DartNames.takenTypeNames` reserves `SseRetry`, the new type of
+  `typed_openapi_client` 0.3.0: a schema with that name gets a suffix.
+- The root client reserves `defaults` among its members, since its
+  constructor takes a parameter of that name: a group named `defaults` gets a
+  suffix (TOA551).
+
 ## 0.2.0
 
 ### Changed

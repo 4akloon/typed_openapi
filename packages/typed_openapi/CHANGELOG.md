@@ -1,5 +1,9 @@
 ## 0.3.0 - Unreleased
 
+### Changed
+- The manifest `.typed_openapi.json` records `typed_openapi 0.3.0` as the
+  generator.
+
 ### Output changes
 - The constructors of the root client and of every group take
   `{CallOptions defaults = const CallOptions()}` and hand it to their

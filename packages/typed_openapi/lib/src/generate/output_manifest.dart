@@ -13,7 +13,7 @@ final class OutputManifest {
   static const fileName = '.typed_openapi.json';
 
   /// The generator and its version, as the manifest names them.
-  static const generator = 'typed_openapi 0.2.0';
+  static const generator = 'typed_openapi 0.3.0';
 
   /// The format of the manifest, which it records as `format`: 2 lists every
   /// file with its hash, and `generate` deletes only files whose hash it

@@ -17,7 +17,7 @@ Every output directory holds `.typed_openapi.json`, written last in the same swa
 
 ```json
 {
-  "generator": "typed_openapi 0.2.0",
+  "generator": "typed_openapi 0.3.0",
   "format": 2,
   "inputs": "a92d74a3cb72...",
   "files": {
