@@ -5,6 +5,12 @@
 # `generate` (the client is generated and passes the analyzer) or
 # `{check-errors: [...]}` (the client is skipped for exactly these errors of
 # the spec). Sources and licenses: docs/research/08-test-corpus.md.
+# `framework` names the framework that wrote a code-first spec (generic,
+# nestjs, fastapi, springdoc, aspnet; default generic): `corpus lint` fails
+# when `typed_openapi lint` detects another preset. `detects: false`, only
+# with a framework, says the spec carries none of the framework's marks
+# (the Swashbuckle test site has no ProblemDetails schema), so generic is
+# the expected detection.
 # `schemas` are single files that offline tests read from the same cache
 # (fetched and pinned by hash, never kept in the repository).
 specs:
@@ -41,12 +47,14 @@ specs:
     sha256: 4ac04303fa3e5f089418b4a7eec96fcecf5c3e56f36b476136f45924373641a4
     license: Apache-2.0
     expect: generate
+    framework: fastapi
   # `example: !!timestamp ...` is TOA009, an error of the spec.
   artemis:
     url: https://raw.githubusercontent.com/ls1intum/Artemis/e92f350e7892b514b976b05c4f83cfcec12ec54c/config/openapi/openapi.yaml
     sha256: 2894ffdbbb3d8f35615ea9cae971934fa72543be82571446d126d5b0163ffb20
     license: MIT
     expect: {check-errors: [TOA009]}
+    framework: springdoc
   digitalocean:
     archive: https://codeload.github.com/digitalocean/openapi/tar.gz/6fda13183a6046c669b591e057b9d7b3a6344829
     root: specification
@@ -69,6 +77,7 @@ specs:
     sha256: 172696266496de449e60d782b9248dfb04cf71961be54b73d1d78d6c40acd777
     license: Apache-2.0
     expect: generate
+    framework: springdoc
   googlemaps:
     url: https://github.com/googlemaps/openapi-specification/releases/download/v1.22.3/google-maps-platform-openapi3.json
     sha256: 98167d8487d600d530e145cbd468d6f0488b55eb463eee68c66454188d4e3347
@@ -93,6 +102,7 @@ specs:
     sha256: bd31bb194443d1c57616fa0a8521e099b17d096b92794e471c0e0725c50949c8
     license: not stated (server GPL-2.0)
     expect: generate
+    framework: aspnet
   medusa:
     archive: https://codeload.github.com/medusajs/medusa/tar.gz/146c46b0ad1146b40595c8ef586c4d5890982603
     root: www/apps/api-reference/specs/store
@@ -105,6 +115,7 @@ specs:
     sha256: 312691b28f1c4b7da988a6c45d4c75ecf5c9f11720902acfaaeba351c383a9e0
     license: MIT
     expect: generate
+    framework: nestjs
   # Code-first specs of open projects (besides airflow: FastAPI, artemis and
   # efgs: springdoc, jellyfin: Swashbuckle, tambo: NestJS).
   # NestJS (@nestjs/swagger).
@@ -113,18 +124,22 @@ specs:
     sha256: 2cce36a0afe3207316135ff6d8fd3f931d22247332175793c8c5ca4179f1b485
     license: AGPL-3.0
     expect: generate
+    framework: nestjs
   # springdoc with Spring Data REST (HAL), from springdoc's own tests.
   springdoc:
     url: https://raw.githubusercontent.com/springdoc/springdoc-openapi/1cc87a7ca2a0003004fb6149ee3a1afe919530b2/springdoc-openapi-tests/springdoc-openapi-data-rest-tests/src/test/resources/results/3.1.0/app17.json
     sha256: c21e71131bd23c94510422bf3478959dab7cdc19f1777bd2616faed21c84f24e
     license: Apache-2.0
     expect: generate
+    framework: springdoc
   # Swashbuckle (ASP.NET Core, .NET 10), from Swashbuckle's own test sites.
   swashbuckle:
     url: https://raw.githubusercontent.com/domaindrivendev/Swashbuckle.AspNetCore/8505e3382689240473ae263d50832318a061cc7d/test/WebSites/NswagClientExample/swagger_net10.0.json
     sha256: ea9018f5522148e3f635680556883b4e843a561550359581f360f4e5c4beb552
     license: MIT
     expect: generate
+    framework: aspnet
+    detects: false
 schemas:
   # SARIF 2.1.0 (OASIS Standard), checked against the SARIF reporter's output.
   # The OASIS IPR Policy governs the file, so the repository only pins it.

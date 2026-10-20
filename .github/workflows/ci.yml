@@ -150,6 +150,12 @@ jobs:
         run: dart run bin/corpus.dart check
         working-directory: packages/typed_openapi_tool
 
+      # `typed_openapi lint` on every spec: the counts by framework, and a
+      # failure when the detected preset is not the one corpus.yaml names.
+      - name: Lint the corpus and check the framework detection
+        run: dart run bin/corpus.dart lint
+        working-directory: packages/typed_openapi_tool
+
       # The SARIF reporter's output against the SARIF 2.1.0 schema, which
       # `corpus fetch` keeps in the cache (pinned by hash, not vendored).
       - name: Check the SARIF output against its schema

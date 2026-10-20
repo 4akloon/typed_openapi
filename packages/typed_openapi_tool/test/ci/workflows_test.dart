@@ -118,6 +118,10 @@ void main() {
     );
     expect(
       runsOf('ci.yml', 'corpus'),
+      contains('dart run bin/corpus.dart lint'),
+    );
+    expect(
+      runsOf('ci.yml', 'corpus'),
       contains(contains('dart test test/sarif/sarif_validity_test.dart')),
     );
     expect(runsOf('ci.yml', 'fuzz'), contains(contains('--seeds 200')));

@@ -1,3 +1,5 @@
+import 'package:typed_openapi_core/typed_openapi_core.dart' show Preset;
+
 import 'expectation.dart';
 import 'spec_source.dart';
 
@@ -12,6 +14,8 @@ final class CorpusSpec {
     required this.sha256,
     required this.license,
     required this.expectation,
+    this.framework = Preset.generic,
+    this.detects = true,
   });
 
   /// The name of the entry, also the name of its client.
@@ -29,4 +33,16 @@ final class CorpusSpec {
 
   /// What generation does with the spec.
   final Expectation expectation;
+
+  /// The framework that wrote the spec, [Preset.generic] when it is not
+  /// code-first.
+  final Preset framework;
+
+  /// Whether the spec carries the marks `typed_openapi lint` detects
+  /// [framework] by; false only for a spec with a framework whose marks
+  /// are missing.
+  final bool detects;
+
+  /// The preset `typed_openapi lint` is expected to detect.
+  Preset get expectedPreset => detects ? framework : Preset.generic;
 }
