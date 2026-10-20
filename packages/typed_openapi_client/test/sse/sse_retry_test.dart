@@ -26,6 +26,8 @@ void main() {
     ],
     for (final status in [
       501,
+      600,
+      999,
       505,
       400,
       401,
