@@ -124,8 +124,11 @@ final class NullableEnumOneOf extends NormalizerRule {
   @override
   String? hint(DiagnosticCode code, Preset preset) => switch (preset) {
     .nestjs =>
-      'In NestJS, @nestjs/swagger 12 writes nullability according to the '
-          'document version; on 11.x keep the document at OpenAPI 3.0.',
+      'In NestJS, declare the property as @ApiProperty({ enum: Currency, '
+          "enumName: 'Currency', nullable: true }); @nestjs/swagger 12 "
+          'spells the null by the version of the document (nullable: true in '
+          "3.0, anyOf with {type: 'null'} in 3.1), so upgrade and "
+          'regenerate the spec first.',
     _ => null,
   };
 }

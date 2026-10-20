@@ -47,6 +47,31 @@ components:
     );
   });
 
+  test('discriminator-property-required: aspnet is told there is no '
+      'switch', () {
+    final d = NormalizerFixture(
+      r'''
+openapi: 3.1.0
+info: {title: Zoo, version: "1"}
+components:
+  schemas:
+    Animal:
+      oneOf:
+        - {$ref: '#/components/schemas/Lion'}
+      discriminator: {propertyName: kind}
+    Lion:
+      type: object
+      properties: {kind: {type: string}}
+''',
+      preset: Preset.aspnet,
+    ).of(DiagnosticCode.discriminatorNotRequired).single;
+    expect(d.fix, startsWith('Add "kind" to "required" of each variant'));
+    expect(d.fix, contains('dotnet/aspnetcore#60469'));
+    expect(d.fix, contains('AddSchemaTransformer'));
+    expect(d.fix, contains('ISchemaFilter'));
+    expect(d.fix, isNot(contains('JsonPolymorphic')));
+  });
+
   test('discriminator-property-required lists at most ten variants', () {
     final schemas = StringBuffer();
     final refs = StringBuffer();
