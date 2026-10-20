@@ -1,4 +1,4 @@
-## 0.0.1 - Unreleased
+## 0.1.0 - Unreleased
 
 ### Added
 - M11b: the package is renamed from `typed_openapi_runtime` and is Dio-free

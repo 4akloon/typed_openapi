@@ -1,4 +1,4 @@
-## 0.0.1 - Unreleased
+## 0.1.0 - Unreleased
 
 ### Added
 - The package, split from `typed_openapi` (M12b): the engine that loads,

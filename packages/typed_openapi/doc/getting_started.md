@@ -4,7 +4,7 @@ This guide takes one NestJS-style spec from file to a working call: install, con
 
 ## Install
 
-`typed_openapi` is not published to pub.dev yet (version 0.0.1). Until it is, depend on it from the repository by git or path. The generator is a dev dependency; the generated client depends only on `typed_openapi_client`; the app adds a transport, here `typed_openapi_dio` and Dio.
+`typed_openapi` is not published to pub.dev yet (version 0.1.0). Until it is, depend on it from the repository by git or path. The generator is a dev dependency; the generated client depends only on `typed_openapi_client`; the app adds a transport, here `typed_openapi_dio` and Dio.
 
 ```yaml
 dependencies:

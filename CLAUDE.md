@@ -1219,7 +1219,7 @@ query is built by the client, so interceptors see an empty
 holds `//`, which Dio would collapse. On the web with Dio's default adapter
 an event stream is refused with `webStreamingMessage` (the adapter delivers
 the body only when the connection closes). Inside the workspace its
-`typed_openapi_client: ^0.0.1` resolves to the package next to it
+`typed_openapi_client: ^0.1.0` resolves to the package next to it
 (`resolution: workspace`); a release that needs a new client publishes the
 client first. Tests: `dio_transport_test.dart` (a fake adapter,
 `test/helpers/fake_adapter.dart`), `web_test.dart` (`@TestOn('browser')`),

@@ -1,4 +1,4 @@
-## 0.0.1 - Unreleased
+## 0.1.0 - Unreleased
 
 ### Changed
 - The engine (loading, normalizing, checking, the IR, baselines, the API

@@ -6,7 +6,7 @@
 
 **An OpenAPI 3.x to Dart client generator for imperfect, code-first specs** (NestJS, FastAPI, Spring, ASP.NET). It fixes what such specs get wrong, tells you every fix with a stable code, and generates Dio clients with typed errors, open enums and unions that do not break on a value the spec forgot.
 
-> **Status:** pre-release (version 0.0.1). It is not published to pub.dev yet; install it from the repository, see [Install](#install).
+> **Status:** pre-release (version 0.1.0). It is not published to pub.dev yet; install it from the repository, see [Install](#install).
 
 ## Install
 

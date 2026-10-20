@@ -1,6 +1,6 @@
 # Troubleshooting
 
-This guide is organised by what you see: a message, a missing file, a surprising type. Each entry gives the cause and the fix. The outputs below were produced by running `typed_openapi` 0.0.1 on small specs; a code that is only named here is explained in [Diagnostics](diagnostics.md).
+This guide is organised by what you see: a message, a missing file, a surprising type. Each entry gives the cause and the fix. The outputs below were produced by running `typed_openapi` 0.1.0 on small specs; a code that is only named here is explained in [Diagnostics](diagnostics.md).
 
 ## The spec cannot be read
 
@@ -177,7 +177,7 @@ Set `baseline:` on the client first; until the file exists `check` reports TOA82
 
 ### The output changed after an upgrade
 
-The manifest `.typed_openapi.json` records the generator version (`"generator": "typed_openapi 0.0.1"`). A new generator can write different code from the same spec and config; that is a change of the generator, not of your API. **Fix:** commit the generated tree, upgrade in a branch, and read the diff. Pin the version of `typed_openapi` and `typed_openapi_client` together with the same `ref`. If the diff is a change you did not expect, see [Reporting a bug](#reporting-a-bug). The same spec and config on the same version always give the same bytes. See [Determinism](generate_output.md#determinism).
+The manifest `.typed_openapi.json` records the generator version (`"generator": "typed_openapi 0.1.0"`). A new generator can write different code from the same spec and config; that is a change of the generator, not of your API. **Fix:** commit the generated tree, upgrade in a branch, and read the diff. Pin the version of `typed_openapi` and `typed_openapi_client` together with the same `ref`. If the diff is a change you did not expect, see [Reporting a bug](#reporting-a-bug). The same spec and config on the same version always give the same bytes. See [Determinism](generate_output.md#determinism).
 
 ## Using the client
 

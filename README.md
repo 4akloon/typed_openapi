@@ -6,7 +6,7 @@
 
 **An OpenAPI 3.x to Dart client generator for imperfect, code-first specs** (NestJS, FastAPI, Spring, ASP.NET). It repairs what such specs get wrong, reports every repair with a stable code, and writes plain Dio clients with typed errors, open enums and unions that do not break on a value the spec forgot.
 
-> **Status:** pre-release (version 0.0.1). Nothing is published to pub.dev yet; install from this repository. The stage map is in [docs/roadmap.md](docs/roadmap.md).
+> **Status:** pre-release (version 0.1.0). Nothing is published to pub.dev yet; install from this repository. The stage map is in [docs/roadmap.md](docs/roadmap.md).
 
 ## Contents
 
@@ -228,7 +228,7 @@ The minimum SDK is Dart 3.10 for the generator and for generated code. Translati
 
 ## Status and roadmap
 
-Version 0.0.1, pre-release: the surface may still change, and a change of generated output is a breaking change of the generator. The milestones (M1 to M13) are listed in [docs/roadmap.md](docs/roadmap.md); requirements and the research behind the decisions are in [docs/](docs/).
+Version 0.1.0, pre-release: the surface may still change, and a change of generated output is a breaking change of the generator. The milestones (M1 to M13) are listed in [docs/roadmap.md](docs/roadmap.md); requirements and the research behind the decisions are in [docs/](docs/).
 
 ## Contributing and license
 

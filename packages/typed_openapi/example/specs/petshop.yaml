@@ -1,0 +1,40 @@
+openapi: 3.1.0
+info:
+  title: Petshop
+  version: "1.0"
+paths:
+  /pets/{id}:
+    get:
+      operationId: getPet
+      tags: [pets]
+      summary: Get one pet.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: integer}
+      responses:
+        "200":
+          description: The pet.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Pet'}
+        "404":
+          description: There is no such pet.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Problem'}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [id, name]
+      properties:
+        id: {type: integer}
+        name: {type: string}
+        tag: {type: string}
+    Problem:
+      type: object
+      required: [title]
+      properties:
+        title: {type: string}
