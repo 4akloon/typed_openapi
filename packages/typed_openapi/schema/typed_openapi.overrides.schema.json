@@ -1,0 +1,579 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "typed_openapi overrides",
+  "description": "The overrides file of a typed_openapi client.",
+  "type": "object",
+  "properties": {
+    "operations": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Why the override exists; kept in the file for the reader, not used."
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The Dart name of the method."
+              },
+              "exclude": {
+                "type": "boolean",
+                "description": "Whether the operation is left out."
+              },
+              "group": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The class the method goes to, UpperCamelCase. The loader does not check the case; the generator reports a group that differs."
+              },
+              "parameters": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "object",
+                      "properties": {
+                        "reason": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "Why the override exists; kept in the file for the reader, not used."
+                        },
+                        "required": {
+                          "type": "boolean",
+                          "description": "Whether the parameter is required."
+                        },
+                        "schema": {
+                          "type": "object",
+                          "description": "The schema of the parameter, written as in the spec."
+                        },
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "The Dart name of the argument."
+                        },
+                        "dartType": {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "minLength": 1,
+                              "pattern": "^[A-Za-z$][A-Za-z0-9_$]*$",
+                              "description": "The Dart type, written as it is: no prefix and no type arguments, and not a reserved word (the schema cannot check the last)."
+                            },
+                            "import": {
+                              "type": "string",
+                              "minLength": 1,
+                              "pattern": "^(package:[A-Za-z_][A-Za-z0-9_]*/\\S+|dart:\\w+)$",
+                              "description": "The package: or dart: library that declares the type."
+                            },
+                            "converter": {
+                              "type": "string",
+                              "minLength": 1,
+                              "pattern": "^[A-Za-z$][A-Za-z0-9_$]*$",
+                              "description": "A class with fromJson and toJson that converts the type, when the type itself has no such members."
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "import"
+                          ],
+                          "additionalProperties": false,
+                          "description": "Use this Dart type from a library. The schema does not check that a type or converter is not a reserved word of Dart."
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "propertyNames": {
+                      "pattern": "^(?:(?:query|querystring|header|path|cookie):.*|:.*|[^:]*)$"
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Parameter overrides, by name or as in:name (in is query, header, path, cookie or querystring)."
+              },
+              "requestBody": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Why the override exists; kept in the file for the reader, not used."
+                  },
+                  "contentType": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "/",
+                    "description": "The media type to use, such as application/json. The schema checks only that it has a slash; the loader reads it as a media type."
+                  },
+                  "schema": {
+                    "type": "object",
+                    "description": "The schema of the body, written as in the spec."
+                  }
+                },
+                "additionalProperties": false,
+                "description": "The override of the request body."
+              },
+              "responses": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "object",
+                      "properties": {
+                        "reason": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "Why the override exists; kept in the file for the reader, not used."
+                        },
+                        "contentType": {
+                          "type": "string",
+                          "minLength": 1,
+                          "pattern": "/",
+                          "description": "The media type to use, such as application/json. The schema checks only that it has a slash; the loader reads it as a media type."
+                        },
+                        "schema": {
+                          "type": "object",
+                          "description": "The schema of the body, written as in the spec."
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Response overrides by status or range, such as 200, 4XX or default."
+              },
+              "sse": {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "type": "object"
+                      }
+                    ],
+                    "description": "The data of every event: a components.schemas key or an inline schema. It excludes events, which the schema cannot say: the loader reports both together and ignores them."
+                  },
+                  "events": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "oneOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            {
+                              "type": "object"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "minProperties": 1,
+                    "description": "The data of each event by event name: a components.schemas key, an inline schema, or null for an event without data."
+                  },
+                  "unknown": {
+                    "type": "string",
+                    "enum": [
+                      "keep",
+                      "ignore"
+                    ],
+                    "description": "What to do with an event name the spec does not list: keep it as an unknown event or drop it."
+                  },
+                  "reconnect": {
+                    "type": "boolean",
+                    "description": "Whether this stream reconnects."
+                  },
+                  "method": {
+                    "type": "string",
+                    "enum": [
+                      "stream",
+                      "only",
+                      "none"
+                    ],
+                    "description": "Which methods are generated: stream (the events beside the body), only (the events only) or none (leave the operation out)."
+                  }
+                },
+                "additionalProperties": false,
+                "description": "How the event stream of the operation is generated."
+              }
+            },
+            "additionalProperties": false
+          },
+          "propertyNames": {
+            "pattern": "^(?:(?:[gG][eE][tT]|[pP][uU][tT]|[pP][oO][sS][tT]|[dD][eE][lL][eE][tT][eE]|[oO][pP][tT][iI][oO][nN][sS]|[hH][eE][aA][dD]|[pP][aA][tT][cC][hH]|[tT][rR][aA][cC][eE]|[qQ][uU][eE][rR][yY]) /.*|(?![A-Za-z]+ /).*)$"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Operation overrides, by operationId or as METHOD /path. Null, as when every entry is commented out, means none."
+    },
+    "schemas": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Why the override exists; kept in the file for the reader, not used."
+              },
+              "$ref": {
+                "type": "string",
+                "minLength": 1,
+                "description": "A reference to another schema, such as \"#/components/schemas/Pet\"; the schema becomes the reference. Other spec fields beside it are reported and dropped by the loader, which the schema cannot say; nullable and the required of a property may stay."
+              },
+              "type": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "string",
+                      "number",
+                      "integer",
+                      "boolean",
+                      "array",
+                      "object"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The type; null removes it (use nullable for a null value)."
+              },
+              "nullable": {
+                "type": "boolean",
+                "description": "Whether the value may be null."
+              },
+              "format": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The format; null removes it."
+              },
+              "required": {
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The names of the required properties; null removes them."
+              },
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The schema of the items, as in the spec; null removes it."
+              },
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "oneOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "object"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "true, false or a schema, as in the spec; null removes it."
+              },
+              "enum": {
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "items": {},
+                    "minItems": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The allowed values; null removes them."
+              },
+              "discriminator": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The discriminator, as in the spec; null removes it."
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The Dart name."
+              },
+              "exclude": {
+                "type": "boolean",
+                "description": "Whether it is left out of the generated code."
+              },
+              "exhaustive": {
+                "type": "boolean",
+                "description": "Whether the base of an enum or union is sealed."
+              },
+              "union": {
+                "type": "string",
+                "enum": [
+                  "raw",
+                  "structural"
+                ],
+                "description": "How a oneOf or anyOf without a discriminator whose variants share a JSON type is generated."
+              },
+              "dartType": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z$][A-Za-z0-9_$]*$",
+                    "description": "The Dart type, written as it is: no prefix and no type arguments, and not a reserved word (the schema cannot check the last)."
+                  },
+                  "import": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^(package:[A-Za-z_][A-Za-z0-9_]*/\\S+|dart:\\w+)$",
+                    "description": "The package: or dart: library that declares the type."
+                  },
+                  "converter": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z$][A-Za-z0-9_$]*$",
+                    "description": "A class with fromJson and toJson that converts the type, when the type itself has no such members."
+                  }
+                },
+                "required": [
+                  "type",
+                  "import"
+                ],
+                "additionalProperties": false,
+                "description": "Use this Dart type from a library. The schema does not check that a type or converter is not a reserved word of Dart."
+              },
+              "properties": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "object",
+                      "properties": {
+                        "reason": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "Why the override exists; kept in the file for the reader, not used."
+                        },
+                        "$ref": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "A reference to another schema, such as \"#/components/schemas/Pet\"; the schema becomes the reference. Other spec fields beside it are reported and dropped by the loader, which the schema cannot say; nullable and the required of a property may stay."
+                        },
+                        "type": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "string",
+                                "number",
+                                "integer",
+                                "boolean",
+                                "array",
+                                "object"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "The type; null removes it (use nullable for a null value)."
+                        },
+                        "nullable": {
+                          "type": "boolean",
+                          "description": "Whether the value may be null."
+                        },
+                        "format": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "The format; null removes it."
+                        },
+                        "required": {
+                          "type": "boolean",
+                          "description": "Whether the property is required."
+                        },
+                        "items": {
+                          "anyOf": [
+                            {
+                              "type": "object"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "The schema of the items, as in the spec; null removes it."
+                        },
+                        "additionalProperties": {
+                          "anyOf": [
+                            {
+                              "oneOf": [
+                                {
+                                  "type": "boolean"
+                                },
+                                {
+                                  "type": "object"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "true, false or a schema, as in the spec; null removes it."
+                        },
+                        "enum": {
+                          "anyOf": [
+                            {
+                              "type": "array",
+                              "items": {},
+                              "minItems": 1
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "The allowed values; null removes them."
+                        },
+                        "discriminator": {
+                          "anyOf": [
+                            {
+                              "type": "object"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "The discriminator, as in the spec; null removes it."
+                        },
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "The Dart name."
+                        },
+                        "exclude": {
+                          "type": "boolean",
+                          "description": "Whether it is left out of the generated code."
+                        },
+                        "dartType": {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "minLength": 1,
+                              "pattern": "^[A-Za-z$][A-Za-z0-9_$]*$",
+                              "description": "The Dart type, written as it is: no prefix and no type arguments, and not a reserved word (the schema cannot check the last)."
+                            },
+                            "import": {
+                              "type": "string",
+                              "minLength": 1,
+                              "pattern": "^(package:[A-Za-z_][A-Za-z0-9_]*/\\S+|dart:\\w+)$",
+                              "description": "The package: or dart: library that declares the type."
+                            },
+                            "converter": {
+                              "type": "string",
+                              "minLength": 1,
+                              "pattern": "^[A-Za-z$][A-Za-z0-9_$]*$",
+                              "description": "A class with fromJson and toJson that converts the type, when the type itself has no such members."
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "import"
+                          ],
+                          "additionalProperties": false,
+                          "description": "Use this Dart type from a library. The schema does not check that a type or converter is not a reserved word of Dart."
+                        },
+                        "triState": {
+                          "type": "boolean",
+                          "description": "Whether the property tells null from absent in a PATCH."
+                        },
+                        "union": {
+                          "type": "string",
+                          "enum": [
+                            "raw",
+                            "structural"
+                          ],
+                          "description": "How a oneOf or anyOf without a discriminator whose variants share a JSON type is generated."
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Property overrides by name. They cannot go with a $ref, which the schema cannot say: the loader reports it and ignores them."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Schema overrides, by components.schemas key. Null, as when every entry is commented out, means none."
+    }
+  },
+  "additionalProperties": false
+}

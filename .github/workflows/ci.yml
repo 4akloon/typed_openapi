@@ -17,6 +17,8 @@ permissions:
 #   JavaScript and to Wasm;
 # - the corpus job generates the public specs with both SDKs and compares
 #   the output with corpus.lock;
+# - the docs job checks that the references and JSON Schemas generated from
+#   the code are committed;
 # - the quick fuzz runs 200 seeds; the semver job checks that a change of
 #   output carries a CHANGELOG entry and a raised version (no raise is
 #   needed while the base version is unreleased; the entry still is).
@@ -172,6 +174,24 @@ jobs:
 
       - name: Fuzz
         run: dart run bin/fuzz.dart --seeds 200
+        working-directory: packages/typed_openapi_tool
+
+  docs:
+    name: Generated docs are current
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Install dependencies (workspace)
+        run: dart pub get
+
+      - name: Check the generated docs
+        run: dart run bin/docs.dart check
         working-directory: packages/typed_openapi_tool
 
   semver:

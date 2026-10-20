@@ -127,6 +127,11 @@ void main() {
     );
   });
 
+  test('every PR checks that the generated docs are current', () {
+    expect(runsOf('ci.yml', 'docs'), contains('dart run bin/docs.dart check'));
+    expect(directoriesOf('ci.yml', 'docs'), ['packages/typed_openapi_tool']);
+  });
+
   test('nightly runs beta as a warning, the corpus on Windows, 6000 seeds', () {
     expect(at('nightly.yml', ['jobs', 'beta', 'continue-on-error']), isTrue);
     expect(
