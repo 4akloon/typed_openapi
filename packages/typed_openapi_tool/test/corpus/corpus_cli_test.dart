@@ -7,11 +7,10 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 import 'package:typed_openapi_tool/src/corpus/corpus_cli.dart';
 import 'package:typed_openapi_tool/src/corpus/corpus_exception.dart';
 import 'package:typed_openapi_tool/src/corpus/spec_cache.dart';
-
-import '../helpers/temp_dir.dart';
 
 const _text = 'openapi: 3.1.0\n';
 

@@ -6,7 +6,7 @@ import 'dart:io';
 
 import 'package:source_span/source_span.dart';
 import 'package:test/test.dart';
-import 'package:typed_openapi/typed_openapi.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
 
 import '../helpers/cached_schema.dart';
 import '../helpers/code_scanning_rules.dart';

@@ -1,4 +1,4 @@
-import 'package:typed_openapi/typed_openapi.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
 
 /// The Dart program that round-trips the samples of one generated client:
 /// each value goes through `fromJson`, `toJson`, JSON text and `fromJson`

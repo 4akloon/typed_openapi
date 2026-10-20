@@ -3,8 +3,8 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:typed_openapi/typed_openapi.dart';
-
-import '../helpers/temp_dir.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 const _spec = r'''
 openapi: 3.1.0

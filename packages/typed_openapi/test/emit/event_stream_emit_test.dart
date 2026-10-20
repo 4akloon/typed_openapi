@@ -6,7 +6,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
-import 'package:typed_openapi/src/config/generation_config.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
 
 import '../helpers/emit_fixture.dart';
 

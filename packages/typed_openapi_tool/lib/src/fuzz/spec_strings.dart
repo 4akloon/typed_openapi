@@ -1,4 +1,4 @@
-import 'package:typed_openapi/typed_openapi.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
 
 /// The spec strings a client's code must hold as string literals with the
 /// same value: property keys, string enum values, discriminator properties

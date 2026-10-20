@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:args/command_runner.dart';
 import 'package:io/io.dart' show ExitCode;
 
-import '../diagnostics/display_paths.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
 import 'baseline_command.dart';
 import 'check_command.dart';
 import 'diff_command.dart';

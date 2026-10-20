@@ -6,10 +6,14 @@ Guidance for working in this repository.
 
 `typed_openapi` generates Dart clients from OpenAPI 3.x specs, aimed at
 imperfect, code-first specs (NestJS, FastAPI, Spring, ASP.NET). It is a Dart
-pub workspace with five pure-Dart packages (no Flutter):
+pub workspace with seven pure-Dart packages (no Flutter):
 
-- `packages/typed_openapi` - the generator: CLI and programmatic API. Never a
-  runtime dependency of user apps.
+- `packages/typed_openapi_core` - the engine (M12b): load, normalize, check,
+  the IR, baselines, the API snapshot and the diff. A tool that only checks
+  specs (grund's CI) depends on it alone; no emitter, no code output.
+- `packages/typed_openapi` - the generator: the emitters, the output writer
+  and the CLI, on top of the core (it depends on `typed_openapi_core`). Never
+  a runtime dependency of user apps.
 - `packages/typed_openapi_client` - the client core, the only package
   generated clients depend on (typed errors, `Result`, `Patch`, JSON decoding
   with paths, encoders, request bodies, SSE, the `ClientTransport` contract).
@@ -19,6 +23,9 @@ pub workspace with five pure-Dart packages (no Flutter):
   and its loopback server. `publish_to: none`.
 - `packages/typed_openapi_tool` - repository tools (M11): the public-spec
   corpus and the escaping fuzz. `publish_to: none`; nothing depends on it.
+- `packages/typed_openapi_test_support` - the fixtures and test helpers the
+  core, the generator and the tool share (`TempDir`, `NormalizedFixture`, the
+  size-limit measuring code). `publish_to: none`; only dev dependencies use it.
 
 Minimum SDK: Dart 3.10 (`>=3.10.0 <4.0.0`), also for generated code.
 
@@ -27,12 +34,14 @@ Minimum SDK: Dart 3.10 (`>=3.10.0 <4.0.0`), also for generated code.
 ```sh
 dart pub get                                 # repo root, once and after pubspec edits
 dart analyze packages                        # repo root; must print "No issues found!"
-cd packages/typed_openapi && dart test       # also in typed_openapi_client, typed_openapi_dio
+cd packages/typed_openapi_core && dart test  # the engine; also in typed_openapi, typed_openapi_client, typed_openapi_dio
 cd packages/typed_openapi_client && dart test -p chrome                        # dart2js; also typed_openapi_dio
 cd packages/typed_openapi_client && dart test -p chrome --compiler dart2wasm   # dart2wasm; also typed_openapi_dio
 cd packages/typed_openapi && dart format lib test bin   # a second run must change 0 files
+cd packages/typed_openapi_core && dart format lib test  # the same
 cd packages/typed_openapi_client && dart format lib test # the same; also typed_openapi_dio, typed_openapi_transport_tests
-cd packages/<package> && dart pub publish --dry-run # before publishing (the client before the Dio transport)
+cd packages/typed_openapi_test_support && dart format lib # the same
+cd packages/<package> && dart pub publish --dry-run # before publishing (the core before the generator, the client before the Dio transport)
 cd packages/typed_openapi_tool && dart test
 cd packages/typed_openapi_tool && dart format lib test bin # the same
 cd packages/typed_openapi_tool && dart run bin/corpus.dart check  # network on first fetch
@@ -46,7 +55,8 @@ Git commands run from the repo root. Commit messages are Conventional Commits
 
 ## Architecture (`dart run typed_openapi check`)
 
-All under `packages/typed_openapi/lib/src/`, one folder per stage:
+Engine folders under `packages/typed_openapi_core/lib/src/`, generator folders
+(`emit/`, `generate/`, `cli/`) under `packages/typed_openapi/lib/src/`, one folder per stage:
 
 - `diagnostics/` - `Diagnostic` (with `RelatedLocation`s, preset `hints` as
   `(preset, text)` and fingerprint `args`), `DiagnosticCode` (stable `TOAnnn`
@@ -124,6 +134,9 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `BundlerConstructs`; `OperationParser` reads servers through `ServerParser` and the `security` field
   through `SecurityParser` (a field that is not a list is one malformed
   requirement, `SecurityRequirement.isNotList`, with TOA111 kept).
+- `paths/` - `RealPaths` compares paths with symbolic links resolved and case
+  ignored where the file system ignores it; `ConfigLoader` (TOA904) and the
+  generator's `OutputWriter` use it.
 - `resolve/` - `RefTarget` reads a `$ref` value (a query, a bad fragment or a
   file name that is not UTF-8 after percent-decoding -> TOA100, a host ->
   TOA102), `SpecDocuments` loads other local files once by
@@ -757,7 +770,8 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   holds a manifest), reporting TOA832 (info). `OutputWriter.forTesting`
   (`@visibleForTesting`) takes the test hooks (`beforeInstall`, and `run`
   for `chmod`/`kill`); the public constructor has none.
-  `RealPaths` compares paths with symbolic links resolved and case ignored
+  `RealPaths` (`paths/real_paths.dart` in the core, exported for this
+  package) compares paths with symbolic links resolved and case ignored
   where the file system ignores it (found by a probe; `ConfigLoader` uses it
   for TOA904 too). An input of the run is also found by file identity
   (`FileSystemEntity.identical`) among the files in the output, so a hard
@@ -855,12 +869,10 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   there, and the exit code is the one `check` gives);
   `bin/typed_openapi.dart` only calls `TypedOpenApiCli().run(args)` and sets
   `exitCode`.
-- `lib/typed_openapi.dart` exports the public API, each with a `show` list:
-  `SpecChecker`, `ClientCheck`, `TypedOpenApiCli`, `ConfigLoader`,
+- `packages/typed_openapi_core/lib/typed_openapi_core.dart` exports the public
+  API of the engine, each with a `show` list: `SpecChecker`, `ClientCheck`, `ConfigLoader`,
   `ClientConfig`, `Preset`, `ProjectConfig`, `GenerationConfig`, `GroupBy`,
-  `TriStateRule`, `OperationFilter`, `FilterPattern`, `ModelLibrary`,
-  `ApiLibrary` (M11: the fuzz of `packages/typed_openapi_tool` emits whole
-  clients in-process), `OutputWriter`, `OutputChanges`, the IR (`IrBuilder`,
+  `TriStateRule`, `OperationFilter`, `FilterPattern`, the IR (`IrBuilder`,
   `IrJson`, `ClientIr` and its node classes, among them the M9 ones
   (`RootIr`, `ServerIr`, `ServerVariableIr`, `StatusTypeIr`, `StatusCaseIr`,
   `PartIr`, `EncodingIr`, `SecurityUseIr`, `SecuritySchemeIr`,
@@ -880,17 +892,15 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `Finding`, `SpecEdit`, `EditOperation`) and the overrides file
   (`OverrideLoader`, `OverrideSet`, `OverrideEntry` and its subclasses,
   `DartTypeOverride`, `UnionMode`, `SseOverride`, `SseMethod`), and
-  `NameLock` (M12: what `IrBuilder(names:)` takes). Not
-  exported: `CheckCommand`,
-  `BaselineCommand`, `GenerateCommand`, `DiffCommand`, `ClientWriter`,
-  `ApiLockRun`, `snapshot/` and `diff/` (the lock's format is the file,
-  not a Dart API), `LockedNames`, `RealPaths`, the emitters
-  (`DartCode`, `DartWriter`, `Imports`, `TypeCodec`, `ModelEmitter`,
-  `ModelConstructors`, `EnumEmitter`, `UnionEmitter`, `DiscriminatorDecoder`,
-  `UnionVariants`, and the API emitters (`ApiLibrary` aside),
-  `OperationEmitter`, `RequestWriter`, `DecoderWriter`, `PartsEmitter`,
-  `StatusTypeEmitter`: `generate` runs them through `ApiLibrary`, the one
-  public entry point), the
+  `NameLock` (M12: what `IrBuilder(names:)` takes). M12b adds what the
+  generator needs and nothing else (decided per symbol, found with
+  `dart analyze`, which fails on a `src` import across packages): `ApiLock`,
+  `ApiSnapshot`, `SnapshotBuilder`, `SnapshotJson`, `ApiDiff`, `ApiChange`,
+  `ChangeCategory`, `ChangeCounts`, `TextDiffReport`, `JsonDiffReport`,
+  `MarkdownDiffReport`, `DartNames`, `NameScope`, `MediaTypeName`,
+  `PathTemplate`, `JsonKind` (16) and `RealPaths`. Not
+  exported: `LockedNames`, the rest of `snapshot/` and `diff/` (the lock's
+  format is the file, not a Dart API), the
   internals of `parse/` (`OpenApiParser`, `OperationParser`, `SchemaParser`,
   `ObjectReader`, `ParseContext`, `SpecIndex`, `DialectChecker`), `resolve/`
   (`RefTarget`, `RefResolver`), `normalize/` (`TreeEditor`, the rule
@@ -898,9 +908,22 @@ All under `packages/typed_openapi/lib/src/`, one folder per stage:
   `OverrideSnippet`), `ir/` internals (`IrContext`, `IrOverrides`,
   `SchemaMapper` and its collaborators, `SchemaShapes` and its collaborators,
   `RefFollower`, `Decimal`, `NameHint`, `DirectionIndex`,
-  `OperationSelector`, `OperationBuilder`, `SpecOperation`, `DartNames`,
-  `NameScope`, `MediaTypePicker`, `RootNames`, `TypeClaims`, `PartsBuilder`,
-  `BodyEncoding`, `SchemaDefaults`, `DefaultMatcher`), `IrCommand`, `YamlComposer` and `load/yaml/`.
+  `OperationSelector`, `OperationBuilder`, `SpecOperation`,
+  `MediaTypePicker`, `RootNames`, `TypeClaims`, `PartsBuilder`,
+  `BodyEncoding`, `SchemaDefaults`, `DefaultMatcher`), `YamlComposer` and `load/yaml/`.
+- `packages/typed_openapi/lib/typed_openapi.dart` exports five symbols and
+  re-exports nothing from the core: `TypedOpenApiCli`, `ApiLibrary` (M11:
+  the fuzz of `packages/typed_openapi_tool` emits whole clients
+  in-process), `ModelLibrary`, `OutputWriter` and `OutputChanges`. Not
+  exported: `CheckCommand`, `BaselineCommand`, `GenerateCommand`,
+  `DiffCommand`, `IrCommand`, `ClientWriter`, `ApiLockRun`, the emitters
+  (`DartCode`, `DartWriter`, `Imports`, `TypeCodec`, `ModelEmitter`,
+  `ModelConstructors`, `EnumEmitter`, `UnionEmitter`, `DiscriminatorDecoder`,
+  `UnionVariants`, and the API emitters (`ApiLibrary` aside),
+  `OperationEmitter`, `RequestWriter`, `DecoderWriter`, `PartsEmitter`,
+  `StatusTypeEmitter`: `generate` runs them through `ApiLibrary`, the one
+  public entry point). Code that needs `SpecChecker`, `ConfigLoader`,
+  `DiagnosticBag` or the IR imports `package:typed_openapi_core/typed_openapi_core.dart`.
 
 Data flows loader -> parser -> resolver -> overrides -> normalizer -> IR
 builder -> checker, every stage writing problems into one `DiagnosticBag`;
@@ -923,7 +946,7 @@ Rules of the pipeline:
 ## Tools (`packages/typed_openapi_tool/`)
 
 The corpus, golden tests and fuzz of M11 (R15.3, R15.4); the tool uses the
-generator's public API only. Its network use is the `SpecCache` download
+public APIs of the core and the generator only. Its network use is the `SpecCache` download
 (`corpus fetch`, and `update`/`check` for what the cache lacks) and the
 `dart pub get` of `PackageGate`; no test touches the network.
 
@@ -1249,8 +1272,19 @@ adapter delivers a body only when the connection closes: the adapter runs
   commas. The rule list is grouped by purpose and explained in
   `docs/code-quality-review.md` (section 7); rules waiting for the M9 merge
   are listed at the bottom of the file.
-- Tests do not touch the network; temp files only through `TempDir` in
-  `test/helpers/temp_dir.dart`.
+- Tests do not touch the network; temp files only through `TempDir` of
+  `typed_openapi_test_support`.
+
+**Packages and tests (M12b).** The fixture specs (`lib/fixtures/`) and the
+helpers several packages need (`TempDir`, `NormalizedFixture`, the size-limit
+measuring code) live in `typed_openapi_test_support`; `IrFixture`, built on
+`NormalizedFixture`, is in the core's `test/helpers/`. A test goes with the
+code it tests: engine tests in the core, emitter, writer and CLI tests in the
+generator. Each of the core, the generator and the client has its own ratchet
+(`test/quality/size_limits_test.dart`, with its own allowlist). `ir_robustness_test`
+scans the core's tests only. The four publishable packages carry one version
+(lockstep, pinned by a tool test) and publish in the order core, client,
+`typed_openapi`, Dio transport.
 
 ## Code quality rules (size, decomposition, readability)
 

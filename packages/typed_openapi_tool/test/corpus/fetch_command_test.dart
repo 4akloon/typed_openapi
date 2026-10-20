@@ -2,9 +2,8 @@
 library;
 
 import 'package:test/test.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 import 'package:typed_openapi_tool/src/corpus/corpus_cli.dart';
-
-import '../helpers/temp_dir.dart';
 
 const _hash =
     '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';

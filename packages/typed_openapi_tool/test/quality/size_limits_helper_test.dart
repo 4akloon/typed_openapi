@@ -1,7 +1,5 @@
 import 'package:test/test.dart';
-
-import '../helpers/size_limits.dart';
-import '../helpers/temp_dir.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 void main() {
   /// Measures a package whose `lib/a.dart` holds [source].

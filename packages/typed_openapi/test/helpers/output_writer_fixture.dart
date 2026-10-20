@@ -1,11 +1,9 @@
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
-import 'package:typed_openapi/src/config/project_config.dart';
-import 'package:typed_openapi/src/diagnostics/diagnostic_bag.dart';
 import 'package:typed_openapi/src/generate/output_writer.dart';
-
-import 'temp_dir.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 /// A client whose output is `gen/pets` in a temp directory, and an
 /// [OutputWriter] run on it, for the tests of the writer.

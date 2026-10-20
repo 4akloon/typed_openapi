@@ -1,14 +1,4 @@
-import '../config/project_config.dart';
-import '../diagnostics/diagnostic_bag.dart';
-import '../diagnostics/display_paths.dart';
-import '../diagnostics/json_pointer.dart';
-import '../diff/api_diff.dart';
-import '../diff/change_counts.dart';
-import '../ir/ir.dart';
-import '../snapshot/api_lock.dart';
-import '../snapshot/api_snapshot.dart';
-import '../snapshot/snapshot_builder.dart';
-import '../snapshot/snapshot_json.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
 
 /// What one `generate` run does with `typed_openapi.lock` (M12, decisions
 /// 4 and 6): it says for each client written how its API changed since the

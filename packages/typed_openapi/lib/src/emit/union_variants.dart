@@ -1,5 +1,4 @@
-import '../ir/dart_type.dart';
-import '../ir/ir.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
 import 'type_codec.dart';
 
 /// What the writers of a union share about its variants: how a variant's

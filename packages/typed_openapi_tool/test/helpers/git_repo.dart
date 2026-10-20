@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'temp_dir.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 /// A real git repository in a temp directory, for tests of git commands.
 final class GitRepo {

@@ -26,6 +26,11 @@ jobs:
       - name: Install dependencies (workspace)
         run: dart pub get
 
+      - name: Test typed_openapi_core
+        if: always()
+        run: dart test
+        working-directory: packages/typed_openapi_core
+
       - name: Test typed_openapi
         if: always()
         run: dart test

@@ -5,12 +5,11 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
-import 'package:typed_openapi/src/config/generation_config.dart';
-import 'package:typed_openapi/src/overrides/override_set.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 import '../helpers/dart_process.dart';
 import '../helpers/emit_fixture.dart';
-import '../helpers/temp_dir.dart';
 
 void main() {
   group('a package of generated clients', () {

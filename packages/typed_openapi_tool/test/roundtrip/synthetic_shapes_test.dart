@@ -1,5 +1,5 @@
 import 'package:test/test.dart';
-import 'package:typed_openapi/typed_openapi.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
 import 'package:typed_openapi_tool/src/roundtrip/roundtrip_program.dart';
 import 'package:typed_openapi_tool/src/roundtrip/sample.dart';
 import 'package:typed_openapi_tool/src/roundtrip/synthetic_values.dart';

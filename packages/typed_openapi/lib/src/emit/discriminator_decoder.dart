@@ -1,4 +1,4 @@
-import '../ir/ir.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
 import 'dart_code.dart';
 import 'dart_writer.dart';
 import 'type_codec.dart';

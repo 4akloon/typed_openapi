@@ -5,13 +5,13 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 import 'package:typed_openapi_tool/src/corpus/archive_extractor.dart';
 import 'package:typed_openapi_tool/src/corpus/corpus_exception.dart';
 import 'package:typed_openapi_tool/src/corpus/tar_runner.dart';
 import 'package:typed_openapi_tool/src/corpus/tree_hash.dart';
 
 import '../helpers/tar_archive.dart';
-import '../helpers/temp_dir.dart';
 
 /// The entries of a small repository archive whose root is `specs`.
 const _repo = [

@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
-import 'package:typed_openapi/typed_openapi.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
 
 import '../corpus/corpus_exception.dart';
 import '../corpus/timed_process.dart';

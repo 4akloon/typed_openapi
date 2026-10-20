@@ -1,0 +1,166 @@
+/// The engine of typed_openapi: read, normalize and check an OpenAPI spec.
+///
+/// The programmatic API mirrors the CLI: load a config, check specs, report
+/// diagnostics. [SpecReader] reads a loaded spec into the typed model
+/// ([SpecModel]) with its `$ref`s resolved; [OverrideLoader] reads a
+/// client's overrides file; [Normalizer] applies its spec fields, runs the
+/// named rules over the spec and applies their fixes. [Baseline] and
+/// [BaselineLoader] read and write a client's baseline file, and
+/// [Fingerprints] computes the keys it matches diagnostics by. [IrBuilder]
+/// builds a client's semantic IR ([ClientIr]: declarations with Dart names
+/// and [DartType]s, groups of operations) from the normalized spec, and
+/// [IrJson] writes it as JSON.
+library;
+
+export 'src/baseline/anchor_index.dart' show AnchorIndex;
+export 'src/baseline/baseline.dart' show Baseline, BaselineEntry, BaselineMatch;
+export 'src/baseline/baseline_loader.dart' show BaselineLoader;
+export 'src/baseline/fingerprints.dart' show Fingerprints;
+export 'src/check/spec_checker.dart' show ClientCheck, SpecChecker;
+export 'src/config/config_loader.dart' show ConfigLoader;
+export 'src/config/generation_config.dart'
+    show
+        FilterPattern,
+        GenerationConfig,
+        GroupBy,
+        OperationFilter,
+        TriStateRule;
+export 'src/config/project_config.dart'
+    show ClientConfig, Preset, ProjectConfig;
+export 'src/diagnostics/diagnostic.dart' show Diagnostic, RelatedLocation;
+export 'src/diagnostics/diagnostic_bag.dart' show DiagnosticBag;
+export 'src/diagnostics/diagnostic_code.dart' show DiagnosticCode;
+export 'src/diagnostics/display_paths.dart' show DisplayPaths;
+export 'src/diagnostics/github_actions_reporter.dart'
+    show GitHubActionsReporter;
+export 'src/diagnostics/json_pointer.dart' show JsonPointer;
+export 'src/diagnostics/reporters.dart'
+    show DiagnosticReporter, JsonReporter, ReportFormat, TextReporter;
+export 'src/diagnostics/sarif_reporter.dart' show SarifReporter;
+export 'src/diagnostics/severity.dart' show Severity;
+export 'src/diagnostics/severity_levels.dart' show SeverityLevels;
+export 'src/diff/api_change.dart' show ApiChange, ChangeCategory;
+export 'src/diff/api_diff.dart' show ApiDiff;
+export 'src/diff/change_counts.dart' show ChangeCounts;
+export 'src/diff/json_diff_report.dart' show JsonDiffReport;
+export 'src/diff/markdown_diff_report.dart' show MarkdownDiffReport;
+export 'src/diff/text_diff_report.dart' show TextDiffReport;
+export 'src/ir/api_ir.dart'
+    show
+        EncodingIr,
+        PartIr,
+        RootIr,
+        SecurityKind,
+        SecuritySchemeIr,
+        SecurityUseIr,
+        ServerIr,
+        ServerVariableIr,
+        StatusCaseIr,
+        StatusTypeIr;
+export 'src/ir/dart_type.dart'
+    show
+        CoreKind,
+        CoreType,
+        CustomType,
+        DartType,
+        DeclId,
+        DeclVariant,
+        ListType,
+        MapType,
+        NamedType,
+        PatchType;
+export 'src/ir/ir.dart'
+    show
+        BodyKind,
+        ClientIr,
+        ConstraintsIr,
+        Declaration,
+        EnumDecl,
+        EnumKind,
+        EnumValueIr,
+        ErrorsByStatus,
+        ErrorsIr,
+        EventStreamIr,
+        EventUnionIr,
+        EventVariantIr,
+        FieldIr,
+        GroupIr,
+        JsonKind,
+        ModelDecl,
+        ModelDirection,
+        NoErrors,
+        OperationIr,
+        ParameterIr,
+        RequestBodyIr,
+        ResponseIr,
+        SingleError,
+        StreamReconnection,
+        UnionDecl,
+        UnionDispatch,
+        UnionKind,
+        UnionVariantIr;
+export 'src/ir/ir_builder.dart' show IrBuilder;
+export 'src/ir/ir_json.dart' show IrJson;
+export 'src/ir/name_lock.dart' show NameLock;
+export 'src/ir/name_scope.dart' show NameScope;
+export 'src/ir/names.dart' show DartNames;
+export 'src/load/openapi_version.dart'
+    show OpenApiVersion, OpenApiVersionDetector;
+export 'src/load/spec_document.dart' show SpecDocument;
+export 'src/load/spec_loader.dart' show SpecLoader;
+export 'src/model/document.dart' show Components, Info, OpenApiDocument, Tag;
+export 'src/model/media_type_name.dart' show MediaTypeName;
+export 'src/model/operation.dart'
+    show
+        Encoding,
+        Example,
+        Header,
+        MediaType,
+        Operation,
+        Parameter,
+        ParameterLocation,
+        ParameterStyle,
+        PathItem,
+        RequestBody,
+        Response,
+        SecurityRequirement,
+        Server,
+        ServerVariable;
+export 'src/model/path_template.dart' show PathTemplate;
+export 'src/model/schema.dart'
+    show BooleanSchema, Discriminator, Schema, SchemaObject, SchemaType;
+export 'src/model/security.dart'
+    show
+        ApiKeyLocation,
+        OAuthFlow,
+        OAuthFlows,
+        SecurityScheme,
+        SecuritySchemeType;
+export 'src/model/spec_node.dart'
+    show Inline, Ref, RefKind, RefOr, SpecLocation, SpecNode;
+export 'src/normalize/normalizer.dart' show NormalizedSpec, Normalizer;
+export 'src/normalize/normalizer_rule.dart'
+    show Finding, NormalizerRule, RuleContext;
+export 'src/normalize/spec_edit.dart' show EditOperation, SpecEdit;
+export 'src/overrides/override_loader.dart' show OverrideLoader;
+export 'src/overrides/override_set.dart'
+    show
+        BodyOverride,
+        DartTypeOverride,
+        OperationOverride,
+        OverrideEntry,
+        OverrideSet,
+        ParameterOverride,
+        PropertyOverride,
+        ResponseOverride,
+        SchemaOverride,
+        UnionMode;
+export 'src/overrides/sse_override.dart' show SseMethod, SseOverride;
+export 'src/paths/real_paths.dart' show RealPaths;
+export 'src/resolve/spec_documents.dart' show SpecDocuments;
+export 'src/resolve/spec_model.dart' show SpecModel;
+export 'src/resolve/spec_reader.dart' show SpecReader;
+export 'src/snapshot/api_lock.dart' show ApiLock;
+export 'src/snapshot/api_snapshot.dart' show ApiSnapshot;
+export 'src/snapshot/snapshot_builder.dart' show SnapshotBuilder;
+export 'src/snapshot/snapshot_json.dart' show SnapshotJson;

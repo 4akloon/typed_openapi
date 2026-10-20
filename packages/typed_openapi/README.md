@@ -10,7 +10,7 @@
 
 ## Install
 
-`typed_openapi` is the generator: a dev dependency and a CLI, never a runtime dependency. The generated code depends only on [`typed_openapi_client`](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/README.md); the app adds a transport, such as [`typed_openapi_dio`](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_dio/README.md) over Dio. None of these packages is on pub.dev yet, so use git (or a path to a checkout):
+`typed_openapi` is the generator: a dev dependency and a CLI, never a runtime dependency. It is built on [`typed_openapi_core`](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_core/README.md), the engine that reads, normalizes and checks specs, which a project lists next to it for now. The generated code depends only on [`typed_openapi_client`](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/README.md); the app adds a transport, such as [`typed_openapi_dio`](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_dio/README.md) over Dio. None of these packages is on pub.dev yet, so use git (or a path to a checkout):
 
 ```yaml
 dependencies:
@@ -24,6 +24,10 @@ dependencies:
       url: https://github.com/4akloon/typed_openapi.git
       path: packages/typed_openapi_dio
 dev_dependencies:
+  typed_openapi_core:
+    git:
+      url: https://github.com/4akloon/typed_openapi.git
+      path: packages/typed_openapi_core
   typed_openapi:
     git:
       url: https://github.com/4akloon/typed_openapi.git

@@ -47,6 +47,10 @@ dependencies:
       url: https://github.com/4akloon/typed_openapi.git
       path: packages/typed_openapi_dio
 dev_dependencies:
+  typed_openapi_core:
+    git:
+      url: https://github.com/4akloon/typed_openapi.git
+      path: packages/typed_openapi_core
   typed_openapi:
     git:
       url: https://github.com/4akloon/typed_openapi.git
@@ -155,7 +159,7 @@ Against a server that answers `{"id": 7, "name": "Rex", "status": "available"}` 
 
 ## Documentation
 
-Every guide of both packages. Package READMEs: [typed_openapi](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi/README.md), [typed_openapi_client](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/README.md).
+Every guide of the generator and the client. Package READMEs: [typed_openapi_core](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_core/README.md), [typed_openapi](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi/README.md), [typed_openapi_client](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/README.md).
 
 **The generator, `typed_openapi`**
 

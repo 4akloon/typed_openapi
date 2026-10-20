@@ -3,18 +3,7 @@ import 'dart:io';
 import 'package:args/command_runner.dart';
 import 'package:io/io.dart' show ExitCode;
 
-import '../check/spec_checker.dart';
-import '../config/config_loader.dart';
-import '../diagnostics/diagnostic_bag.dart';
-import '../diagnostics/display_paths.dart';
-import '../diagnostics/reporters.dart';
-import '../diff/api_change.dart';
-import '../diff/api_diff.dart';
-import '../diff/json_diff_report.dart';
-import '../diff/markdown_diff_report.dart';
-import '../diff/text_diff_report.dart';
-import '../snapshot/api_lock.dart';
-import '../snapshot/api_snapshot.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
 import 'api_lock_run.dart';
 import 'check_command.dart';
 

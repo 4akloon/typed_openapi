@@ -1,10 +1,7 @@
 import 'package:test/test.dart';
-import 'package:typed_openapi/src/config/generation_config.dart';
 import 'package:typed_openapi/src/emit/model_library.dart';
-import 'package:typed_openapi/src/ir/ir_builder.dart';
-import 'package:typed_openapi/src/overrides/override_set.dart';
-
-import '../helpers/ir_fixture.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 /// The model files of [spec], a spec whose `GET /x` returns `Root`.
 Map<String, String> emit(
@@ -13,7 +10,7 @@ Map<String, String> emit(
   String? overrides,
   String paths = '',
 }) {
-  final fixture = IrFixture(
+  final fixture = NormalizedFixture(
     '''
 openapi: 3.1.0
 info: {title: t, version: "1"}
@@ -36,7 +33,7 @@ $schemas''',
   );
   final ir = IrBuilder(
     fixture.diagnostics,
-  ).build(fixture.context.spec, fixture.context.client);
+  ).build(fixture.spec, fixture.client);
   return const ModelLibrary().files(ir);
 }
 

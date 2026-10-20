@@ -2,8 +2,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
-import 'package:typed_openapi/src/diagnostics/diagnostic_code.dart';
-import 'package:typed_openapi/src/diagnostics/severity.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
 
 import '../helpers/output_writer_fixture.dart';
 

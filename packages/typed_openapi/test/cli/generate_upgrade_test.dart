@@ -4,8 +4,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:typed_openapi/src/cli/cli.dart';
-
-import '../helpers/temp_dir.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 String _spec({bool withOwners = true}) =>
     '''

@@ -5,7 +5,7 @@ library;
 
 import 'package:test/test.dart';
 
-import '../helpers/size_limits.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 void main() {
   final limits = SizeLimits('.');

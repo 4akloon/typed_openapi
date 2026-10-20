@@ -2,8 +2,7 @@
 library;
 
 import 'package:test/test.dart';
-import 'package:typed_openapi/src/config/generation_config.dart';
-import 'package:typed_openapi/src/overrides/override_set.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
 
 import '../helpers/emit_fixture.dart';
 

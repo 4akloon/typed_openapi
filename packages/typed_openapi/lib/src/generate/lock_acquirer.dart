@@ -1,7 +1,6 @@
 import 'dart:io';
 
-import '../diagnostics/diagnostic_bag.dart';
-import '../diagnostics/display_paths.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
 import 'lock_holder.dart';
 import 'output_lock.dart';
 import 'output_target.dart';

@@ -71,6 +71,7 @@ void main() {
 
   test('every PR tests the Dio adapter on the VM and in Chrome', () {
     expect(directoriesOf('ci.yml', 'analyze-test'), [
+      'packages/typed_openapi_core',
       'packages/typed_openapi',
       'packages/typed_openapi_client',
       'packages/typed_openapi_dio',
@@ -80,6 +81,19 @@ void main() {
       'packages/typed_openapi_client',
       'packages/typed_openapi_dio',
     ]);
+  });
+
+  test('the core is tested, dry-run before the generator, and has a tag', () {
+    final dryRuns = directoriesOf('ci.yml', 'publish-dry-run');
+    expect(dryRuns, contains('packages/typed_openapi_core'));
+    expect(
+      dryRuns.indexOf('packages/typed_openapi_core'),
+      lessThan(dryRuns.indexOf('packages/typed_openapi')),
+    );
+    expect(
+      at('publish.yml', ['on', 'push', 'tags']),
+      contains('typed_openapi_core-v*'),
+    );
   });
 
   test('the Dio adapter is dry-run and published by its tag', () {

@@ -3,13 +3,13 @@ library;
 
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 import 'package:typed_openapi_tool/src/corpus/corpus_exception.dart';
 import 'package:typed_openapi_tool/src/corpus/corpus_run.dart';
 import 'package:typed_openapi_tool/src/corpus/expectation.dart';
 import 'package:typed_openapi_tool/src/corpus/generate_run.dart';
 
 import '../helpers/corpus_entry.dart';
-import '../helpers/temp_dir.dart';
 
 const _spec = '''
 openapi: 3.1.0
