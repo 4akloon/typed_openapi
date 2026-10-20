@@ -159,11 +159,12 @@ final class EnumMapper {
     if (named != null && fromName == null) {
       _context.report(
         .nameUnrepresentable,
-        'The x-enum-varnames entry "$named" of enum $owner has no ASCII '
+        'The ${SpecExtensions.enumVarnames.key} entry "$named" of enum $owner has no ASCII '
         'letter or digit, so the value "$value" is named "${claimed.$1}".',
         location,
         severity: .info,
-        fix: 'Write a name with a letter or digit in x-enum-varnames.',
+        fix:
+            'Write a name with a letter or digit in ${SpecExtensions.enumVarnames.key}.',
       );
     }
     if (candidate != null && value is! num) {
@@ -172,7 +173,7 @@ final class EnumMapper {
         claimed.$1,
         location,
         what: 'Value',
-        fix: 'Name it with x-enum-varnames at the source.',
+        fix: 'Name it with ${SpecExtensions.enumVarnames.key} at the source.',
       );
     }
     return claimed.$1;
@@ -195,18 +196,20 @@ final class EnumMapper {
       _context.report(
         .nameUnrepresentable,
         'Value "$value" of enum $owner has no ASCII letter or digit, so it '
-        'is named "$name". Add x-enum-varnames to the enum in the spec to '
+        'is named "$name". Add ${SpecExtensions.enumVarnames.key} to the enum in the spec to '
         'name its values.',
         location,
         severity: .info,
-        fix: 'Name the values with x-enum-varnames at the source.',
+        fix:
+            'Name the values with ${SpecExtensions.enumVarnames.key} at the source.',
       );
     } else if (change != null) {
       _context.report(
         change == .reserved ? .nameReserved : .nameCollision,
         'Value "$value" of enum $owner is named "$name".',
         location,
-        fix: 'Name the values with x-enum-varnames at the source.',
+        fix:
+            'Name the values with ${SpecExtensions.enumVarnames.key} at the source.',
       );
     }
   }

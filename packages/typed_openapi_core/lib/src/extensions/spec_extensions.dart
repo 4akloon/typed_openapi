@@ -21,6 +21,9 @@ abstract final class SpecExtensions {
     diagnostics: [
       DiagnosticCode.enumVarnamesInvalid,
       DiagnosticCode.nameUnrepresentable,
+      DiagnosticCode.nameReserved,
+      DiagnosticCode.nameCollision,
+      DiagnosticCode.nameLossy,
     ],
   );
 
