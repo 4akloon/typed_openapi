@@ -48,6 +48,7 @@ export 'src/sse/sse_item_decoder.dart' show SseItemDecoder;
 export 'src/sse/sse_message.dart' show SseMessage;
 export 'src/sse/sse_options.dart' show SseOptions, SseReconnection;
 export 'src/sse/sse_reconnector.dart' show SseReconnector, SseResume;
+export 'src/sse/sse_trace.dart' show SseTrace, SseTraceKind;
 export 'src/transport/cancel_signal.dart' show CancelSignal;
 export 'src/transport/client_transport.dart' show ClientTransport;
 export 'src/transport/transport_exception.dart'

@@ -1,0 +1,71 @@
+import 'sse_trace.dart';
+
+/// Sends the [SseTrace]s of one event-stream call to `SseOptions.onTrace`.
+///
+/// A callback that throws an [Exception] is ignored: tracing must not break
+/// the stream. An [Error] from it is a bug of the program and is not
+/// caught, as elsewhere in the client.
+final class SseTracer {
+  SseTracer._(this._callback) : streamId = _nextId++;
+
+  /// The tracer of a call whose `onTrace` is [callback]; null for no
+  /// tracing.
+  static SseTracer? of(void Function(SseTrace trace)? callback) =>
+      callback == null ? null : SseTracer._(callback);
+
+  // Process-wide, so ids differ between calls; they do not need to be
+  // stable between runs.
+  static int _nextId = 1;
+
+  final void Function(SseTrace trace) _callback;
+
+  /// The correlation id of the call.
+  final int streamId;
+
+  /// A connection attempt, number [attempt] of the call.
+  void connect(int attempt) =>
+      _send(SseTrace(.connect, streamId: streamId, attempt: attempt));
+
+  /// The response headers, with [statusCode].
+  void open(int statusCode) =>
+      _send(SseTrace(.open, streamId: streamId, statusCode: statusCode));
+
+  /// A message named [event] with the stream's last event [id].
+  void event(String event, String id) => _send(
+    SseTrace(.event, streamId: streamId, event: event, eventId: id),
+  );
+
+  /// A comment line.
+  void heartbeat() => _send(SseTrace(.heartbeat, streamId: streamId));
+
+  /// A failure: [error], raised at [stackTrace].
+  void error(Object error, StackTrace? stackTrace) => _send(
+    SseTrace(
+      .error,
+      streamId: streamId,
+      error: error,
+      stackTrace: stackTrace,
+    ),
+  );
+
+  /// A wait of [delay] before attempt [attempt].
+  void reconnecting(int attempt, Duration delay) => _send(
+    SseTrace(
+      .reconnecting,
+      streamId: streamId,
+      attempt: attempt,
+      delay: delay,
+    ),
+  );
+
+  /// The end of the stream.
+  void closed() => _send(SseTrace(.closed, streamId: streamId));
+
+  void _send(SseTrace trace) {
+    try {
+      _callback(trace);
+    } on Exception {
+      // A debug hook must not break the stream.
+    }
+  }
+}

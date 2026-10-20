@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'sse_cooldown.dart';
+import 'sse_trace.dart';
 
 /// How an event stream reconnects after its connection ends (R12.5): the
 /// `sse` field of `CallOptions`.
@@ -27,6 +28,7 @@ final class SseOptions {
     this.jitter = 0,
     this.cooldown,
     this.random,
+    this.onTrace,
     this.wait,
   }) : assert(jitter >= 0 && jitter <= 1, 'jitter is a ratio from 0 to 1');
 
@@ -84,6 +86,14 @@ final class SseOptions {
   /// The source of [jitter]; a fresh `Random()` per stream when null. Tests
   /// pass a seeded one.
   final Random? random;
+
+  /// Called with a small [SseTrace] for each step of the stream: connect,
+  /// open, event, heartbeat, error, reconnecting and closed, all with the
+  /// stream's correlation id. For a debug panel or a log; it never changes
+  /// the items the stream emits. It runs synchronously, so keep it short. An
+  /// [Exception] it throws is ignored; an [Error] is a bug of the program
+  /// and is not caught.
+  final void Function(SseTrace trace)? onTrace;
 
   /// Waits [delay] before an attempt; a timer that a cancel stops
   /// (`CancellableWait`) when null. Tests pass a function that does not

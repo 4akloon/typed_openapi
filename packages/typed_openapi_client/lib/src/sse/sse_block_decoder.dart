@@ -10,7 +10,7 @@ import 'sse_message.dart';
 final class SseBlockDecoder extends StreamTransformerBase<List<int>, SseBlock> {
   /// Creates a decoder; each bound stream gets its own state, which starts
   /// from [lastEventId] and [retry].
-  const SseBlockDecoder({this.lastEventId = '', this.retry});
+  const SseBlockDecoder({this.lastEventId = '', this.retry, this.onComment});
 
   /// The last event id before the stream starts.
   final String lastEventId;
@@ -18,20 +18,24 @@ final class SseBlockDecoder extends StreamTransformerBase<List<int>, SseBlock> {
   /// The reconnection time before the stream starts.
   final Duration? retry;
 
+  /// Called for each comment line (`: ping`), which is no block.
+  final void Function()? onComment;
+
   @override
   Stream<SseBlock> bind(Stream<List<int>> stream) => Stream.eventTransformed(
     // bind, not stream.transform: a Stream<Uint8List> (what Dio gives) does
     // not accept a transformer of List<int> at run time.
     const Utf8Decoder(allowMalformed: true).bind(stream),
-    (out) => _SseSink(out, lastEventId, retry),
+    (out) => _SseSink(out, lastEventId, retry, onComment),
   );
 }
 
 /// The parser state of one stream.
 final class _SseSink implements EventSink<String> {
-  _SseSink(this._out, this._lastEventId, this._retry);
+  _SseSink(this._out, this._lastEventId, this._retry, this._onComment);
 
   final EventSink<SseBlock> _out;
+  final void Function()? _onComment;
   final StringBuffer _line = StringBuffer();
   final StringBuffer _data = StringBuffer();
   bool _afterCr = false;
@@ -73,7 +77,7 @@ final class _SseSink implements EventSink<String> {
     final line = _line.toString();
     _line.clear();
     if (line.isEmpty) return _dispatch();
-    if (line.startsWith(':')) return;
+    if (line.startsWith(':')) return _onComment?.call();
     final colon = line.indexOf(':');
     final field = colon < 0 ? line : line.substring(0, colon);
     var value = colon < 0 ? '' : line.substring(colon + 1);

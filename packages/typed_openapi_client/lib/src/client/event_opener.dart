@@ -21,6 +21,7 @@ import 'handshake.dart';
 import 'progress_counter.dart';
 import 'request_builder.dart';
 import 'response_reader.dart';
+import 'traced_result.dart';
 
 /// Opens the event streams of `ClientSender.openEvents`: the first
 /// connection, the reconnections, and the error responses that are read to
@@ -47,6 +48,20 @@ final class EventOpener {
     required SseReconnection reconnection,
   }) async {
     final event = EventCall(request, decodeEvent, decodeError, call);
+    final result = await _openReconnecting(event, reconnection);
+    return switch (event.tracer) {
+      final tracer? => TracedResult(tracer).wrap(result),
+      null => result,
+    };
+  }
+
+  /// The first connection, with reconnection around its stream when the
+  /// call and the operation ask for it.
+  Future<Result<Stream<SseItem<T>>, E>> _openReconnecting<T, E>(
+    EventCall<T, E> event,
+    SseReconnection reconnection,
+  ) async {
+    final call = event.call;
     final first = await _connect(event, (
       lastEventId: RequestBuilder.userLastEventId(call?.headers),
       retry: null,
@@ -78,6 +93,7 @@ final class EventOpener {
     SseResume resume,
   ) async {
     final signal = event.signals.next();
+    event.tracer?.connect(event.nextConnection());
     final sent = builder.build(
       event.request,
       event.call,
@@ -94,6 +110,7 @@ final class EventOpener {
     } on TransportException catch (e, stackTrace) {
       return _results.failure(e, stackTrace);
     }
+    event.tracer?.open(response.statusCode);
     if (!event.request.streamStatuses.contains(response.statusCode)) {
       return _openFailed(response, event);
     }
@@ -122,6 +139,10 @@ final class EventOpener {
     final items = SseItemDecoder<T>(
       event.decodeEvent,
       onClose: () => signal.cancel('the event stream was closed'),
+      onMessage: event.tracer == null
+          ? null
+          : (message) => event.tracer?.event(message.event, message.id),
+      onComment: event.tracer?.heartbeat,
       lastEventId: resume.lastEventId,
       retry: resume.retry,
     ).bind(body);
