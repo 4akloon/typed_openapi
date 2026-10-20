@@ -1,7 +1,9 @@
 import '../diagnostics/json_pointer.dart';
 import '../model/schema.dart';
+import '../schema/override_schema_keys.dart';
 import 'generation_field_reader.dart';
 import 'override_field_reader.dart';
+import 'override_keys.dart';
 import 'override_set.dart';
 
 /// Reads the entries of the `schemas` section: a component schema with its
@@ -13,45 +15,13 @@ final class SchemaOverrideReader {
   final OverrideFieldReader _fields;
   final GenerationFieldReader _generation;
 
-  /// Fields that change a schema, in the order they are applied.
-  static const _schemaFields = [
-    r'$ref',
-    'type',
-    'nullable',
-    'format',
-    'required',
-    'items',
-    'additionalProperties',
-    'enum',
-    'discriminator',
-  ];
-  static const _schemaKeys = {
-    'reason',
-    ..._schemaFields,
-    'name',
-    'exclude',
-    'exhaustive',
-    'union',
-    'dartType',
-    'properties',
-  };
-  static const _propertyKeys = {
-    'reason',
-    ..._schemaFields,
-    'name',
-    'exclude',
-    'dartType',
-    'triState',
-    'union',
-  };
-
   /// The schema override [entry] at [at] under [key].
   SchemaOverride schema(
     String key,
     Map<String, Object?> entry,
     JsonPointer at,
   ) {
-    _fields.checkKeys(entry, _schemaKeys, at);
+    _fields.checkKeys(entry, OverrideKeys.schema, at);
     final spec = _schemaSpec(entry, at, property: false);
     final properties = [
       for (final (name, value, p) in _fields.entries(entry, 'properties', at))
@@ -84,7 +54,7 @@ final class SchemaOverrideReader {
     Map<String, Object?> entry,
     JsonPointer at,
   ) {
-    _fields.checkKeys(entry, _propertyKeys, at);
+    _fields.checkKeys(entry, OverrideKeys.property, at);
     return PropertyOverride(
       key: key,
       pointer: at,
@@ -106,7 +76,7 @@ final class SchemaOverrideReader {
     required bool property,
   }) {
     final spec = <String, Object?>{};
-    for (final field in _schemaFields) {
+    for (final field in OverrideSchemaKeys.specFieldNames) {
       if (!entry.containsKey(field)) continue;
       final value = entry[field];
       if (!_isValid(field, value, property: property)) {

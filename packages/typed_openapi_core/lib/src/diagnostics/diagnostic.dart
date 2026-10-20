@@ -50,6 +50,7 @@ final class Diagnostic implements Comparable<Diagnostic> {
     this.pointer,
     this.span,
     String? fix,
+    this.backendFix,
     this.hints = const [],
     this.args = const [],
     this.related = const [],
@@ -91,6 +92,17 @@ final class Diagnostic implements Comparable<Diagnostic> {
     return [?fix, ...texts].join(' ');
   }
 
+  /// What to change at the source when the usual [fix] offers an override
+  /// of the generator, which a backend team has no use for; see
+  /// [forBackend].
+  final String? backendFix;
+
+  /// What a fix for a reader without the generator's config cannot say.
+  static final RegExp _configWords = RegExp(
+    r'override|typed_openapi\.yaml|severity|baseline|rules:',
+    caseSensitive: false,
+  );
+
   /// How to fix the finding in the code of a framework: the preset's name
   /// and the hint, one per preset of the clients that share the finding.
   final List<(String, String)> hints;
@@ -115,6 +127,29 @@ final class Diagnostic implements Comparable<Diagnostic> {
     return start == null ? null : start.column + 1;
   }
 
+  /// This diagnostic for a reader who owns the spec, not the generator
+  /// config: the fix is [backendFix], else the plain fix when it names
+  /// no config (an override, the config file, a severity, a baseline, rules),
+  /// else none. The [hints] stay.
+  Diagnostic forBackend() {
+    final plain = _fix;
+    final own =
+        backendFix ??
+        (plain != null && !_configWords.hasMatch(plain) ? plain : null);
+    return Diagnostic(
+      code: code,
+      severity: severity,
+      message: message,
+      file: file,
+      pointer: pointer,
+      span: span,
+      fix: own,
+      hints: hints,
+      args: args,
+      related: related,
+    );
+  }
+
   /// This diagnostic with [related] instead of its own related locations.
   Diagnostic withRelated(List<RelatedLocation> related) => Diagnostic(
     code: code,
@@ -124,6 +159,7 @@ final class Diagnostic implements Comparable<Diagnostic> {
     pointer: pointer,
     span: span,
     fix: _fix,
+    backendFix: backendFix,
     hints: hints,
     args: args,
     related: related,
@@ -138,6 +174,7 @@ final class Diagnostic implements Comparable<Diagnostic> {
     pointer: pointer,
     span: span,
     fix: _fix,
+    backendFix: backendFix,
     hints: hints,
     args: args,
     related: related,
@@ -152,6 +189,7 @@ final class Diagnostic implements Comparable<Diagnostic> {
     pointer: pointer,
     span: span,
     fix: _fix,
+    backendFix: backendFix,
     hints: hints,
     args: args,
     related: related,

@@ -1,5 +1,6 @@
 import '../diagnostics/json_pointer.dart';
 import 'override_field_reader.dart';
+import 'override_keys.dart';
 import 'sse_override.dart';
 
 /// Reads the `sse` field of an operation override (decision 6 of M10):
@@ -12,14 +13,12 @@ final class SseOverrideReader {
 
   final OverrideFieldReader _fields;
 
-  static const _keys = {'data', 'events', 'unknown', 'reconnect', 'method'};
-
   /// The `sse` field of [entry] at [at]; null when absent or not a mapping.
   SseOverride? read(Map<String, Object?> entry, JsonPointer at) {
     final sse = _fields.map(entry, 'sse', at);
     if (sse == null) return null;
     final p = at.child('sse');
-    _fields.checkKeys(sse, _keys, p);
+    _fields.checkKeys(sse, OverrideKeys.sse, p);
     var data = sse.containsKey('data')
         ? _schema(sse['data'], p.child('data'))
         : null;

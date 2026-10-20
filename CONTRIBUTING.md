@@ -6,6 +6,7 @@
 - [Getting the code](#getting-the-code)
 - [Repository layout](#repository-layout)
 - [Everyday commands](#everyday-commands)
+- [Adding to the catalogs](#adding-to-the-catalogs)
 - [Design rules](#design-rules)
 - [Coding conventions](#coding-conventions)
 - [Object-oriented code and Dart 3.10](#object-oriented-code-and-dart-310)
@@ -14,7 +15,7 @@
 
 ## Prerequisites
 
-- Dart SDK `>=3.10.0 <4.0.0`. Both packages are pure Dart; Flutter is not needed.
+- Dart SDK `>=3.10.0 <4.0.0`. All packages are pure Dart; Flutter is not needed.
 
 ## Getting the code
 
@@ -57,6 +58,13 @@ cd packages/<package> && dart pub publish --dry-run
 cd packages/typed_openapi_tool && dart run bin/corpus.dart check
 cd packages/typed_openapi_tool && dart run bin/corpus.dart update   # after an intended output change
 cd packages/typed_openapi_tool && dart run bin/fuzz.dart --seeds 200
+
+# The corpus specs through `typed_openapi lint`, and the framework detection:
+cd packages/typed_openapi_tool && dart run bin/corpus.dart lint
+
+# The docs generated from the code (see "Adding to the catalogs"):
+cd packages/typed_openapi_tool && dart run bin/docs.dart check
+cd packages/typed_openapi_tool && dart run bin/docs.dart generate
 ```
 
 A change that changes generated output (`corpus.lock` or a golden file)
@@ -66,6 +74,57 @@ version (minor before 1.0, major after; no raise is needed while the base's
 top CHANGELOG section is the `Unreleased` one of the current version); CI
 checks it with
 `dart run bin/corpus.dart semver`.
+
+## Adding to the catalogs
+
+Some documentation and the two JSON Schemas are generated from the code, so
+they cannot drift from it. Never edit `packages/typed_openapi/doc/diagnostics.md`,
+`doc/extensions.md` or `packages/typed_openapi/schema/*.json` by hand: change
+the source below, run `dart run bin/docs.dart generate` in
+`packages/typed_openapi_tool`, and commit the result with the change. A test
+(`the generated docs of the repository are current`) and the CI job `docs`
+fail while a generated file is stale.
+
+- **A diagnostic code.** Add an entry to the `DiagnosticCode` enum in
+  `packages/typed_openapi_core/lib/src/diagnostics/diagnostic_code.dart`:
+  `name('TOAnnn', 'slug', .severity)`, in the hundred of the stage that
+  reports it. Its doc comment is one or more paragraphs of meaning, then a
+  paragraph that starts `Example: ` and one that starts `Fix: `, each ending
+  with a full stop. A missing or incomplete comment fails
+  `diagnostic_source_test`, and `docs.dart generate` stops with the entry's
+  id. A code never changes meaning once released.
+- **A config key.** Add a `KeySpec` (type, description, a valid `example`,
+  `defaultValue`, `invalidExamples`) to the catalog in
+  `packages/typed_openapi_core/lib/src/schema/`: `ConfigCatalog`, or
+  `ConfigGenerationKeys` / `ConfigNamingKeys` for a generation setting. The
+  loader's allowed keys (`ConfigKeys`) come from the catalog; read the value
+  through `ConfigSources.resolve`, so an invalid client value falls back to
+  `defaults` and TOA902 names the value applied. The schema tests in the core
+  judge the catalog's examples with both the schema and the loader, and the
+  two must agree. The overrides file works the same way through
+  `OverrideCatalog`, `OverrideOperationKeys` and `OverrideSchemaKeys`.
+- **An `x-` extension.** Add a `SpecExtension` (key, what it applies to,
+  effect, an example, the diagnostics that report its wrong value) to
+  `SpecExtensions` in `packages/typed_openapi_core/lib/src/extensions/`, and
+  to `SpecExtensions.all`. Code reads it as `SpecExtensions.<name>.key`:
+  `spec_extensions_test` fails when another file of `lib/` writes an `x-`
+  literal.
+- **A framework recipe.** The recipe of a framework is
+  `packages/typed_openapi/doc/frameworks/<name>.md`, and its advice in the
+  core is `NormalizerRule.hint(code, preset)` (in
+  `packages/typed_openapi_core/lib/src/normalize/rules/`). A recipe ends with a
+  `## Sources` section that has at least three links, `Checked on <date>.`
+  and `Versions:`; a hint states only what a source says.
+  `framework_recipes_test` also fails when a code that fires on a corpus spec
+  of that framework (`framework:` in `corpus.yaml`, counts in `corpus.lock`)
+  is not named in the recipe. For a **new** framework, also add a `Preset`
+  value (`project_config.dart`; the config schema, `lint --preset` and
+  `framework:` take their names from it), its marks in `PresetDetector`, a
+  `framework:` entry on at least one spec of `corpus.yaml` (and `detects:
+  false` where its marks are absent), and its recipe file in the `recipes`
+  map of `framework_recipes_test`. A finding whose text offers an override also
+  needs a `backendFix:` that does not (`backend_fixes_test`), because
+  `typed_openapi lint` never tells a backend team to write an override.
 
 ## Design rules
 

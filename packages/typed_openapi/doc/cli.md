@@ -1,15 +1,16 @@
 # Command line
 
-`typed_openapi` has four commands: `check` reads specs and reports problems, `generate` writes the Dart clients, `diff` reports how their API changed, and `baseline` records the problems you accept. All of them read `typed_openapi.yaml` from the working directory, and none of them calls the network.
+`typed_openapi` has five commands: `check` reads specs and reports problems, `generate` writes the Dart clients, `diff` reports how their API changed, `baseline` records the problems you accept, and `lint` checks one spec for the team that writes it. All of them but `lint` read `typed_openapi.yaml` from the working directory, and none of them calls the network.
 
 ```sh
 dart run typed_openapi check
 dart run typed_openapi generate
 dart run typed_openapi diff
 dart run typed_openapi baseline create
+dart run typed_openapi lint openapi.yaml
 ```
 
-`typed_openapi` is not on pub.dev yet, so `dart pub global activate typed_openapi` does not work. From a checkout of the repository, `dart pub global activate --source path packages/typed_openapi` installs the `typed_openapi` executable; then replace `dart run typed_openapi` with `typed_openapi`.
+`dart pub global activate typed_openapi` installs the `typed_openapi` executable; then replace `dart run typed_openapi` with `typed_openapi`. From a checkout of the repository, `dart pub global activate --source path packages/typed_openapi` installs the version on `main`.
 
 ```text
 $ typed_openapi --help
@@ -25,6 +26,7 @@ Available commands:
   check      Check specs and report diagnostics without generating code.
   diff       Report how the API of the clients changed since typed_openapi.lock.
   generate   Check specs and generate the clients without errors.
+  lint       Check one spec and say how to fix it at the source; needs no config.
 ```
 
 > **Note:** A hidden `ir` command prints the intermediate representation of a client as JSON. It exists for the generator's own tests, is not listed in `--help`, and its output format is not a public contract.
@@ -90,7 +92,7 @@ dart run typed_openapi check --format json | jq '.summary'
 
 ## generate
 
-`typed_openapi generate [options] [client...]` runs the same checks as `check`, then writes every client that has no errors. A client with errors is skipped with `Skipped shop: its check reports errors; fix them and run generate again.`, so one broken spec does not stop the others, and the exit code is `1`. A config error does not skip a client. A bad config value (TOA902) is reported as an error and the default is used, so `generate` still writes the clients whose specs have no errors and exits `1`. This was run with `input_suffix` equal to `patch_suffix` and a non-string `group` under `defaults.naming`: the client was generated and the exit code was `1`. An invalid `severity` level on a client behaves the same, while a client in the same config whose spec file is missing is skipped. Check the exit code in CI, and run `check` first if you want nothing written on a bad config. When the check passes but the output cannot be written (TOA830, TOA831), the line is `Skipped shop: see the error above.`
+`typed_openapi generate [options] [client...]` runs the same checks as `check`, then writes every client that has no errors. A client with errors is skipped with `Skipped shop: its check reports errors; fix them and run generate again.`, so one broken spec does not stop the others, and the exit code is `1`. A config error does not skip a client. A bad config value (TOA902) is reported as an error and the setting falls back to the value in `defaults`, then to the built-in default, so `generate` still writes the clients whose specs have no errors and exits `1`. This was run with `input_suffix` equal to `patch_suffix` and a non-string `group` under `defaults.naming`: the client was generated and the exit code was `1`. An invalid `severity` level on a client behaves the same, while a client in the same config whose spec file is missing is skipped. Check the exit code in CI, and run `check` first if you want nothing written on a bad config. When the check passes but the output cannot be written (TOA830, TOA831), the line is `Skipped shop: see the error above.`
 
 | Option | Default | Meaning |
 | --- | --- | --- |
@@ -174,6 +176,41 @@ Pruned specs/shop.baseline.yaml: removed 1 entries, 2 left.
 ```
 
 Without a `baseline:` key on any selected client, `baseline create` prints `No client has a "baseline" in the config.` with the usage and exits `64`. See [Baseline](baseline.md) for the file format and an adoption workflow.
+
+## lint
+
+`typed_openapi lint [options] <spec>` checks one spec file for the team that writes it, with no config and no generated code. It names the framework (detected from the spec, or set with `--preset`), then lists each finding with the change to make at the source and, for a framework, its recipe. It never suggests a generator override.
+
+`lint` runs the loader, the version check and the normalizer's rules, and stops there: it builds no IR, so the codes of the IR stage (naming, unions, media types, operations that cannot be generated) belong to [`check`](#check). It exits `0` however many findings there are, so a first run in a pipeline cannot break it; `--fail-on` turns the findings into a gate.
+
+| Option | What it does |
+| --- | --- |
+| `--preset` | The backend framework (`generic`, `nestjs`, `fastapi`, `springdoc`, `aspnet`), instead of detecting it. |
+| `--format` | `text` (default), `json`, `sarif` or `github-actions`. |
+| `--fail-on` | `error` or `warning`: exit `1` when a finding of that level or a more serious one is found. By default `lint` only reports and exits `0`. |
+
+The first line says which preset was used and why (`Preset: nestjs (detected: ...)`, `Preset: nestjs (set with --preset).`, or `Preset: generic (no framework marks were found; ...)`). In the `text` format it is the first line of stdout; in `json`, `sarif` and `github-actions` it goes to stderr, so stdout stays one document that a tool can read. This is the start of the output of `lint` on the fixture `backend_defects.yaml`, a spec with several defects and no framework marks (the full run reports `errors: 3, warnings: 11, infos: 1`):
+
+```text
+$ typed_openapi lint openapi.yaml
+Preset: generic (no framework marks were found; name the framework with --preset to get its recipes).
+warning TOA501 missing-path-parameter: The path /pets/{petId} has {petId}, but this operation declares no path parameter "petId"; it is added as a required string path parameter.
+  --> openapi.yaml:6:7
+  at #/paths/~1pets~1{petId}/get
+  fix: Declare each at the source as {name: <name>, in: path, required: true, schema: {type: string}}.
+info TOA503 missing-operation-id: This operation has no "operationId", so its method is named after the HTTP method and the path.
+  --> openapi.yaml:6:7
+  at #/paths/~1pets~1{petId}/get
+  fix: Add an operationId at the source.
+error TOA502 path-parameter-not-in-template: Path parameter "id" is not in the path template /pets/{petId}.
+  --> openapi.yaml:7:11
+  at #/paths/~1pets~1{petId}/get/parameters/0
+  fix: Make the parameter name and the template variable the same at the source.
+...
+errors: 3, warnings: 11, infos: 1
+```
+
+`--fail-on error` on this spec exits `1` (it has three errors), and `--fail-on warning` exits `1` too. A spec that cannot be read is reported as an error (TOA004 for a missing file) and exits `1`; a wrong option value, a missing path or more than one path is a usage error, exit `64`.
 
 ## Exit codes
 

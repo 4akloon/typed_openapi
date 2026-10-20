@@ -1,0 +1,124 @@
+# Builds the typed_openapi binaries for the tag typed_openapi-v<version> (the
+# tag publish.yml uses too) and attaches them, with SHA256SUMS, to a GitHub
+# release. Nothing runs until such a tag is pushed.
+name: Release binaries
+
+on:
+  push:
+    tags: ['typed_openapi-v*']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    timeout-minutes: 20
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - target: linux-x64
+            os: ubuntu-24.04
+            flags: ''
+            ext: ''
+          - target: linux-arm64
+            os: ubuntu-24.04
+            flags: '--target-os linux --target-arch arm64'
+            ext: ''
+          - target: macos-x64
+            os: macos-15-intel
+            flags: ''
+            ext: ''
+          - target: macos-arm64
+            os: macos-15
+            flags: ''
+            ext: ''
+          - target: windows-x64
+            os: windows-2025
+            flags: ''
+            ext: '.exe'
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Read the version from the tag
+        id: meta
+        run: |
+          version=${GITHUB_REF_NAME#typed_openapi-v}
+          if ! [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::The tag $GITHUB_REF_NAME does not end in a version such as 0.1.0."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Verify the pubspec version matches the tag
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          grep -Fxq "version: $VERSION" packages/typed_openapi/pubspec.yaml
+
+      - name: Install dependencies (workspace)
+        run: dart pub get
+
+      - name: Compile
+        env:
+          FLAGS: ${{ matrix.flags }}
+          EXT: ${{ matrix.ext }}
+        run: |
+          mkdir -p build
+          # The flags are separate words on purpose.
+          # shellcheck disable=SC2086
+          dart compile exe $FLAGS packages/typed_openapi/bin/typed_openapi.dart -o "build/typed_openapi${EXT}"
+
+      - name: Smoke test
+        if: matrix.flags == ''
+        env:
+          EXT: ${{ matrix.ext }}
+        run: |
+          "build/typed_openapi${EXT}" --help
+          "build/typed_openapi${EXT}" lint packages/typed_openapi_test_support/lib/fixtures/pets.yaml
+
+      - name: Package
+        env:
+          TARGET: ${{ matrix.target }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          EXT: ${{ matrix.ext }}
+        run: release/package.sh "$TARGET" "$VERSION" "build/typed_openapi${EXT}" dist
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: typed_openapi-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: Create the release
+    needs: build
+    timeout-minutes: 10
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # create the release and attach the files
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Write SHA256SUMS
+        run: cat dist/*.sha256 > dist/SHA256SUMS
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "typed_openapi ${GITHUB_REF_NAME#typed_openapi-v}" --generate-notes

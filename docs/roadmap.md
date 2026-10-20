@@ -20,7 +20,8 @@ Date: 2026-10-11. Each stage is a separate plan in `superpowers/plans/`, and eac
 | M11b | Transport split | `typed_openapi_runtime` becomes `typed_openapi_client`, a core with no HTTP dependency that builds requests and reads responses itself; generated code takes a `ClientTransport`; `typed_openapi_dio` is the Dio transport; a conformance suite with a loopback server runs every transport on the VM, dart2js and dart2wasm. Plan: [2026-10-19-m11b-transport-split.md](superpowers/plans/2026-10-19-m11b-transport-split.md) | R10.1, R10.2, R12.4 | M11 (implemented on branch `feat/m11b-transport-split`, merge pending) |
 | M12 | Evolution | `diff` between regenerations with change categories (including source-breaking for an exhaustive `switch`), lock file; config `exhaustive`; the lock keeps type and method names. Plan: [2026-10-13-m12-evolution.md](superpowers/plans/2026-10-13-m12-evolution.md) | R14 | M9 |
 | M12b | Core split | `typed_openapi_core` (engine) and `typed_openapi` (generator, CLI), `typed_openapi_test_support`; no behaviour change, output byte-identical. Plan: [2026-10-20-m12b-core-split.md](superpowers/plans/2026-10-20-m12b-core-split.md) | R15.1 (partial) | M12 |
-| M13 | Documentation and product | Support matrix, `x-` registry, code catalog, recipes for NestJS / FastAPI / Spring / ASP.NET, JSON Schema of the config, `lint` mode for the backend, optional `build_runner` | R15.2, R15.5, R15.6, R15.1 (partial) | all |
+| M13 | Documentation and product | Support matrix, `x-` registry, code catalog, recipes for NestJS / FastAPI / Spring / ASP.NET, JSON Schemas of the config and the overrides file, `lint` mode for the backend, an automation recipe (a task, a git hook and CI with `generate --locked`) in place of `build_runner`, prebuilt binaries and a GitHub Action, release readiness. Plan: [2026-10-20-m13-product.md](superpowers/plans/2026-10-20-m13-product.md) | R15.2, R15.5, R15.6, R15.1 (partial) | all |
+| After 1.0 | `build_runner` builder | A `build.yaml` builder that runs `generate` for projects that already use `build_runner`. Not before 1.0: it needs the output layout and the lock to be stable, and the automation recipe covers the same need with CI and a pre-commit hook. | R15.1 (partial) | M13 |
 
 ## Order
 
@@ -91,7 +92,7 @@ M3 review findings that were deliberately deferred (all of them are on invalid s
 | `DiagnosticBag` ignores `fix` during dedup: on a shared file the preset hint of the second client is lost | M5 (baseline and levels) |
 | TOA402 accepts any existing node as a `mapping` target (including `#`) | when needed |
 | URIs with percent-encoding in `SpecDocuments` keys vs `document.uri`; positions shift after list edits; a file that failed to load is re-read on every pass | not needed in either M4 or M6: when needed |
-| Preset hints: aspnet for TOA401 (§D.4.5 instead of §D.4.4), nestjs for TOA303 does not remove defect C-54; several hints are only indirectly based on §D | M13 (recipes) |
+| Preset hints: aspnet for TOA401 (§D.4.5 instead of §D.4.4), nestjs for TOA303 does not remove defect C-54; several hints are only indirectly based on §D | done in M13: both hints rewritten against dotnet/aspnetcore#60469 and the `@nestjs/swagger` 12.0.0 notes; each framework recipe has a Sources section |
 | Test gaps: negative cases for the rules on schema shape, enum, path parameters, `operationId`, discriminator | together with the next changes to these rules |
 
 ## Moved from M4
@@ -160,7 +161,6 @@ M6 review findings and items deferred in the plan, which were deliberately left.
 | A very long `$ref` chain (~1300) — stack depth and O(N²); unrealistic | when needed |
 | `NameScope.claim('')`, gaps in the `dart:core` list in `takenTypeNames` (`RuneIterator`, `UriData`, …) | when needed |
 | IR hygiene: nested lists are not `unmodifiable` (const constructors), `PatchType(String?)` is not enforced, a duplicate `DeclId` — the last one wins, `IrJson` does not print `import` | when needed (statuses and default values are printed since M9, 10c) |
-| An invalid value in a client falls back to the built-in default value, not to `defaults` | M13 (config documentation) |
 | `DirectionIndex` cached "not directional" inside a loop depending on the order of queries | done in M6 (10a): the answer depends only on the set of reachable schemas |
 | `deprecated: false` next to `$ref` does not cancel the target's mark (in the model it is a plain `bool`); a description of the target written in its own annotations-only `allOf` part does not reach the field | when needed (doc comments only) |
 | `IrJson` does not print descriptions, so the effect of annotations next to `$ref` is visible only in tests | M8 (if the dump is needed for doc comments) |
@@ -260,8 +260,8 @@ skipped client has no counts.
 | Other `ir/` messages still write a spec name raw (`model_notices.dart`, `part_media_type.dart`, `root_names.dart`, `media_type_picker.dart`, `security_builder.dart`); the text and GitHub reporters neutralise it, JSON and SARIF keep it as it is by design | when the fuzz covers those sinks |
 | The fuzz does not use hostile component names (a `$ref` pointer needs `~1` and percent escaping) and checks server URLs and defaults only with `LeakCheck` | when needed |
 | GitHub Actions are pinned by tag, not by commit SHA (a download has a time limit and a 256 MiB size cap) | before 1.0 (no secrets in CI, `permissions: contents: read`) |
-| The generated code needs `JsonReader.constant` to return a `bool`, but no gate ties the runtime version to the generator version ("release together" is CHANGELOG prose only) | M13. Re-parked by M12: its snapshot is the API of a generated client, and the client packages' own API is out of its scope (M12 spec, "Out of scope"); a version constraint the generated code checks belongs with the release work |
-| The SARIF rule help does not link a diagnostics catalog | M13 (the catalog is the generated documentation) |
+| The generated code needs `JsonReader.constant` to return a `bool`, but no gate ties the runtime version to the generator version ("release together" is CHANGELOG prose only) | After 0.1.0: the four packages are versioned in lockstep (`lockstep_versions_test` and the guides), so a generated client and the client core it was built for share a version; a gate is needed only when they can differ |
+| The SARIF rule help does not link a diagnostics catalog | done in M13: `helpUri` links the generated catalog |
 | `workflows_test.dart` still carries top-level helpers, against "no top-level functions except `main`" | when that file is touched |
 | `size_limits.dart` (three copies) ends an expression-bodied member by a heuristic: a multi-line string at low indentation can end it early (a false negative only) | when needed |
 

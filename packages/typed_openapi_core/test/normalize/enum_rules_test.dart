@@ -90,6 +90,27 @@ void main() {
       expect(d.message, contains('"#/components/schemas/Currency"'));
     });
 
+    test('nestjs is told how 12 spells the null, not to stay on 3.0', () {
+      final run = NormalizerFixture(
+        spec(r'''
+    Currency: {type: string, enum: [EUR, USD]}
+    Price:
+      type: object
+      properties:
+        currency:
+          nullable: true
+          oneOf:
+            - {type: string, nullable: true, enum: [null]}
+            - {$ref: '#/components/schemas/Currency'}
+'''),
+        preset: .nestjs,
+      );
+      final fix = run.of(DiagnosticCode.nullableEnumOneOf).single.fix;
+      expect(fix, contains('Node 20.19+'));
+      expect(fix, contains('@nestjs/swagger 12'));
+      expect(fix, isNot(contains('keep the document at OpenAPI 3.0')));
+    });
+
     test('an ordinary oneOf is not reported', () {
       final run = NormalizerFixture(
         spec(r'''

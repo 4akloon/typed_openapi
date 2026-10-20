@@ -1,0 +1,2625 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "typed_openapi.yaml",
+  "description": "The config of typed_openapi.",
+  "type": "object",
+  "properties": {
+    "defaults": {
+      "$ref": "#/definitions/defaults"
+    },
+    "clients": {
+      "type": "object",
+      "description": "The clients to generate, by name.",
+      "minProperties": 1,
+      "additionalProperties": {
+        "$ref": "#/definitions/client"
+      }
+    }
+  },
+  "required": [
+    "clients"
+  ],
+  "additionalProperties": false,
+  "definitions": {
+    "defaults": {
+      "type": "object",
+      "properties": {
+        "preset": {
+          "$ref": "#/definitions/preset"
+        },
+        "line_width": {
+          "$ref": "#/definitions/line_width"
+        },
+        "rules": {
+          "$ref": "#/definitions/rules"
+        },
+        "severity": {
+          "$ref": "#/definitions/severity"
+        },
+        "naming": {
+          "type": "object",
+          "properties": {
+            "client": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Z$][A-Za-z0-9_$]*$",
+              "description": "The name of the root client class. It must be a Dart class name that starts with an uppercase letter and is not a reserved word (the schema cannot check the last). When unset it is made from the client name with Client."
+            },
+            "group": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?=.*\\{Tag\\})(?:[A-Za-z_$]|\\{Tag\\})(?:[A-Za-z0-9_$]|\\{Tag\\})*$",
+              "description": "The template of the name of a group class. It must contain {Tag} and give a Dart identifier. Default: {Tag}Api."
+            },
+            "default_group": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+              "description": "The class of operations without a group. It is the name of a class, so a reserved word cannot be it (the schema cannot check this). Default: DefaultApi."
+            },
+            "input_suffix": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+              "description": "The suffix of the request model of a schema that is split by direction. It must differ from patch_suffix (the schema cannot check this). Default: Input."
+            },
+            "patch_suffix": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+              "description": "The suffix of the PATCH body model of a schema that is also used elsewhere. It must differ from input_suffix (the schema cannot check this). Default: Patch."
+            },
+            "operation_prefix": {
+              "type": "string",
+              "minLength": 1,
+              "description": "A regular expression removed from the start of an operationId before the method name is made. It applies only where its match starts at the first character. It must be a valid regular expression (the schema cannot check this)."
+            },
+            "stream_suffix": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Z0-9][A-Za-z0-9]*$",
+              "description": "The suffix of the event-stream method of an operation that also returns JSON. Letters and digits, from an uppercase letter or a digit. Default: Stream."
+            }
+          },
+          "additionalProperties": false,
+          "description": "How the generated classes and methods are named."
+        },
+        "group_by": {
+          "type": "string",
+          "enum": [
+            "tag",
+            "path",
+            "single"
+          ],
+          "description": "How operations are put into classes. Default: tag."
+        },
+        "include": {
+          "type": "object",
+          "properties": {
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "Tags to match, case-sensitive."
+            },
+            "operations": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "Operations to match, by operationId or as METHOD /path; * matches inside one segment."
+            },
+            "paths": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "Paths to match; * is one path segment and ** is any number."
+            }
+          },
+          "additionalProperties": false,
+          "description": "Generate only the operations that match (a union of tags, operations and paths); empty means all."
+        },
+        "exclude": {
+          "type": "object",
+          "properties": {
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "Tags to match, case-sensitive."
+            },
+            "operations": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "Operations to match, by operationId or as METHOD /path; * matches inside one segment."
+            },
+            "paths": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "Paths to match; * is one path segment and ** is any number."
+            }
+          },
+          "additionalProperties": false,
+          "description": "Leave out the operations that match; it wins."
+        },
+        "types": {
+          "type": "object",
+          "properties": {
+            "number": {
+              "type": "string",
+              "enum": [
+                "num",
+                "double",
+                "int"
+              ],
+              "description": "The Dart type of a number without a format. Default: num."
+            },
+            "formats": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z$][A-Za-z0-9_$]*$",
+                    "description": "The Dart type, written as it is: no prefix and no type arguments, and not a reserved word (the schema cannot check the last)."
+                  },
+                  "import": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^(package:[A-Za-z_][A-Za-z0-9_]*/\\S+|dart:\\w+)$",
+                    "description": "The package: or dart: library that declares the type."
+                  },
+                  "converter": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z$][A-Za-z0-9_$]*$",
+                    "description": "A class with fromJson and toJson that converts the type, when the type itself has no such members."
+                  }
+                },
+                "required": [
+                  "type",
+                  "import"
+                ],
+                "additionalProperties": false
+              },
+              "description": "Custom Dart types by the format of a schema."
+            },
+            "schemas": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z$][A-Za-z0-9_$]*$",
+                    "description": "The Dart type, written as it is: no prefix and no type arguments, and not a reserved word (the schema cannot check the last)."
+                  },
+                  "import": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^(package:[A-Za-z_][A-Za-z0-9_]*/\\S+|dart:\\w+)$",
+                    "description": "The package: or dart: library that declares the type."
+                  },
+                  "converter": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z$][A-Za-z0-9_$]*$",
+                    "description": "A class with fromJson and toJson that converts the type, when the type itself has no such members."
+                  }
+                },
+                "required": [
+                  "type",
+                  "import"
+                ],
+                "additionalProperties": false
+              },
+              "description": "Custom Dart types by the key of a component schema."
+            }
+          },
+          "additionalProperties": false,
+          "description": "How the types of schemas are written."
+        },
+        "tri_state": {
+          "type": "string",
+          "enum": [
+            "patch",
+            "optional",
+            "extension"
+          ],
+          "description": "Which properties of PATCH bodies tell null from absent. Default: patch."
+        },
+        "union": {
+          "type": "string",
+          "enum": [
+            "raw",
+            "structural"
+          ],
+          "description": "How a oneOf or anyOf without a discriminator whose variants share a JSON type is generated. Default: raw."
+        },
+        "exhaustive": {
+          "type": "boolean",
+          "description": "Whether the bases of enums, unions, status types and event unions are sealed, so a switch names every case. Default: true."
+        },
+        "errors": {
+          "type": "object",
+          "properties": {
+            "default_schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The key of the component schema that is the body of an error status declared without one."
+            }
+          },
+          "additionalProperties": false,
+          "description": "How error responses are typed."
+        },
+        "sse": {
+          "type": "object",
+          "properties": {
+            "reconnect": {
+              "type": "boolean",
+              "description": "Whether the event streams of GET operations reconnect unless a call says no. Default: false."
+            }
+          },
+          "additionalProperties": false,
+          "description": "How event streams are generated."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Settings every client starts from."
+    },
+    "client": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The OpenAPI file, relative to this file."
+        },
+        "output": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The directory the client is written to."
+        },
+        "overrides": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The overrides file of this client."
+        },
+        "baseline": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The baseline file of this client; each client has its own."
+        },
+        "preset": {
+          "$ref": "#/definitions/preset"
+        },
+        "line_width": {
+          "$ref": "#/definitions/line_width"
+        },
+        "rules": {
+          "$ref": "#/definitions/rules"
+        },
+        "severity": {
+          "$ref": "#/definitions/severity"
+        },
+        "naming": {
+          "type": "object",
+          "properties": {
+            "client": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Z$][A-Za-z0-9_$]*$",
+              "description": "The name of the root client class. It must be a Dart class name that starts with an uppercase letter and is not a reserved word (the schema cannot check the last). When unset it is made from the client name with Client."
+            },
+            "group": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?=.*\\{Tag\\})(?:[A-Za-z_$]|\\{Tag\\})(?:[A-Za-z0-9_$]|\\{Tag\\})*$",
+              "description": "The template of the name of a group class. It must contain {Tag} and give a Dart identifier. Default: {Tag}Api."
+            },
+            "default_group": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+              "description": "The class of operations without a group. It is the name of a class, so a reserved word cannot be it (the schema cannot check this). Default: DefaultApi."
+            },
+            "input_suffix": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+              "description": "The suffix of the request model of a schema that is split by direction. It must differ from patch_suffix (the schema cannot check this). Default: Input."
+            },
+            "patch_suffix": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+              "description": "The suffix of the PATCH body model of a schema that is also used elsewhere. It must differ from input_suffix (the schema cannot check this). Default: Patch."
+            },
+            "operation_prefix": {
+              "type": "string",
+              "minLength": 1,
+              "description": "A regular expression removed from the start of an operationId before the method name is made. It applies only where its match starts at the first character. It must be a valid regular expression (the schema cannot check this)."
+            },
+            "stream_suffix": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Z0-9][A-Za-z0-9]*$",
+              "description": "The suffix of the event-stream method of an operation that also returns JSON. Letters and digits, from an uppercase letter or a digit. Default: Stream."
+            }
+          },
+          "additionalProperties": false,
+          "description": "How the generated classes and methods are named."
+        },
+        "group_by": {
+          "type": "string",
+          "enum": [
+            "tag",
+            "path",
+            "single"
+          ],
+          "description": "How operations are put into classes. Default: tag."
+        },
+        "include": {
+          "type": "object",
+          "properties": {
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "Tags to match, case-sensitive."
+            },
+            "operations": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "Operations to match, by operationId or as METHOD /path; * matches inside one segment."
+            },
+            "paths": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "Paths to match; * is one path segment and ** is any number."
+            }
+          },
+          "additionalProperties": false,
+          "description": "Generate only the operations that match (a union of tags, operations and paths); empty means all."
+        },
+        "exclude": {
+          "type": "object",
+          "properties": {
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "Tags to match, case-sensitive."
+            },
+            "operations": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "Operations to match, by operationId or as METHOD /path; * matches inside one segment."
+            },
+            "paths": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "Paths to match; * is one path segment and ** is any number."
+            }
+          },
+          "additionalProperties": false,
+          "description": "Leave out the operations that match; it wins."
+        },
+        "types": {
+          "type": "object",
+          "properties": {
+            "number": {
+              "type": "string",
+              "enum": [
+                "num",
+                "double",
+                "int"
+              ],
+              "description": "The Dart type of a number without a format. Default: num."
+            },
+            "formats": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z$][A-Za-z0-9_$]*$",
+                    "description": "The Dart type, written as it is: no prefix and no type arguments, and not a reserved word (the schema cannot check the last)."
+                  },
+                  "import": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^(package:[A-Za-z_][A-Za-z0-9_]*/\\S+|dart:\\w+)$",
+                    "description": "The package: or dart: library that declares the type."
+                  },
+                  "converter": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z$][A-Za-z0-9_$]*$",
+                    "description": "A class with fromJson and toJson that converts the type, when the type itself has no such members."
+                  }
+                },
+                "required": [
+                  "type",
+                  "import"
+                ],
+                "additionalProperties": false
+              },
+              "description": "Custom Dart types by the format of a schema."
+            },
+            "schemas": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z$][A-Za-z0-9_$]*$",
+                    "description": "The Dart type, written as it is: no prefix and no type arguments, and not a reserved word (the schema cannot check the last)."
+                  },
+                  "import": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^(package:[A-Za-z_][A-Za-z0-9_]*/\\S+|dart:\\w+)$",
+                    "description": "The package: or dart: library that declares the type."
+                  },
+                  "converter": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z$][A-Za-z0-9_$]*$",
+                    "description": "A class with fromJson and toJson that converts the type, when the type itself has no such members."
+                  }
+                },
+                "required": [
+                  "type",
+                  "import"
+                ],
+                "additionalProperties": false
+              },
+              "description": "Custom Dart types by the key of a component schema."
+            }
+          },
+          "additionalProperties": false,
+          "description": "How the types of schemas are written."
+        },
+        "tri_state": {
+          "type": "string",
+          "enum": [
+            "patch",
+            "optional",
+            "extension"
+          ],
+          "description": "Which properties of PATCH bodies tell null from absent. Default: patch."
+        },
+        "union": {
+          "type": "string",
+          "enum": [
+            "raw",
+            "structural"
+          ],
+          "description": "How a oneOf or anyOf without a discriminator whose variants share a JSON type is generated. Default: raw."
+        },
+        "exhaustive": {
+          "type": "boolean",
+          "description": "Whether the bases of enums, unions, status types and event unions are sealed, so a switch names every case. Default: true."
+        },
+        "errors": {
+          "type": "object",
+          "properties": {
+            "default_schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The key of the component schema that is the body of an error status declared without one."
+            }
+          },
+          "additionalProperties": false,
+          "description": "How error responses are typed."
+        },
+        "sse": {
+          "type": "object",
+          "properties": {
+            "reconnect": {
+              "type": "boolean",
+              "description": "Whether the event streams of GET operations reconnect unless a call says no. Default: false."
+            }
+          },
+          "additionalProperties": false,
+          "description": "How event streams are generated."
+        }
+      },
+      "required": [
+        "input",
+        "output"
+      ],
+      "additionalProperties": false,
+      "description": "One client: a spec and where its code goes."
+    },
+    "preset": {
+      "type": "string",
+      "enum": [
+        "generic",
+        "nestjs",
+        "fastapi",
+        "springdoc",
+        "aspnet"
+      ],
+      "description": "The framework the spec comes from; it adds hints. Default: generic."
+    },
+    "line_width": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "The line width of the generated code. Default: 80."
+    },
+    "rules": {
+      "type": "object",
+      "properties": {
+        "bool-required-to-array": {
+          "type": "boolean"
+        },
+        "drop-invalid-default": {
+          "type": "boolean"
+        },
+        "array-without-items": {
+          "type": "boolean"
+        },
+        "double-array": {
+          "type": "boolean"
+        },
+        "format-on-array": {
+          "type": "boolean"
+        },
+        "binary-object": {
+          "type": "boolean"
+        },
+        "contradictory-object-type": {
+          "type": "boolean"
+        },
+        "example-type-mismatch": {
+          "type": "boolean"
+        },
+        "dedupe-enum-values": {
+          "type": "boolean"
+        },
+        "nullable-enum-one-of": {
+          "type": "boolean"
+        },
+        "declare-missing-path-params": {
+          "type": "boolean"
+        },
+        "path-param-not-in-template": {
+          "type": "boolean"
+        },
+        "missing-operation-id": {
+          "type": "boolean"
+        },
+        "duplicate-operation-id": {
+          "type": "boolean"
+        },
+        "discriminator-property-required": {
+          "type": "boolean"
+        },
+        "discriminator-mapping-target": {
+          "type": "boolean"
+        },
+        "wildcard-media-type": {
+          "type": "boolean"
+        },
+        "component-key-characters": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Normalizer rules by name; false turns a rule off. A client adds to the rules of defaults."
+    },
+    "severity": {
+      "type": "object",
+      "properties": {
+        "TOA001": {
+          "enum": [
+            "error"
+          ]
+        },
+        "parse-error": {
+          "enum": [
+            "error"
+          ]
+        },
+        "TOA002": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "duplicate-key": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA003": {
+          "enum": [
+            "error"
+          ]
+        },
+        "root-not-object": {
+          "enum": [
+            "error"
+          ]
+        },
+        "TOA004": {
+          "enum": [
+            "error"
+          ]
+        },
+        "input-not-found": {
+          "enum": [
+            "error"
+          ]
+        },
+        "TOA005": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "positions-unavailable": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA006": {
+          "enum": [
+            "error"
+          ]
+        },
+        "input-unreadable": {
+          "enum": [
+            "error"
+          ]
+        },
+        "TOA007": {
+          "enum": [
+            "error"
+          ]
+        },
+        "nesting-too-deep": {
+          "enum": [
+            "error"
+          ]
+        },
+        "TOA008": {
+          "enum": [
+            "error"
+          ]
+        },
+        "alias-expansion-too-large": {
+          "enum": [
+            "error"
+          ]
+        },
+        "TOA009": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "yaml-tag-unsupported": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA010": {
+          "enum": [
+            "error"
+          ]
+        },
+        "missing-openapi-version": {
+          "enum": [
+            "error"
+          ]
+        },
+        "TOA011": {
+          "enum": [
+            "error"
+          ]
+        },
+        "unsupported-openapi-version": {
+          "enum": [
+            "error"
+          ]
+        },
+        "TOA012": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "unknown-openapi-minor-version": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA013": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "openapi-version-not-string": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA015": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "yaml-warning": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA020": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "openapi-3-1-in-3-0": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA021": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "nullable-after-3-0": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA022": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "openapi-3-2-in-older": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA100": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "invalid-ref": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA101": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "unresolved-ref": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA102": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "remote-ref": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA103": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "ref-cycle": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA104": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "ref-kind-mismatch": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA105": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "ref-base-ignored": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA106": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "invalid-component-key": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA107": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "ref-not-allowed": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA108": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "ref-commented-out": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA109": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "yaml-merge-key": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA110": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "unknown-key": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA111": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "invalid-value": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA112": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "missing-required-field": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA113": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "non-string-key": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA114": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "null-key": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA201": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "bool-required": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA202": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "array-without-items": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA203": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "double-array": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA204": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "format-on-array": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA205": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "binary-object": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA206": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "contradictory-object-type": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA207": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "example-type-mismatch": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA208": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "example-scalar-type": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA211": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "invalid-default": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA250": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "mixed-type-schema": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA251": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "recursive-alias": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA252": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "allof-property-conflict": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA253": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "allof-part-ignored": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA254": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "excluded-schema-referenced": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA255": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "oneof-constraints-ignored": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA256": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "composition-parts-ignored": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA301": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "duplicate-enum-value": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA303": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "nullable-enum-one-of": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA350": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "enum-mixed-values": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA351": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "enum-varnames-invalid": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA401": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "discriminator-not-required": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA402": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "discriminator-mapping-unresolved": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA450": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "discriminator-value-missing": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA451": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "discriminator-mapping-not-variant": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA452": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "discriminator-without-subtypes": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA453": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "union-undiscriminated": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA454": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "union-variant-duplicate": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA455": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "union-branch-subsumed": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA456": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "discriminator-value-duplicate": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA457": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "discriminator-value-derived": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA458": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "union-json-type-shadowed": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA501": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "missing-path-parameter": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA502": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "path-parameter-not-in-template": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA503": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "missing-operation-id": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA504": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "duplicate-operation-id": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA550": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "name-reserved": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA551": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "name-collision": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA552": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "name-unrepresentable": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA553": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "operation-multiple-tags": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA554": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "operation-untagged": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA555": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "tags-merged": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA556": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "path-variable-unbound": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA557": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "filter-matches-nothing": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA558": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "filter-conflict": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA559": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "name-lossy": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA560": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "override-name-invalid": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA563": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "client-empty": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA564": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "parameter-style-invalid": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA565": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "querystring-not-generated": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA566": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "operation-servers-ignored": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA567": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "callbacks-not-generated": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA568": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "security-scheme-unknown": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA569": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "locked-name-taken": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA570": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "locked-name-kept": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA571": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "locked-name-released": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA601": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "wildcard-media-type": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA650": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "media-type-as-bytes": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA651": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "media-types-dropped": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA652": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "default-error-schema-missing": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA653": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "success-undocumented": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA654": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "event-stream-not-generated": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA655": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "multipart-not-object": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA656": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "encoding-headers-ignored": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA657": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "response-status-invalid": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA658": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "response-status-not-generated": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA659": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "encoding-key-unknown": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA660": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "default-value-invalid": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA661": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "part-media-type-chosen": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA662": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "part-media-type-not-json": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA663": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "event-stream-method-added": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA664": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "event-data-array-items": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA665": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "event-stream-reconnect-off": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA666": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "event-item-schema-unread": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA667": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "event-name-duplicate": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA668": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "event-name-unrepresentable": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA669": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "sse-override-not-applied": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA670": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "event-name-unreachable": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA671": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "event-stream-error-as-text": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA800": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "fix-not-applied": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA801": {
+          "enum": [
+            "error"
+          ]
+        },
+        "overrides-not-found": {
+          "enum": [
+            "error"
+          ]
+        },
+        "TOA802": {
+          "enum": [
+            "error"
+          ]
+        },
+        "invalid-override": {
+          "enum": [
+            "error"
+          ]
+        },
+        "TOA803": {
+          "enum": [
+            "error"
+          ]
+        },
+        "unknown-override-key": {
+          "enum": [
+            "error"
+          ]
+        },
+        "TOA804": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "override-target-not-found": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA805": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "override-target-ambiguous": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA806": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "override-conflict": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA807": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "override-unchanged": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA808": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "override-shared-target": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA809": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "override-nullability-dropped": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA820": {
+          "enum": [
+            "error"
+          ]
+        },
+        "baseline-not-found": {
+          "enum": [
+            "error"
+          ]
+        },
+        "TOA821": {
+          "enum": [
+            "error"
+          ]
+        },
+        "invalid-baseline": {
+          "enum": [
+            "error"
+          ]
+        },
+        "TOA822": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "baseline-entry-stale": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "TOA823": {
+          "enum": [
+            "error"
+          ]
+        },
+        "baseline-not-written": {
+          "enum": [
+            "error"
+          ]
+        },
+        "TOA830": {
+          "enum": [
+            "error"
+          ]
+        },
+        "output-not-owned": {
+          "enum": [
+            "error"
+          ]
+        },
+        "TOA831": {
+          "enum": [
+            "error"
+          ]
+        },
+        "output-not-written": {
+          "enum": [
+            "error"
+          ]
+        },
+        "TOA832": {
+          "enum": [
+            "error",
+            "warning",
+            "info"
+          ]
+        },
+        "output-recovered": {
+          "enum": [
+            "error",
+            "warning",
+            "info"
+          ]
+        },
+        "TOA833": {
+          "enum": [
+            "error",
+            "warning",
+            "info"
+          ]
+        },
+        "output-file-replaced": {
+          "enum": [
+            "error",
+            "warning",
+            "info"
+          ]
+        },
+        "TOA834": {
+          "enum": [
+            "error"
+          ]
+        },
+        "api-lock-differs": {
+          "enum": [
+            "error"
+          ]
+        },
+        "TOA835": {
+          "enum": [
+            "error"
+          ]
+        },
+        "api-lock-unusable": {
+          "enum": [
+            "error"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "description": "The level of diagnostic codes, by id or by name: error, warning, info or off. A code that reports a file that cannot be read can be raised but not lowered."
+    }
+  }
+}

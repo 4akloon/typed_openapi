@@ -75,8 +75,11 @@ final class DiscriminatorPropertyRequired extends NormalizerRule {
   @override
   String? hint(DiagnosticCode code, Preset preset) => switch (preset) {
     .aspnet =>
-      'In ASP.NET, put [JsonPolymorphic] on an abstract base type and '
-          '[JsonDerivedType(typeof(Bar), "bar")] on it for each variant.',
+      'In ASP.NET, the document requires the discriminator in the base '
+          'schema only (dotnet/aspnetcore#60469, open), and we found no '
+          'setting that changes that; add it to "required" of the derived schemas with a schema '
+          'transformer (Microsoft.AspNetCore.OpenApi: AddSchemaTransformer) '
+          'or an ISchemaFilter (Swashbuckle), or accept this info.',
     _ => null,
   };
 }
@@ -121,6 +124,7 @@ final class DiscriminatorMappingTarget extends NormalizerRule {
           fix:
               'Point it at an existing schema at the source; until then, '
               'override the mapping of this discriminator.',
+          backendFix: 'Point it at an existing schema at the source.',
         );
       }
     }
@@ -170,6 +174,9 @@ final class WildcardMediaType extends NormalizerRule {
         fix:
             'Declare the actual media type (usually application/json) at the '
             'source, or override the content type here.',
+        backendFix:
+            'Declare the actual media type (usually application/json) at the '
+            'source.',
       );
     }
   }

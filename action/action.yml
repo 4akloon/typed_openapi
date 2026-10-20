@@ -1,0 +1,73 @@
+name: typed_openapi
+description: >-
+  Lint an OpenAPI spec for the team that owns the backend, or check the specs
+  of a typed_openapi config. Runs a release binary, so Dart is not needed.
+inputs:
+  command:
+    description: "lint (one spec, no config) or check (the specs of a typed_openapi config)."
+    default: lint
+  spec:
+    description: The OpenAPI file to lint. Required for lint, refused for check.
+    default: ""
+  preset:
+    description: The framework preset for lint (generic, nestjs, fastapi, springdoc or aspnet).
+    default: ""
+  fail-on:
+    description: The lowest severity that fails lint (error or warning).
+    default: ""
+  config:
+    description: The typed_openapi config for check.
+    default: typed_openapi.yaml
+  format:
+    description: The report format (text, json, sarif or github-actions).
+    default: github-actions
+  version:
+    description: >-
+      The release to download, such as 0.1.0. Required unless executable is
+      set; there is no latest.
+    default: ""
+  executable:
+    description: A typed_openapi binary to run instead of downloading a release.
+    default: ""
+  working-directory:
+    description: The directory the command runs in.
+    default: .
+runs:
+  using: composite
+  steps:
+    - name: Find typed_openapi
+      id: install
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        EXECUTABLE: ${{ inputs.executable }}
+        VERSION: ${{ inputs.version }}
+      run: |
+        if [ -n "$EXECUTABLE" ]; then
+          if [ ! -x "$EXECUTABLE" ]; then
+            echo "::error::The 'executable' input '$EXECUTABLE' is not an executable file."
+            exit 64
+          fi
+          path=$(cd "$(dirname "$EXECUTABLE")" && pwd)/$(basename "$EXECUTABLE")
+        elif [ -n "$VERSION" ]; then
+          path=$("$ACTION_PATH/install.sh" "$VERSION" "$RUNNER_OS" "$RUNNER_ARCH" "$RUNNER_TEMP/typed_openapi")
+        else
+          echo "::error::Set the 'version' input to a release such as 0.1.0, or 'executable' to a binary."
+          exit 64
+        fi
+        echo "path=$path" >> "$GITHUB_OUTPUT"
+
+    - name: Run typed_openapi
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        INPUT_EXECUTABLE: ${{ steps.install.outputs.path }}
+        INPUT_COMMAND: ${{ inputs.command }}
+        INPUT_SPEC: ${{ inputs.spec }}
+        INPUT_PRESET: ${{ inputs.preset }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_FORMAT: ${{ inputs.format }}
+      run: '"$ACTION_PATH/run.sh"'

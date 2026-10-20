@@ -108,6 +108,7 @@ final class NullableEnumOneOf extends NormalizerRule {
           schema.location,
           {r'$ref': ref, 'nullable': true},
         ),
+        backendFix: 'Write a nullable reference to "$ref" at the source.',
       );
     }
   }
@@ -123,8 +124,11 @@ final class NullableEnumOneOf extends NormalizerRule {
   @override
   String? hint(DiagnosticCode code, Preset preset) => switch (preset) {
     .nestjs =>
-      'In NestJS, @nestjs/swagger 12 writes nullability according to the '
-          'document version; on 11.x keep the document at OpenAPI 3.0.',
+      'In NestJS, @nestjs/swagger 12 spells a nullable schema by the version '
+          'of the document (the nullable keyword in 3.0, a null in the enum '
+          "or anyOf with {type: 'null'} in 3.1). Upgrade (12 needs Nest 12 "
+          'and Node 20.19+ or 22.12+, and is an ES module) and regenerate '
+          'the spec.',
     _ => null,
   };
 }

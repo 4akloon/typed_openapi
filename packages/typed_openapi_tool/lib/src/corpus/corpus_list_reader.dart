@@ -1,3 +1,4 @@
+import 'package:typed_openapi_core/typed_openapi_core.dart' show Preset;
 import 'package:yaml/yaml.dart';
 
 import 'corpus_exception.dart';
@@ -29,6 +30,8 @@ final class CorpusListReader {
     'sha256',
     'license',
     'expect',
+    'framework',
+    'detects',
   };
 
   /// The entries of the corpus file [text], in the order of the file.
@@ -66,14 +69,39 @@ final class CorpusListReader {
 
   CorpusSpec _entry(String name, Object? value) {
     final map = _entryMap(name, value, _keys);
+    final framework = _framework(name, map['framework']);
     return CorpusSpec(
       name: name,
       source: _source(name, map),
       sha256: _hash(name, map),
       license: _text(name, map, 'license'),
       expectation: _expectation(name, map['expect']),
+      framework: framework,
+      detects: _detects(name, map, framework),
     );
   }
+
+  static Preset _framework(String name, Object? value) {
+    if (value == null) return Preset.generic;
+    for (final preset in Preset.values) {
+      if (preset.name == value) return preset;
+    }
+    throw CorpusException(
+      'corpus.yaml: $name has "framework" $value; known: '
+      '${Preset.values.map((p) => p.name).join(', ')}.',
+    );
+  }
+
+  static bool _detects(String name, YamlMap map, Preset framework) =>
+      switch (map['detects']) {
+        null => true,
+        true => true,
+        false when framework != Preset.generic => false,
+        final other => throw CorpusException(
+          'corpus.yaml: $name has "detects" $other: it is a boolean, and '
+          'false only for a spec with a "framework".',
+        ),
+      };
 
   static YamlMap _entryMap(String name, Object? value, Set<String> keys) {
     if (!_name.hasMatch(name)) {

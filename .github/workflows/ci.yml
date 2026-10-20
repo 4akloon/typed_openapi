@@ -17,6 +17,8 @@ permissions:
 #   JavaScript and to Wasm;
 # - the corpus job generates the public specs with both SDKs and compares
 #   the output with corpus.lock;
+# - the docs job checks that the references and JSON Schemas generated from
+#   the code are committed;
 # - the quick fuzz runs 200 seeds; the semver job checks that a change of
 #   output carries a CHANGELOG entry and a raised version (no raise is
 #   needed while the base version is unreleased; the entry still is).
@@ -135,7 +137,7 @@ jobs:
         run: dart pub get
 
       - name: Cache the corpus specs
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: packages/typed_openapi_tool/.dart_tool/corpus/specs
           key: corpus-specs-${{ hashFiles('packages/typed_openapi_tool/corpus.yaml') }}
@@ -146,6 +148,12 @@ jobs:
       # on the output, round-trips the values, and compares with the lock.
       - name: Check the corpus against corpus.lock
         run: dart run bin/corpus.dart check
+        working-directory: packages/typed_openapi_tool
+
+      # `typed_openapi lint` on every spec: the counts by framework, and a
+      # failure when the detected preset is not the one corpus.yaml names.
+      - name: Lint the corpus and check the framework detection
+        run: dart run bin/corpus.dart lint
         working-directory: packages/typed_openapi_tool
 
       # The SARIF reporter's output against the SARIF 2.1.0 schema, which
@@ -173,6 +181,63 @@ jobs:
       - name: Fuzz
         run: dart run bin/fuzz.dart --seeds 200
         working-directory: packages/typed_openapi_tool
+
+  docs:
+    name: Generated docs are current
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Install dependencies (workspace)
+        run: dart pub get
+
+      - name: Check the generated docs
+        run: dart run bin/docs.dart check
+        working-directory: packages/typed_openapi_tool
+
+  actionlint:
+    name: Workflows are valid
+    timeout-minutes: 10
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      # Pinned: 1.7.7 does not know the label macos-15-intel.
+      - name: Run actionlint
+        run: docker run --rm --volume "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.12 -color
+
+  binary:
+    name: Release binary works
+    timeout-minutes: 15
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Install dependencies (workspace)
+        run: dart pub get
+
+      - name: Compile and pack
+        run: |
+          mkdir -p build
+          dart compile exe packages/typed_openapi/bin/typed_openapi.dart -o build/typed_openapi
+          release/package.sh linux-x64 0.0.0-ci build/typed_openapi dist
+
+      - name: Run the action on a fixture spec
+        uses: ./action
+        with:
+          command: lint
+          spec: packages/typed_openapi_test_support/lib/fixtures/backend_defects.yaml
+          executable: build/typed_openapi
+          format: text
 
   semver:
     name: Output changes are versioned

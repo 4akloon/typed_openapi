@@ -2,11 +2,11 @@
 
 ![Dart SDK](https://img.shields.io/badge/Dart-%3E%3D3.10-0175C2?logo=dart&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Status](https://img.shields.io/badge/status-pre--release-orange)
+![Status](https://img.shields.io/badge/status-0.1.0-blue)
 
 **An OpenAPI 3.x to Dart client generator for imperfect, code-first specs** (NestJS, FastAPI, Spring, ASP.NET). It repairs what such specs get wrong, reports every repair with a stable code, and writes plain Dio clients with typed errors, open enums and unions that do not break on a value the spec forgot.
 
-> **Status:** pre-release (version 0.0.1). Nothing is published to pub.dev yet; install from this repository. The stage map is in [docs/roadmap.md](docs/roadmap.md).
+> **Status:** version 0.1.0, the first release, on pub.dev. The stage map is in [docs/roadmap.md](docs/roadmap.md).
 
 ## Contents
 
@@ -33,29 +33,14 @@ The project's own [research](https://github.com/4akloon/typed_openapi/blob/main/
 
 ## Quick start
 
-Five minutes, one spec. Add the packages (they are not on pub.dev yet; pin a `ref:` to get a reproducible build):
+Five minutes, one spec. Add the packages:
 
-```yaml
-dependencies:
-  dio: ^5.11.1
-  typed_openapi_client:
-    git:
-      url: https://github.com/4akloon/typed_openapi.git
-      path: packages/typed_openapi_client
-  typed_openapi_dio:
-    git:
-      url: https://github.com/4akloon/typed_openapi.git
-      path: packages/typed_openapi_dio
-dev_dependencies:
-  typed_openapi_core:
-    git:
-      url: https://github.com/4akloon/typed_openapi.git
-      path: packages/typed_openapi_core
-  typed_openapi:
-    git:
-      url: https://github.com/4akloon/typed_openapi.git
-      path: packages/typed_openapi
+```sh
+dart pub add dio typed_openapi_client typed_openapi_dio
+dart pub add --dev typed_openapi
 ```
+
+To follow `main` instead of a release, use a `git:` dependency with `url: https://github.com/4akloon/typed_openapi.git` and the `path:` of each package under `packages/` (pin a `ref:`).
 
 `specs/petstore.yaml`:
 
@@ -153,6 +138,7 @@ Against a server that answers `{"id": 7, "name": "Rex", "status": "available"}` 
 - **Request bodies:** JSON, forms, multipart with typed parts, text, bytes, files: [Request bodies](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi/doc/generated/request_bodies.md).
 - **Server-Sent Events** as `Stream`s with reconnection and typed event unions: [Event streams](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi/doc/generated/event_streams.md).
 - **Security metadata** as data on each operation; it never signs a request: [Security](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi/doc/generated/security.md).
+- **Lint, binaries and a GitHub Action:** `typed_openapi lint` checks a single spec for the team that writes it ([command line](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi/doc/cli.md)); prebuilt binaries and the GitHub Action are described in [CI](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi/doc/ci.md).
 - **Works in CI:** exit codes, text, JSON, SARIF and GitHub annotations: [CI](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi/doc/ci.md).
 - **Deterministic output** written atomically; it replaces only files it wrote: [Generated output](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi/doc/generate_output.md).
 - **Runtime on the VM, dart2js and dart2wasm**, with strict JSON decoding that names the JSON pointer of a mismatch: [typed_openapi_client](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/README.md).
@@ -228,7 +214,7 @@ The minimum SDK is Dart 3.10 for the generator and for generated code. Translati
 
 ## Status and roadmap
 
-Version 0.0.1, pre-release: the surface may still change, and a change of generated output is a breaking change of the generator. The milestones (M1 to M13) are listed in [docs/roadmap.md](docs/roadmap.md); requirements and the research behind the decisions are in [docs/](docs/).
+Version 0.1.0, the first release: the surface may still change before 1.0, and a change of generated output is a breaking change of the generator. The milestones (M1 to M13) are listed in [docs/roadmap.md](docs/roadmap.md); requirements and the research behind the decisions are in [docs/](docs/).
 
 ## Contributing and license
 

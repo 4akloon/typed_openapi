@@ -1,4 +1,4 @@
-## 0.0.1 - Unreleased
+## 0.1.0
 
 ### Changed
 - The engine (loading, normalizing, checking, the IR, baselines, the API
@@ -79,6 +79,15 @@
   missing config) at the config file. `SarifReporter` takes `defaultFile`.
 
 ### Added
+- `typed_openapi lint <spec>` (M13) checks one spec for the team that writes
+  it: it needs no config, reports the spec's problems with the fix at the
+  source (the backend or the framework) in place of the config fix, and
+  exits `1` on errors. `--preset` names a framework, else it is detected.
+- Two JSON Schemas are published under `schema/`
+  (`typed_openapi.schema.json` for the config and
+  `typed_openapi.overrides.schema.json` for the overrides file), generated
+  from the same catalog the loaders read, for editor completion and
+  validation (M13).
 - Config `exhaustive` (M12, R14.2), in `defaults` or a client: with
   `false` the bases of enums, unions, status types and event unions are
   `abstract interface` in place of `sealed`, so a new value is not a

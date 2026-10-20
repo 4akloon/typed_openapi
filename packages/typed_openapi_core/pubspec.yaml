@@ -3,9 +3,16 @@ description: >
   The engine of typed_openapi: reads OpenAPI 3.x specs, normalizes their
   defects with named rules, checks them with stable diagnostic codes and
   builds the semantic IR that the Dart client generator writes from.
-version: 0.0.1
-homepage: https://github.com/4akLoon/typed_openapi
-repository: https://github.com/4akLoon/typed_openapi
+version: 0.1.0
+homepage: https://github.com/4akloon/typed_openapi
+repository: https://github.com/4akloon/typed_openapi
+issue_tracker: https://github.com/4akloon/typed_openapi/issues
+topics:
+  - openapi
+  - swagger
+  - parser
+  - linter
+  - diagnostics
 
 environment:
   sdk: ">=3.10.0 <4.0.0"
@@ -23,7 +30,7 @@ dev_dependencies:
   test: ^1.24.0
   # A test checks that the engine reads path templates as the client core
   # does.
-  typed_openapi_client: ^0.0.1
+  typed_openapi_client: ^0.1.0
   # The fixture specs and helpers the tests share (not published).
   typed_openapi_test_support: any
   # Tests compare the composer with package:yaml's loader.

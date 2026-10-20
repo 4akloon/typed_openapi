@@ -75,7 +75,7 @@ jobs:
         run: dart pub get
 
       - name: Cache the corpus specs
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: packages/typed_openapi_tool/.dart_tool/corpus/specs
           key: corpus-specs-windows-${{ hashFiles('packages/typed_openapi_tool/corpus.yaml') }}

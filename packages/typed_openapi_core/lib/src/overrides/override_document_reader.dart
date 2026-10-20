@@ -3,6 +3,7 @@ import '../load/spec_document.dart';
 import 'generation_field_reader.dart';
 import 'operation_override_reader.dart';
 import 'override_field_reader.dart';
+import 'override_keys.dart';
 import 'override_set.dart';
 import 'schema_override_reader.dart';
 
@@ -21,8 +22,6 @@ final class OverrideDocumentReader {
       ),
       _schemas = SchemaOverrideReader(fields, GenerationFieldReader(fields));
 
-  static const _sections = {'operations', 'schemas'};
-
   final SpecDocument _document;
   final OverrideFieldReader _fields;
   final OperationOverrideReader _operations;
@@ -31,7 +30,7 @@ final class OverrideDocumentReader {
   /// The overrides of the document.
   OverrideSet read() {
     final root = _document.root;
-    _fields.checkKeys(root, _sections, .root);
+    _fields.checkKeys(root, OverrideKeys.sections, .root);
     return OverrideSet(
       _document,
       operations: [

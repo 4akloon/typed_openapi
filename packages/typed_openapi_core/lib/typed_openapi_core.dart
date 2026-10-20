@@ -17,6 +17,7 @@ export 'src/baseline/baseline.dart' show Baseline, BaselineEntry, BaselineMatch;
 export 'src/baseline/baseline_loader.dart' show BaselineLoader;
 export 'src/baseline/fingerprints.dart' show Fingerprints;
 export 'src/check/spec_checker.dart' show ClientCheck, SpecChecker;
+export 'src/check/spec_linter.dart' show LintResult, SpecLinter;
 export 'src/config/config_loader.dart' show ConfigLoader;
 export 'src/config/generation_config.dart'
     show
@@ -45,6 +46,8 @@ export 'src/diff/change_counts.dart' show ChangeCounts;
 export 'src/diff/json_diff_report.dart' show JsonDiffReport;
 export 'src/diff/markdown_diff_report.dart' show MarkdownDiffReport;
 export 'src/diff/text_diff_report.dart' show TextDiffReport;
+export 'src/extensions/spec_extension.dart' show SpecExtension;
+export 'src/extensions/spec_extensions.dart' show SpecExtensions;
 export 'src/ir/api_ir.dart'
     show
         EncodingIr,
@@ -141,6 +144,8 @@ export 'src/model/spec_node.dart'
 export 'src/normalize/normalizer.dart' show NormalizedSpec, Normalizer;
 export 'src/normalize/normalizer_rule.dart'
     show Finding, NormalizerRule, RuleContext;
+export 'src/normalize/preset_detection.dart' show PresetDetection;
+export 'src/normalize/preset_detector.dart' show PresetDetector;
 export 'src/normalize/spec_edit.dart' show EditOperation, SpecEdit;
 export 'src/overrides/override_loader.dart' show OverrideLoader;
 export 'src/overrides/override_set.dart'
@@ -160,6 +165,8 @@ export 'src/paths/real_paths.dart' show RealPaths;
 export 'src/resolve/spec_documents.dart' show SpecDocuments;
 export 'src/resolve/spec_model.dart' show SpecModel;
 export 'src/resolve/spec_reader.dart' show SpecReader;
+export 'src/schema/config_schema.dart' show ConfigSchema;
+export 'src/schema/override_schema.dart' show OverrideSchema;
 export 'src/snapshot/api_lock.dart' show ApiLock;
 export 'src/snapshot/api_snapshot.dart' show ApiSnapshot;
 export 'src/snapshot/snapshot_builder.dart' show SnapshotBuilder;

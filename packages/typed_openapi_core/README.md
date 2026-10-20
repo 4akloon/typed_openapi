@@ -13,16 +13,12 @@ specs without generating Dart, for example in a CI tool or in the tests of a
 backend platform. To generate a client, use the generator,
 `typed_openapi`, which depends on this package.
 
-> **Status:** in development, not published yet.
+> **Status:** version 0.1.0, the first release, on pub.dev.
 
 ## Install
 
-```yaml
-dependencies:
-  typed_openapi_core:
-    git:
-      url: https://github.com/4akloon/typed_openapi.git
-      path: packages/typed_openapi_core
+```sh
+dart pub add typed_openapi_core
 ```
 
 ## Check the specs of a config

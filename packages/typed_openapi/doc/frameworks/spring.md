@@ -39,7 +39,7 @@ info TOA650 media-type-as-bytes: The media type "*/*" of the response is not JSO
   fix: Use a JSON media type at the source if the schema matters.
 error TOA504 duplicate-operation-id: operationId "get_1" is also the id of the operation at #/paths/~1api~1invoices~1{id}/get; method names would clash.
   at #/paths/~1api~1payments~1{id}/get/operationId
-  fix: Give each operation its own operationId at the source. To generate anyway, lower TOA504 in the client's severity and pin the second method's name with an override. In springdoc, set @Operation(operationId = "...") explicitly; the generated _1 suffixes are not stable.
+  fix: Give each operation its own operationId at the source. To generate anyway, lower TOA504 in the client's severity and pin the second method's name with an override. In springdoc, set @Operation(operationId = "...") explicitly; springdoc adds a _1 suffix to an operationId it finds twice.
 error TOA402 discriminator-mapping-unresolved: discriminator.mapping "wire" points to "#/components/schemas/Missing", which does not exist.
   at #/paths/~1api~1payments~1{id}/get/responses/200/content/*~1*/schema/discriminator/mapping/wire
   fix: Point it at an existing schema at the source; until then, override the mapping of this discriminator. In springdoc, declare the mapping: @Schema(discriminatorProperty = "kind", discriminatorMapping = {@DiscriminatorMapping(value = "foo1", schema = Foo1.class)}).
@@ -118,11 +118,17 @@ Only the first two have `expect: generate` in the corpus; Artemis is expected to
 From the preset's hints and the springdoc documentation:
 
 - `springdoc.default-produces-media-type=application/json` removes every `*/*`.
-- Set `@Operation(operationId = "...")` explicitly; the `_1` suffixes depend on method order.
+- Set `@Operation(operationId = "...")` explicitly; springdoc adds a `_1` suffix to an id it finds twice ([springdoc-openapi#675](https://github.com/springdoc/springdoc-openapi/issues/675) reports it for two controllers with the same id). An `OperationCustomizer` bean can set the ids in one place.
 - Declare polymorphism twice: `@JsonTypeInfo`/`@JsonSubTypes` for Jackson and `@Schema(discriminatorProperty = "kind", discriminatorMapping = {...})` for the spec. Names from `@JsonSubTypes` do not reach the mapping by themselves.
 - Name colliding schemas with `@Schema(name = "...")`; `component-key-characters` (`TOA106`) reports a `components` key that OpenAPI does not allow.
-- Expand `Pageable` with `@ParameterObject` so `page`, `size` and `sort` are separate parameters instead of one object parameter.
+- Expand `Pageable` with `@ParameterObject` (springdoc-openapi 1.6.0 and later) so `page`, `size` and `sort` are separate parameters instead of one object parameter.
 - Pin the generated spec with a snapshot test in the backend's CI; springdoc output has changed between releases.
+
+## Sources
+
+Checked on 2026-10-20. Versions: springdoc-openapi 3.1.1 (Spring Boot 4; 2.9.1 for Spring Boot 3), read from the `main` branch.
+
+- springdoc-openapi [documentation and FAQ](https://springdoc.org/) (`@ParameterObject` and `Pageable`, the property list), [`SpringDocConfigProperties.java`](https://github.com/springdoc/springdoc-openapi/blob/main/springdoc-openapi-starter-common/src/main/java/org/springdoc/core/properties/SpringDocConfigProperties.java) (`springdoc.default-produces-media-type`, default `*/*`), [`OperationService.java`](https://github.com/springdoc/springdoc-openapi/blob/main/springdoc-openapi-starter-common/src/main/java/org/springdoc/core/service/OperationService.java) (`@Operation(operationId)` is copied to the operation), [issue 675](https://github.com/springdoc/springdoc-openapi/issues/675) (the `_1` suffix).
 
 ## Caveats
 

@@ -45,6 +45,8 @@ errors: 0, warnings: 0, infos: 1, baselined: 2
 
 `--format sarif` prints SARIF 2.1.0 for [GitHub code scanning](https://docs.github.com/en/code-security/code-scanning). Alerts then appear in the Security tab and on pull requests, and a fixed problem closes its alert.
 
+Every rule has a `helpUri` that links its entry in [the diagnostics catalog](diagnostics.md), and the rule help of a `lint` run speaks of the fix at the source of the spec.
+
 ```sh
 dart run typed_openapi check --format sarif > typed_openapi.sarif
 ```
@@ -159,9 +161,74 @@ What each step does:
 | `upload-sarif` | Sends it to code scanning (needs `security-events: write`; on a private repository, code scanning must be enabled). |
 | `generate` + `git status` | Fails when the committed client is not what the spec generates. |
 
+## Lint in the backend pipeline
+
+The team that writes the spec can run [`lint`](cli.md#lint) on the file its framework generates, with no `typed_openapi.yaml` and no generated code. This job belongs in the backend repository. It assumes an earlier step leaves the spec at `openapi.json`. It needs the Dart SDK, which the backend project does not otherwise need.
+
+The job activates `typed_openapi` from pub.dev; pin the version (`dart pub global activate typed_openapi 0.1.0`) to get a reproducible job. The explicit `PATH` step is there so the job does not depend on whether `setup-dart` puts the pub cache on it. To lint with the version on `main`, check out the repository and activate it with `dart pub global activate --source path`.
+
+```yaml
+name: openapi-lint
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Build or export openapi.json here, with the backend's own tool.
+      - uses: dart-lang/setup-dart@v1
+      - run: dart pub global activate typed_openapi
+      - run: echo "${PUB_CACHE:-$HOME/.pub-cache}/bin" >> "$GITHUB_PATH"
+      - run: typed_openapi lint --format github-actions --fail-on error openapi.json
+```
+
+Findings are annotations on the changed files, and an error fails the job; warnings are shown but do not. Use `--fail-on warning` once the spec has none, and `--preset` to name the framework when detection says `generic`. The `lint` command line and its annotations were run locally; the workflow file, including the `PATH` step, was not run on GitHub.
+
+### Without Dart: the action and the binaries
+
+A backend project that has no Dart SDK can run the same `lint` from a release binary. Each release `typed_openapi-v<version>` (the tag of the generator) attaches five archives and the file `SHA256SUMS`:
+
+- `typed_openapi-<version>-linux-x64.tar.gz`
+- `typed_openapi-<version>-linux-arm64.tar.gz`
+- `typed_openapi-<version>-macos-x64.tar.gz`
+- `typed_openapi-<version>-macos-arm64.tar.gz`
+- `typed_openapi-<version>-windows-x64.tar.gz`
+
+Each archive holds the executable (`typed_openapi.exe` on Windows) and the `LICENSE`. The action downloads the archive of the runner, checks its SHA-256 against `SHA256SUMS` and runs the command:
+
+```yaml
+      - uses: 4akloon/typed_openapi/action@typed_openapi-v0.1.0
+        with:
+          command: lint
+          spec: openapi.json
+          version: 0.1.0
+          fail-on: error
+```
+
+| Input | Default | Meaning |
+| --- | --- | --- |
+| `command` | `lint` | `lint` (one spec) or `check` (the specs of a config). |
+| `spec` | | The file to lint. Required for `lint`, refused for `check`. |
+| `preset` | | The framework preset for `lint`. Refused for `check`. |
+| `fail-on` | | The lowest level that fails `lint`. Refused for `check`. |
+| `config` | `typed_openapi.yaml` | The config for `check`. |
+| `format` | `github-actions` | `text`, `json`, `sarif` or `github-actions`. |
+| `version` | | The release to download, such as `0.1.0`. |
+| `executable` | | A binary to run instead of downloading one. |
+| `working-directory` | `.` | Where the command runs. |
+
+A relative `executable` is resolved against `working-directory`. `SHA256SUMS` is published in the same release as the archives, so the check detects a corrupt or mismatched download but does not protect against a compromised release. `version` or `executable` is required: there is no "latest", so a pipeline never changes under you. The first release is not out yet, so this step does not run until it is. The scripts and the action are tested on Linux with a fake executable and validated by actionlint; macOS and Windows are first exercised by the first release.
+
 ## See also
 
 - [Command line](cli.md): options and exit codes.
 - [Baseline](baseline.md): accepting existing problems.
 - [Generated output](generate_output.md): ownership, locks and what to commit.
 - [Diagnostics](diagnostics.md): every code and how to set its level.
+- [Automation](automation.md): `diff`, `generate --locked`, a Makefile and a git hook.

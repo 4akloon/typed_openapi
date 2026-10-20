@@ -32,7 +32,17 @@ import 'severity.dart';
 final class SarifReporter implements DiagnosticReporter {
   /// Creates a SARIF reporter that locates a result without a file at
   /// [defaultFile] and fingerprints files relative to [workingDirectory].
-  const SarifReporter({this.defaultFile, this.workingDirectory});
+  ///
+  /// With [isLint] the rule help says nothing of the config file, which a
+  /// reader of `lint` does not have.
+  const SarifReporter({
+    this.defaultFile,
+    this.workingDirectory,
+    this.isLint = false,
+  });
+
+  /// Whether the report is the output of `lint`.
+  final bool isLint;
 
   /// The file a result without one is located at.
   final String? defaultFile;
@@ -67,7 +77,7 @@ final class SarifReporter implements DiagnosticReporter {
           'tool': {
             'driver': {
               'name': 'typed_openapi',
-              'informationUri': 'https://github.com/4akLoon/typed_openapi',
+              'informationUri': 'https://github.com/4akloon/typed_openapi',
               'rules': [for (final code in codes) _rule(code)],
             },
           },
@@ -80,7 +90,7 @@ final class SarifReporter implements DiagnosticReporter {
     });
   }
 
-  static Map<String, Object?> _rule(DiagnosticCode code) => {
+  Map<String, Object?> _rule(DiagnosticCode code) => {
     'id': code.id,
     'name': code.slug,
     'shortDescription': {'text': code.slug},
@@ -89,9 +99,14 @@ final class SarifReporter implements DiagnosticReporter {
           '${code.id} ${code.slug}, a diagnostic of typed_openapi '
           '(${_level(code.defaultSeverity)} by default).',
     },
-    'help': {'text': _help(code)},
+    'help': {'text': isLint ? _lintHelp(code) : _help(code)},
+    'helpUri': code.helpUri,
     'defaultConfiguration': {'level': _level(code.defaultSeverity)},
   };
+
+  static String _lintHelp(DiagnosticCode code) =>
+      '${code.id} (${code.slug}): see the reference linked from this rule '
+      'for what it means and how to fix it.';
 
   /// How the level of [code] can be changed, which the config allows only
   /// for codes that are neither fixed nor config codes.

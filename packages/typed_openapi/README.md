@@ -2,39 +2,24 @@
 
 ![Dart SDK](https://img.shields.io/badge/Dart-%3E%3D3.10-0175C2?logo=dart&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Status](https://img.shields.io/badge/status-pre--release-orange)
+![Status](https://img.shields.io/badge/status-0.1.0-blue)
 
 **An OpenAPI 3.x to Dart client generator for imperfect, code-first specs** (NestJS, FastAPI, Spring, ASP.NET). It fixes what such specs get wrong, tells you every fix with a stable code, and generates Dio clients with typed errors, open enums and unions that do not break on a value the spec forgot.
 
-> **Status:** pre-release (version 0.0.1). It is not published to pub.dev yet; install it from the repository, see [Install](#install).
+> **Status:** version 0.1.0, the first release, on pub.dev. See [Install](#install).
 
 ## Install
 
-`typed_openapi` is the generator: a dev dependency and a CLI, never a runtime dependency. It is built on [`typed_openapi_core`](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_core/README.md), the engine that reads, normalizes and checks specs, which a project lists next to it for now. The generated code depends only on [`typed_openapi_client`](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/README.md); the app adds a transport, such as [`typed_openapi_dio`](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_dio/README.md) over Dio. None of these packages is on pub.dev yet, so use git (or a path to a checkout):
+`typed_openapi` is the generator: a dev dependency and a CLI, never a runtime dependency. It is built on [`typed_openapi_core`](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_core/README.md), the engine that reads, normalizes and checks specs, which comes with it. The generated code depends only on [`typed_openapi_client`](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/README.md); the app adds a transport, such as [`typed_openapi_dio`](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_dio/README.md) over Dio.:
 
-```yaml
-dependencies:
-  dio: ^5.11.1
-  typed_openapi_client:
-    git:
-      url: https://github.com/4akloon/typed_openapi.git
-      path: packages/typed_openapi_client
-  typed_openapi_dio:
-    git:
-      url: https://github.com/4akloon/typed_openapi.git
-      path: packages/typed_openapi_dio
-dev_dependencies:
-  typed_openapi_core:
-    git:
-      url: https://github.com/4akloon/typed_openapi.git
-      path: packages/typed_openapi_core
-  typed_openapi:
-    git:
-      url: https://github.com/4akloon/typed_openapi.git
-      path: packages/typed_openapi
+```sh
+dart pub add dio typed_openapi_client typed_openapi_dio
+dart pub add --dev typed_openapi
 ```
 
-Pin a `ref:` (a tag or a commit) in both entries to get a reproducible build. The minimum SDK is Dart 3.10, for the generator and for the code it writes. Run the CLI with `dart run typed_openapi <command>`.
+To follow `main` instead of a release, use `git:` dependencies (`url: https://github.com/4akloon/typed_openapi.git`, the `path:` of each package under `packages/`) or a path to a checkout, and pin a `ref:` (a tag or a commit) to get a reproducible build.
+
+The minimum SDK is Dart 3.10, for the generator and for the code it writes. Run the CLI with `dart run typed_openapi <command>`.
 
 ## Quick start
 
@@ -153,13 +138,17 @@ Exit code `0` means no errors, `1` errors, `64` a usage error and `78` a config 
 | Guide | What it covers |
 | --- | --- |
 | [Getting started](doc/getting_started.md) | From a spec to a working call, step by step. |
-| [Command line](doc/cli.md) | `check`, `generate`, `baseline`, formats and exit codes. |
+| [Command line](doc/cli.md) | `check`, `generate`, `diff`, `baseline`, `lint`, formats and exit codes. |
 | [Configuration](doc/configuration.md) | Every key of `typed_openapi.yaml`. |
 | [Overrides](doc/overrides.md) | Fixing a spec by location without editing it. |
 | [Presets and rules](doc/presets_and_rules.md) | The normalizer rules and the framework presets. |
 | [Diagnostics](doc/diagnostics.md) | Every `TOAnnn` code and how to fix it. |
 | [Baseline](doc/baseline.md) | Accepting existing problems; adopting on a large spec. |
 | [Generated output](doc/generate_output.md) | Ownership, manifest, locks, determinism, what to commit. |
+| [Support matrix](doc/support_matrix.md) | What is read, generated, reported or not supported, with the test that shows it. |
+| [Automation](doc/automation.md) | `diff` and `generate --locked` in a Makefile, a git hook and CI. |
+| [Client for a 3.1 service](doc/client_for_grund.md) | A 3.1 sample from install to a typed call, and what happens when the spec changes. |
+| [Extensions](doc/extensions.md) | The `x-` keys that are read. |
 | [CI](doc/ci.md) | Exit codes, annotations, SARIF, a GitHub Actions workflow. |
 | [The generated client](doc/generated/overview.md) | Layout and shape of what `generate` writes. |
 | [Models](doc/generated/models.md), [Enums](doc/generated/enums.md), [Unions](doc/generated/unions.md) | Generated types. |

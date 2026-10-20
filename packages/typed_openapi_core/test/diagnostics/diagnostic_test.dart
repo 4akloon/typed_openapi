@@ -3,6 +3,7 @@ import 'package:test/test.dart';
 import 'package:typed_openapi_core/src/diagnostics/diagnostic.dart';
 import 'package:typed_openapi_core/src/diagnostics/diagnostic_code.dart';
 import 'package:typed_openapi_core/src/diagnostics/json_pointer.dart';
+import 'package:typed_openapi_core/src/diagnostics/severity.dart';
 
 void main() {
   final source = SourceFile.fromString(
@@ -78,6 +79,62 @@ void main() {
       expect(d.column, isNull);
       expect(d.location, 'api.json');
       expect(make(file: null).location, isNull);
+    });
+  });
+
+  group('Diagnostic.forBackend', () {
+    Diagnostic withFix(
+      String? fix, {
+      String? backendFix,
+      List<(String, String)> hints = const [],
+    }) => Diagnostic(
+      code: .arrayWithoutItems,
+      severity: .warning,
+      message: 'm',
+      file: 'api.json',
+      pointer: JsonPointer.parse('#/a'),
+      span: source.span(2, 3),
+      fix: fix,
+      backendFix: backendFix,
+      hints: hints,
+    );
+
+    test('a backend fix replaces a fix that offers an override', () {
+      final d = withFix(
+        'Fix it at the source, or override "items".',
+        backendFix: 'Fix it at the source.',
+      );
+      expect(d.fix, 'Fix it at the source, or override "items".');
+      expect(d.forBackend().fix, 'Fix it at the source.');
+    });
+
+    test('a fix that mentions no override is its own backend fix', () {
+      expect(withFix('Quote the key.').forBackend().fix, 'Quote the key.');
+    });
+
+    test('a fix that offers an override and has no backend fix is dropped', () {
+      expect(
+        withFix('Override "items" of this schema.').forBackend().fix,
+        isNull,
+      );
+    });
+
+    test('the hints stay, after the backend fix', () {
+      final d = withFix(
+        'Fix it, or override it.',
+        backendFix: 'Fix it.',
+        hints: [('nestjs', 'In NestJS, set X.')],
+      );
+      expect(d.forBackend().fix, 'Fix it. In NestJS, set X.');
+      expect(d.fix, 'Fix it, or override it. In NestJS, set X.');
+    });
+
+    test('the other fields and the copies of the result are kept', () {
+      final d = withFix('Quote the key.', backendFix: 'Quote it.');
+      final backend = d.forBackend();
+      expect(backend.span, d.span);
+      expect(backend.pointer?.value, d.pointer?.value);
+      expect(backend.withSeverity(.info).forBackend().severity, Severity.info);
     });
   });
 }

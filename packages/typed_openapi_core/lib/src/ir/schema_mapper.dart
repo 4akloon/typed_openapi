@@ -51,7 +51,7 @@ final class SchemaMapper {
 
   /// The extension that makes a property tri-state with
   /// `tri_state: extension` (R7.2).
-  static const triStateExtension = ModelMapper.triStateExtension;
+  static final triStateExtension = ModelMapper.triStateExtension;
 
   final IrContext _context;
   final DirectionIndex _directions;

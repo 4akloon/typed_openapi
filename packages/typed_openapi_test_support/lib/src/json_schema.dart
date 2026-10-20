@@ -1,11 +1,13 @@
 import 'dart:convert';
 
-/// A validator for the part of JSON Schema draft-04 that the SARIF 2.1.0
-/// schema uses: `type`, `enum`, `properties`, `additionalProperties`,
-/// `required`, `items`, `minItems`, `uniqueItems`, `minimum`, `maximum`,
-/// `pattern`, `anyOf`, `oneOf` and local `$ref`s (`#/definitions/...`).
-/// `format`, `default` and the annotations are not checked. Tests only:
-/// nothing ships it.
+/// A validator for the part of JSON Schema (draft-04 and draft-07) that the
+/// SARIF 2.1.0 schema and the config schema use: `type`, `enum` and `const`
+/// (compared by value), `properties`, `patternProperties`,
+/// `additionalProperties`, `propertyNames`, `required`, `minProperties`,
+/// `items`, `minItems`, `minLength`, `uniqueItems`, `minimum`, `maximum`,
+/// `pattern`, `anyOf`, `oneOf` and local `$ref`s (`#/definitions/...`). `format`,
+/// `default` and the annotations are not checked. Tests only: nothing ships
+/// it.
 final class JsonSchema {
   /// Creates the validator of the schema [root].
   const JsonSchema(this.root);
@@ -17,6 +19,9 @@ final class JsonSchema {
   /// value is valid.
   List<String> validate(Object? value) => _check(root, value, '');
 
+  /// Whether [document] is valid.
+  bool accepts(Object? document) => validate(document).isEmpty;
+
   List<String> _check(Map<String, Object?> schema, Object? value, String at) {
     if (schema[r'$ref'] case final String ref) {
       return _check(_resolve(ref), value, at);
@@ -25,9 +30,14 @@ final class JsonSchema {
       if (schema['type'] case final Object type when !_hasType(value, type))
         '$at: expected $type, got ${jsonEncode(value)}',
       if (schema['enum'] case final List<Object?> values
-          when !values.contains(value))
+          when !values.any((v) => _same(v, value)))
         '$at: ${jsonEncode(value)} is not one of $values',
+      if (schema.containsKey('const') && !_same(schema['const'], value))
+        '$at: ${jsonEncode(value)} is not ${jsonEncode(schema['const'])}',
       ..._number(schema, value, at),
+      if (schema['minLength'] case final int min
+          when value is String && value.runes.length < min)
+        '$at: "$value" is shorter than $min',
       if (schema['pattern'] case final String pattern
           when value is String && !RegExp(pattern).hasMatch(value))
         '$at: "$value" does not match $pattern',
@@ -47,6 +57,18 @@ final class JsonSchema {
     }
     return node! as Map<String, Object?>;
   }
+
+  static bool _same(Object? a, Object? b) =>
+      jsonEncode(_sorted(a)) == jsonEncode(_sorted(b));
+
+  static Object? _sorted(Object? value) => switch (value) {
+    final Map<Object?, Object?> map => {
+      for (final key in map.keys.map((k) => '$k').toList()..sort())
+        key: _sorted(map[key]),
+    },
+    final List<Object?> list => list.map(_sorted).toList(),
+    _ => value,
+  };
 
   static bool _hasType(Object? value, Object type) => switch (type) {
     final List<Object?> types => types.any((t) => _hasType(value, t!)),
@@ -98,15 +120,18 @@ final class JsonSchema {
     final properties =
         schema['properties'] as Map<String, Object?>? ?? const {};
     final additional = schema['additionalProperties'];
+    final patterns =
+        schema['patternProperties'] as Map<String, Object?>? ?? const {};
+    final names = schema['propertyNames'];
     return [
+      if (schema['minProperties'] case final int min when value.length < min)
+        '$at: fewer than $min properties',
+      if (names is Map<String, Object?>)
+        for (final key in value.keys) ..._check(names, key, '$at/$key (name)'),
       for (final key in schema['required'] as List<Object?>? ?? const [])
         if (!value.containsKey(key)) '$at: "$key" is required',
       for (final MapEntry(:key, value: item) in value.entries)
-        ...switch (properties[key] ?? additional) {
-          final Map<String, Object?> sub => _check(sub, item, '$at/$key'),
-          false => ['$at: "$key" is not allowed'],
-          _ => const <String>[],
-        },
+        ..._property(properties, patterns, additional, key, item, at),
     ];
   }
 
@@ -123,5 +148,28 @@ final class JsonSchema {
       if (schema['items'] case final Map<String, Object?> items)
         for (final (i, item) in value.indexed) ..._check(items, item, '$at/$i'),
     ];
+  }
+
+  List<String> _property(
+    Map<String, Object?> properties,
+    Map<String, Object?> patterns,
+    Object? additional,
+    String key,
+    Object? item,
+    String at,
+  ) {
+    final matching = [
+      if (properties[key] case final Map<String, Object?> sub) sub,
+      for (final MapEntry(key: pattern, value: sub) in patterns.entries)
+        if (RegExp(pattern).hasMatch(key)) sub! as Map<String, Object?>,
+    ];
+    if (matching.isNotEmpty) {
+      return [for (final sub in matching) ..._check(sub, item, '$at/$key')];
+    }
+    return switch (additional) {
+      final Map<String, Object?> sub => _check(sub, item, '$at/$key'),
+      false => ['$at: "$key" is not allowed'],
+      _ => const <String>[],
+    };
   }
 }
