@@ -8,7 +8,7 @@ import '../diagnostics/diagnostic_bag.dart';
 import '../diagnostics/display_paths.dart';
 import '../diagnostics/reporters.dart';
 import '../generate/output_writer.dart';
-import '../generate/real_paths.dart';
+import '../paths/real_paths.dart';
 import '../snapshot/api_lock.dart';
 import 'api_lock_run.dart';
 import 'check_command.dart';

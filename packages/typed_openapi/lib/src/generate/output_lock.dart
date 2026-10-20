@@ -4,7 +4,7 @@ import 'dart:math';
 
 import 'package:path/path.dart' as p;
 
-import 'real_paths.dart';
+import '../paths/real_paths.dart';
 
 /// The lock of an output: the file and what this run wrote into it.
 final class OutputLock {
