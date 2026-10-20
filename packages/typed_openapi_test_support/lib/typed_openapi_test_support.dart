@@ -2,6 +2,7 @@
 library;
 
 export 'src/fixtures.dart' show Fixtures;
+export 'src/json_schema.dart' show JsonSchema;
 export 'src/normalized_fixture.dart' show NormalizedFixture;
 export 'src/size_limits.dart' show SizeLimits;
 export 'src/temp_dir.dart' show TempDir;

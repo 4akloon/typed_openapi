@@ -7,10 +7,10 @@ import 'dart:io';
 import 'package:source_span/source_span.dart';
 import 'package:test/test.dart';
 import 'package:typed_openapi_core/typed_openapi_core.dart';
+import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
 import '../helpers/cached_schema.dart';
 import '../helpers/code_scanning_rules.dart';
-import '../helpers/json_schema.dart';
 
 /// Every shape of result the reporter writes: a file with a position and a
 /// fix, a related location, a file without a position, no file, and an
