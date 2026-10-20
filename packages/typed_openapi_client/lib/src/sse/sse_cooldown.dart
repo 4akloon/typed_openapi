@@ -9,6 +9,15 @@ final class SseCooldown {
   const SseCooldown({required this.after, required this.duration})
     : assert(after > 0, 'after must be positive');
 
+  /// No cooldown: in a call's options it switches off a default cooldown.
+  static const SseCooldown none = SseCooldown(
+    after: 1,
+    duration: Duration.zero,
+  );
+
+  /// Whether this is [none].
+  bool get isNone => identical(this, none);
+
   /// How many failed attempts in a row start the cooldown.
   final int after;
 

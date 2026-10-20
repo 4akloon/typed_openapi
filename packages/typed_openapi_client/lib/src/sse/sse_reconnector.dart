@@ -7,6 +7,7 @@ import 'cancellable_wait.dart';
 import 'reconnection_plan.dart';
 import 'sse_item.dart';
 import 'sse_options.dart';
+import 'sse_settings.dart';
 
 /// Where a new connection of an event stream picks up: the last event id
 /// (sent as `Last-Event-ID`) and the server's last reconnection time.
@@ -56,8 +57,8 @@ final class SseReconnector<T>
 /// The state of one reconnecting stream.
 final class _Reconnection<T> {
   _Reconnection(this._owner)
-    : _sleep = CancellableWait(_owner.options.wait),
-      _plan = ReconnectionPlan(_owner.options);
+    : _sleep = CancellableWait(SseSettings.of(_owner.options).wait),
+      _plan = ReconnectionPlan(SseSettings.of(_owner.options));
 
   final SseReconnector<T> _owner;
   final CancellableWait _sleep;

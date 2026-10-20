@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:test/test.dart';
+import 'package:typed_openapi_client/src/sse/sse_settings.dart';
 import 'package:typed_openapi_client/typed_openapi_client.dart';
 
 import '../helpers/fake_transport.dart';
@@ -78,7 +79,10 @@ void main() {
     test('double from 1 s up to 30 s without a server retry', () {
       const options = SseOptions();
       expect(
-        [for (var i = 1; i <= 7; i++) options.delayBefore(i, null)],
+        [
+          for (var i = 1; i <= 7; i++)
+            SseSettings.of(options).delayBefore(i, null),
+        ],
         [
           for (final s in [1, 2, 4, 8, 16, 30, 30]) Duration(seconds: s),
         ],
@@ -88,15 +92,21 @@ void main() {
     test('start from the server retry', () {
       const options = SseOptions();
       const retry = Duration(milliseconds: 2500);
-      expect(options.delayBefore(1, retry), retry);
-      expect(options.delayBefore(2, retry), const Duration(seconds: 5));
-      expect(options.delayBefore(5, retry), const Duration(seconds: 30));
+      expect(SseSettings.of(options).delayBefore(1, retry), retry);
+      expect(
+        SseSettings.of(options).delayBefore(2, retry),
+        const Duration(seconds: 5),
+      );
+      expect(
+        SseSettings.of(options).delayBefore(5, retry),
+        const Duration(seconds: 30),
+      );
     });
 
     test('a server retry over the cap is kept as it is', () {
       const options = SseOptions();
       const retry = Duration(minutes: 2);
-      expect(options.delayBefore(3, retry), retry);
+      expect(SseSettings.of(options).delayBefore(3, retry), retry);
     });
   });
 

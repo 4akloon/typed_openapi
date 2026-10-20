@@ -105,7 +105,7 @@ final class EventOpener {
     final TransportResponse response;
     try {
       response = await Handshake(
-        event.call?.sse?.handshakeTimeout,
+        event.settings.handshakeTimeout,
       ).send(transport, sent, signal);
     } on TransportException catch (e, stackTrace) {
       return _results.failure(e, stackTrace);
@@ -126,7 +126,7 @@ final class EventOpener {
     CancelSignal signal,
     SseResume resume,
   ) {
-    final watched = switch (event.call?.sse?.idleTimeout) {
+    final watched = switch (event.settings.idleTimeout) {
       final timeout? => IdleTimeout(
         timeout,
         onIdle: () => signal.cancel('the event stream was idle'),
