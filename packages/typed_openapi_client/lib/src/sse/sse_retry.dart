@@ -18,8 +18,9 @@ import '../result/result.dart';
 /// The status is read from [HttpError], [UndocumentedStatus] and
 /// [DecodeError]: a 503 from a proxy is the same event whether or not the
 /// spec documents it.
-// ignore: avoid_classes_with_only_static_members, a namespace the plan names (SseRetry.isTransient) so a user override can call it.
-abstract final class SseRetry {
+final class SseRetry {
+  const SseRetry._();
+
   /// Whether trying again can help after [failure].
   static bool isTransient(Failure<Object?, Object?> failure) =>
       switch (failure) {
@@ -35,5 +36,5 @@ abstract final class SseRetry {
   static bool _isTransientStatus(int status) =>
       status == 408 ||
       status == 429 ||
-      (status >= 500 && status != 501 && status != 505);
+      (status >= 500 && status <= 599 && status != 501 && status != 505);
 }

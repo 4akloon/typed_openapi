@@ -2,8 +2,9 @@
 /// accept.
 ///
 /// `dart:io` has an `HttpDate`, but the client also runs on the web.
-// ignore: avoid_classes_with_only_static_members, a namespace the plan names (SseRetry.isTransient) so a user override can call it.
-abstract final class HttpDate {
+final class HttpDate {
+  const HttpDate._();
+
   static const _months = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
@@ -58,17 +59,10 @@ abstract final class HttpDate {
       return null;
     }
     final [y, d, hour, minute, second] = fields.cast<int>();
-    final fullYear = year.length == 2
-        ? _expandYear(y, monthIndex + 1, d, now)
-        : y;
-    final result = DateTime.utc(
-      fullYear,
-      monthIndex + 1,
-      d,
-      hour,
-      minute,
-      second,
-    );
+    DateTime at(int fullYear) =>
+        DateTime.utc(fullYear, monthIndex + 1, d, hour, minute, second);
+    final fullYear = year.length == 2 ? _expandYear(y, now, at) : y;
+    final result = at(fullYear);
     final isExact =
         result.year == fullYear &&
         result.month == monthIndex + 1 &&
@@ -79,12 +73,35 @@ abstract final class HttpDate {
     return isExact ? result : null;
   }
 
-  static int _expandYear(int twoDigits, int month, int day, DateTime now) {
+  /// RFC 9110: the year with these digits nearest to [now] (a tie goes to
+  /// the later one), or the most recent past one when that is more than 50
+  /// years after [now]. [at] builds the instant for a candidate year.
+  static int _expandYear(
+    int twoDigits,
+    DateTime now,
+    DateTime Function(int year) at,
+  ) {
     final century = now.year - now.year % 100;
-    final candidate = century + twoDigits;
-    final limit = DateTime.utc(now.year + 50, now.month, now.day, 23, 59, 59);
-    final isTooFar = DateTime.utc(candidate, month, day).isAfter(limit);
-    return isTooFar ? candidate - 100 : candidate;
+    final candidates = [
+      century - 100 + twoDigits,
+      century + twoDigits,
+      century + 100 + twoDigits,
+    ];
+    var nearest = candidates.first;
+    for (final candidate in candidates) {
+      if ((candidate - now.year).abs() <= (nearest - now.year).abs()) {
+        nearest = candidate;
+      }
+    }
+    final limit = DateTime.utc(
+      now.year + 50,
+      now.month,
+      now.day,
+      now.hour,
+      now.minute,
+      now.second,
+    );
+    return at(nearest).isAfter(limit) ? nearest - 100 : nearest;
   }
 
   static int? _digits(String text) =>

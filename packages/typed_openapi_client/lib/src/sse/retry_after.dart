@@ -2,8 +2,9 @@ import '../result/result.dart';
 import 'http_date.dart';
 
 /// Reads a `Retry-After` header: the server's "not before" for one retry.
-// ignore: avoid_classes_with_only_static_members, a namespace the plan names (SseRetry.isTransient) so a user override can call it.
-abstract final class RetryAfter {
+final class RetryAfter {
+  const RetryAfter._();
+
   /// Longest delta-seconds text read, so a [Duration] never overflows.
   static const _maxDigits = 9;
 

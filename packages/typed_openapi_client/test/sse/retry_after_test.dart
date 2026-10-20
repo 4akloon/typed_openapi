@@ -107,6 +107,21 @@ void main() {
       );
     });
 
+    test('a date form without a date header uses the clock', () {
+      expect(
+        of(
+          const HttpError(
+            'x',
+            statusCode: 503,
+            headers: {
+              'retry-after': ['Wed, 21 Oct 2026 12:00:10 GMT'],
+            },
+          ),
+        ),
+        const Duration(seconds: 10),
+      );
+    });
+
     test('no header gives null', () {
       expect(of(const HttpError('x', statusCode: 503)), isNull);
     });

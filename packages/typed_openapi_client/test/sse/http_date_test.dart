@@ -28,6 +28,30 @@ void main() {
     );
   });
 
+  test('a year nearest to now can be in the next century', () {
+    expect(
+      HttpDate.parse(
+        'Sunday, 06-Nov-10 08:49:37 GMT',
+        now: DateTime.utc(2090, 6, 1),
+      ),
+      DateTime.utc(2110, 11, 6, 8, 49, 37),
+    );
+  });
+
+  test('exactly 50 years after now is still the future', () {
+    expect(
+      HttpDate.parse('Monday, 21-Oct-76 12:00:00 GMT', now: now),
+      DateTime.utc(2076, 10, 21, 12),
+    );
+  });
+
+  test('one second past 50 years after now is the past year', () {
+    expect(
+      HttpDate.parse('Monday, 21-Oct-76 12:00:01 GMT', now: now),
+      DateTime.utc(1976, 10, 21, 12, 0, 1),
+    );
+  });
+
   for (final text in [
     '',
     'tomorrow',
