@@ -32,6 +32,7 @@ final class ArrayWithoutItems extends NormalizerRule {
         fix:
             'Add "items" with the element schema at the source, or override '
             '"items" of this schema.',
+        backendFix: 'Add "items" with the element schema at the source.',
       );
     }
   }

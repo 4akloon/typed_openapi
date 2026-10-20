@@ -32,6 +32,7 @@ final class SpecLoader {
         'Spec file $file does not exist.',
         file: file,
         fix: 'Check "input" in the config, or download a fresh snapshot.',
+        backendFix: 'Check the path of the spec file.',
       );
       return null;
     }
@@ -41,6 +42,7 @@ final class SpecLoader {
         'Spec path $file is a directory, not a file.',
         file: file,
         fix: 'Point "input" at the spec file itself.',
+        backendFix: 'Give the path of the spec file, not of a directory.',
       );
       return null;
     }

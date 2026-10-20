@@ -31,6 +31,7 @@ final class MissingOperationId extends NormalizerRule {
         fix:
             'Add an operationId at the source, or override the method name of '
             'this operation.',
+        backendFix: 'Add an operationId at the source.',
       );
     }
   }
@@ -82,6 +83,7 @@ final class DuplicateOperationId extends NormalizerRule {
             'Give each operation its own operationId at the source. To '
             'generate anyway, lower TOA504 in the client\'s severity and pin '
             'the second method\'s name with an override.',
+        backendFix: 'Give each operation its own operationId at the source.',
       );
     }
   }

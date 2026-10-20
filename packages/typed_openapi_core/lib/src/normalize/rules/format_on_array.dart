@@ -79,6 +79,9 @@ final class FormatOnArray extends NormalizerRule {
                   'items': {'type': type, 'format': format},
                 },
               ),
+        backendFix:
+            'Move "format" into the elements of the array at the source and '
+            'remove it from the array.',
       );
     }
   }

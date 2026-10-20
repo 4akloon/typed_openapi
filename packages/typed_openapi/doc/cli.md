@@ -1,12 +1,13 @@
 # Command line
 
-`typed_openapi` has four commands: `check` reads specs and reports problems, `generate` writes the Dart clients, `diff` reports how their API changed, and `baseline` records the problems you accept. All of them read `typed_openapi.yaml` from the working directory, and none of them calls the network.
+`typed_openapi` has five commands: `check` reads specs and reports problems, `generate` writes the Dart clients, `diff` reports how their API changed, `baseline` records the problems you accept, and `lint` checks one spec for the team that writes it. All of them but `lint` read `typed_openapi.yaml` from the working directory, and none of them calls the network.
 
 ```sh
 dart run typed_openapi check
 dart run typed_openapi generate
 dart run typed_openapi diff
 dart run typed_openapi baseline create
+dart run typed_openapi lint openapi.yaml
 ```
 
 `typed_openapi` is not on pub.dev yet, so `dart pub global activate typed_openapi` does not work. From a checkout of the repository, `dart pub global activate --source path packages/typed_openapi` installs the `typed_openapi` executable; then replace `dart run typed_openapi` with `typed_openapi`.
@@ -25,6 +26,7 @@ Available commands:
   check      Check specs and report diagnostics without generating code.
   diff       Report how the API of the clients changed since typed_openapi.lock.
   generate   Check specs and generate the clients without errors.
+  lint       Check one spec and say how to fix it at the source; needs no config.
 ```
 
 > **Note:** A hidden `ir` command prints the intermediate representation of a client as JSON. It exists for the generator's own tests, is not listed in `--help`, and its output format is not a public contract.
@@ -174,6 +176,28 @@ Pruned specs/shop.baseline.yaml: removed 1 entries, 2 left.
 ```
 
 Without a `baseline:` key on any selected client, `baseline create` prints `No client has a "baseline" in the config.` with the usage and exits `64`. See [Baseline](baseline.md) for the file format and an adoption workflow.
+
+## lint
+
+`lint` checks one spec file for the team that writes it, with no config and no generated code. It names the framework (detected from the spec, or set with `--preset`), then lists each finding with the change to make at the source and, for a framework, its recipe. It never suggests a generator override.
+
+| Option | What it does |
+| --- | --- |
+| `--preset` | The backend framework (`generic`, `nestjs`, `fastapi`, `springdoc`, `aspnet`), instead of detecting it. |
+| `--format` | `text` (default), `json`, `sarif` or `github-actions`. With `json` and `sarif` the preset line goes to stderr, so stdout stays one document. |
+| `--fail-on` | `error` or `warning`: exit `1` when a finding of that level or a more serious one is found. By default `lint` only reports and exits `0`. |
+
+```text
+$ typed_openapi lint openapi.yaml
+Preset: nestjs (detected: info.contact is the empty object that the DocumentBuilder of @nestjs/swagger writes).
+warning TOA202 array-without-items: This array has no "items", which OpenAPI 3.0 requires; its elements are read as any JSON value.
+  --> openapi.yaml:24:10
+  at #/components/schemas/Arr
+  fix: Add "items" with the element schema at the source. In NestJS, give the element type: @ApiProperty({ type: [Item] }).
+errors: 0, warnings: 1, infos: 0
+```
+
+A spec that cannot be read exits `1`; a wrong option or other than one path exits `64`.
 
 ## Exit codes
 

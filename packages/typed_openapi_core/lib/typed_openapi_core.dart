@@ -17,6 +17,7 @@ export 'src/baseline/baseline.dart' show Baseline, BaselineEntry, BaselineMatch;
 export 'src/baseline/baseline_loader.dart' show BaselineLoader;
 export 'src/baseline/fingerprints.dart' show Fingerprints;
 export 'src/check/spec_checker.dart' show ClientCheck, SpecChecker;
+export 'src/check/spec_linter.dart' show LintResult, SpecLinter;
 export 'src/config/config_loader.dart' show ConfigLoader;
 export 'src/config/generation_config.dart'
     show

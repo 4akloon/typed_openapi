@@ -178,6 +178,9 @@ final class PathParamNotInTemplate extends NormalizerRule {
           fix:
               'Make the parameter name and the template variable the same at '
               'the source; until then, override the name of this parameter.',
+          backendFix:
+              'Make the parameter name and the template variable the same at '
+              'the source.',
         );
       }
     }

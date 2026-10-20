@@ -37,6 +37,8 @@ final class DoubleArray extends NormalizerRule {
         '${raw['required']}", the shape a decorator gives a list declared '
         'twice; clients read a list of lists.',
         items.location,
+        backendFix:
+            'If the field is a flat list, declare it once at the source.',
         fix: switch (raw['items']) {
           final Map<String, Object?> inner => context.withOverride(
             fix,

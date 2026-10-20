@@ -121,6 +121,7 @@ final class DiscriminatorMappingTarget extends NormalizerRule {
           fix:
               'Point it at an existing schema at the source; until then, '
               'override the mapping of this discriminator.',
+          backendFix: 'Point it at an existing schema at the source.',
         );
       }
     }
@@ -170,6 +171,9 @@ final class WildcardMediaType extends NormalizerRule {
         fix:
             'Declare the actual media type (usually application/json) at the '
             'source, or override the content type here.',
+        backendFix:
+            'Declare the actual media type (usually application/json) at the '
+            'source.',
       );
     }
   }

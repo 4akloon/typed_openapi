@@ -1,0 +1,36 @@
+openapi: 3.0.3
+info: {title: t, version: "1"}
+paths:
+  /pets/{petId}:
+    get:
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: ok
+          content:
+            "*/*": {schema: {type: string}}
+    post:
+      operationId: dup
+      responses: {"200": {description: ok}}
+  /dups:
+    get:
+      operationId: dup
+      responses: {"204": {description: ok}}
+components:
+  schemas:
+    Bin: {type: object, format: binary}
+    Both: {type: object, oneOf: [{type: string}, {type: integer}]}
+    Arr: {type: array}
+    Fmt: {type: array, format: uuid}
+    Dbl: {type: array, items: {type: array, required: true, items: {type: string}}}
+    Nul:
+      oneOf:
+        - $ref: '#/components/schemas/Bin'
+        - {enum: [null]}
+    Ex: {type: array, items: {type: string}, example: {a: 1}}
+    Pet:
+      type: object
+      discriminator: {propertyName: kind, mapping: {cat: '#/components/schemas/Cat'}}
+      properties: {kind: {type: string}}
+      required: [kind]

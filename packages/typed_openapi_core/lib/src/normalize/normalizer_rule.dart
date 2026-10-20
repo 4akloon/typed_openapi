@@ -72,11 +72,15 @@ final class RuleContext {
   }
 
   /// A finding of [code] at [at], with [edits] when it is a fix.
+  ///
+  /// [backendFix] is the fix for a reader who cannot use an override; see
+  /// [Diagnostic.forBackend].
   Finding finding(
     DiagnosticCode code,
     String message,
     SpecLocation at, {
     String? fix,
+    String? backendFix,
     List<SpecEdit> edits = const [],
   }) => Finding(
     Diagnostic(
@@ -87,6 +91,7 @@ final class RuleContext {
       pointer: at.pointer,
       span: documents[at.document]?.spanOf(at.pointer),
       fix: fix,
+      backendFix: backendFix,
     ),
     edits: edits,
   );

@@ -32,6 +32,7 @@ final class BinaryObject extends NormalizerRule {
           schema.location,
           {'type': 'string'},
         ),
+        backendFix: 'Write "type: string" at the source.',
       );
     }
   }

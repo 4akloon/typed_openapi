@@ -108,6 +108,7 @@ final class NullableEnumOneOf extends NormalizerRule {
           schema.location,
           {r'$ref': ref, 'nullable': true},
         ),
+        backendFix: 'Write a nullable reference to "$ref" at the source.',
       );
     }
   }

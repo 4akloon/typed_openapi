@@ -44,6 +44,7 @@ final class ContradictoryObjectType extends NormalizerRule {
           schema.location,
           {'type': null},
         ),
+        backendFix: 'Remove "type: object" at the source.',
       );
     }
   }

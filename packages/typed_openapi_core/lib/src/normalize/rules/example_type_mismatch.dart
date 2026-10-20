@@ -44,6 +44,7 @@ final class ExampleTypeMismatch extends NormalizerRule {
               fix:
                   'Fix the schema or the example at the source; if the '
                   'example is right, override "type" of this schema.',
+              backendFix: 'Fix the schema or the example at the source.',
             )
           : context.finding(
               .exampleScalarType,

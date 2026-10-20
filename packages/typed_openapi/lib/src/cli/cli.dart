@@ -9,6 +9,7 @@ import 'check_command.dart';
 import 'diff_command.dart';
 import 'generate_command.dart';
 import 'ir_command.dart';
+import 'lint_command.dart';
 
 /// The `typed_openapi` command line.
 final class TypedOpenApiCli {
@@ -30,7 +31,8 @@ final class TypedOpenApiCli {
       ..addCommand(BaselineCommand(out ?? stdout, paths))
       ..addCommand(GenerateCommand(out ?? stdout, paths))
       ..addCommand(DiffCommand(out ?? stdout, _err, paths))
-      ..addCommand(IrCommand(out ?? stdout, _err, paths));
+      ..addCommand(IrCommand(out ?? stdout, _err, paths))
+      ..addCommand(LintCommand(out ?? stdout, _err, paths));
   }
 
   final CommandRunner<int> _runner;
