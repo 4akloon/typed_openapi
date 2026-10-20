@@ -2,7 +2,7 @@
 
 The pipeline the command line uses lives in two libraries: `package:typed_openapi_core/typed_openapi_core.dart` (the engine: config, checks, diagnostics, the IR) and `package:typed_openapi/typed_openapi.dart` (the generator: the command line, the emitters and the output writer). Together they cover: load a config, check the specs, build the semantic model of each client, write files. It is meant for tools that wrap the generator (a build script, an editor plugin, a test). Everything the CLI reports is also available as data.
 
-> **Note:** The API may change before 1.0 (the current version is 0.1.0). `ApiLibrary` writes the whole client that [`typed_openapi generate`](cli.md#generate) writes; `ModelLibrary` writes only its model files.
+> **Note:** The API may change before 1.0 (the current version is 0.2.0). `ApiLibrary` writes the whole client that [`typed_openapi generate`](cli.md#generate) writes; `ModelLibrary` writes only its model files.
 
 ## Entry points
 

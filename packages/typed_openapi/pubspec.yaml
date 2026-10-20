@@ -3,7 +3,7 @@ description: >
   OpenAPI 3.x to Dart client generator for imperfect, code-first specs:
   named normalizer rules, diagnostics with stable codes, overrides,
   open enums, unions with an unknown variant and typed errors.
-version: 0.1.0
+version: 0.2.0
 homepage: https://github.com/4akloon/typed_openapi
 repository: https://github.com/4akloon/typed_openapi
 issue_tracker: https://github.com/4akloon/typed_openapi/issues
@@ -26,14 +26,14 @@ dependencies:
   io: ^1.1.0
   meta: ^1.15.0
   path: ^1.9.1
-  typed_openapi_core: ^0.1.0
+  typed_openapi_core: ^0.2.0
 
 dev_dependencies:
   # The spans of the diagnostics the SARIF tests report.
   source_span: ^1.10.2
   test: ^1.24.0
   # The generated clients are compiled against the client core in tests.
-  typed_openapi_client: ^0.1.0
+  typed_openapi_client: ^0.2.0
   # The fixture specs and helpers the tests share (not published).
   typed_openapi_test_support: any
 
