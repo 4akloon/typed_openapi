@@ -1,5 +1,6 @@
 import '../diagnostics/json_pointer.dart';
 import '../overrides/override_set.dart';
+import 'config_keys.dart';
 import 'config_sources.dart';
 
 /// Reads the custom types of `types.formats` and `types.schemas` (R6.8),
@@ -10,8 +11,6 @@ final class CustomTypesReader {
   /// Creates a reader of [_sources] that reports a bad value through
   /// [_invalid] and an unknown key through [_checkKeys].
   const CustomTypesReader(this._sources, this._invalid, this._checkKeys);
-
-  static const _customTypeKeys = {'type', 'import', 'converter'};
 
   /// The maps to read, `defaults` first, with their pointers.
   final ConfigSources _sources;
@@ -51,7 +50,7 @@ final class CustomTypesReader {
     if (value is! Map<String, Object?>) {
       return _report('A custom type must be a mapping.', at);
     }
-    _checkKeys(value, _customTypeKeys, at);
+    _checkKeys(value, ConfigKeys.customType, at);
     final type = value['type'];
     final import = value['import'];
     final converter = value['converter'];

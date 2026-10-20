@@ -162,6 +162,7 @@ export 'src/paths/real_paths.dart' show RealPaths;
 export 'src/resolve/spec_documents.dart' show SpecDocuments;
 export 'src/resolve/spec_model.dart' show SpecModel;
 export 'src/resolve/spec_reader.dart' show SpecReader;
+export 'src/schema/config_schema.dart' show ConfigSchema;
 export 'src/snapshot/api_lock.dart' show ApiLock;
 export 'src/snapshot/api_snapshot.dart' show ApiSnapshot;
 export 'src/snapshot/snapshot_builder.dart' show SnapshotBuilder;

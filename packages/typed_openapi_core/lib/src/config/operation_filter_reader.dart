@@ -1,6 +1,7 @@
 import 'package:source_span/source_span.dart';
 
 import '../diagnostics/json_pointer.dart';
+import 'config_keys.dart';
 import 'config_reading.dart';
 import 'config_sources.dart';
 import 'generation_config.dart';
@@ -18,8 +19,6 @@ final class OperationFilterReader {
     this._checkKeys,
     this._spanAt,
   );
-
-  static const _filterKeys = {'tags', 'operations', 'paths'};
 
   /// The maps to read, `defaults` first, with their pointers.
   final ConfigSources _sources;
@@ -60,7 +59,7 @@ final class OperationFilterReader {
     for (final (map, mapAt) in _sources.reversed) {
       final at = mapAt.child(key);
       if (map[key] case final Map<String, Object?> filter) {
-        _checkKeys(filter, _filterKeys, at);
+        _checkKeys(filter, ConfigKeys.filter, at);
       }
       if (at.value == appliedAt?.value) return;
     }
@@ -69,7 +68,7 @@ final class OperationFilterReader {
   String _describe(Map<String, Object?> filter) {
     final parts = [
       for (final MapEntry(:key, :value) in filter.entries)
-        if (value is List<Object?> && _filterKeys.contains(key))
+        if (value is List<Object?> && ConfigKeys.filter.contains(key))
           '$key: ${value.join(', ')}',
     ];
     return parts.isEmpty ? 'no filter' : parts.join('; ');

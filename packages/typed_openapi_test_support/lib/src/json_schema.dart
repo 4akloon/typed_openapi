@@ -4,7 +4,7 @@ import 'dart:convert';
 /// SARIF 2.1.0 schema and the config schema use: `type`, `enum` and `const`
 /// (compared by value), `properties`, `patternProperties`,
 /// `additionalProperties`, `propertyNames`, `required`, `minProperties`,
-/// `items`, `minItems`, `uniqueItems`, `minimum`, `maximum`, `pattern`,
+/// `items`, `minItems`, `minLength`, `uniqueItems`, `minimum`, `maximum`, `pattern`,
 /// `anyOf`, `oneOf` and local `$ref`s (`#/definitions/...`). `format`,
 /// `default` and the annotations are not checked. Tests only: nothing ships
 /// it.
@@ -35,6 +35,9 @@ final class JsonSchema {
       if (schema.containsKey('const') && !_same(schema['const'], value))
         '$at: ${jsonEncode(value)} is not ${jsonEncode(schema['const'])}',
       ..._number(schema, value, at),
+      if (schema['minLength'] case final int min
+          when value is String && value.runes.length < min)
+        '$at: "$value" is shorter than $min',
       if (schema['pattern'] case final String pattern
           when value is String && !RegExp(pattern).hasMatch(value))
         '$at: "$value" does not match $pattern',

@@ -82,8 +82,8 @@ final class GenerationReader {
       for (final (section, keys) in [
         ('naming', ConfigKeys.naming),
         ('types', ConfigKeys.types),
-        ('errors', const {'default_schema'}),
-        ('sse', const {'reconnect'}),
+        ('errors', ConfigKeys.errors),
+        ('sse', ConfigKeys.sse),
       ]) {
         if (_reader.mapAt(map, section, at) case final inner?) {
           _reader.checkKeys(inner, keys, at.child(section));
