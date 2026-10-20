@@ -43,11 +43,14 @@ Run from the repo root unless noted otherwise:
 dart analyze packages
 dart format packages
 
+cd packages/typed_openapi_core && dart test
 cd packages/typed_openapi && dart test
 cd packages/typed_openapi_client && dart test
 cd packages/typed_openapi_tool && dart test
 
-# Before publishing a package:
+# Before publishing a package (the four share one version; publish in the
+# order typed_openapi_core, typed_openapi_client, typed_openapi,
+# typed_openapi_dio):
 cd packages/<package> && dart pub publish --dry-run
 
 # The public-spec corpus and the escaping fuzz (packages/typed_openapi_tool):

@@ -212,6 +212,7 @@ Files and methods already over their limit that may not grow; the list only
 shrinks. The single source is now the allowlists in the ratchet tests, one per
 package:
 
+- `packages/typed_openapi_core/test/quality/size_limits_test.dart`
 - `packages/typed_openapi/test/quality/size_limits_test.dart`
 - `packages/typed_openapi_client/test/quality/size_limits_test.dart`
 
@@ -221,7 +222,7 @@ permanent exemptions. The tests fail on a file or method over its limit that
 is not listed and on a listed one that grew; a listed unit that shrank or is
 within its limit again is a stale entry that is deleted (nothing fails, so
 nothing reminds you). A new entry is never added: the unit is split instead.
-The measuring code is `test/helpers/size_limits.dart` (the method check is an
+The measuring code is `packages/typed_openapi_test_support/lib/src/size_limits.dart` (the method check is an
 indentation heuristic, expression bodies are not seen). The numbers that were
 listed here in this document are not kept: they would go stale.
 

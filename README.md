@@ -47,6 +47,10 @@ dependencies:
       url: https://github.com/4akloon/typed_openapi.git
       path: packages/typed_openapi_dio
 dev_dependencies:
+  typed_openapi_core:
+    git:
+      url: https://github.com/4akloon/typed_openapi.git
+      path: packages/typed_openapi_core
   typed_openapi:
     git:
       url: https://github.com/4akloon/typed_openapi.git

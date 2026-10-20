@@ -1,24 +1,24 @@
 # Programmatic API
 
-The library `package:typed_openapi/typed_openapi.dart` exposes the pipeline the command line uses: load a config, check the specs, build the semantic model of each client, write files. It is meant for tools that wrap the generator (a build script, an editor plugin, a test). Everything the CLI reports is also available as data.
+The pipeline the command line uses lives in two libraries: `package:typed_openapi_core/typed_openapi_core.dart` (the engine: config, checks, diagnostics, the IR) and `package:typed_openapi/typed_openapi.dart` (the generator: the command line, the emitters and the output writer). Together they cover: load a config, check the specs, build the semantic model of each client, write files. It is meant for tools that wrap the generator (a build script, an editor plugin, a test). Everything the CLI reports is also available as data.
 
 > **Note:** The API is pre-release (version 0.0.1) and may change before 1.0. `ApiLibrary` writes the whole client that [`typed_openapi generate`](cli.md#generate) writes; `ModelLibrary` writes only its model files.
 
 ## Entry points
 
-| Class | What it does |
-| --- | --- |
-| `TypedOpenApiCli` | The command line as a class. `run(args)` returns the exit code; it never calls `exit()`. Reports go to `out`, usage errors to `err`, relative paths resolve against `workingDirectory`. |
-| `DiagnosticBag` | Where every stage reports problems. Pass one to each component below. |
-| `ConfigLoader` | `load(path)` reads `typed_openapi.yaml` into a `ProjectConfig` (its `clients` are `ClientConfig`s). It returns `null` when the file is missing or unusable, with the reason in the bag (TOA901, TOA902). |
-| `SpecChecker` | `check(config, {only, strictBaseline})` checks every client and applies its levels and baseline; `checkClients` does the same without baselines. Both return one `ClientCheck` per client. |
-| `ClientCheck` | The result for one client: `client`, `diagnostics`, `errors` (errors left after levels and baseline), `ir` (`null` when the spec could not be read), `irJson`, and `sources` (the files that were read). |
-| `ApiLibrary` | `files(ir, client: name)` returns every file of the client, as `generate` writes them: the models, a file per group in `api/` with the barrel `api.dart`, and the root client `<client>.dart`, as a map from path to text sorted by path. `ApiLibrary(width: 80)` sets the line width (`ClientConfig.lineWidth`). |
-| `ModelLibrary` | `files(ir)` returns the model files (`models/<name>.dart` and the barrel `models.dart`) as a map from path to text, sorted by path. |
-| `OutputWriter` | `write(client, files, inputs: ...)` writes a map of files into the client's output directory with the [atomic, ownership-checked procedure](generate_output.md) and returns an `OutputChanges` (`written`, `unchanged`, `deleted`, `forced`), or `null` after reporting why nothing was written. |
-| `TextReporter`, `JsonReporter`, `SarifReporter`, `GitHubActionsReporter` | Turn a bag into the [report formats](cli.md#formats). |
+| Class | Library | What it does |
+| --- | --- | --- |
+| `TypedOpenApiCli` | generator | The command line as a class. `run(args)` returns the exit code; it never calls `exit()`. Reports go to `out`, usage errors to `err`, relative paths resolve against `workingDirectory`. |
+| `DiagnosticBag` | core | Where every stage reports problems. Pass one to each component below. |
+| `ConfigLoader` | core | `load(path)` reads `typed_openapi.yaml` into a `ProjectConfig` (its `clients` are `ClientConfig`s). It returns `null` when the file is missing or unusable, with the reason in the bag (TOA901, TOA902). |
+| `SpecChecker` | core | `check(config, {only, strictBaseline})` checks every client and applies its levels and baseline; `checkClients` does the same without baselines. Both return one `ClientCheck` per client. |
+| `ClientCheck` | core | The result for one client: `client`, `diagnostics`, `errors` (errors left after levels and baseline), `ir` (`null` when the spec could not be read), `irJson`, and `sources` (the files that were read). |
+| `ApiLibrary` | generator | `files(ir, client: name)` returns every file of the client, as `generate` writes them: the models, a file per group in `api/` with the barrel `api.dart`, and the root client `<client>.dart`, as a map from path to text sorted by path. `ApiLibrary(width: 80)` sets the line width (`ClientConfig.lineWidth`). |
+| `ModelLibrary` | generator | `files(ir)` returns the model files (`models/<name>.dart` and the barrel `models.dart`) as a map from path to text, sorted by path. |
+| `OutputWriter` | generator | `write(client, files, inputs: ...)` writes a map of files into the client's output directory with the [atomic, ownership-checked procedure](generate_output.md) and returns an `OutputChanges` (`written`, `unchanged`, `deleted`, `forced`), or `null` after reporting why nothing was written. |
+| `TextReporter`, `JsonReporter`, `SarifReporter`, `GitHubActionsReporter` | core | Turn a bag into the [report formats](cli.md#formats). |
 
-The library also exports the loader (`SpecLoader`, `SpecDocument`), the typed model of the spec (`OpenApiDocument` and the other OpenAPI objects), the normalizer (`Normalizer`, `NormalizerRule`, `Finding`, `SpecEdit`), the overrides reader (`OverrideLoader`, `OverrideSet`), the baseline classes (`Baseline`, `BaselineLoader`) and the IR (`IrBuilder`, `ClientIr`, `DartType`, ...). Each has a doc comment in the source; this guide covers the path from config to files.
+The core also exports the loader (`SpecLoader`, `SpecDocument`), the typed model of the spec (`OpenApiDocument` and the other OpenAPI objects), the normalizer (`Normalizer`, `NormalizerRule`, `Finding`, `SpecEdit`), the overrides reader (`OverrideLoader`, `OverrideSet`), the baseline classes (`Baseline`, `BaselineLoader`) and the IR (`IrBuilder`, `ClientIr`, `DartType`, ...). Each has a doc comment in the source; this guide covers the path from config to files.
 
 ## Check a config and write the client
 
@@ -33,6 +33,7 @@ clients:
 
 ```dart
 import 'package:typed_openapi/typed_openapi.dart';
+import 'package:typed_openapi_core/typed_openapi_core.dart';
 
 void main() {
   final diagnostics = DiagnosticBag();

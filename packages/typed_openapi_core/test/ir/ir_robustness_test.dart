@@ -152,9 +152,10 @@ void main() {
   final probes = probeCases();
   final fixtures = sourceCases();
 
-  // The extraction finds 134 probes and 150 fixtures. The floors are 80% of
-  // that, so a few fixtures can move or go without failing this test, while
-  // an extraction that stops finding the files does fail it.
+  // The extraction finds 134 probes and 218 fixtures. The probe floor is 80%
+  // of that and the fixture floor is lower, so a few fixtures can move or go
+  // without failing this test, while an extraction that stops finding the
+  // files does fail it.
   test('has probes and fixtures to build', () {
     expect(probes.length, greaterThanOrEqualTo(107));
     expect(fixtures.length, greaterThanOrEqualTo(120));
