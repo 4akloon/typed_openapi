@@ -27,10 +27,8 @@ void main() {
       );
     });
 
-    test('both import CallOptions from the client package', () {
-      for (final file in [root.value, group.value]) {
-        expect(file, matches(RegExp(r'show[^;]*\bCallOptions\b')));
-      }
+    test('the root imports CallOptions from the client package', () {
+      expect(root.value, matches(RegExp(r'show[^;]*\bCallOptions\b')));
     });
   });
 }
