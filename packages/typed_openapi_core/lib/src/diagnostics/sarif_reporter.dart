@@ -90,6 +90,7 @@ final class SarifReporter implements DiagnosticReporter {
           '(${_level(code.defaultSeverity)} by default).',
     },
     'help': {'text': _help(code)},
+    'helpUri': code.helpUri,
     'defaultConfiguration': {'level': _level(code.defaultSeverity)},
   };
 

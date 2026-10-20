@@ -1407,4 +1407,13 @@ enum DiagnosticCode {
 
   /// The severity used unless configuration overrides it.
   final Severity defaultSeverity;
+
+  /// The anchor of this code's entry in the diagnostics reference, such as
+  /// `toa001-parse-error`.
+  String get docsAnchor => '${id.toLowerCase()}-$slug';
+
+  /// The link to this code's entry in the diagnostics reference.
+  String get helpUri =>
+      'https://github.com/4akLoon/typed_openapi/blob/main/packages/'
+      'typed_openapi/doc/diagnostics.md#$docsAnchor';
 }

@@ -149,6 +149,15 @@ void main() {
     );
   });
 
+  test('a code links to its entry in the diagnostics reference', () {
+    expect(DiagnosticCode.parseError.docsAnchor, 'toa001-parse-error');
+    expect(
+      DiagnosticCode.missingPathParameter.helpUri,
+      'https://github.com/4akLoon/typed_openapi/blob/main/packages/'
+      'typed_openapi/doc/diagnostics.md#toa501-missing-path-parameter',
+    );
+  });
+
   test('an empty report is a run without results', () {
     final log = sarif(DiagnosticBag());
     expectValidSarif(log);
@@ -182,6 +191,7 @@ void expectValidSarif(Map<String, Object?> log) {
       final level =
           (rule['defaultConfiguration']! as Map<String, Object?>)['level'];
       expect(level, isIn(['none', 'note', 'warning', 'error']));
+      expect(rule['helpUri'], matches(RegExp(r'#toa\d{3}-[a-z0-9-]+$')));
     }
     for (final result
         in (run['results']! as List<Object?>).cast<Map<String, Object?>>()) {
