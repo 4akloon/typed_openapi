@@ -77,9 +77,10 @@ final class SseOptions {
   /// the last event id and the delay, but are no message), does not. A
   /// written `null` never gives up: the stream reconnects until the call is
   /// cancelled, the listener cancels or an attempt fails in a way that
-  /// retrying cannot fix (`SseRetry`, or `retryWhen`). Omitted leaves it unset (5). This field reads
-  /// null both when it was omitted and when `null` was written; [merge]
-  /// keeps the difference. A negative number counts as omitted.
+  /// retrying cannot fix (`SseRetry`, or `retryWhen`). Omitted leaves it
+  /// unset (5). This field reads null both when it was omitted and when
+  /// `null` was written; [merge] keeps the difference. A negative number
+  /// counts as omitted.
   final int? maxAttempts;
 
   final bool _hasMaxAttempts;

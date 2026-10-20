@@ -22,9 +22,9 @@ typedef SseResume = ({String lastEventId, Duration? retry});
 /// The stream ends with [SseDisconnected] when [SseSettings.maxAttempts]
 /// attempts in a row bring no message (never, when it is null), when the
 /// request is cancelled (the listener cancels, or [cancel] is cancelled,
-/// also during a wait), when an attempt fails in a way [SseSettings.shouldRetry]
-/// refuses (the `Failure` is the cause), or with 204 No Content, which tells
-/// a client to stop reconnecting.
+/// also during a wait), when an attempt fails in a way that
+/// [SseSettings.shouldRetry] refuses (the `Failure` is the cause), or with
+/// 204 No Content, which tells a client to stop reconnecting.
 final class SseReconnector<T>
     extends StreamTransformerBase<SseItem<T>, SseItem<T>> {
   /// Creates the reconnection of one call.
