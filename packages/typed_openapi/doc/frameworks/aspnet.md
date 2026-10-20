@@ -16,7 +16,7 @@ clients:
 
 The preset adds ASP.NET advice to the `fix:` text of `missing-operation-id` (`.WithName`, `[EndpointName]`, Swashbuckle's `CustomOperationIds`), `discriminator-property-required` (a schema transformer or an `ISchemaFilter`) and `component-key-characters` (`CustomSchemaIds`). It changes no behaviour; see [Presets and rules](../presets_and_rules.md).
 
-Export the document at build time (`swagger tofile`, or the `Microsoft.Extensions.ApiDescription.Server` package with `OpenApiGenerateDocumentsOnBuild` and `OpenApiDocumentsDirectory` in the `.csproj`) or save the `/swagger/v1/swagger.json` response, and commit it.
+Export the document at build time (`swagger tofile`, or the `Microsoft.Extensions.ApiDescription.Server` package with `OpenApiGenerateDocumentsOnBuild` and `OpenApiDocumentsDirectory` in the `.csproj`; see its `.targets` file under Sources) or save the `/swagger/v1/swagger.json` response, and commit it.
 
 ## What the spec looks like
 
@@ -87,20 +87,21 @@ Both are in the repository's corpus (`packages/typed_openapi_tool/corpus.yaml`) 
 From the preset's hints and the framework documentation:
 
 - **Operation ids.** `.WithName("getUser")` or `[EndpointName("getUser")]`; with Swashbuckle, `o.CustomOperationIds(api => api.TryGetMethodInfo(out var mi) ? mi.Name : null)`.
-- **One media type.** In controllers, `[Produces("application/json")]` and `[Consumes("application/json")]` remove `text/plain`, `text/json` and `application/*+json`. In Minimal APIs `Produces` and `[ProducesResponseType]` set metadata only and the content type follows the return type of the handler.
+- **One media type.** In controllers, `[Consumes("application/json")]` makes the `requestBody` list only the types it names (the built-in JSON input formatter otherwise offers `application/json`, `text/json` and `application/*+json`). For responses, `[Produces]` and `[ProducesResponseType]` (controllers) and the `Produces` extension method (Minimal APIs, default content type `application/json`) set the content types; check the generated document for the other types you see.
 - **Errors:** `[ProducesResponseType<ProblemDetails>(400, "application/problem+json")]`.
 - **Enums as strings.** Register `JsonStringEnumConverter` so the document lists names, not numbers. With Microsoft.AspNetCore.OpenApi the JSON options are the global `Microsoft.AspNetCore.Http.Json.JsonOptions`; MVC's `AddJsonOptions` does not reach the document.
-- **Polymorphism.** With Swashbuckle, `UseAllOfForInheritance()` and `UseOneOfForPolymorphism()`; its Annotations package reads `[JsonPolymorphic]` and `[JsonDerivedType]` for the discriminator (`EnableAnnotations(enableAnnotationsForInheritance: true, enableAnnotationsForPolymorphism: true)`). Neither generator writes the discriminator property into `required` of the derived schemas (Jellyfin is the example): this is `TOA401`, an info, and no setting changes it ([dotnet/aspnetcore#60469](https://github.com/dotnet/aspnetcore/issues/60469) is open). Add it with a schema transformer (`AddSchemaTransformer`, Microsoft.AspNetCore.OpenApi) or an `ISchemaFilter` (Swashbuckle), or accept the info.
+- **Polymorphism.** With Swashbuckle, `UseAllOfForInheritance()` and `UseOneOfForPolymorphism()`; its Annotations package reads `[JsonPolymorphic]` and `[JsonDerivedType]` for the discriminator (`EnableAnnotations(enableAnnotationsForInheritance: true, enableAnnotationsForPolymorphism: true)`). Microsoft.AspNetCore.OpenApi requires the discriminator property in the base schema only: [dotnet/aspnetcore#60469](https://github.com/dotnet/aspnetcore/issues/60469) is open. In the Swashbuckle spec of Jellyfin we observed the same result (`TOA401`, an info), and we found no setting that changes it in either generator. Add the property to `required` of the derived schemas with a schema transformer (`AddSchemaTransformer`, Microsoft.AspNetCore.OpenApi) or an `ISchemaFilter` (Swashbuckle), or accept the info.
 - **Schema ids.** `o.CustomSchemaIds(t => t.FullName!.Replace('+', '.'))` for nested types and generic clashes.
 - **Required and nullable.** `[Required]` or the `required` modifier; with Swashbuckle `SupportNonNullableReferenceTypes()` and `NonNullableReferenceTypesAsRequired()`.
 - **OpenAPI version.** `OpenApiVersion` of `AddOpenApi` options in Microsoft.AspNetCore.OpenApi (3.1 is the default in .NET 10, 3.2 in .NET 11) and `UseSwagger(o => o.OpenApiVersion = OpenApiSpecVersion.OpenApi3_1)` in Swashbuckle 10 (3.0 is its default); this tool reads all of them.
 
 ## Sources
 
-Checked on 2026-10-20. Versions: Swashbuckle.AspNetCore 10.3.0, Microsoft.AspNetCore.OpenApi in .NET 10 (documentation moniker `aspnetcore-10.0`).
+Checked on 2026-10-20. Versions: Swashbuckle.AspNetCore 10.3.1, Microsoft.AspNetCore.OpenApi in .NET 10 (documentation moniker `aspnetcore-10.0`).
 
 - Swashbuckle.AspNetCore docs [SwaggerGen options](https://github.com/domaindrivendev/Swashbuckle.AspNetCore/blob/master/docs/configure-and-customize-swaggergen.md), [Swagger options](https://github.com/domaindrivendev/Swashbuckle.AspNetCore/blob/master/docs/configure-and-customize-swagger.md), [Annotations](https://github.com/domaindrivendev/Swashbuckle.AspNetCore/blob/master/docs/configure-and-customize-annotations.md) and [`SwaggerGenOptionsExtensions.cs`](https://github.com/domaindrivendev/Swashbuckle.AspNetCore/blob/master/src/Swashbuckle.AspNetCore.SwaggerGen/DependencyInjection/SwaggerGenOptionsExtensions.cs).
 - Microsoft Learn [Generate OpenAPI documents](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/openapi/aspnetcore-openapi?view=aspnetcore-10.0), [Customize OpenAPI documents](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/openapi/customize-openapi?view=aspnetcore-10.0), [Include OpenAPI metadata](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/openapi/include-metadata?view=aspnetcore-10.0).
+- [`Microsoft.Extensions.ApiDescription.Server.targets`](https://github.com/dotnet/aspnetcore/blob/main/src/Tools/Extensions.ApiDescription.Server/src/build/Microsoft.Extensions.ApiDescription.Server.targets) (`OpenApiGenerateDocumentsOnBuild`, `OpenApiDocumentsDirectory`).
 - [dotnet/aspnetcore#60469](https://github.com/dotnet/aspnetcore/issues/60469) (the discriminator property is not `required` in derived schemas; open, Backlog milestone).
 
 ## Caveats

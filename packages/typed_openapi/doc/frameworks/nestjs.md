@@ -32,7 +32,7 @@ These defects come from the decorators and the Swagger CLI plugin. The sample sp
 | `default` of another type than the schema, or computed at run time | `drop-invalid-default` | `TOA211` (warning), default ignored |
 | `type: array` with no `items` (3.0 only) | `array-without-items` | `TOA202` (warning), reports only |
 | `type: [Item]` together with `isArray: true`: a list of lists | `double-array` | `TOA203` (warning), reports only |
-| A nullable enum as `oneOf: [{enum: [null]}, {$ref}]` (the `oneOf` form that `@nestjs/swagger` 12 replaced) | `nullable-enum-one-of` | `TOA303` (warning), reports only |
+| A nullable enum as `oneOf: [{enum: [null]}, {$ref}]` (the form older `@nestjs/swagger` versions wrote; 12 spells the null by document version) | `nullable-enum-one-of` | `TOA303` (warning), reports only |
 | Several controllers with a method of the same name | none | `TOA551` (info), the second gets `2` |
 | Operations with several tags | none | `TOA553` (info), generated once, in the first tag's group |
 
@@ -124,7 +124,7 @@ The preset's hints, and the NestJS documentation they point at:
 - **Arrays:** write `@ApiProperty({ type: [Item] })` or `@ApiProperty({ type: Item, isArray: true })`, never both: the documentation accepts either, and both together give a list of lists (`TOA203`).
 - **Defaults:** `excludeDynamicDefaults: true` in `SwaggerModule.createDocument` leaves out defaults computed at run time.
 - **Operation ids:** `operationIdFactory` in `SwaggerModule.createDocument` replaces the default `controllerKey_methodKey` (with the version appended when versioning is on). If you return the method name, make it unique yourself (`TOA504` reports duplicates).
-- **Nullable enums:** declare the property with `enum`, `enumName` and `nullable: true`. `@nestjs/swagger` 12 writes the null by the version of the document: the `nullable` keyword in 3.0, a type union, a `null` in the enum or `anyOf` with `{type: 'null'}` in 3.1. Upgrade and regenerate the spec before you override `TOA303`.
+- **Nullable enums:** `@nestjs/swagger` 12 spells a nullable schema by the version of the document: the `nullable` keyword in 3.0, a type union, a `null` in the enum or `anyOf` with `{type: 'null'}` in 3.1 (release notes of 12.0.0). Version 12 needs Nest 12 and Node 20.19+ or 22.12+ and is an ES module. Upgrade and regenerate the spec before you override `TOA303`.
 
 ## Sources
 

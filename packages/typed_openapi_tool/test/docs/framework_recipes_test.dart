@@ -37,7 +37,11 @@ void main() {
           .map((m) => m.group(0))
           .toSet();
       final client = clients['raw/${spec.name}'] as Map<String, Object?>?;
-      final codes = (client?['diagnostics'] as Map<String, Object?>?) ?? {};
+      if (client == null) {
+        missing.add('${spec.name}: no raw/${spec.name} entry in corpus.lock');
+        continue;
+      }
+      final codes = client['diagnostics']! as Map<String, Object?>;
       for (final code in codes.keys) {
         if (!inRecipe.contains(code)) missing.add('${spec.name}: $code');
       }

@@ -106,7 +106,7 @@ void main() {
         preset: .nestjs,
       );
       final fix = run.of(DiagnosticCode.nullableEnumOneOf).single.fix;
-      expect(fix, contains("enumName: 'Currency', nullable: true"));
+      expect(fix, contains('Node 20.19+'));
       expect(fix, contains('@nestjs/swagger 12'));
       expect(fix, isNot(contains('keep the document at OpenAPI 3.0')));
     });

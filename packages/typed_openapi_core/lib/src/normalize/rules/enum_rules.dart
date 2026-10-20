@@ -124,11 +124,11 @@ final class NullableEnumOneOf extends NormalizerRule {
   @override
   String? hint(DiagnosticCode code, Preset preset) => switch (preset) {
     .nestjs =>
-      'In NestJS, declare the property as @ApiProperty({ enum: Currency, '
-          "enumName: 'Currency', nullable: true }); @nestjs/swagger 12 "
-          'spells the null by the version of the document (nullable: true in '
-          "3.0, anyOf with {type: 'null'} in 3.1), so upgrade and "
-          'regenerate the spec first.',
+      'In NestJS, @nestjs/swagger 12 spells a nullable schema by the version '
+          'of the document (the nullable keyword in 3.0, a null in the enum '
+          "or anyOf with {type: 'null'} in 3.1). Upgrade (12 needs Nest 12 "
+          'and Node 20.19+ or 22.12+, and is an ES module) and regenerate '
+          'the spec.',
     _ => null,
   };
 }

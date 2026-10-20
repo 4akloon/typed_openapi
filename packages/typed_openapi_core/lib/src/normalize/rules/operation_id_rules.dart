@@ -96,8 +96,8 @@ final class DuplicateOperationId extends NormalizerRule {
     .fastapi =>
       'In FastAPI, pass `generate_unique_id_function` to FastAPI(...).',
     .springdoc =>
-      'In springdoc, set @Operation(operationId = "...") explicitly; the '
-          'generated _1 suffixes are not stable.',
+      'In springdoc, set @Operation(operationId = "...") explicitly; springdoc '
+          'adds a _1 suffix to an operationId it finds twice.',
     _ => null,
   };
 }

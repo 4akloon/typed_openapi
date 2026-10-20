@@ -76,8 +76,8 @@ final class DiscriminatorPropertyRequired extends NormalizerRule {
   String? hint(DiagnosticCode code, Preset preset) => switch (preset) {
     .aspnet =>
       'In ASP.NET, the document requires the discriminator in the base '
-          'schema only and no setting changes that (dotnet/aspnetcore#60469, '
-          'open); add it to "required" of the derived schemas with a schema '
+          'schema only (dotnet/aspnetcore#60469, open), and we found no '
+          'setting that changes that; add it to "required" of the derived schemas with a schema '
           'transformer (Microsoft.AspNetCore.OpenApi: AddSchemaTransformer) '
           'or an ISchemaFilter (Swashbuckle), or accept this info.',
     _ => null,
