@@ -2,6 +2,7 @@ import '../diagnostics/json_pointer.dart';
 import '../model/operation.dart';
 import 'generation_field_reader.dart';
 import 'override_field_reader.dart';
+import 'override_keys.dart';
 import 'override_set.dart';
 import 'sse_override_reader.dart';
 
@@ -14,25 +15,6 @@ final class OperationOverrideReader {
   final OverrideFieldReader _fields;
   final GenerationFieldReader _generation;
 
-  static const _operationKeys = {
-    'reason',
-    'name',
-    'exclude',
-    'group',
-    'parameters',
-    'requestBody',
-    'responses',
-    'sse',
-  };
-  static const _parameterKeys = {
-    'reason',
-    'required',
-    'schema',
-    'name',
-    'dartType',
-  };
-  static const _contentKeys = {'reason', 'contentType', 'schema'};
-
   static final _methodAndPath = RegExp(r'^([A-Za-z]+) (/.*)$');
 
   /// The operation override [entry] at [at] under [key]; null, after a
@@ -42,7 +24,7 @@ final class OperationOverrideReader {
     Map<String, Object?> entry,
     JsonPointer at,
   ) {
-    _fields.checkKeys(entry, _operationKeys, at);
+    _fields.checkKeys(entry, OverrideKeys.operation, at);
     final address = _address(key, at);
     if (address == null) return null;
     final body = _fields.map(entry, 'requestBody', at);
@@ -98,7 +80,7 @@ final class OperationOverrideReader {
     Map<String, Object?> entry,
     JsonPointer at,
   ) {
-    _fields.checkKeys(entry, _parameterKeys, at);
+    _fields.checkKeys(entry, OverrideKeys.parameter, at);
     var name = key;
     ParameterLocation? placement;
     final colon = key.indexOf(':');
@@ -134,7 +116,7 @@ final class OperationOverrideReader {
   }
 
   BodyOverride _body(Map<String, Object?> entry, JsonPointer at) {
-    _fields.checkKeys(entry, _contentKeys, at);
+    _fields.checkKeys(entry, OverrideKeys.requestBody, at);
     return BodyOverride(
       key: 'requestBody',
       pointer: at,
@@ -148,7 +130,7 @@ final class OperationOverrideReader {
     Map<String, Object?> entry,
     JsonPointer at,
   ) {
-    _fields.checkKeys(entry, _contentKeys, at);
+    _fields.checkKeys(entry, OverrideKeys.response, at);
     return ResponseOverride(
       key: status,
       pointer: at,

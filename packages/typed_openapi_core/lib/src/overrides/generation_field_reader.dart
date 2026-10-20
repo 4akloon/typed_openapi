@@ -1,5 +1,6 @@
 import '../diagnostics/json_pointer.dart';
 import 'override_field_reader.dart';
+import 'override_keys.dart';
 import 'override_set.dart';
 
 /// Reads the generation fields several kinds of entry share (`union` and
@@ -9,8 +10,6 @@ final class GenerationFieldReader {
   const GenerationFieldReader(this._fields);
 
   final OverrideFieldReader _fields;
-
-  static const _dartTypeKeys = {'type', 'import', 'converter'};
 
   /// The `union` mode of [entry]; null when absent or invalid.
   UnionMode? unionMode(Map<String, Object?> entry, JsonPointer at) {
@@ -28,7 +27,7 @@ final class GenerationFieldReader {
     final value = _fields.map(entry, 'dartType', at);
     if (value == null) return null;
     final p = at.child('dartType');
-    _fields.checkKeys(value, _dartTypeKeys, p);
+    _fields.checkKeys(value, OverrideKeys.dartType, p);
     final type = _fields.string(value, 'type', p, required: true);
     final import = _fields.string(value, 'import', p, required: true);
     final converter = _fields.string(value, 'converter', p);

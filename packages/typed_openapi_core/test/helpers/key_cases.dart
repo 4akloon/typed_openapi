@@ -142,7 +142,15 @@ final class _Variants {
       case CodeLevelsKey() || RuleFlagsKey():
         yield _Variant.invalid(path, 'is text', 'text');
         yield _Variant.valid(path, 'is empty', <String, Object?>{});
-      case NullableKey() || OneOfKey() || FreeObjectKey() || AnyKey():
+      case NullableKey(:final inner):
+        yield _Variant.valid(path, 'is null', null);
+        yield* of(inner, example, spec, path);
+      case OneOfKey():
+        yield _Variant.invalid(path, 'is a number', 1);
+        yield _Variant.invalid(path, 'is a list', <Object?>[]);
+      case FreeObjectKey():
+        yield _Variant.invalid(path, 'is text', 'text');
+      case AnyKey():
         break;
     }
   }
