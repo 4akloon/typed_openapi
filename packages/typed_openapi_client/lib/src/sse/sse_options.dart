@@ -1,3 +1,7 @@
+import 'dart:math';
+
+import 'sse_cooldown.dart';
+
 /// How an event stream reconnects after its connection ends (R12.5): the
 /// `sse` field of `CallOptions`.
 ///
@@ -7,7 +11,10 @@
 /// `retry`, else [delay]; each further delay doubles up to [maxDelay] (a
 /// server `retry` longer than [maxDelay] is kept as it is). After
 /// [maxAttempts] attempts in a row without a message, the stream ends with
-/// `SseDisconnected`.
+/// `SseDisconnected`; a null [maxAttempts] never gives up. [jitter] spreads
+/// the delays and [cooldown] pauses for long after many failures. The server's
+/// `retry` replaces [delay] as the first delay and, while it is in effect,
+/// the delays are not spread; [cooldown] is not affected by it.
 final class SseOptions {
   /// Creates the options of one call.
   const SseOptions({
@@ -15,8 +22,11 @@ final class SseOptions {
     this.delay = const Duration(seconds: 1),
     this.maxDelay = const Duration(seconds: 30),
     this.maxAttempts = 5,
+    this.jitter = 0,
+    this.cooldown,
+    this.random,
     this.wait,
-  });
+  }) : assert(jitter >= 0 && jitter <= 1, 'jitter is a ratio from 0 to 1');
 
   /// Whether the stream reconnects; null keeps the operation's setting
   /// (see [SseReconnection]). `true` has no effect on an operation whose
@@ -28,15 +38,33 @@ final class SseOptions {
   /// The first delay when the server sent no `retry`.
   final Duration delay;
 
-  /// The longest delay a doubling reaches.
+  /// The longest delay a doubling reaches (before [jitter] is applied).
   final Duration maxDelay;
 
   /// How many attempts in a row may fail before the stream ends; a message
   /// on a new connection (an event, also one that does not decode or that
   /// the program drops) starts the count again. A connection that brings
   /// only comments, or blocks with just an `id:` or a `retry:` (they move
-  /// the last event id and the delay, but are no message), does not.
-  final int maxAttempts;
+  /// the last event id and the delay, but are no message), does not. Null
+  /// never gives up: the stream reconnects until the call is cancelled, the
+  /// listener cancels or the server answers with a status that is not a
+  /// stream.
+  final int? maxAttempts;
+
+  /// The share, from 0 to 1, by which each backoff delay is moved at random
+  /// either way: 0.2 gives 80% to 120% of the delay. 0 (the default) adds no
+  /// jitter. A delay that comes from the server's `retry` and a [cooldown]
+  /// are not spread.
+  final double jitter;
+
+  /// A long pause after many failed attempts in a row, or null for none.
+  /// The count of failed attempts then starts again, so [maxAttempts] counts
+  /// the attempts of one cycle.
+  final SseCooldown? cooldown;
+
+  /// The source of [jitter]; a fresh `Random()` per stream when null. Tests
+  /// pass a seeded one.
+  final Random? random;
 
   /// Waits [delay] before an attempt; a timer that a cancel stops
   /// (`CancellableWait`) when null. Tests pass a function that does not
@@ -44,7 +72,7 @@ final class SseOptions {
   final Future<void> Function(Duration delay)? wait;
 
   /// The delay before [attempt] (1 for the first), given the server's last
-  /// [retry].
+  /// [retry], without [jitter].
   Duration delayBefore(int attempt, Duration? retry) {
     final first = retry ?? delay;
     final cap = first > maxDelay ? first : maxDelay;
