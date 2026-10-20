@@ -1356,7 +1356,23 @@ like `test/helpers/pets_api.dart` (illustrative, not a contract);
   the count: a stream of ignored heartbeats is not given up), all in
   `SseOptions` with an injectable `wait` (the default is a
   `CancellableWait`, a timer a cancel stops, so a cancelled stream does not
-  keep the program alive). `SseReconnection` is the operation's policy:
+  keep the program alive). Opt-in resilience in `SseOptions` (defaults
+  unchanged): `idleTimeout` (`IdleTimeout` wraps the connection's bytes; any
+  chunk, comments included, resets it; expiry cancels the request and ends
+  the body with a `TransportException` of kind `timeout`, so it is the cause
+  of `SseReconnecting` or `SseDisconnected`; a paused listener stops the
+  timer), `handshakeTimeout` (`Handshake` in `client/`: a timeout of the
+  response headers of each attempt, which cancels the request and fails the
+  attempt), `maxAttempts: null`, `jitter` + `random` + `cooldown`
+  (`ReconnectionPlan` decides every attempt: no jitter while the server's
+  `retry` is in effect, never on the cooldown; the cooldown wait is attempt
+  `after + 1` and resets the count) and `onTrace` (`SseTrace`, sent by
+  `SseTracer`; connect, open, event and heartbeat come from `EventOpener` and
+  the decoder hooks `onMessage`/`onComment`, error, reconnecting and closed
+  from `TracedItems` over the finished stream; an `Exception` from the
+  callback is swallowed). Do not cancel a finished subscription again in a
+  stream transformer: under `fakeAsync` that future completes outside the
+  fake zone. `SseReconnection` is the operation's policy:
   `off` (a POST that does not enable it; the call cannot), `onRequest`
   (GET), `on`. Cancel, an error status (the `Failure` is the cause) and 204
   end the stream; a listener cancel also aborts a request that is in flight
