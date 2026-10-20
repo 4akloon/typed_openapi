@@ -109,11 +109,25 @@ void main() {
     expect(generation.numberType, 'int');
     expect(generation.defaultErrorSchema, 'Problem');
     expect(generation.streamReconnect, isTrue);
-    final reported = problems(bag);
-    expect(reported, hasLength(8));
-    for (final (message, _) in reported) {
-      expect(message, contains('The value from "defaults"'));
-    }
+    expect(
+      [
+        for (final (message, at) in problems(bag))
+          if (message.contains('The value from "defaults" (')) at,
+      ],
+      unorderedEquals([
+        for (final key in [
+          'group_by',
+          'tri_state',
+          'union',
+          'exhaustive',
+          'naming/stream_suffix',
+          'types/number',
+          'errors/default_schema',
+          'sse/reconnect',
+        ])
+          '#/clients/a/$key',
+      ]),
+    );
   });
 
   test('the message names a built-in that is not a plain word', () {
@@ -129,6 +143,84 @@ void main() {
       bag,
     );
     expect(clients.single.generation.include.tags.map((t) => t.value), ['a']);
+    expect(problems(bag), [
+      (
+        '"tags" must be a list of strings. '
+            'The value from "defaults" (tags: a) is used.',
+        '#/clients/a/include/tags',
+      ),
+    ]);
+  });
+
+  test('an invalid exclude filter without defaults leaves no filter', () {
+    final bag = DiagnosticBag();
+    final clients = load(
+      config('  {}', '    exclude: {paths: nope}'),
+      bag,
+    );
+    expect(clients.single.generation.exclude.paths, isEmpty);
+    expect(
+      problems(bag).single.$1,
+      endsWith('The default (no filter) is used.'),
+    );
+  });
+
+  test('an unknown key of a rejected filter is still reported', () {
+    final bag = DiagnosticBag();
+    load(config('  {}', '    include: {tags: nope, bogus: 1}'), bag);
+    expect(
+      bag.all.map((d) => d.pointer?.value),
+      containsAll(['#/clients/a/include/tags', '#/clients/a/include/bogus']),
+    );
+  });
+
+  test('naming settings fall back to defaults', () {
+    final bag = DiagnosticBag();
+    final clients = load(
+      config(
+        '  naming: {group: "{Tag}Service", default_group: Misc, '
+            'client: MyClient, operation_prefix: "^api_"}',
+        '    naming: {group: Nope, default_group: class, client: lower, '
+            'operation_prefix: "["}',
+      ),
+      bag,
+    );
+    final generation = clients.single.generation;
+    expect(generation.groupTemplate, '{Tag}Service');
+    expect(generation.defaultGroup, 'Misc');
+    expect(generation.clientClass, 'MyClient');
+    expect(generation.operationPrefix?.pattern, '^api_');
+    expect(
+      [for (final (_, at) in problems(bag)) at],
+      unorderedEquals([
+        for (final key in [
+          'group',
+          'default_group',
+          'client',
+          'operation_prefix',
+        ])
+          '#/clients/a/naming/$key',
+      ]),
+    );
+  });
+
+  test('errors and types messages show the applied value', () {
+    final bag = DiagnosticBag();
+    load(
+      config(
+        '  {}',
+        '    errors: {default_schema: ""}\n    types: {number: x}',
+      ),
+      bag,
+    );
+    expect(
+      problems(bag).map((p) => p.$1),
+      unorderedEquals([
+        '"default_schema" must be a non-empty string. '
+            'The default (none) is used.',
+        '"number" must be num, double or int. The default (num) is used.',
+      ]),
+    );
   });
 
   test('equal suffixes revert both to the defaults, as before', () {

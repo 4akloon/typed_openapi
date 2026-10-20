@@ -45,8 +45,8 @@ final class NamingSettingsReader {
     GenerationConfig.defaultDefaultGroup,
     (value) {
       switch (_identifierOf('default_group', value)) {
-        case InvalidValue<String>():
-          return _identifierOf('default_group', value);
+        case final InvalidValue<String> invalid:
+          return invalid;
         case ValidValue<String>(value: final name):
           if (!_isReserved(name)) return ValidValue(name);
           return InvalidValue(

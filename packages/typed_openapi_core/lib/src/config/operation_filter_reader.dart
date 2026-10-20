@@ -37,20 +37,39 @@ final class OperationFilterReader {
 
   /// The filter under [key]: `include` or `exclude`.
   OperationFilter read(String key) {
+    _checkUnknownKeys(key);
     final (:value, :at) = _sources.resolve<Map<String, Object?>>(
       key,
       builtIn: const {},
-      show: (_) => 'no filter',
+      show: _describe,
       report: _invalid,
       read: (value) => _mapping(key, value),
     );
     if (at == null) return const OperationFilter();
-    _checkKeys(value, _filterKeys, at);
     return OperationFilter(
       tags: _patterns(value, 'tags', at),
       operations: _patterns(value, 'operations', at),
       paths: _patterns(value, 'paths', at),
     );
+  }
+
+  /// Reports the unknown keys of every source's filter, also one that is
+  /// rejected for another reason.
+  void _checkUnknownKeys(String key) {
+    for (final (map, at) in _sources) {
+      if (map[key] case final Map<String, Object?> filter) {
+        _checkKeys(filter, _filterKeys, at.child(key));
+      }
+    }
+  }
+
+  String _describe(Map<String, Object?> filter) {
+    final parts = [
+      for (final MapEntry(:key, :value) in filter.entries)
+        if (value is List<Object?> && _filterKeys.contains(key))
+          '$key: ${value.join(', ')}',
+    ];
+    return parts.isEmpty ? 'no filter' : parts.join('; ');
   }
 
   ConfigReading<Map<String, Object?>> _mapping(String key, Object? value) {
