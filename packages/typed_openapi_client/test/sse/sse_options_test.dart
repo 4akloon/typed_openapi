@@ -131,4 +131,17 @@ void main() {
     const defaults = SseOptions(reconnect: true);
     expect(identical(defaults.merge(null), defaults), isTrue);
   });
+
+  test('a cooldown equal to none by value is none', () {
+    // Built at run time, so it is not the canonical const instance.
+    final after = [1].single;
+    final copy = SseCooldown(after: after, duration: Duration.zero);
+    expect(identical(copy, SseCooldown.none), isFalse);
+    expect(copy.isNone, isTrue);
+    expect(copy.hashCode, SseCooldown.none.hashCode);
+    expect(
+      const SseCooldown(after: 2, duration: Duration.zero).isNone,
+      isFalse,
+    );
+  });
 }

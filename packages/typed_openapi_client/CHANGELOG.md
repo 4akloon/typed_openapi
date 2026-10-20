@@ -16,6 +16,12 @@
   `onTrace` can tell the streams apart.
 
 ### Changed
+- Default headers sit under the operation's headers, the call's over them: a
+  default `Accept` no longer replaces `text/event-stream`, and a default header
+  does not beat the header argument of a method.
+- `Retry-After` is cut to 24 hours.
+- An `Exception` thrown by `SseOptions.wait` now ends the stream with
+  `SseDisconnected` (an `Error` is still the stream's error).
 - Every `SseOptions` field is nullable, `null` meaning unset; the built-in
   values apply after the merge. `maxAttempts: null` still means never give
   up, and leaving the argument out means unset.

@@ -43,7 +43,11 @@ final class ClientSender {
     this.transport, {
     this.defaults = const CallOptions(),
     String Function()? boundary,
-  }) : _builder = RequestBuilder(BodyEncoder(boundary ?? _randomBoundary));
+  }) : _builder = RequestBuilder(
+         BodyEncoder(boundary ?? _randomBoundary),
+         defaultHeaders: defaults.headers,
+       ),
+       _options = defaults.withoutHeaders();
 
   /// The transport every request goes through.
   final ClientTransport transport;
@@ -54,6 +58,10 @@ final class ClientSender {
 
   final RequestBuilder _builder;
 
+  // The defaults but their headers, which the builder layers under the
+  // operation's; merging a call into this keeps the call's headers alone.
+  final CallOptions _options;
+
   static const _results = ClientResults();
 
   /// Sends [request] and decodes the response of any status with [decode].
@@ -62,7 +70,7 @@ final class ClientSender {
     Result<T, E> Function(RawResponse response) decode, {
     CallOptions? call,
   }) async {
-    final merged = defaults.merge(call);
+    final merged = _options.merge(call);
     final sent = _builder.build(request, merged);
     if (merged.cancel case final cancel? when cancel.isCancelled) {
       return _results.cancelledBefore(cancel);
@@ -124,7 +132,7 @@ final class ClientSender {
       request,
       decodeEvent,
       decodeError,
-      call: defaults.merge(call),
+      call: _options.merge(call),
       reconnection: reconnection,
     );
   }

@@ -8,13 +8,27 @@ final class RetryAfter {
   /// Longest delta-seconds text read, so a [Duration] never overflows.
   static const _maxDigits = 9;
 
-  /// The wait [value] asks for, or null when it is unparsable, zero or in
-  /// the past.
+  /// The longest wait a `Retry-After` can ask for. A browser fires a timer
+  /// above 2^31-1 ms (about 24.8 days) at once, so a larger delay is cut
+  /// here instead of being read as no delay at all.
+  static const maxWait = Duration(hours: 24);
+
+  /// The wait [value] asks for, at most [maxWait], or null when it is
+  /// unparsable, zero or in the past.
   ///
   /// [value] is delta-seconds or an HTTP date. A date is measured against
   /// [responseDate] (the response's `Date` header, which avoids clock skew)
   /// when that parses, else against [now].
   static Duration? parse(
+    String value, {
+    required DateTime now,
+    String? responseDate,
+  }) {
+    final wait = _parse(value, now: now, responseDate: responseDate);
+    return wait != null && wait > maxWait ? maxWait : wait;
+  }
+
+  static Duration? _parse(
     String value, {
     required DateTime now,
     String? responseDate,
@@ -31,8 +45,8 @@ final class RetryAfter {
             ? null
             : HttpDate.parse(responseDate, now: now)) ??
         now;
-    final wait = target.difference(from);
-    return wait > Duration.zero ? wait : null;
+    final until = target.difference(from);
+    return until > Duration.zero ? until : null;
   }
 
   /// The wait [failure] asks for in its `retry-after` header, or null when

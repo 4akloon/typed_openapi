@@ -20,8 +20,19 @@ void main() {
     });
   }
 
-  test('nine digits are the longest delta', () {
-    expect(parse('999999999'), const Duration(seconds: 999999999));
+  test('nine digits are the longest delta, cut to 24 hours', () {
+    expect(parse('999999999'), RetryAfter.maxWait);
+    expect(RetryAfter.maxWait, const Duration(hours: 24));
+  });
+
+  test('a delta of exactly 24 hours is kept, one second more is cut', () {
+    expect(parse('86400'), const Duration(hours: 24));
+    expect(parse('86401'), const Duration(hours: 24));
+    expect(parse('86399'), const Duration(seconds: 86399));
+  });
+
+  test('a date in the year 9999 is cut to 24 hours', () {
+    expect(parse('Fri, 31 Dec 9999 23:59:59 GMT'), RetryAfter.maxWait);
   });
 
   test('a date after the response date is the difference', () {

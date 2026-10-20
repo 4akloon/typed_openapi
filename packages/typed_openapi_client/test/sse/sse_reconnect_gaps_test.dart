@@ -140,6 +140,27 @@ void main() {
   });
 
   group('a wait that throws', () {
+    test('an Exception at once ends the stream with SseDisconnected', () async {
+      final stream = await open(
+        _adapter([(_) => _stream('data: a\n\n')]),
+        SseOptions(
+          reconnect: true,
+          wait: (_) => throw const FormatException('at once'),
+        ),
+      );
+      final errors = <Object>[];
+      final items = await stream.handleError(errors.add).toList();
+      expect(items.take(2).map(describe), [
+        'event a',
+        'reconnecting 1 after 1000ms',
+      ]);
+      expect(errors, isEmpty);
+      expect(
+        (items.last as SseDisconnected<String>).cause,
+        isA<FormatException>(),
+      );
+    });
+
     test('at once ends the stream with that error', () async {
       final stream = await open(
         _adapter([(_) => _stream('data: a\n\n')]),

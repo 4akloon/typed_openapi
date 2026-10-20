@@ -273,7 +273,9 @@ The stream **ends** with `SseDisconnected` when:
 
   That is six requests: the first and five reconnections.
 
-An exception or `Error` thrown on an attempt, by a `wait` or an interceptor,
+An `Exception` thrown by `SseOptions.wait` ends the stream with a last
+`SseDisconnected` whose `cause` is that exception, as it ends an opening. An
+`Error` thrown on an attempt, by a `wait`, the transport or an interceptor,
 is the stream's one error, never the zone's.
 
 ### Long-lived streams
@@ -415,10 +417,18 @@ final result = await client.customerEvents.inboxUnreadCount(call: CallOptions(ca
 A value the call sets wins; a value it leaves unset falls back to the
 default. `CallOptions.merge` and `SseOptions.merge` do this.
 
+A default `cancel` is scoped to the client's lifetime. Each call and stream
+adds a listener to the signal that stays until the signal fires, and once it
+has fired every later call of that client returns `Cancelled`, because a
+signal stays cancelled. Build a new client with a new signal after that. Use
+it for a session-scoped client that is thrown away on logout (the signal
+fires, the client goes), not for a client that lives as long as the app and
+makes unbounded calls: pass `call.cancel` there.
+
 | Field | Merge |
 | --- | --- |
-| `cancel` | `call.cancel ?? defaults.cancel`. A default signal cancels every call that brings no signal of its own (a logout); it is not combined with the call's |
-| `headers` | Union. The call wins per name, case-insensitively, and keeps its spelling. A `null` value in the call removes a default header |
+| `cancel` | `call.cancel ?? defaults.cancel`. A default signal cancels every call that brings no signal of its own; it is not combined with the call's. See the note below |
+| `headers` | Three layers, lowest to highest: the default headers, the operation's own headers (its header parameters, `Accept`, `Content-Type`, `Content-Length`, `Last-Event-ID`), the call's headers. So a default `Accept` never replaces `text/event-stream`, and a default `X-Tenant` does not beat the header argument of a method. Names compare case-insensitively and the call keeps its spelling. A `null` value in the call removes a default header. A default `Last-Event-ID` is ignored on an event stream |
 | `extra` | Union. The call wins per key; a `null` is a value |
 | `onSendProgress`, `onReceiveProgress` | `call ?? defaults` |
 | `sse` | `SseOptions.merge`, field by field: a field the call leaves `null` takes the default's |
@@ -472,7 +482,9 @@ together with the reconnections of that call.
 For each failed attempt the trace is `connect`, `open` (when a status
 arrived), `error`, `reconnecting`. On a final failure or when the attempts
 are used up it is `error`, then `closed`. A cancel during the backoff gives
-`error`, `reconnecting`, `error` (the cancel), `closed`.
+`error`, `reconnecting`, `error` (the cancel), `closed`. A `wait` that throws
+an `Exception` gives `error`, `reconnecting`, `closed`: the failure it was
+waiting after is traced once.
 
 ### Which failures are retried
 
@@ -509,7 +521,9 @@ On a failure that is retried (the classifier, or `retryWhen`, accepts it)
 and carries `Retry-After` (delta-seconds or an HTTP date in IMF-fixdate,
 RFC 850 or asctime form) the delay of that attempt is the larger of the header and the backoff delay, jitter included. A date is
 measured against the response's `Date` header, else the clock. `maxDelay`
-does not cap it, and it does not stick to later attempts. A value that
+does not cap it, but a delay above 24 hours is cut to 24 hours (a browser
+fires a timer above 2^31-1 ms at once), and it does not stick to later
+attempts. A value that
 cannot be parsed, or that is zero or past, falls back to the backoff.
 
 ## Cancel and pause

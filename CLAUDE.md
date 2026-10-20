@@ -1333,9 +1333,15 @@ like `test/helpers/pets_api.dart` (illustrative, not a contract);
   `ClientSender(transport, {defaults})` merges the defaults with each call
   once, at the top of `send` and `openEvents` (`CallOptions.merge`: the
   call's value wins; `cancel` and the progress callbacks `call ?? defaults`;
-  `headers` a union, case-insensitive, a `null` call value removes a default;
   `extra` a union; `sse` through `SseOptions.merge`), so every later stage
-  reads the merged value. Every `SseOptions` field is nullable (unset);
+  reads the merged value. The default headers are not merged into the
+  call's: the sender merges its defaults without headers
+  (`CallOptions.withoutHeaders`) and `RequestBuilder(defaultHeaders:)` layers
+  them, lowest to highest, default headers, the operation's (`Accept`, header
+  parameters, `Last-Event-ID`), the call's (case-insensitive; a `null` call
+  value removes a default; a default `Last-Event-ID` is ignored on a
+  stream). A default `cancel` lives as long as the client: every call adds a
+  listener to it and, once it fires, every later call is `Cancelled`. Every `SseOptions` field is nullable (unset);
   `SseSettings` (internal) applies the built-in values after the merge, and
   `maxAttempts` keeps an explicit `null` as "never give up" apart from an
   omitted argument (a private flag). The opening of an event stream goes
@@ -1349,7 +1355,8 @@ like `test/helpers/pets_api.dart` (illustrative, not a contract);
   retried or reconnected. `RetryAfter` (`sse/`, web-safe, with its own
   `HttpDate` in `sse/http_date.dart`, not `dart:io`'s)
   reads delta-seconds or an HTTP date against the response `Date`; the
-  delay is `max(Retry-After, backoff)`, uncapped, for that attempt only.
+  delay is `max(Retry-After, backoff)` for that attempt only, not capped by
+  `maxDelay` but by `RetryAfter.maxWait` (24 hours).
   `SseTrace.operation` names the stream's `OperationInfo`.
   `EventOpener` opens event streams: `openEvents` needs its stream
   listened to or cancelled; a listener cancel cancels the request. An
@@ -1403,9 +1410,10 @@ like `test/helpers/pets_api.dart` (illustrative, not a contract);
   and 204 end the stream (a transient status, `SseRetry`/`retryWhen`, is
   retried); a listener cancel also aborts a request that is in flight
   (`SseReconnector.onCancel`); a pause of the listener, also during a wait
-  or a reopen, holds the next connection; an exception or `Error` thrown on
-  an attempt, by a `wait` or the transport, is the stream's one error,
-  never the zone's. An event id that is not printable ASCII, space or tab is
+  or a reopen, holds the next connection; an `Exception` thrown by a `wait`
+  ends the stream with `SseDisconnected` (as it ends an opening), and an
+  `Error` thrown on an attempt, by a `wait` or the transport, is the
+  stream's one error, never the zone's. An event id that is not printable ASCII, space or tab is
   not sent as `Last-Event-ID`, on the web too (a browser would send UTF-8,
   but the VM's `HttpClient` rejects it and every reconnection would fail),
   and the reconnection goes on without it. Use `transformer.bind(stream)`,

@@ -16,11 +16,20 @@ final class SseCooldown {
   );
 
   /// Whether this is [none].
-  bool get isNone => identical(this, none);
+  bool get isNone => this == none;
 
   /// How many failed attempts in a row start the cooldown.
   final int after;
 
   /// How long the cooldown lasts.
   final Duration duration;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SseCooldown &&
+      other.after == after &&
+      other.duration == duration;
+
+  @override
+  int get hashCode => Object.hash(after, duration);
 }

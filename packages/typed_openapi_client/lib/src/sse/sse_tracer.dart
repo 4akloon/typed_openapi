@@ -76,7 +76,17 @@ final class SseTracer {
   /// A failed attempt or the end of a call: a [TransportError] or
   /// [Cancelled] traces its exception and stack trace, any other failure
   /// itself.
-  void failed(Failure<Object?, Object?> failure) => switch (failure) {
+  void failed(Failure<Object?, Object?> failure) {
+    // One trace per failure: an opening that ends on the failure it already
+    // traced before a wait must not trace it again as the end of the call.
+    if (identical(failure, _lastFailed)) return;
+    _lastFailed = failure;
+    _traceFailure(failure);
+  }
+
+  Failure<Object?, Object?>? _lastFailed;
+
+  void _traceFailure(Failure<Object?, Object?> failure) => switch (failure) {
     TransportError(:final exception, :final stackTrace) => error(
       exception,
       stackTrace,

@@ -26,6 +26,14 @@ final class CallOptions {
 
   /// Cancels the call; the operation then returns `Cancelled`, and an event
   /// stream ends with `SseDisconnected`.
+  ///
+  /// As a client's default (`ClientSender.defaults`) the signal is scoped to
+  /// the client's lifetime: each call and stream adds a listener to it that
+  /// stays until the signal fires, and once it has fired every later call
+  /// of the client returns `Cancelled`, since a signal stays cancelled.
+  /// Build a new client with a new signal after that. Use it for a
+  /// session-scoped client that is thrown away on logout, not for a client
+  /// that lives as long as the app and makes unbounded calls.
   final CancelSignal? cancel;
 
   /// Headers added to the request; they win over the headers the operation
@@ -62,9 +70,12 @@ final class CallOptions {
   /// call wins field by field, and a null [call] gives these options.
   ///
   /// - [cancel]: the call's signal, else the default's; they are never
-  ///   combined.
+  ///   combined. A default signal is scoped to the client's lifetime (see
+  ///   [cancel]): once it fires, every later call returns `Cancelled`.
   /// - [headers]: the union; the call wins per name, case-insensitively,
-  ///   and keeps its own spelling. A `null` value in the call removes the
+  ///   and keeps its own spelling. (`ClientSender` does not send this union:
+  ///   it puts the default headers under the operation's and the call's
+  ///   over them.) A `null` value in the call removes the
   ///   default header and stays in the map as written.
   /// - [extra]: the union; the call wins per key and a `null` is a value.
   /// - [onSendProgress] and [onReceiveProgress]: the call's, else the
@@ -84,6 +95,16 @@ final class CallOptions {
       },
     );
   }
+
+  /// These options without their [headers]: what a client merges its call
+  /// into when it sends the default headers under the operation's.
+  CallOptions withoutHeaders() => CallOptions(
+    cancel: cancel,
+    extra: extra,
+    onSendProgress: onSendProgress,
+    onReceiveProgress: onReceiveProgress,
+    sse: sse,
+  );
 
   static Map<String, Object?> _mergeHeaders(
     Map<String, Object?> defaults,

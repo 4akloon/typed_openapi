@@ -179,7 +179,12 @@ final class _Reconnection<T> {
     _out.add(
       SseReconnecting(attempt, delay, cause: cause, stackTrace: stackTrace),
     );
-    await _wait(delay);
+    try {
+      await _wait(delay);
+    } on Exception catch (e, trace) {
+      // An injected `wait` that fails ends the stream, as in the opening.
+      return _end(_disconnected(e, trace));
+    }
     if (_closed) return;
     if (_cancel case final cancel?) {
       return _end(_disconnected(cancel, cancel.stackTrace));

@@ -142,12 +142,12 @@ void main() {
         ),
         onTrace: (t) => traces.add(describe(t)),
       );
+      // The failure that ends the opening was traced before the wait.
       expect(traces, [
         'connect 1',
         'open 503',
         'error',
         'reconnecting 1 1s',
-        'error',
         'closed',
       ]);
     });

@@ -8,15 +8,26 @@ import 'progress_counter.dart';
 
 /// Builds the [TransportRequest] of an [OperationRequest]: the target, the
 /// headers in order and the body bytes. It sets `Accept`, the operation's
-/// headers, `Content-Type` and `Content-Length`, and nothing else.
+/// headers, `Content-Type` and `Content-Length`, and nothing else besides
+/// the client's default headers and the call's own.
+///
+/// A header is set by the first of these that has it, from the last to the
+/// first: the call's headers, the operation's (and the stream's
+/// `Last-Event-ID`), the client's [defaultHeaders].
 final class RequestBuilder {
-  /// Creates the builder, which encodes bodies with [encoder].
-  const RequestBuilder(this.encoder);
+  /// Creates the builder, which encodes bodies with [encoder] and sends
+  /// [defaultHeaders] when neither the operation nor the call sets them.
+  const RequestBuilder(this.encoder, {this.defaultHeaders = const {}});
 
   /// Encodes request bodies.
   final BodyEncoder encoder;
 
-  /// The request of [request] with [call]: for an event stream ([events])
+  /// The headers of the client's defaults (`CallOptions.headers`), under
+  /// the operation's. A call that gives a name a `null` removes it here.
+  final Map<String, Object?> defaultHeaders;
+
+  /// The request of [request] with [call], whose headers are the call's own
+  /// (not merged with the defaults'): for an event stream ([events])
   /// with `Accept: text/event-stream` and, when it is not empty and a valid
   /// header value, [lastEventId] as `Last-Event-ID`. [cancel] wins over the
   /// call's signal.
@@ -49,9 +60,10 @@ final class RequestBuilder {
     );
   }
 
-  /// The headers of [request]: `Accept`, the operation's, the call's, the
-  /// stream's `Last-Event-ID`, then the body's type and length.
-  static Map<String, List<String>> _headers(
+  /// The headers of [request]: `Accept`, the operation's, the defaults'
+  /// that these leave unset, the call's, the stream's `Last-Event-ID`, then
+  /// the body's type and length.
+  Map<String, List<String>> _headers(
     OperationRequest request,
     CallOptions? call,
     EncodedBody? body,
@@ -62,6 +74,16 @@ final class RequestBuilder {
       ..add('Accept', events ? 'text/event-stream' : request.accept);
     for (final MapEntry(:key, :value) in request.resolveHeaders().entries) {
       headers.add(key, value);
+    }
+    final callNames = {
+      for (final name in call?.headers.keys ?? const <String>[])
+        name.toLowerCase(),
+    };
+    for (final MapEntry(:key, :value) in defaultHeaders.entries) {
+      final isReplaced =
+          callNames.contains(key.toLowerCase()) ||
+          (events && _isLastEventId(key));
+      if (!isReplaced) headers.addIfAbsent(key, value);
     }
     for (final MapEntry(:key, :value) in call?.headers.entries ?? const []) {
       // The stream's last event id replaces the user's `Last-Event-ID`.
@@ -120,6 +142,11 @@ final class _HeaderList {
     if (values == null) return;
     final key = name.toLowerCase();
     _byName[key] = (_byName[key]?.$1 ?? name, values);
+  }
+
+  /// Sets [name] like [add] unless a value is there already.
+  void addIfAbsent(String name, Object? value) {
+    if (!_byName.containsKey(name.toLowerCase())) add(name, value);
   }
 
   /// Removes [name] in any case.

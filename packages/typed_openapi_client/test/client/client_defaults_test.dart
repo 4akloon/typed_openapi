@@ -232,6 +232,32 @@ void main() {
     });
   });
 
+  test('a default cancel fired during the opening backoff completes the '
+      'Future with Cancelled and leaves no wait pending', () {
+    fakeAsync((async) {
+      final signal = CancelSignal();
+      final failing = ScriptedConnection.open(status: 503);
+      final transport = ScriptedTransport([failing]);
+      Result<Stream<SseItem<String>>, Never>? result;
+      openStream(
+        transport,
+        CallOptions(
+          cancel: signal,
+          sse: const SseOptions(reconnect: true),
+        ),
+      ).then((r) => result = r);
+      async.flushMicrotasks();
+      failing.body.close();
+      async.flushMicrotasks();
+      expect(result, isNull);
+      expect(async.pendingTimers, isNotEmpty);
+      signal.cancel();
+      async.flushMicrotasks();
+      expect(result, isA<Cancelled<Stream<SseItem<String>>, Never>>());
+      expect(async.pendingTimers, isEmpty);
+    });
+  });
+
   test('ClientSender without defaults sends as before', () async {
     final transport = FakeTransport.json(200, 'x');
     final result = await ClientSender(transport).send<String, Never>(
