@@ -1,12 +1,8 @@
-import 'dart:convert';
-import 'dart:io';
-
-import 'package:crypto/crypto.dart';
-
 import 'package:typed_openapi_core/typed_openapi_core.dart';
 import '../emit/api_library.dart';
 import '../generate/output_writer.dart';
 import 'api_lock_run.dart';
+import 'generation_inputs.dart';
 
 /// Writes each client a `generate` run checked into its output directory
 /// and says in one line what became of it.
@@ -47,7 +43,8 @@ final class ClientWriter {
   String write(ClientCheck check) {
     final client = check.client;
     final ir = check.ir;
-    if (ir == null || check.errors > 0) {
+    final irJson = check.irJson;
+    if (ir == null || irJson == null || check.errors > 0) {
       return 'Skipped ${client.name}: its check reports errors; fix them and '
           'run generate again.';
     }
@@ -64,7 +61,7 @@ final class ClientWriter {
     final changes = _writer.write(
       client,
       files,
-      inputs: _inputsOf(check),
+      inputs: GenerationInputs.of(client, ir, irJson),
       protected: protected,
       force: force,
       breakLock: breakLock,
@@ -82,36 +79,4 @@ final class ClientWriter {
   /// The files of the whole client [client] with the IR [ir].
   static Map<String, String> _files(ClientConfig client, ClientIr ir) =>
       ApiLibrary(width: client.lineWidth).files(ir, client: client.name);
-
-  /// The hash of what the code of [check]'s client is generated from: the
-  /// content of every file the run read, the client's settings that change
-  /// the code, and the generator. The same inputs give the same hash on
-  /// any machine: paths are not part of it. `typed_openapi.lock` also
-  /// decides names (M12) but is not in the hash: it is not an input of the
-  /// spec, and a rename it causes shows in the files' hashes.
-  static String _inputsOf(ClientCheck check) {
-    final client = check.client;
-    String hashOf(String path) {
-      try {
-        return sha256.convert(File(path).readAsBytesSync()).toString();
-      } on FileSystemException {
-        return 'unreadable';
-      }
-    }
-
-    return sha256
-        .convert(
-          utf8.encode(
-            jsonEncode({
-              'generator': OutputWriter.generator,
-              'files': [for (final path in check.sources) hashOf(path)],
-              'generation': client.generation.key,
-              'line_width': client.lineWidth,
-              'preset': client.preset?.name,
-              'rules': client.disabledRules.toList()..sort(),
-            }),
-          ),
-        )
-        .toString();
-  }
 }

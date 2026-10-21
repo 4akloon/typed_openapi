@@ -137,7 +137,7 @@ void main() {
     const client = '  pets: {input: specs/pets.yaml, output: gen/pets}\n';
     await generate(client);
     final before = tree('gen/pets')['.typed_openapi.json'];
-    dir.write('specs/pets.yaml', '$_spec\n# a comment\n');
+    dir.write('specs/pets.yaml', _spec.replaceAll('b]', 'b, c]'));
     await generate(client);
     expect(tree('gen/pets')['.typed_openapi.json'], isNot(before));
   });
