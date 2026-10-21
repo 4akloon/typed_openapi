@@ -913,7 +913,10 @@ Engine folders under `packages/typed_openapi_core/lib/src/`, generator folders
   bag) plus the nodes only they use, found by incoming `$ref`s, `discriminator`
   mappings (bare names also in the root document), `allOf` subtypes of a
   discriminated base at any depth or through aliases (`RefEdges`,
-  `SubtypeEdges`) and the `errors.default_schema`, a use from nowhere
+  `SubtypeEdges`), and as uses from a synthetic source outside every
+  document the `errors.default_schema`, each generated operation and the
+  `parameters` and `servers` of its path item, so a `$ref` from a dropped
+  operation into generated code keeps its level
   (`OutsideRegion`: candidates and dropped operations lose their place while
   a node outside the region refers to them, to a fixpoint; a node below a
   dropped operation that is referred to becomes a hole). It
