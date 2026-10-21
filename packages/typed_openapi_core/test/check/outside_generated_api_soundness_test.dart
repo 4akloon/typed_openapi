@@ -185,4 +185,81 @@ paths:
     );
     _expectBlocks(run);
   });
+
+  group('a left out operation that refers into a generated one', () {
+    const badSchema =
+        r"{type: object, properties: {bad: {$ref: '#/components/schemas/'}}}";
+    String paths(String generated, String excluded) =>
+        '  /gen:\n$generated  /ex:\n$excluded';
+
+    void expectKept(String spec) => _expectBlocks(OutsideApiRun(spec, _gen));
+
+    test('to its response', () {
+      expectKept(
+        _spec(
+          paths(
+            '    get:\n      operationId: gen\n      responses:\n'
+                "        '200':\n          description: ok\n"
+                '          content: {application/json: {schema: $badSchema}}\n',
+            '    get:\n      operationId: ex\n      responses:\n'
+                r"        '200': {$ref: '#/paths/~1gen/get/responses/200'}"
+                '\n',
+          ),
+          '',
+        ),
+      );
+    });
+
+    test('to a parameter of its path item', () {
+      expectKept(
+        _spec(
+          paths(
+            '    parameters: [{name: q, in: query, schema: $badSchema}]\n'
+                '    get:\n      operationId: gen\n'
+                "      responses: {'204': {description: ok}}\n",
+            '    get:\n      operationId: ex\n'
+                r"      parameters: [{$ref: '#/paths/~1gen/parameters/0'}]"
+                "\n      responses: {'204': {description: ok}}\n",
+          ),
+          '',
+        ),
+      );
+    });
+
+    test('to its path item, from a callback', () {
+      expectKept(
+        _spec(
+          paths(
+            '    post:\n      operationId: gen\n'
+                '      requestBody: {content: {application/json: '
+                '{schema: $badSchema}}}\n'
+                "      responses: {'204': {description: ok}}\n",
+            '    post:\n      operationId: ex\n      callbacks:\n'
+                '        cb:\n'
+                r"          '{$request.body#/u}': {$ref: '#/paths/~1gen'}"
+                "\n      responses: {'204': {description: ok}}\n",
+          ),
+          '',
+        ),
+      );
+    });
+
+    test('to the whole document', () {
+      expectKept(
+        _spec(
+          paths(
+            '    post:\n      operationId: gen\n'
+                '      requestBody: {content: {application/json: '
+                '{schema: $badSchema}}}\n'
+                "      responses: {'204': {description: ok}}\n",
+            '    get:\n      operationId: ex\n      responses:\n'
+                "        '200': {description: ok, content: "
+                r"{application/json: {schema: {$ref: '#'}}}}"
+                '\n',
+          ),
+          '',
+        ),
+      );
+    });
+  });
 }

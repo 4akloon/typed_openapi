@@ -30,13 +30,14 @@ final class OutsideGeneratedApi {
   /// [diagnostics] with the findings outside the generated API lowered, and
   /// the note TOA811 when there were any.
   List<Diagnostic> apply(List<Diagnostic> diagnostics) {
-    final dropped = _dropped();
+    final (dropped, generated) = _operations();
     if (dropped.isEmpty) return diagnostics;
     final region = OutsideRegion(
       dropped,
       RefEdges(
         _spec.documents,
         _client.generation.defaultErrorSchema,
+        generated,
       ).collect(),
     );
     final uris = {
@@ -72,19 +73,28 @@ final class OutsideGeneratedApi {
   }
 
   /// The locations of the operations the client's filters and overrides
-  /// leave out, and that no generated operation shares.
-  List<SpecLocation> _dropped() {
+  /// leave out and that no generated operation shares, and the nodes the
+  /// generated operations use: themselves, and the parameters and servers of
+  /// their path items.
+  (List<SpecLocation>, List<SpecLocation>) _operations() {
     final context = IrContext(DiagnosticBag(), _spec, _client, names: _names);
     final (all, _) = SpecOperations.of(context);
-    final selected = {
-      for (final entry in OperationSelector(context).select(all))
-        entry.operation.location,
-    };
-    return [
-      for (final entry in all)
-        if (!selected.contains(entry.operation.location))
+    final chosen = OperationSelector(context).select(all);
+    final selected = {for (final entry in chosen) entry.operation.location};
+    return (
+      [
+        for (final entry in all)
+          if (!selected.contains(entry.operation.location))
+            entry.operation.location,
+      ],
+      [
+        for (final entry in chosen) ...[
           entry.operation.location,
-    ];
+          entry.item.location.child('parameters'),
+          entry.item.location.child('servers'),
+        ],
+      ],
+    );
   }
 
   List<Diagnostic> _note(int count) {

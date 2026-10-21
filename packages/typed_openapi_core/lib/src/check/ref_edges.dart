@@ -16,11 +16,24 @@ import 'subtype_edges.dart';
 /// shows: it is a use from outside every operation.
 final class RefEdges {
   /// Creates a finder over [_documents]; [_defaultErrorSchema] is the key the
-  /// config names in `errors.default_schema`.
-  const RefEdges(this._documents, [this._defaultErrorSchema]);
+  /// config names in `errors.default_schema`, and [_generated] are the nodes
+  /// of the generated operations, which use their whole subtree.
+  const RefEdges(
+    this._documents,
+    this._defaultErrorSchema, [
+    this._generated = const [],
+  ]);
+
+  /// The source of the uses that come from no place of a spec: the code
+  /// generated for an operation or read by name.
+  static final SpecLocation outside = SpecLocation(
+    Uri.parse('typed-openapi:outside'),
+    JsonPointer.root,
+  );
 
   final SpecDocuments _documents;
   final String? _defaultErrorSchema;
+  final List<SpecLocation> _generated;
 
   /// Every reference of the loaded documents.
   List<RefEdge> collect() {
@@ -50,10 +63,8 @@ final class RefEdges {
       ...edges,
       ...subtypes.edges(),
       if (name != null)
-        RefEdge(
-          SpecLocation(root, JsonPointer.root),
-          SpecLocation(root, _schemaPointer(name)),
-        ),
+        RefEdge(outside, SpecLocation(root, _schemaPointer(name))),
+      for (final node in _generated) RefEdge(outside, node),
     ];
   }
 
