@@ -53,13 +53,38 @@ void main() {
   });
 
   test('the order of the operations changes no name', () {
-    final swapped = _spec()
-        .replaceFirst('    post:', '    put:')
-        .replaceFirst('    get:', '    post:')
-        .replaceFirst('    put:', '    get:');
-    final names = _names(IrFixture(swapped).build());
-    expect(names[_bodySite], 'NewPetType');
-    expect(names.values.where((n) => n.endsWith('Type')), hasLength(2));
+    final spec = _spec();
+    final get = spec.indexOf('    get:');
+    final post = spec.indexOf('    post:');
+    final end = spec.indexOf('components:');
+    final swapped =
+        spec.substring(0, get) +
+        spec.substring(post, end) +
+        spec.substring(get, post) +
+        spec.substring(end);
+    expect(swapped.indexOf('createPet'), lessThan(swapped.indexOf('listPets')));
+    expect(_names(IrFixture(swapped).build()), _names(IrFixture(spec).build()));
+  });
+
+  test('an anyOf of two equal enums collapses to one enum of its site', () {
+    final fixture = IrFixture('''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        kind:
+          anyOf:
+            - {type: string, enum: [a, b]}
+            - {type: string, enum: [a, b]}
+''');
+    final (ir, _) = mapComponents(fixture, ['Pet']);
+    expect(
+      [for (final d in ir.declarations) (d.name, d.runtimeType)],
+      [('Pet', ModelDecl), ('PetKind', EnumDecl)],
+    );
   });
 
   test('another value in one copy leaves the other copy as it was', () {
@@ -120,38 +145,73 @@ components:
   });
 
   group('a lock written when the sites shared one enum', () {
-    // The old run kept both sites as the enum of the body property.
+    // Taken from a run of the generator before 0.3.1 over `_spec()`: the
+    // operations are built first, so the query parameter owned the enum and
+    // the body property was typed with it.
+    const oldLock = r'''
+{
+  "version": 1,
+  "clients": {
+    "c": {
+      "#/components/schemas/NewPet": {
+        "name": "NewPet",
+        "kind": "model",
+        "members": {
+          "type": {"name":"type","kind":"field","facts":{"json":"type","required":"false","type":"ListPetsType?"}}
+        }
+      },
+      "#/paths/~1pets/get/parameters/0/schema": {
+        "name": "ListPetsType",
+        "kind": "enumeration",
+        "facts": {"kind":"string","known":"ListPetsTypeKnown","unknown":"ListPetsTypeUnknown"},
+        "members": {
+          "\"cat\"": {"name":"cat","kind":"value"},
+          "\"dog\"": {"name":"dog","kind":"value"}
+        }
+      },
+      "group:": {
+        "name": "DefaultApi",
+        "kind": "group",
+        "members": {
+          "createPet": {"name":"createPet","kind":"method","facts":{"method":"POST","path":"/pets","responses":"200","returns":"Result<void, Never>"}},
+          "createPet/body": {"name":"body","kind":"body","owner":"createPet","facts":{"kind":"json","media":"application/json","required":"false","type":"NewPet"}},
+          "listPets": {"name":"listPets","kind":"method","facts":{"method":"GET","path":"/pets","responses":"200","returns":"Result<void, Never>"}},
+          "listPets/type": {"name":"type","kind":"parameter","owner":"listPets","facts":{"in":"query","required":"false","type":"ListPetsType?","wire":"type"}}
+        }
+      },
+      "root": {
+        "name": "ApiClient",
+        "kind": "root",
+        "members": {
+          "group:": {"name":"defaultApi","kind":"groupField","facts":{"type":"DefaultApi"}}
+        }
+      }
+    }
+  }
+}''';
+    final old = const SnapshotJson().decode(oldLock)['c']!;
     final fresh = snapshotOf(_spec());
-    final old = const SnapshotJson().decode(
-      const SnapshotJson()
-          .encode({'c': fresh})
-          .replaceAll('ListPetsType?', 'NewPetType?')
-          .replaceAll(
-            RegExp(
-              r'\n      "#/paths/~1pets/get/parameters/0/schema": \{.*?\n      \},',
-              dotAll: true,
-            ),
-            '',
-          ),
-    )['c']!;
 
     test('keeps the first owner name, names the other site afresh', () {
       final fixture = IrFixture(_spec());
       final root = fixture.context.model.document.location.document;
-      final lock = SnapshotNameLock.of(old, root);
-      final names = _names(fixture.build(names: lock));
-      expect(names[_bodySite], 'NewPetType');
+      final names = _names(
+        fixture.build(names: SnapshotNameLock.of(old, root)),
+      );
       expect(names[_querySite], 'ListPetsType');
+      expect(names[_bodySite], 'NewPetType');
       expect(fixture.reportedOf(DiagnosticCode.lockedNameTaken), isEmpty);
+      expect(fixture.reportedOf(DiagnosticCode.lockedNameKept), isEmpty);
+      expect(fixture.reportedOf(DiagnosticCode.lockedNameReleased), isEmpty);
     });
 
-    test('the diff says a type was added and members were retyped', () {
+    test('the diff says a type was added and a member retyped', () {
       final changes = const ApiDiff().compare(old, fresh);
       expect(
         [for (final c in changes) (c.category, c.type, c.member)],
         [
-          (ChangeCategory.breaking, 'group:', 'listPets/type'),
-          (ChangeCategory.additive, _querySite, null),
+          (ChangeCategory.breaking, '#/components/schemas/NewPet', 'type'),
+          (ChangeCategory.additive, _bodySite, null),
         ],
       );
     });
