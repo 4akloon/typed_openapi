@@ -215,7 +215,7 @@ A JSON Schema of the config, [`typed_openapi.schema.json`](../schema/typed_opena
 # yaml-language-server: $schema=https://raw.githubusercontent.com/4akloon/typed_openapi/typed_openapi-v0.3.1/packages/typed_openapi/schema/typed_openapi.schema.json
 ```
 
-That URL is pinned to the tag of release 0.1.0; use the tag of the version you have. In a checkout a relative path to the file works as well. The schema checks the shape only: that a key is known, has the right type and takes one of its values. A missing `input` file and overlapping outputs stay with [`check`](cli.md#check) (TOA904), and a few things the loader rejects the schema cannot say (one code written under both its id and its name, equal `input_suffix` and `patch_suffix`, an `operation_prefix` that is not a regular expression). The schema is not published to SchemaStore.
+That URL is pinned to the tag of release 0.3.1; use the tag of the version you have. In a checkout a relative path to the file works as well. The schema checks the shape only: that a key is known, has the right type and takes one of its values. A missing `input` file and overlapping outputs stay with [`check`](cli.md#check) (TOA904), and a few things the loader rejects the schema cannot say (one code written under both its id and its name, equal `input_suffix` and `patch_suffix`, an `operation_prefix` that is not a regular expression). The schema is not published to SchemaStore.
 
 ## See also
 

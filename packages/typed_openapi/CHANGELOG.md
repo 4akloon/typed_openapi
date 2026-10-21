@@ -5,16 +5,21 @@
   generator, and its `inputs` hash is computed differently (see Fixed): the
   first `generate` after the upgrade rewrites the manifest of every client
   once, even when no file changes.
-- An event name is split into words like any identifier, so a name written in
-  capitals is no longer glued together: the variant of
-  `USER_INBOX_UNREAD_COUNT_UPDATED` is `...EventUserInboxUnreadCountUpdated`
-  (before: `...EventUSERINBOXUNREADCOUNTUPDATED`), its data type
+- Every all-caps piece of an event name is lowercased after its first
+  letter, so a name written in capitals is no longer glued together:
+  `USER_INBOX_UNREAD_COUNT_UPDATED` gives the variant
+  `...EventUserInboxUnreadCountUpdated` (before:
+  `...EventUSERINBOXUNREADCOUNTUPDATED`), its data type
   `...EventUserInboxUnreadCountUpdatedData` and the file
-  `models/..._event_user_inbox_unread_count_updated_data.dart`. Names that were
-  not in capitals only (`delta`, `userCreated`, `order.shipped`) are unchanged.
+  `models/..._event_user_inbox_unread_count_updated_data.dart`; `user.CREATED`
+  gives `UserCreated` (before: `UserCREATED`). Mixed-case pieces are
+  unchanged. `USER_CREATED` next to `userCreated` can now collide: they give
+  `UserCreated` and `UserCreated2` and TOA551.
   With an existing `typed_openapi.lock` the inline model of the event data
-  keeps its locked name and only the variant class is renamed;
-  `generate --fresh-names` renames both.
+  keeps its locked name (TOA570, info) and only the variant class is renamed.
+  `generate --fresh-names` renames both, but also drops every other name the
+  lock keeps; the narrower ways are to delete that one entry from
+  `typed_openapi.lock` or to give the schema a `name` override.
 - An inline enum is named after its own site (`Schema.property`, or the
   operation and the parameter). Two inline enums with equal values are no
   longer merged into one type named after the first site, so a type that two
@@ -24,13 +29,19 @@
   `typed_openapi.lock` the first owner keeps its locked name and the other
   sites get new names; `generate --fresh-names` renames all of them. An
   `anyOf` of two equal inline enums still collapses to one enum.
+- These renames can break code that names the old types (for example
+  `NewPet.type` was `ListPetsType` and is now `NewPetType`): update the app
+  in one go.
+- `generate --locked` reports TOA834 for every affected client (any all-caps
+  event, any formerly shared inline enum) until `typed_openapi.lock` is
+  regenerated with a plain `generate`.
 
 ### Fixed
 - The `inputs` hash of the manifest covers what generation reads (the
   generator, the client's name, `line_width` and the IR without locations),
-  not the text of the input files: a comment, a backend change to an operation
-  that the client's `include` leaves out, or a moved checkout no longer
-  rewrites the manifest.
+  not the text of the input files: a comment, or a backend change to an
+  operation that the client's `include` leaves out, no longer rewrites the
+  manifest.
 
 ### Added
 - The hidden `typed_openapi ir` command prints more: enum `cases` are objects

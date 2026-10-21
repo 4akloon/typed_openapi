@@ -175,7 +175,7 @@ operations:
     group: Pets
 ```
 
-The editor then completes the keys of an operation or a schema and flags a key the loader would call TOA803 or a value it would call TOA802. The URL is pinned to the tag of release 0.1.0; use the tag of the version you have. The schema cannot know your spec, so an address that matches nothing (`listPet` for `listPets`) is still `TOA804` from `check`. It is not published to SchemaStore.
+The editor then completes the keys of an operation or a schema and flags a key the loader would call TOA803 or a value it would call TOA802. The URL is pinned to the tag of release 0.3.1; use the tag of the version you have. The schema cannot know your spec, so an address that matches nothing (`listPet` for `listPets`) is still `TOA804` from `check`. It is not published to SchemaStore.
 
 ## See also
 

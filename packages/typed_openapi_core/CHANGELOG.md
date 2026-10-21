@@ -1,19 +1,20 @@
 ## 0.3.1 - Unreleased
 
-### Fixed
-- `DartNames.eventPascal` names the variants of an event union and their data
-  types: an event name written in capitals (`USER_CREATED`) is split into words
-  (`UserCreated`), not glued (`USERCREATED`). Other names are unchanged.
+### Added
+- `DartNames.eventPascal`, which names the variants of an event union and
+  their data types: every all-caps piece of an event name is lowercased after
+  its first letter (`USER_CREATED` is `UserCreated`, not `USERCREATED`).
+- `DiagnosticCode.overrideOperationNotGenerated` (`TOA810`, warning): an
+  overrides entry addresses an operation that `include`/`exclude` leaves out.
+
+### Changed
 - An inline enum is a declaration of its own site: two inline enums with equal
   values are no longer merged into one declaration named after the first site.
 - `IrJson` dumps every field the emitters read (descriptions, defaults,
-  constraints, known and unknown names, dispatch, enum cases as objects) and
-  can write the IR without locations (`IrJson.withoutLocations`), which the
-  generator hashes for the manifest.
-
-### Added
-- `DiagnosticCode.overrideOperationNotGenerated` (`TOA810`, warning): an
-  overrides entry addresses an operation that `include`/`exclude` leaves out.
+  constraints, known and unknown names, dispatch) and can write the IR without
+  locations (`IrJson.withoutLocations`), which the generator hashes for the
+  manifest. The shape changed: enum `cases` was a map and is now a list of
+  objects.
 
 ## 0.3.0
 
