@@ -1,4 +1,4 @@
-## 0.3.0 - Unreleased
+## 0.3.0
 
 ### Output changes
 - The manifest `.typed_openapi.json` records `typed_openapi 0.3.0` as the
