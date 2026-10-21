@@ -71,7 +71,7 @@ final class OverrideEvents {
     int index,
     String prefix,
   ) {
-    final words = _names.pascal(event) ?? 'Event${index + 1}';
+    final words = _names.eventPascal(event) ?? 'Event${index + 1}';
     final mapped = _mapper.typeOf(
       data,
       NameHint(prefix, 'Event${words}Data'),

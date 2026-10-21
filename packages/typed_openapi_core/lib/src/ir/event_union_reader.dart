@@ -143,7 +143,7 @@ final class EventUnionReader {
             schema.types.single == SchemaType.nullType) {
       return EventVariantIr(event, location: at, hasData: false);
     }
-    final words = _names.pascal(event) ?? 'Event${index + 1}';
+    final words = _names.eventPascal(event) ?? 'Event${index + 1}';
     final read = _data.read(data, NameHint(prefix, 'Event${words}Data'));
     if (read == null && !_data.isBroken(data)) {
       _data.unread(at.child('properties').child('data'));
