@@ -160,7 +160,7 @@ warning TOA560 override-name-invalid: The name "my rate" of this override is not
 | TOA808 | info | The node is shared with other operations. |
 | TOA809 | info | Removing `type` dropped nullability. |
 | TOA800 | warning | The change cannot be written (3.0 beside `$ref`). |
-| TOA810 | warning | The entry addresses an operation that `include`/`exclude` leaves out. |
+| TOA810 | warning | The entry addresses an operation that `include`/`exclude` leaves out, reported for each client whose filter drops it (also when another client that shares the file uses it: lower the level with `severity` or use the baseline). |
 
 Every code is explained in [Diagnostics](diagnostics.md). Rules that only report give you an override snippet in their `fix:` text, for example TOA554 prints `operations: ping: group: Default`.
 

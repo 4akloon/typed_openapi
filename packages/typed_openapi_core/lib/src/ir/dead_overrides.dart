@@ -18,11 +18,12 @@ final class DeadOverrides {
   /// Reports the operation entries whose operation is in [all] but not in
   /// [selected].
   void report(List<SpecOperation> all, List<SpecOperation> selected) {
+    final overrides = _context.spec.overrides;
+    final entries = _context.overrides.operations.toList();
+    if (overrides == null || entries.isEmpty) return;
     final generated = {for (final e in selected) e.operation.location};
     final present = {for (final e in all) e.operation.location};
-    final overrides = _context.spec.overrides;
-    if (overrides == null) return;
-    for (final (location, entry) in _context.overrides.operations) {
+    for (final (location, entry) in entries) {
       if (!present.contains(location) || generated.contains(location)) {
         continue;
       }

@@ -1,5 +1,6 @@
 import 'package:test/test.dart';
 import 'package:typed_openapi_core/src/config/generation_config.dart';
+import 'package:typed_openapi_core/src/diagnostics/diagnostic.dart';
 import 'package:typed_openapi_core/src/diagnostics/diagnostic_code.dart';
 import 'package:typed_openapi_core/src/diagnostics/json_pointer.dart';
 import 'package:typed_openapi_core/src/ir/ir_builder.dart';
@@ -30,6 +31,23 @@ operations:
     name: orders
     parameters:
       limit: {spec: {description: How many.}}
+''';
+
+const _sharedSpec = '''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      tags: [pets]
+      responses: {"204": {description: ok}}
+  /store/orders:
+    parameters: [{name: limit, in: query, schema: {type: integer}}]
+    get:
+      operationId: listOrders
+      tags: [store]
+      responses: {"204": {description: ok}}
 ''';
 
 FilterPattern _pattern(String value, String pointer) =>
@@ -100,12 +118,47 @@ void main() {
     expect(fixture.reported, isEmpty);
   });
 
+  List<Diagnostic> dead(IrFixture fixture) => fixture.reported
+      .where((d) => d.code == DiagnosticCode.overrideOperationNotGenerated)
+      .toList();
+
   test('removing the entry removes the diagnostic', () {
+    const kept = 'operations:\n  listPets: {name: pets}\n';
+    final withEntry = _fixture(
+      generation: _including('pets'),
+      overrides: '${kept}  listOrders: {name: orders}\n',
+    );
+    final without = _fixture(generation: _including('pets'), overrides: kept);
+    expect(dead(withEntry), hasLength(1));
+    expect(dead(without), isEmpty);
+  });
+
+  test('an entry addressed by operationId is reported', () {
     final fixture = _fixture(
       generation: _including('pets'),
-      overrides: 'operations:\n  listPets: {name: pets}\n',
+      overrides: 'operations:\n  listOrders: {name: orders}\n',
     );
-    expect(fixture.reported, isEmpty);
+    final found = dead(fixture);
+    expect(found, hasLength(1));
+    expect(found.single.pointer?.value, '#/operations/listOrders');
+    expect(found.single.message, contains('listOrders'));
+  });
+
+  test('a shared path-level parameter override gives one report on the '
+      'entry', () {
+    final fixture = IrFixture(
+      _sharedSpec,
+      generation: _including('pets'),
+      overrides:
+          'operations:\n  GET /store/orders:\n    parameters:\n'
+          '      limit: {spec: {description: How many.}}\n',
+    );
+    IrBuilder(
+      fixture.diagnostics,
+    ).build(fixture.context.spec, fixture.context.client);
+    final found = dead(fixture);
+    expect(found, hasLength(1));
+    expect(found.single.pointer?.value, '#/operations/GET ~1store~1orders');
   });
 
   test('an entry that resolves to no operation is only TOA804', () {

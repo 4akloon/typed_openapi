@@ -1437,11 +1437,11 @@ An override removes the `type` of a nullable 3.1 schema, so the schema is no lon
 
 Default: warning.
 
-An override addresses an operation that the client's `include` or `exclude` filter leaves out, so the entry and the overrides of its parameters, body and responses change nothing in the generated client. An entry with its own `exclude: true` is not reported.
+An override addresses an operation that the client's `include` or `exclude` filter leaves out, so the entry and the overrides of its parameters, body and responses change nothing in the generated client. An entry with its own `exclude: true` is not reported. The check is made for each client, so it is reported for every client whose filter drops the operation, also when another client that shares the overrides file generates it.
 
 **Example.** The entry `GET /social-networks/facebook/auth-links` in the overrides file while `include` of the client does not list that operation.
 
-**Fix.** Remove the entry, or change `include` or `exclude` so that the operation is generated.
+**Fix.** Remove the entry, or change `include` or `exclude` so that the operation is generated. When other clients share the overrides file and use the operation, lower the level for this client with `severity` (`TOA810: off`) or accept it in the baseline.
 
 ### TOA820 `baseline-not-found`
 
