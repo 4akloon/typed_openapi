@@ -1,3 +1,30 @@
+## 0.3.1
+
+### Added
+- `DiagnosticCode.findingsOutsideGeneratedApi` (`TOA811`, info): `SpecChecker`
+  lowers to info the errors and warnings located in operations the client's
+  filters or `exclude: true` overrides leave out and in nodes only those
+  operations use (found by incoming references: a node a generated
+  operation refers to, a subtype of a discriminated union at any depth or
+  through aliases, a `discriminator.mapping` target, the
+  `errors.default_schema` or a `$ref` into a left out operation from outside
+  keeps its level; a client's `severity` entry is applied afterwards and
+  wins), and reports how many.
+- `DartNames.eventPascal`, which names the variants of an event union and
+  their data types: every all-caps piece of an event name is lowercased after
+  its first letter (`USER_CREATED` is `UserCreated`, not `USERCREATED`).
+- `DiagnosticCode.overrideOperationNotGenerated` (`TOA810`, warning): an
+  overrides entry addresses an operation that `include`/`exclude` leaves out.
+
+### Changed
+- An inline enum is a declaration of its own site: two inline enums with equal
+  values are no longer merged into one declaration named after the first site.
+- `IrJson` dumps every field the emitters read (descriptions, defaults,
+  constraints, known and unknown names, dispatch) and can write the IR without
+  locations (`IrJson.withoutLocations`), which the generator hashes for the
+  manifest. The shape changed: enum `cases` was a map and is now a list of
+  objects.
+
 ## 0.3.0
 
 ### Changed

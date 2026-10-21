@@ -156,6 +156,20 @@ final class DartNames {
     return _leading(parts.map(_capitalize).join());
   }
 
+  /// An event name as UpperCamelCase words, or null when it has no ASCII
+  /// letter or digit. A piece between separators with no lowercase letter
+  /// (`USER`, `HTTP`) is one word to lowercase first, so
+  /// `USER_INBOX_UPDATED` is `UserInboxUpdated`; a mixed-case piece is
+  /// left to [pascal] (`UserDTO_ready` is `UserDTOReady`).
+  String? eventPascal(String event) => pascal(
+    event
+        .split(_separators)
+        .map(
+          (piece) => piece.contains(_lowercase) ? piece : _asciiLower(piece),
+        )
+        .join('_'),
+  );
+
   /// [text] as a lowerCamelCase member name, or null when it has no ASCII
   /// letter or digit. A name that starts with a digit gets a `$`.
   String? camel(String text) {
@@ -182,6 +196,15 @@ final class DartNames {
   /// when [text] has no ASCII letter or digit.
   String? sanitize(String text, NameKind kind) =>
       kind == .type ? pascal(text) : camel(text);
+
+  static final _lowercase = RegExp('[a-z]');
+
+  /// Lowercases only ASCII capitals, so a letter such as the Kelvin sign
+  /// (U+212A) is not turned into an ASCII `k`.
+  static String _asciiLower(String piece) => piece.replaceAllMapped(
+    RegExp('[A-Z]'),
+    (match) => match[0]!.toLowerCase(),
+  );
 
   static String _capitalize(String word) =>
       word[0].toUpperCase() + word.substring(1);

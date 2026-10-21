@@ -54,7 +54,7 @@ final class EventUnionNames {
     int index,
     OperationIr operation,
   ) {
-    final words = _names.pascal(variant.event);
+    final words = _names.eventPascal(variant.event);
     final candidate = '$union${words ?? 'Event${index + 1}'}';
     if (words == null) {
       _context.report(

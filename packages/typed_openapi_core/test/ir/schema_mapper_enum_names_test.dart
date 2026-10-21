@@ -150,8 +150,10 @@ components:
       expect(fixture.reported, isEmpty);
     });
 
-    test('does not merge inline enums with other varnames', () {
-      final fixture = IrFixture('''
+    test(
+      'gives each inline enum its own declaration, varnames equal or not',
+      () {
+        final fixture = IrFixture('''
 openapi: 3.1.0
 info: {title: t, version: "1"}
 components:
@@ -164,16 +166,17 @@ components:
         phase: {type: string, enum: [a, b], x-enum-varnames: [first, second]}
         stage: {type: string, enum: [a, b]}
 ''');
-      final (ir, _) = mapComponents(fixture, ['Order']);
-      expect(fieldsOf(ir, 'Order'), [
-        'status(status): OrderStatus?',
-        'state(state): OrderState?',
-        'phase(phase): OrderStatus?',
-        'stage(stage): OrderStage?',
-      ]);
-      expect(MappedIr.valuesOf(ir, 'OrderState'), ['one=a', 'two=b']);
-      expect(fixture.reported, isEmpty);
-    });
+        final (ir, _) = mapComponents(fixture, ['Order']);
+        expect(fieldsOf(ir, 'Order'), [
+          'status(status): OrderStatus?',
+          'state(state): OrderState?',
+          'phase(phase): OrderPhase?',
+          'stage(stage): OrderStage?',
+        ]);
+        expect(MappedIr.valuesOf(ir, 'OrderState'), ['one=a', 'two=b']);
+        expect(fixture.reported, isEmpty);
+      },
+    );
   });
 
   group('enum value names (final review M5, M14)', () {

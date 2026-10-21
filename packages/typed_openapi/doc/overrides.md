@@ -160,6 +160,8 @@ warning TOA560 override-name-invalid: The name "my rate" of this override is not
 | TOA808 | info | The node is shared with other operations. |
 | TOA809 | info | Removing `type` dropped nullability. |
 | TOA800 | warning | The change cannot be written (3.0 beside `$ref`). |
+| TOA811 | info | Findings in operations that `include`/`exclude` or an `exclude: true` entry leave out, and in schemas only those operations use, were lowered to info. |
+| TOA810 | warning | The entry addresses an operation that `include`/`exclude` leaves out, reported for each client whose filter drops it (also when another client that shares the file uses it: lower the level with `severity` or use the baseline). |
 
 Every code is explained in [Diagnostics](diagnostics.md). Rules that only report give you an override snippet in their `fix:` text, for example TOA554 prints `operations: ping: group: Default`.
 
@@ -168,16 +170,16 @@ Every code is explained in [Diagnostics](diagnostics.md). Rules that only report
 The overrides file has a JSON Schema too, [`typed_openapi.overrides.schema.json`](../schema/typed_openapi.overrides.schema.json), generated and tested like [the one of the config](configuration.md#editor-support) (`override_schema_test.dart` in `typed_openapi_core` checks it against `OverrideLoader`). Put this as the first line of the file:
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/4akloon/typed_openapi/typed_openapi-v0.3.0/packages/typed_openapi/schema/typed_openapi.overrides.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/4akloon/typed_openapi/typed_openapi-v0.3.1/packages/typed_openapi/schema/typed_openapi.overrides.schema.json
 operations:
   listPets:
     group: Pets
 ```
 
-The editor then completes the keys of an operation or a schema and flags a key the loader would call TOA803 or a value it would call TOA802. The URL is pinned to the tag of release 0.1.0; use the tag of the version you have. The schema cannot know your spec, so an address that matches nothing (`listPet` for `listPets`) is still `TOA804` from `check`. It is not published to SchemaStore.
+The editor then completes the keys of an operation or a schema and flags a key the loader would call TOA803 or a value it would call TOA802. The URL is pinned to the tag of release 0.3.1; use the tag of the version you have. The schema cannot know your spec, so an address that matches nothing (`listPet` for `listPets`) is still `TOA804` from `check`. It is not published to SchemaStore.
 
 ## See also
 
 - [Configuration](configuration.md): the `overrides` key and `sse.reconnect`.
-- [Diagnostics](diagnostics.md): TOA560, TOA800-TOA809.
+- [Diagnostics](diagnostics.md): TOA560, TOA800-TOA811.
 - [Presets and rules](presets_and_rules.md): findings that suggest an override.

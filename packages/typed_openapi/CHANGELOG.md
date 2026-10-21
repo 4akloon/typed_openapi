@@ -1,3 +1,70 @@
+## 0.3.1
+
+### Output changes
+- The manifest `.typed_openapi.json` records `typed_openapi 0.3.1` as the
+  generator, and its `inputs` hash is computed differently (see Fixed): the
+  first `generate` after the upgrade rewrites the manifest of every client
+  once, even when no file changes.
+- Every all-caps piece of an event name is lowercased after its first
+  letter, so a name written in capitals is no longer glued together:
+  `USER_INBOX_UNREAD_COUNT_UPDATED` gives the variant
+  `...EventUserInboxUnreadCountUpdated` (before:
+  `...EventUSERINBOXUNREADCOUNTUPDATED`), its data type
+  `...EventUserInboxUnreadCountUpdatedData` and the file
+  `models/..._event_user_inbox_unread_count_updated_data.dart`; `user.CREATED`
+  gives `UserCreated` (before: `UserCREATED`). Mixed-case pieces are
+  unchanged. `USER_CREATED` next to `userCreated` can now collide: they give
+  `UserCreated` and `UserCreated2` and TOA551.
+  With an existing `typed_openapi.lock` the inline model of the event data
+  keeps its locked name (TOA570, info) and only the variant class is renamed.
+  `generate --fresh-names` renames both, but also drops every other name the
+  lock keeps; the narrower ways are to delete that one entry from
+  `typed_openapi.lock` or to give the schema a `name` override.
+- An inline enum is named after its own site (`Schema.property`, or the
+  operation and the parameter). Two inline enums with equal values are no
+  longer merged into one type named after the first site, so a type that two
+  properties or parameters used to share (for example
+  `GetSocialAccountsByUserIdV2Provider`) is now one type per site, and the
+  files of the new types appear next to it. With an existing
+  `typed_openapi.lock` the first owner keeps its locked name and the other
+  sites get new names; `generate --fresh-names` renames all of them. An
+  `anyOf` of two equal inline enums still collapses to one enum.
+- These renames can break code that names the old types (for example
+  `NewPet.type` was `ListPetsType` and is now `NewPetType`): update the app
+  in one go.
+- `generate --locked` reports TOA834 for every affected client (any all-caps
+  event, any formerly shared inline enum) until `typed_openapi.lock` is
+  regenerated with a plain `generate`.
+
+### Fixed
+- An error or warning in an operation that `include`, `exclude` or an
+  overrides `exclude: true` leave out (or in a schema only such operations
+  use) no longer stops `generate`: the finding keeps its code and message but
+  is reported as info, and `TOA811` (`findings-outside-generated-api`, info)
+  says how many were lowered. A node that anything else uses (a generated
+  operation, a discriminated union and its subtypes, a mapping,
+  `errors.default_schema`) keeps its level, and a client's `severity` entry
+  still sets the level outright (`TOA100: error` blocks again).
+- The `inputs` hash of the manifest covers what generation reads (the
+  generator, the client's name, `line_width` and the IR without locations),
+  not the text of the input files: a comment, or a backend change to an
+  operation that the client's `include` leaves out, no longer rewrites the
+  manifest.
+
+### Added
+- The hidden `typed_openapi ir` command prints more: enum `cases` are objects
+  (name, value, description), and declarations carry descriptions, flags,
+  known and unknown names, the union dispatch, and `Uint8List(binary)` for
+  bytes.
+- Warning `TOA810` (`override-operation-not-generated`): an overrides entry for
+  an operation that the client's `include`/`exclude` leaves out. It is judged
+  per client; when several clients share one overrides file with different
+  filters, lower it with `severity: {TOA810: off}` or accept it in the
+  baseline.
+
+Semver exemption: a patch release for fixes found in one production client;
+the renamed types are listed above and the fixes cannot wait for a minor.
+
 ## 0.3.0
 
 ### Output changes

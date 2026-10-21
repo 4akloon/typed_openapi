@@ -140,4 +140,44 @@ void main() {
     const crlf = '## 0.2.0\r\n\r\n### Output changes\r\n\r\n* a.\r\n';
     expect(problems(changelog: crlf), isEmpty);
   });
+
+  group('a semver exemption', () {
+    const exempt =
+        '## 0.1.1\n\n### Output changes\n- a.\n\n'
+        'Semver exemption: a patch that renames output.\n\n## 0.1.0\n';
+
+    test('with a reason waives the raise of the version', () {
+      expect(problems(version: '0.1.1', changelog: exempt), isEmpty);
+    });
+
+    test('still needs the output changes entry', () {
+      const noEntry =
+          '## 0.1.1\n\n'
+          'Semver exemption: a patch that renames output.\n\n## 0.1.0\n';
+      expect(problems(version: '0.1.1', changelog: noEntry), [
+        contains('add an entry under "### Output changes"'),
+      ]);
+    });
+
+    test('without a reason waives nothing', () {
+      final bare = exempt.replaceAll('a patch that renames output.', '');
+      expect(problems(version: '0.1.1', changelog: bare), [
+        contains('minor before 1.0'),
+      ]);
+    });
+
+    test('is not inherited from the base top section', () {
+      expect(
+        problems(
+          baseVersion: '0.1.1',
+          version: '0.1.2',
+          baseChangelog: exempt,
+          changelog: exempt
+              .replaceFirst('0.1.1', '0.1.2')
+              .replaceFirst('- a.', '- b.'),
+        ),
+        [contains('minor before 1.0')],
+      );
+    });
+  });
 }

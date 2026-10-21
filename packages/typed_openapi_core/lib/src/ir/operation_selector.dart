@@ -1,4 +1,5 @@
 import '../config/generation_config.dart';
+import 'dead_overrides.dart';
 import 'ir_context.dart';
 import 'operation_builder.dart';
 
@@ -29,6 +30,23 @@ final class OperationSelector {
       if (!included || excluded || (override?.exclude ?? false)) continue;
       selected.add(entry);
     }
+    _reportConflicts(config);
+    for (final pattern in [...include.unused, ...exclude.unused]) {
+      _context.diagnostics.report(
+        .filterMatchesNothing,
+        'Filter "${pattern.value}" matches no operation of the spec.',
+        file: config.file,
+        pointer: pattern.pointer,
+        span: pattern.span,
+        fix: 'Fix the pattern, or remove it from the config.',
+      );
+    }
+    DeadOverrides(_context).report(all, selected);
+    return selected;
+  }
+
+  /// Reports each pattern that both filters list.
+  void _reportConflicts(GenerationConfig config) {
     for (final (included, excluded) in [
       (config.include.tags, config.exclude.tags),
       (config.include.operations, config.exclude.operations),
@@ -47,17 +65,6 @@ final class OperationSelector {
         );
       }
     }
-    for (final pattern in [...include.unused, ...exclude.unused]) {
-      _context.diagnostics.report(
-        .filterMatchesNothing,
-        'Filter "${pattern.value}" matches no operation of the spec.',
-        file: config.file,
-        pointer: pattern.pointer,
-        span: pattern.span,
-        fix: 'Fix the pattern, or remove it from the config.',
-      );
-    }
-    return selected;
   }
 }
 

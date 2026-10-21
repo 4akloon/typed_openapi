@@ -5,6 +5,11 @@
 /// While the base's CHANGELOG top section is titled `Unreleased` for the
 /// version in the base pubspec, that version has never been published, so the
 /// output change needs the CHANGELOG entry but no raise of the version.
+///
+/// A change may also waive the raise for its own release: a line
+/// `Semver exemption: <reason>` in the top CHANGELOG section that the base's
+/// top section does not have. The reason is read in review, and the waiver is
+/// gone from the next release because the base then has the line.
 final class SemverRule {
   /// Creates the rule.
   const SemverRule();
@@ -17,6 +22,10 @@ final class SemverRule {
     multiLine: true,
   );
   static final _section = RegExp('^## ', multiLine: true);
+  static final _exemption = RegExp(
+    r'^Semver exemption:[ \t]*(\S.*)$',
+    multiLine: true,
+  );
   static final _entries = RegExp(
     r'^###[ \t]+Output changes[ \t]*\n\s*([-*] [\s\S]*?)'
     r'(?=^### |^## |(?![\s\S]))',
@@ -46,7 +55,9 @@ final class SemverRule {
             'files affected.',
       if (base == null || next == null)
         'The version of packages/typed_openapi/pubspec.yaml cannot be read.'
-      else if (!_isUnreleased(baseChangelog, base) && !_raised(base, next))
+      else if (!_isUnreleased(baseChangelog, base) &&
+          !_raised(base, next) &&
+          !_isExempt(baseChangelog, changelog))
         'The generated output changed: raise the version of '
             'packages/typed_openapi/pubspec.yaml from ${base.join('.')} to '
             '${_required(base)} or later (${base.first == 0 ? 'minor before '
@@ -70,6 +81,12 @@ final class SemverRule {
       caseSensitive: false,
     ).hasMatch(heading);
   }
+
+  /// Whether the top section of [changelog] gives a reason for the waiver and
+  /// the top section of [baseChangelog] does not already.
+  static bool _isExempt(String baseChangelog, String changelog) =>
+      _exemption.hasMatch(_topSection(changelog)) &&
+      !_exemption.hasMatch(_topSection(baseChangelog));
 
   static bool _raised(List<int> base, List<int> next) => base.first == 0
       ? next.first > 0 || next[1] > base[1]

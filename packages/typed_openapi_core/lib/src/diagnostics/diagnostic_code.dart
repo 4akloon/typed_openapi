@@ -1221,6 +1221,55 @@ enum DiagnosticCode {
     .info,
   ),
 
+  /// An override addresses an operation that the client's `include` or
+  /// `exclude` filter leaves out, so the entry and the overrides of its
+  /// parameters, body and responses change nothing in the generated client.
+  /// An entry with its own `exclude: true` is not reported. The check is made
+  /// for each client, so it is reported for every client whose filter drops
+  /// the operation, also when another client that shares the overrides file
+  /// generates it.
+  ///
+  /// Example: The entry `GET /social-networks/facebook/auth-links` in the
+  /// overrides file while `include` of the client does not list that
+  /// operation.
+  ///
+  /// Fix: Remove the entry, or change `include` or `exclude` so that the
+  /// operation is generated. When other clients share the overrides file and
+  /// use the operation, lower the level for this client with `severity`
+  /// (`TOA810: off`) or accept it in the baseline.
+  overrideOperationNotGenerated(
+    'TOA810',
+    'override-operation-not-generated',
+    .warning,
+  ),
+
+  /// Findings located in operations that the client's `include`, `exclude` or
+  /// an overrides `exclude: true` leave out, or only in schemas, parameters
+  /// and responses those operations use, were lowered to info. The whole
+  /// spec is still read, so the findings stay visible under their own codes
+  /// and messages, but they no longer stop the client from being generated.
+  /// A node that anything outside the left out operations also uses keeps
+  /// its level: a generated operation that refers to it, a discriminated base
+  /// whose union holds it as a subtype (through `allOf`, also through other
+  /// subtypes or aliases), a `discriminator.mapping`, the
+  /// `errors.default_schema`, or a `$ref` from such a place into a left out
+  /// operation. A `severity` entry of the client is applied after the
+  /// lowering and sets the level outright: `TOA100: error` makes the finding
+  /// block the client again.
+  ///
+  /// Example: `GET /social-networks/facebook/auth-links` has a response with
+  /// `$ref: "#/components/schemas/"` (`invalid-ref`) while `include` does not
+  /// list that operation.
+  ///
+  /// Fix: Nothing to do for the client. Fix the spec at the source when the
+  /// operation should be generated later, or lower the level of this note
+  /// with `severity` (`TOA811: off`).
+  findingsOutsideGeneratedApi(
+    'TOA811',
+    'findings-outside-generated-api',
+    .info,
+  ),
+
   /// The baseline file a client names does not exist.
   ///
   /// Example: `baseline: baseline.yaml` in the config when the file is not

@@ -242,7 +242,7 @@ class FollowChatEventDone extends FollowChatEvent {
 }
 ```
 
-- **One class per event name.** The class is `<Union><EventName>` (`FollowChatEventDelta`). A variant with a `data` has a `data` field of the data type; one without `data` has none. A name with no letter or digit gets a name by its place and `TOA668` (info); a clash with another type gets a `2` and `TOA551`.
+- **One class per event name.** The class is `<Union><EventName>` (`FollowChatEventDelta`); the event name is split into words like any identifier, so `USER_INBOX_UNREAD_COUNT_UPDATED` gives `...EventUserInboxUnreadCountUpdated`. A variant with a `data` has a `data` field of the data type; one without `data` has none. A name with no letter or digit gets a name by its place and `TOA668` (info); a clash with another type gets a `2` and `TOA551`.
 - **The union lives in the group file**, after the class and the status types, not in `models/`. Variants are equal by value; a secret in the data prints as `<redacted>` in `toString`.
 - **The method** passes `FollowChatEvent.fromEvent` as the event decoder and returns `Stream<SseItem<FollowChatEvent>>`. Switch on `SseEvent(data: ...)` as in the example at the top.
 - **Duplicates and bad names.** If two branches fix the same name, the first one is kept and the rest are dropped with `TOA667` (warning). An empty name (the wire reads an empty `event:` as `message`) or a name with a line break can never be selected, so it is left out with `TOA670` (warning):

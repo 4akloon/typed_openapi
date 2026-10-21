@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import '../model/schema.dart';
 import '../model/spec_node.dart';
 import '../overrides/override_set.dart';
@@ -178,9 +176,6 @@ final class EnumDraft {
 
   /// The `x-enum-descriptions`, one per value.
   final List<String?>? descriptions;
-
-  /// What makes two inline enums the same declaration.
-  String get key => jsonEncode([kind.name, values, names, descriptions]);
 }
 
 /// The mutable state that one mapping shares: every call reads and writes
@@ -189,10 +184,6 @@ final class MappingState {
   /// Every declaration created so far, by identity: reaching one again
   /// gives it back.
   final Map<DeclId, PendingDeclaration> pending = {};
-
-  /// The inline enums created so far, by their values, so an equal one is
-  /// the same declaration.
-  final Map<String, PendingDeclaration> inlineEnums = {};
 
   /// The subtypes found of each polymorphic base, by its location.
   final Map<SpecLocation, List<SchemaObject>> subtypesOf = {};

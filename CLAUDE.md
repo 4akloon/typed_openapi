@@ -34,10 +34,10 @@ pub workspace with seven pure-Dart packages (no Flutter):
 Minimum SDK: Dart 3.10 (`>=3.10.0 <4.0.0`), also for generated code.
 
 The four published packages (core, client, `typed_openapi`, Dio transport)
-share one version, `0.3.0`, released by hand with
+share one version, `0.3.1`, released by hand with
 `docs/release-checklist.md` (the tags and the publish follow the merge); their
-CHANGELOGs say `## 0.3.0 - Unreleased` until the release (a section titled
-`## <version> - Unreleased` is a version not yet released).
+CHANGELOGs head `## 0.3.1` (a section titled `## <version> - Unreleased` is a
+version not yet released).
 
 ## Commands
 
@@ -310,7 +310,10 @@ Engine folders under `packages/typed_openapi_core/lib/src/`, generator folders
   `OverrideResolver` delegates to `OperationTargetFinder`,
   `SchemaTargetFinder` and `TargetConflicts` (TOA806, TOA808) and reports
   through `OverrideTargetReporter` (the targets are in `override_target.dart`,
-  re-exported by the resolver); `OverrideApplier` delegates to
+  re-exported by the resolver); `DeadOverrides` (`ir/`, called at the end of
+  `OperationSelector.select`) reports TOA810 (warning) once for an operation
+  entry whose operation `include`/`exclude` dropped (not one with its own
+  `exclude`, and one that resolved to nothing is TOA804); `OverrideApplier` delegates to
   `OperationOverrideApplier`, `SchemaOverrideApplier` (with
   `ReferenceOverrideApplier`, `TypeOverrideApplier` and `NullableShape`)
   and `OverrideConflicts`, sharing an `OverrideEditContext` (reporting,
@@ -441,7 +444,10 @@ Engine folders under `packages/typed_openapi_core/lib/src/`, generator folders
   reached, so only reachable schemas exist, and named at the end: override
   names, then component keys, then inline names by depth. A declaration is
   its `DeclId`: reaching it again gives the same one, named after the first
-  use, and an inline name always resolves to a declaration of the set. A
+  use. An inline enum is a declaration of its own site (a schema property
+  or an operation parameter), never merged with an equal enum elsewhere
+  (`Declarer`); with a lock the first owner keeps the locked name and the
+  other sites get fresh ones. An inline name always resolves to a declaration of the set. A
   schema a custom type replaces declares and reports nothing: its JSON side
   is scalars, lists, maps and `JsonValue`. A structural alias that reaches
   itself with no declaration between is TOA251. An `allOf` parent that an
@@ -599,7 +605,9 @@ Engine folders under `packages/typed_openapi_core/lib/src/`, generator folders
   that branch. `unknownSensitive` is set when any event's data carries a
   secret. `EventUnionNames` (from `ApiNames`, after the status types)
   names it `<Method>Event`, then `<Union>Unknown`, then `<Union><Event>`
-  (`<Union>Event<n>` without letters or digits, TOA668; `2` on a
+  (the event name goes through `DartNames.eventPascal`, which lowercases the
+  all-caps pieces of a name before `pascal`: `USER_CREATED` is
+  `UserCreated`; `<Union>Event<n>` without letters or digits, TOA668; `2` on a
   collision, TOA551); TOA668 and TOA559 point at the branch. No
   `SchemaMapper` change: the variants' types come from `typeOf`.
   TOA654 is only an operation (or its event-stream method, in the `both`
@@ -618,12 +626,13 @@ Engine folders under `packages/typed_openapi_core/lib/src/`, generator folders
   `MethodBuilder` asks it before it claims the stream method's name
   (TOA663, TOA551) or maps its events, so a stream that is not generated
   declares nothing, claims no name and reports only TOA654.
-  `IrJson` dumps an IR, the operations through `IrOperationJson`: every
-  field of the operation IR (encoding, parts, security, servers, status
-  types, `sensitive`, defaults), except the locations of parameters, bodies
-  and responses and a response's text and media type; `ir_json_test.dart`
-  reads the fields of the IR classes with `dart:mirrors` and fails when one
-  is missing from the dump; the
+  `IrJson` dumps an IR (declarations through `IrDeclarationJson`, types
+  through `IrTypeText`, operations through `IrOperationJson`): every field of
+  every IR class an emitter reads, except locations (`IrJson.withoutLocations`
+  leaves them out all together; the manifest's `inputs` hashes that dump) and
+  a response's text and media type; `ir_json_test.dart` reads the fields of
+  the IR classes with `dart:mirrors` and fails when one is missing from the
+  dump or not exempt with a reason; the
   hidden `typed_openapi ir` command prints it. Naming and mapping codes use
   the second half of each area's hundred: TOA250-TOA256, TOA350-TOA351,
   TOA450-TOA458, TOA550-TOA571, and media types, errors and event streams
@@ -898,6 +907,20 @@ Engine folders under `packages/typed_openapi_core/lib/src/`, generator folders
   `typed_openapi.lock` keeps them (`ApiLockNames`; the `NameLock` is part
   of the run key); an unreadable lock is TOA835 (an error, exit `1`) for `check`,
   `ir`, `baseline` and `diff` too, since every command reads it; `SpecChecker.freshNames` ignores the lock.
+  After the IR is built, `OutsideGeneratedApi` (TOA811) lowers to info the
+  errors and warnings that lie outside the generated API: the dropped
+  operations (`SpecOperations` and `OperationSelector` recomputed on a scratch
+  bag) plus the nodes only they use, found by incoming `$ref`s, `discriminator`
+  mappings (bare names also in the root document), `allOf` subtypes of a
+  discriminated base at any depth or through aliases (`RefEdges`,
+  `SubtypeEdges`), and as uses from a synthetic source outside every
+  document the `errors.default_schema`, each generated operation and the
+  `parameters` and `servers` of its path item, so a `$ref` from a dropped
+  operation into generated code keeps its level
+  (`OutsideRegion`: candidates and dropped operations lose their place while
+  a node outside the region refers to them, to a fixpoint; a node below a
+  dropped operation that is referred to becomes a hole). It
+  bypasses `fixedCodes` on purpose; a node nobody places keeps its level.
   `SpecLinter.lint(path, preset:)` (M13) checks one spec file with no config,
   no overrides, no baseline and no IR: it loads, detects the version, runs
   `Normalizer` with the chosen preset or the one `PresetDetector` found, and
@@ -953,8 +976,9 @@ Engine folders under `packages/typed_openapi_core/lib/src/`, generator folders
   `prune`), `GenerateCommand` (`generate_command.dart`: checks like
   `check`, skips a client with errors (`ClientCheck.errors`) or an output
   that overlaps another's, writes the whole client with `ApiLibrary` and
-  `OutputWriter`, the inputs hash from `ClientCheck.sources` and the
-  client's settings; text report, then a line per client; exit code as
+  `OutputWriter`, the inputs hash of `GenerationInputs` (the generator,
+  the client's name and `line_width`, the IR without locations; not the
+  text of the inputs); text report, then a line per client; exit code as
   `check`; `ClientWriter` writes each client, `ApiLockRun` prints its
   change counts since `typed_openapi.lock` and records its snapshot, or
   with `--locked` refuses a client whose API differs, TOA834, and writes
@@ -1202,8 +1226,9 @@ public APIs of the core and the generator only. Its network use is the `SpecCach
   top section and the version a minor (before 1.0) or major raise, unless
   the CHANGELOG's top section at the base commit is titled `Unreleased` for
   the version in the base pubspec (never published): then the entry is
-  enough. Files are read at HEAD and at the base; a dirty working tree does
-  not count.
+  enough. A line `Semver exemption: <reason>` in that top section, one the
+  base's top section lacks, waives the raise for that release only. Files are
+  read at HEAD and at the base; a dirty working tree does not count.
 - `test/sarif/` - the SARIF output of `SarifReporter` against the SARIF
   2.1.0 JSON schema (`JsonSchema`, in `typed_openapi_test_support`, a validator for
   the draft-04 and draft-07 subset the SARIF and config schemas use) and against GitHub code scanning's required properties
@@ -1450,7 +1475,7 @@ query is built by the client, so interceptors see an empty
 holds `//`, which Dio would collapse. On the web with Dio's default adapter
 an event stream is refused with `webStreamingMessage` (the adapter delivers
 the body only when the connection closes). Inside the workspace its
-`typed_openapi_client: ^0.3.0` resolves to the package next to it
+`typed_openapi_client: ^0.3.1` resolves to the package next to it
 (`resolution: workspace`); a release that needs a new client publishes the
 client first. Tests: `dio_transport_test.dart` (a fake adapter,
 `test/helpers/fake_adapter.dart`), `web_test.dart` (`@TestOn('browser')`),
