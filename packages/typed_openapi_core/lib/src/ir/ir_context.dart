@@ -56,6 +56,14 @@ final class IrOverrides {
     }
   }
 
+  /// The operation overrides that resolved to an Operation Object, by the
+  /// location of that node.
+  Iterable<(SpecLocation, OperationOverride)> get operations sync* {
+    for (final MapEntry(:key, :value) in _entries.entries) {
+      if (value is OperationOverride) yield (key, value);
+    }
+  }
+
   /// The override of the schema at the end of a `components.schemas`
   /// key's `$ref` chain.
   SchemaOverride? schemaAt(SpecLocation location) =>

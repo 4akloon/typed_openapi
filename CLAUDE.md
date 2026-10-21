@@ -310,7 +310,10 @@ Engine folders under `packages/typed_openapi_core/lib/src/`, generator folders
   `OverrideResolver` delegates to `OperationTargetFinder`,
   `SchemaTargetFinder` and `TargetConflicts` (TOA806, TOA808) and reports
   through `OverrideTargetReporter` (the targets are in `override_target.dart`,
-  re-exported by the resolver); `OverrideApplier` delegates to
+  re-exported by the resolver); `DeadOverrides` (`ir/`, called at the end of
+  `OperationSelector.select`) reports TOA810 (warning) once for an operation
+  entry whose operation `include`/`exclude` dropped (not one with its own
+  `exclude`, and one that resolved to nothing is TOA804); `OverrideApplier` delegates to
   `OperationOverrideApplier`, `SchemaOverrideApplier` (with
   `ReferenceOverrideApplier`, `TypeOverrideApplier` and `NullableShape`)
   and `OverrideConflicts`, sharing an `OverrideEditContext` (reporting,

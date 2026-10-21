@@ -2503,6 +2503,22 @@
             "off"
           ]
         },
+        "TOA810": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "override-operation-not-generated": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
         "TOA820": {
           "enum": [
             "error"

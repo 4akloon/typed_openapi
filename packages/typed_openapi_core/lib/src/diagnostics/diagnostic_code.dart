@@ -1221,6 +1221,23 @@ enum DiagnosticCode {
     .info,
   ),
 
+  /// An override addresses an operation that the client's `include` or
+  /// `exclude` filter leaves out, so the entry and the overrides of its
+  /// parameters, body and responses change nothing in the generated client.
+  /// An entry with its own `exclude: true` is not reported.
+  ///
+  /// Example: The entry `GET /social-networks/facebook/auth-links` in the
+  /// overrides file while `include` of the client does not list that
+  /// operation.
+  ///
+  /// Fix: Remove the entry, or change `include` or `exclude` so that the
+  /// operation is generated.
+  overrideOperationNotGenerated(
+    'TOA810',
+    'override-operation-not-generated',
+    .warning,
+  ),
+
   /// The baseline file a client names does not exist.
   ///
   /// Example: `baseline: baseline.yaml` in the config when the file is not

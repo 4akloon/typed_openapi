@@ -2,7 +2,7 @@
 
 # Diagnostics reference
 
-Every problem `typed_openapi` finds in a spec, an overrides file, a baseline or a config has a stable code such as `TOA501`. This guide is the single reference for all 134 codes: what each one means and how to fix it. It is generated from the doc comments of the `DiagnosticCode` enum, so it cannot drift from the tool. Other guides link here instead of repeating the table.
+Every problem `typed_openapi` finds in a spec, an overrides file, a baseline or a config has a stable code such as `TOA501`. This guide is the single reference for all 135 codes: what each one means and how to fix it. It is generated from the doc comments of the `DiagnosticCode` enum, so it cannot drift from the tool. Other guides link here instead of repeating the table.
 
 ```text
 warning TOA501 missing-path-parameter: The path /products/{id} has {id}, but this operation declares no path parameter "id"; it is added as a required string path parameter.
@@ -1321,6 +1321,7 @@ Applying fixes and overrides, baselines, and writing the output.
 | [TOA807](#toa807-override-unchanged) | `override-unchanged` | info |
 | [TOA808](#toa808-override-shared-target) | `override-shared-target` | info |
 | [TOA809](#toa809-override-nullability-dropped) | `override-nullability-dropped` | info |
+| [TOA810](#toa810-override-operation-not-generated) | `override-operation-not-generated` | warning |
 | [TOA820](#toa820-baseline-not-found) | `baseline-not-found` | error (fixed) |
 | [TOA821](#toa821-invalid-baseline) | `invalid-baseline` | error (fixed) |
 | [TOA822](#toa822-baseline-entry-stale) | `baseline-entry-stale` | warning |
@@ -1431,6 +1432,16 @@ An override removes the `type` of a nullable 3.1 schema, so the schema is no lon
 **Example.** An override `type: null` on a schema with `type: [string, "null"]`.
 
 **Fix.** Nothing to do if the schema should stop being nullable; remove the override if it should stay nullable.
+
+### TOA810 `override-operation-not-generated`
+
+Default: warning.
+
+An override addresses an operation that the client's `include` or `exclude` filter leaves out, so the entry and the overrides of its parameters, body and responses change nothing in the generated client. An entry with its own `exclude: true` is not reported.
+
+**Example.** The entry `GET /social-networks/facebook/auth-links` in the overrides file while `include` of the client does not list that operation.
+
+**Fix.** Remove the entry, or change `include` or `exclude` so that the operation is generated.
 
 ### TOA820 `baseline-not-found`
 
@@ -1590,7 +1601,7 @@ Two clients write to the same or nested output directories.
 | Reading files | TOA001-TOA022 | `check`, `generate`, `baseline` |
 | Normalizer rules | TOA106, TOA201-TOA208, TOA211, TOA301, TOA303, TOA401, TOA402, TOA501-TOA504, TOA601 | one of the normalizer rules, see [Presets and rules](presets_and_rules.md) |
 | Mapping to Dart | the other TOA2xx-TOA6xx | the IR builder while it names and types the client |
-| Overrides | TOA560, TOA800-TOA809 | the overrides file, see [Overrides](overrides.md) |
+| Overrides | TOA560, TOA800-TOA810 | the overrides file, see [Overrides](overrides.md) |
 | Baseline | TOA820-TOA823 | see [Baseline](baseline.md) |
 | Generate | TOA830-TOA835 | see [Generated output](generate_output.md) and [the API lock](cli.md#the-api-lock) |
 | Config | TOA901-TOA904 | see [Configuration](configuration.md) |

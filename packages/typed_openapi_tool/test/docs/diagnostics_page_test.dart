@@ -62,7 +62,7 @@ void main() {
     String row(String stage) =>
         page.split('\n').singleWhere((l) => l.startsWith('| $stage |'));
     expect(row('Reading files'), contains('| TOA001-TOA022 |'));
-    expect(row('Overrides'), contains('| TOA560, TOA800-TOA809 |'));
+    expect(row('Overrides'), contains('| TOA560, TOA800-TOA810 |'));
     expect(row('Baseline'), contains('| TOA820-TOA823 |'));
     expect(row('Generate'), contains('| TOA830-TOA835 |'));
     expect(row('Config'), contains('| TOA901-TOA904 |'));
