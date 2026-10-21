@@ -5,10 +5,13 @@ import 'dart:mirrors';
 
 import 'package:test/test.dart';
 import 'package:typed_openapi_core/src/config/generation_config.dart';
+import 'package:typed_openapi_core/src/ir/dart_type.dart';
 import 'package:typed_openapi_core/src/ir/ir.dart';
 import 'package:typed_openapi_core/src/ir/ir_json.dart';
+import 'package:typed_openapi_core/src/ir/ir_type_text.dart';
 
 import '../helpers/ir_fixture.dart';
+import '../helpers/ir_json_classes.dart';
 
 /// A spec that gives every field of the operation IR a value.
 const _spec = '''
@@ -51,6 +54,7 @@ paths:
               properties:
                 file: {type: string, format: binary, description: The file.}
                 note: {type: string}
+              required: [file]
             encoding: {file: {contentType: image/png}}
       responses:
         "200": {description: ok, content: {application/json: {schema: {type: object, properties: {a: {type: string}}}}}}
@@ -87,6 +91,7 @@ paths:
                 oneOf:
                   - {properties: {event: {const: token}, data: {type: string, format: password}}}
                   - {properties: {event: {const: done}}}
+                  - {properties: {event: {const: info}, data: {type: string, contentMediaType: application/json, contentSchema: {type: object, properties: {a: {type: string}}}}}}
   /talk:
     get:
       operationId: talk
@@ -150,7 +155,7 @@ components:
 /// A spec that sets the flags the first one leaves off: secrets, direction,
 /// a discriminator and the variants of one JSON type.
 const _flags = r'''
-openapi: 3.1.0
+openapi: 3.2.0
 info: {title: t, version: "1"}
 paths:
   /owner:
@@ -188,6 +193,15 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/Text'}
+  /secret:
+    get:
+      operationId: getSecret
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Secret'}
   /status:
     get:
       operationId: getStatus
@@ -211,7 +225,7 @@ components:
       oneOf:
         - {$ref: '#/components/schemas/Cat'}
         - {$ref: '#/components/schemas/Dog'}
-      discriminator: {propertyName: kind}
+      discriminator: {propertyName: kind, defaultMapping: Dog}
     Cat:
       type: object
       required: [kind]
@@ -223,6 +237,10 @@ components:
       required: [kind]
       properties:
         kind: {const: dog}
+    Secret:
+      oneOf:
+        - {type: string, format: password}
+        - {type: integer}
     Text:
       oneOf:
         - {type: string}
@@ -267,58 +285,8 @@ const _notDumped = {
   // leaves locations out so the hash does not depend on where the spec is.
   'Declaration.id',
   'FieldIr.location',
+  'EventVariantIr.location',
 };
-
-/// The classes whose fields the dump must write.
-final _classes = <Type>[
-  ClientIr,
-  GroupIr,
-  OperationIr,
-  EventStreamIr,
-  EventUnionIr,
-  EventVariantIr,
-  ParameterIr,
-  RequestBodyIr,
-  ResponseIr,
-  SingleError,
-  ErrorsByStatus,
-  EncodingIr,
-  PartIr,
-  StatusTypeIr,
-  StatusCaseIr,
-  RootIr,
-  ServerIr,
-  ServerVariableIr,
-  SecurityUseIr,
-  SecuritySchemeIr,
-];
-
-/// The classes of the declarations, whose fields are looked up in the
-/// dump of the declarations alone.
-final _declarationClasses = <Type>[
-  Declaration,
-  ModelDecl,
-  FieldIr,
-  ConstraintsIr,
-  EnumDecl,
-  EnumValueIr,
-  UnionDecl,
-  UnionVariantIr,
-];
-
-void _collectKeys(Object? json, Set<String> keys) {
-  switch (json) {
-    case final Map<String, Object?> map:
-      for (final MapEntry(:key, :value) in map.entries) {
-        keys.add(key);
-        _collectKeys(value, keys);
-      }
-    case final List<Object?> list:
-      for (final item in list) {
-        _collectKeys(item, keys);
-      }
-  }
-}
 
 /// The public fields of [type], by name.
 List<String> _fieldsOf(Type type) => [
@@ -327,59 +295,35 @@ List<String> _fieldsOf(Type type) => [
       MirrorSystem.getName(member.simpleName),
 ];
 
+String _nameOf(DeclId id) => 'N';
+
 void main() {
   final ir = IrFixture(_spec).build();
   final json = IrJson((_) => 'api.yaml').toJson(ir);
-  final keys = <String>{};
-  _collectKeys(json, keys);
-  // `exhaustive` is written only when false (R14.2).
-  const open = GenerationConfig(exhaustive: false);
-  _collectKeys(
-    IrJson(
-      (_) => 'api.yaml',
-    ).toJson(IrFixture(_spec, generation: open).build()),
-    keys,
-  );
 
-  test('every field of the operation IR is in the dump', () {
+  test('every field of every IR class is in the dump', () {
+    // `exhaustive` and the flags are written only when set (R14.2).
+    const open = GenerationConfig(exhaustive: false, triState: .extension);
+    final dumps = [
+      json,
+      for (final fixture in [
+        IrFixture(_spec, generation: open),
+        IrFixture(_declarations),
+        IrFixture(_flags, generation: open),
+      ])
+        IrJson((_) => 'api.yaml').toJson(fixture.build()),
+    ];
     final missing = [
-      for (final type in _classes)
+      for (final MapEntry(key: type, value: path)
+          in IrJsonClasses.paths.entries)
         for (final field in _fieldsOf(type))
           if (!_notDumped.contains('$type.$field') &&
-              !keys.contains(
-                _renames['$type.$field'] ?? _renames[field] ?? field,
-              ))
+              !{
+                for (final dump in dumps) ...IrJsonClasses.keysAt(dump, path),
+              }.contains(_renames['$type.$field'] ?? _renames[field] ?? field))
             '$type.$field',
     ];
     expect(missing, isEmpty, reason: 'Write these fields in IrJson.');
-  });
-
-  test('every field of the declarations is in the dump', () {
-    final declarationKeys = <String>{};
-    const open = GenerationConfig(exhaustive: false, triState: .extension);
-    for (final ir in [
-      IrFixture(_declarations).build(),
-      IrFixture(_flags, generation: open).build(),
-    ]) {
-      _collectKeys(
-        IrJson((_) => 'api.yaml').toJson(ir)['declarations'],
-        declarationKeys,
-      );
-    }
-    final missing = [
-      for (final type in _declarationClasses)
-        for (final field in _fieldsOf(type))
-          if (!_notDumped.contains('$type.$field') &&
-              !declarationKeys.contains(
-                _renames['$type.$field'] ?? _renames[field] ?? field,
-              ))
-            '$type.$field',
-    ];
-    expect(
-      missing,
-      isEmpty,
-      reason: 'Write these fields in IrDeclarationJson.',
-    );
   });
 
   test('the dump without locations has no location', () {
@@ -388,6 +332,38 @@ void main() {
       const IrJson.withoutLocations().encode(ir),
       isNot(contains('"at"')),
     );
+  });
+
+  test('every kind of type is written with all it has', () {
+    const text = IrTypeText(_nameOf);
+    const string = CoreType(.string);
+    const custom = CustomType(type: 'M', import: 'a', json: string);
+    final types = <String, DartType>{
+      'nullable': const CoreType(.string, nullable: true),
+      'bytes': const CoreType(.bytes),
+      'binary': const CoreType(.binary),
+      'string': string,
+      'list': const ListType(string),
+      'list of nullable': const ListType(CoreType(.string, nullable: true)),
+      'map': const MapType(string),
+      'patch': const PatchType(string),
+      'custom': custom,
+      'custom import': const CustomType(type: 'M', import: 'b', json: string),
+      'custom converter': const CustomType(
+        type: 'M',
+        import: 'a',
+        json: string,
+        converter: 'C',
+      ),
+      'custom json': const CustomType(
+        type: 'M',
+        import: 'a',
+        json: CoreType(.integer),
+      ),
+      'custom nullable': custom.withNullable(true),
+    };
+    final written = types.map((name, type) => MapEntry(name, text.of(type)));
+    expect(written.values.toSet().length, types.length, reason: '$written');
   });
 
   test('the classes list has fields to check', () {

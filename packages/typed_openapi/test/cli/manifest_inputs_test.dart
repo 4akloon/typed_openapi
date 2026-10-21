@@ -72,6 +72,11 @@ void main() {
     return manifest();
   }
 
+  Future<String> inputsAfter(String spec) async {
+    await manifestAfter(spec);
+    return inputs();
+  }
+
   test('a comment does not change the manifest', () async {
     final before = await manifestAfter(_spec);
     expect(await manifestAfter('$_spec\n# a comment\n'), before);
@@ -99,22 +104,22 @@ void main() {
   );
 
   test('a description of an included operation changes it', () async {
-    final before = await manifestAfter(_spec);
+    final before = await inputsAfter(_spec);
     final changed = _spec.replaceAll(
       'operationId: listPets',
       'operationId: listPets\n      description: Lists the pets.',
     );
-    expect(await manifestAfter(changed), isNot(before));
+    expect(await inputsAfter(changed), isNot(before));
   });
 
   test('a new parameter of an included operation changes it', () async {
-    final before = await manifestAfter(_spec);
+    final before = await inputsAfter(_spec);
     final changed = _spec.replaceAll(
       'operationId: listPets',
       'operationId: listPets\n      parameters:\n'
           '        - {name: limit, in: query, schema: {type: integer}}',
     );
-    expect(await manifestAfter(changed), isNot(before));
+    expect(await inputsAfter(changed), isNot(before));
   });
 
   test('the line width changes it', () async {
@@ -139,8 +144,8 @@ void main() {
   });
 
   Future<void> expectChanged(String from, String to) async {
-    final before = await manifestAfter(_spec);
-    expect(await manifestAfter(_spec.replaceAll(from, to)), isNot(before));
+    final before = await inputsAfter(_spec);
+    expect(await inputsAfter(_spec.replaceAll(from, to)), isNot(before));
   }
 
   test('a description of a property changes it', () async {
