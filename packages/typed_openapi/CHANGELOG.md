@@ -37,6 +37,12 @@
   regenerated with a plain `generate`.
 
 ### Fixed
+- An error or warning in an operation that `include`, `exclude` or an
+  overrides `exclude: true` leave out (or in a schema only such operations
+  use) no longer stops `generate`: the finding keeps its code and message but
+  is reported as info, and `TOA811` (`findings-outside-generated-api`, info)
+  says how many were lowered. A schema that a generated operation also
+  reaches keeps its level.
 - The `inputs` hash of the manifest covers what generation reads (the
   generator, the client's name, `line_width` and the IR without locations),
   not the text of the input files: a comment, or a backend change to an

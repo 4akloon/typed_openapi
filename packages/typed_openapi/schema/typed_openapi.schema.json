@@ -2519,6 +2519,22 @@
             "off"
           ]
         },
+        "TOA811": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
+        "findings-outside-generated-api": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "off"
+          ]
+        },
         "TOA820": {
           "enum": [
             "error"

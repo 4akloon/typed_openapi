@@ -144,7 +144,7 @@ If `input_suffix` and `patch_suffix` are equal, both return to their defaults an
 | `operations` | The raw `operationId`. |
 | `paths` | A path template. `*` is one segment and `**` any number of segments. |
 
-`include` is the union of its three lists; empty means no filter. `exclude` is applied after and wins. A pattern that matches nothing is TOA557, and a pattern in both filters is TOA558. When filters leave no operation, TOA563 says so. An override can also take one operation out with `exclude: true`, see [Overrides](overrides.md).
+`include` is the union of its three lists; empty means no filter. `exclude` is applied after and wins. A pattern that matches nothing is TOA557, and a pattern in both filters is TOA558. When filters leave no operation, TOA563 says so. An override can also take one operation out with `exclude: true`, see [Overrides](overrides.md). The whole spec is still read and checked, but an error or warning in an operation the client leaves out, or in a schema only such operations use, is lowered to info (TOA811 counts them), so it does not stop `generate`; a schema that a generated operation also reaches keeps its level.
 
 ## Types
 

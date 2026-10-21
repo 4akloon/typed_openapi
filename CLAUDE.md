@@ -907,6 +907,14 @@ Engine folders under `packages/typed_openapi_core/lib/src/`, generator folders
   `typed_openapi.lock` keeps them (`ApiLockNames`; the `NameLock` is part
   of the run key); an unreadable lock is TOA835 (an error, exit `1`) for `check`,
   `ir`, `baseline` and `diff` too, since every command reads it; `SpecChecker.freshNames` ignores the lock.
+  After the IR is built, `OutsideGeneratedApi` (TOA811) lowers to info the
+  errors and warnings that lie outside the generated API: the dropped
+  operations (`SpecOperations` and `OperationSelector` recomputed on a scratch
+  bag) plus the nodes only they use, found by incoming `$ref`s, `discriminator`
+  mappings and `allOf` subtypes of a discriminated base (`RefEdges`,
+  `OutsideRegion`: candidates reached from the dropped operations lose a
+  member while a node outside the region refers to it, to a fixpoint). It
+  bypasses `fixedCodes` on purpose; a node nobody places keeps its level.
   `SpecLinter.lint(path, preset:)` (M13) checks one spec file with no config,
   no overrides, no baseline and no IR: it loads, detects the version, runs
   `Normalizer` with the chosen preset or the one `PresetDetector` found, and

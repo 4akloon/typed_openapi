@@ -1,6 +1,12 @@
 ## 0.3.1 - Unreleased
 
 ### Added
+- `DiagnosticCode.findingsOutsideGeneratedApi` (`TOA811`, info): `SpecChecker`
+  lowers to info the errors and warnings located in operations the client's
+  filters or `exclude: true` overrides leave out and in nodes only those
+  operations use (found by incoming references, so a node a generated
+  operation can reach, also through a discriminated subtype or a mapping,
+  keeps its level), and reports how many.
 - `DartNames.eventPascal`, which names the variants of an event union and
   their data types: every all-caps piece of an event name is lowercased after
   its first letter (`USER_CREATED` is `UserCreated`, not `USERCREATED`).
