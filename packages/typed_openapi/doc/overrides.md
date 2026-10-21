@@ -168,7 +168,7 @@ Every code is explained in [Diagnostics](diagnostics.md). Rules that only report
 The overrides file has a JSON Schema too, [`typed_openapi.overrides.schema.json`](../schema/typed_openapi.overrides.schema.json), generated and tested like [the one of the config](configuration.md#editor-support) (`override_schema_test.dart` in `typed_openapi_core` checks it against `OverrideLoader`). Put this as the first line of the file:
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/4akloon/typed_openapi/typed_openapi-v0.2.0/packages/typed_openapi/schema/typed_openapi.overrides.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/4akloon/typed_openapi/typed_openapi-v0.3.0/packages/typed_openapi/schema/typed_openapi.overrides.schema.json
 operations:
   listPets:
     group: Pets

@@ -203,11 +203,11 @@ A backend project that has no Dart SDK can run the same `lint` from a release bi
 Each archive holds the executable (`typed_openapi.exe` on Windows) and the `LICENSE`. The action downloads the archive of the runner, checks its SHA-256 against `SHA256SUMS` and runs the command:
 
 ```yaml
-      - uses: 4akloon/typed_openapi/action@typed_openapi-v0.2.0
+      - uses: 4akloon/typed_openapi/action@typed_openapi-v0.3.0
         with:
           command: lint
           spec: openapi.json
-          version: 0.2.0
+          version: 0.3.0
           fail-on: error
 ```
 

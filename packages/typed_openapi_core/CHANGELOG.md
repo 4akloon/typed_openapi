@@ -1,4 +1,4 @@
-## 0.3.0 - Unreleased
+## 0.3.0
 
 ### Changed
 - `DartNames.takenTypeNames` reserves `SseRetry`, the new type of

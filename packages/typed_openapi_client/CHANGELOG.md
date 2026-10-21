@@ -1,4 +1,4 @@
-## 0.3.0 - Unreleased
+## 0.3.0
 
 ### Added
 - Default call options: `ClientSender(transport, defaults:)` and
