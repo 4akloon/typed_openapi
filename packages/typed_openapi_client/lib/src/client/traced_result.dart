@@ -23,12 +23,8 @@ final class TracedResult {
           statusCode: statusCode,
           headers: headers,
         );
-      case TransportError(:final exception, :final stackTrace):
-        tracer.error(exception, stackTrace);
-      case Cancelled(:final exception, :final stackTrace):
-        tracer.error(exception, stackTrace);
       case final Failure<Stream<SseItem<T>>, E> failure:
-        tracer.error(failure, null);
+        tracer.failed(failure);
     }
     tracer.closed();
     return result;

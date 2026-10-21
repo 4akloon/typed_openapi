@@ -6,7 +6,7 @@ import '../transport/transport_exception.dart';
 import 'cancellable_wait.dart';
 import 'reconnection_plan.dart';
 import 'sse_item.dart';
-import 'sse_options.dart';
+import 'sse_settings.dart';
 
 /// Where a new connection of an event stream picks up: the last event id
 /// (sent as `Last-Event-ID`) and the server's last reconnection time.
@@ -17,25 +17,30 @@ typedef SseResume = ({String lastEventId, Duration? retry});
 /// When a connection ends ([SseDisconnected] from the server closing it or
 /// from a failed connection), the stream emits [SseReconnecting], waits,
 /// and calls [reopen] with the last event id. A new connection's items
-/// follow; a failed attempt (a [TransportError]) is the next attempt. The
-/// stream ends with [SseDisconnected] when [SseOptions.maxAttempts]
+/// follow; a failed attempt that [SseSettings.shouldRetry] accepts is the
+/// next attempt, and a `Retry-After` of its response lengthens the wait.
+/// The stream ends with [SseDisconnected] when [SseSettings.maxAttempts]
 /// attempts in a row bring no message (never, when it is null), when the
-/// request is cancelled (the listener cancels, or [cancel] is cancelled, also
-/// during a wait), when the server answers an attempt with a status that is not a stream (the
-/// `Failure` is the cause), or with 204 No Content, which tells a client
-/// to stop reconnecting.
+/// request is cancelled (the listener cancels, or [cancel] is cancelled,
+/// also during a wait), when an attempt fails in a way that
+/// [SseSettings.shouldRetry] refuses (the `Failure` is the cause), or with
+/// 204 No Content, which tells a client to stop reconnecting.
 final class SseReconnector<T>
     extends StreamTransformerBase<SseItem<T>, SseItem<T>> {
   /// Creates the reconnection of one call.
   const SseReconnector(
-    this.options,
+    this.settings,
+    this.plan,
     this.reopen, {
     this.cancel,
     this.onCancel,
   });
 
-  /// The delays and the number of attempts.
-  final SseOptions options;
+  /// The call's settings: the classifier, the clock of the waits.
+  final SseSettings settings;
+
+  /// The delays and the number of attempts, shared with the opening.
+  final ReconnectionPlan plan;
 
   /// Opens the stream again from a [SseResume].
   final Future<Result<Stream<SseItem<T>>, Object?>> Function(SseResume resume)
@@ -56,8 +61,8 @@ final class SseReconnector<T>
 /// The state of one reconnecting stream.
 final class _Reconnection<T> {
   _Reconnection(this._owner)
-    : _sleep = CancellableWait(_owner.options.wait),
-      _plan = ReconnectionPlan(_owner.options);
+    : _sleep = CancellableWait(_owner.settings.wait),
+      _plan = _owner.plan;
 
   final SseReconnector<T> _owner;
   final CancellableWait _sleep;
@@ -145,9 +150,13 @@ final class _Reconnection<T> {
     _plan.reset();
   }
 
-  Future<void> _reconnect(Object? cause, StackTrace? stackTrace) async {
+  Future<void> _reconnect(
+    Object? cause,
+    StackTrace? stackTrace, [
+    Failure<Object?, Object?>? failure,
+  ]) async {
     try {
-      await _nextConnection(cause, stackTrace);
+      await _nextConnection(cause, stackTrace, failure);
     } on Object catch (error, trace) {
       // Not awaited by anyone: an escaping error would hang the stream and
       // reach the zone. It comes from user code (a `wait` or an interceptor)
@@ -156,15 +165,26 @@ final class _Reconnection<T> {
     }
   }
 
-  /// Waits and opens the next connection after the end of one for [cause].
-  Future<void> _nextConnection(Object? cause, StackTrace? stackTrace) async {
-    final step = _plan.next(_retry);
+  /// Waits and opens the next connection after the end of one for [cause];
+  /// [failure] is the answer of a failed attempt, whose `Retry-After`
+  /// counts.
+  Future<void> _nextConnection(
+    Object? cause,
+    StackTrace? stackTrace,
+    Failure<Object?, Object?>? failure,
+  ) async {
+    final step = _plan.next(_retry, failure: failure);
     if (step == null) return _end(_disconnected(cause, stackTrace));
     final (:attempt, :delay) = step;
     _out.add(
       SseReconnecting(attempt, delay, cause: cause, stackTrace: stackTrace),
     );
-    await _wait(delay);
+    try {
+      await _wait(delay);
+    } on Exception catch (e, trace) {
+      // An injected `wait` that fails ends the stream, as in the opening.
+      return _end(_disconnected(e, trace));
+    }
     if (_closed) return;
     if (_cancel case final cancel?) {
       return _end(_disconnected(cancel, cancel.stackTrace));
@@ -187,12 +207,21 @@ final class _Reconnection<T> {
     switch (result) {
       case Success(:final data):
         _listen(data);
-      case TransportError(:final exception, :final stackTrace):
-        unawaited(_reconnect(exception, stackTrace));
       case Cancelled(:final exception, :final stackTrace):
         _end(_disconnected(exception, stackTrace));
       case final Failure<Stream<SseItem<T>>, Object?> failure:
-        _end(_disconnected(failure, null));
+        final (cause, stackTrace) = switch (failure) {
+          TransportError(:final exception, :final stackTrace) => (
+            exception,
+            stackTrace,
+          ),
+          _ => (failure, null),
+        };
+        if (_owner.settings.shouldRetry(failure)) {
+          unawaited(_reconnect(cause, stackTrace, failure));
+        } else {
+          _end(_disconnected(cause, stackTrace));
+        }
     }
   }
 

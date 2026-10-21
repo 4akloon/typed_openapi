@@ -34,9 +34,9 @@ pub workspace with seven pure-Dart packages (no Flutter):
 Minimum SDK: Dart 3.10 (`>=3.10.0 <4.0.0`), also for generated code.
 
 The four published packages (core, client, `typed_openapi`, Dio transport)
-share one version, `0.2.0`, released by hand with
+share one version, `0.3.0`, released by hand with
 `docs/release-checklist.md` (the tags and the publish follow the merge); their
-CHANGELOGs say `## 0.2.0 - Unreleased` until the release (a section titled
+CHANGELOGs say `## 0.3.0 - Unreleased` until the release (a section titled
 `## <version> - Unreleased` is a version not yet released).
 
 ## Commands
@@ -766,11 +766,15 @@ Engine folders under `packages/typed_openapi_core/lib/src/`, generator folders
   `api.dart` and the root `<client>.dart` (`_client` added when that is a
   barrel's name), which exports both barrels and holds the root class
   (`ClientIr.root`: a field per group, servers as `static const` or a
-  `static String` method of the URL variables; it never sets a base URL).
+  `static String` method of the URL variables; it never sets a base URL; its
+  constructor is `Root(ClientTransport transport, {CallOptions defaults =
+  const CallOptions()})` and hands `defaults` to every group, so `RootNames`
+  reserves `defaults` and a group named so gets a suffix, TOA551; the files
+  import `CallOptions`).
   `OperationEmitter` (with `RequestWriter` for parameters and bodies,
   `DecoderWriter` for the status `switch`, `StatusTypeEmitter` and
   `PartsEmitter` for the types after the class) writes a group: a plain `class` with
-  `{Group}(ClientTransport transport)` (a `ClientSender` over it), a private `OperationInfo` (tags, security) and a
+  `{Group}(ClientTransport transport, {CallOptions defaults = const CallOptions()})` (a `ClientSender` over it, given the defaults), a private `OperationInfo` (tags, security) and a
   static decoder per operation (private names apart in their own scope),
   methods with named arguments only (`required` for required ones; enum
   arguments take the known values), `body`, then `CallOptions? call`,
@@ -1326,6 +1330,35 @@ like `test/helpers/pets_api.dart` (illustrative, not a contract);
   is read is a `TransportError` of kind `other`, and an `Error` is never
   caught. `CallOptions` (`cancel`: `CancelSignal`, `headers`, `extra` for
   the transport, the progress callbacks, `sse`: `SseOptions`).
+  `ClientSender(transport, {defaults})` merges the defaults with each call
+  once, at the top of `send` and `openEvents` (`CallOptions.merge`: the
+  call's value wins; `cancel` and the progress callbacks `call ?? defaults`;
+  `extra` a union; `sse` through `SseOptions.merge`), so every later stage
+  reads the merged value. The default headers are not merged into the
+  call's: the sender merges its defaults without headers
+  (`CallOptions.withoutHeaders`) and `RequestBuilder(defaultHeaders:)` layers
+  them, lowest to highest, default headers, the operation's (`Accept`, header
+  parameters, `Last-Event-ID`), the call's (case-insensitive; a `null` call
+  value removes a default; a default `Last-Event-ID` is ignored on a
+  stream). A default `cancel` lives as long as the client: every call adds a
+  listener to it and, once it fires, every later call is `Cancelled`.
+  Every `SseOptions` field is nullable (unset);
+  `SseSettings` (internal) applies the built-in values after the merge, and
+  `maxAttempts` keeps an explicit `null` as "never give up" apart from an
+  omitted argument (a private flag). The opening of an event stream goes
+  through `StreamOpening` (`client/`): a failed attempt that `SseRetry`
+  (`SseOptions.retryWhen` replaces it) calls transient (`TransportError`
+  `connection`/`timeout`, 408, 429, 5xx but 501 and 505; `Cancelled` is never
+  classified; `TransportError` `other` is final) is traced, waited for and
+  tried again on the call's one `ReconnectionPlan`, which `SseReconnector`
+  shares; `retryOpen` unset follows the reconnection policy, `.off` wins
+  silently, and a body that cannot be sent twice (`ReplayableBody`) is never
+  retried or reconnected. `RetryAfter` (`sse/`, web-safe, with its own
+  `HttpDate` in `sse/http_date.dart`, not `dart:io`'s)
+  reads delta-seconds or an HTTP date against the response `Date`; the
+  delay is `max(Retry-After, backoff)` for that attempt only, not capped by
+  `maxDelay` but by `RetryAfter.maxWait` (24 hours).
+  `SseTrace.operation` names the stream's `OperationInfo`.
   `EventOpener` opens event streams: `openEvents` needs its stream
   listened to or cancelled; a listener cancel cancels the request. An
   `EventCall` holds what every connection of one call shares, and its
@@ -1374,12 +1407,15 @@ like `test/helpers/pets_api.dart` (illustrative, not a contract);
   stream transformer: under `fakeAsync` that future completes outside the
   fake zone. `SseReconnection` is the operation's policy:
   `off` (a POST that does not enable it; the call cannot), `onRequest`
-  (GET), `on`. Cancel, an error status (the `Failure` is the cause) and 204
-  end the stream; a listener cancel also aborts a request that is in flight
+  (GET), `on`. Cancel, a final error status (the `Failure` is the cause)
+  and 204 end the stream (a transient status, `SseRetry`/`retryWhen`, is
+  retried); a listener cancel also aborts a request that is in flight
   (`SseReconnector.onCancel`); a pause of the listener, also during a wait
-  or a reopen, holds the next connection; an exception or `Error` thrown on
-  an attempt, by a `wait` or the transport, is the stream's one error,
-  never the zone's. An event id that is not printable ASCII, space or tab is
+  or a reopen, holds the next connection; an `Exception` thrown by a `wait`
+  ends the stream with `SseDisconnected` (an opening then returns the
+  failure it was waiting after), and an `Error` thrown on an attempt, by a
+  `wait` or the transport, is the stream's one error, never the zone's.
+  An event id that is not printable ASCII, space or tab is
   not sent as `Last-Event-ID`, on the web too (a browser would send UTF-8,
   but the VM's `HttpClient` rejects it and every reconnection would fail),
   and the reconnection goes on without it. Use `transformer.bind(stream)`,
@@ -1414,7 +1450,7 @@ query is built by the client, so interceptors see an empty
 holds `//`, which Dio would collapse. On the web with Dio's default adapter
 an event stream is refused with `webStreamingMessage` (the adapter delivers
 the body only when the connection closes). Inside the workspace its
-`typed_openapi_client: ^0.2.0` resolves to the package next to it
+`typed_openapi_client: ^0.3.0` resolves to the package next to it
 (`resolution: workspace`); a release that needs a new client publishes the
 client first. Tests: `dio_transport_test.dart` (a fake adapter,
 `test/helpers/fake_adapter.dart`), `web_test.dart` (`@TestOn('browser')`),

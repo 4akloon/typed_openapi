@@ -243,6 +243,12 @@ overridden
 POST /chat accept text/event-stream
   end closed
 success 200
+  event message # Thread(id: t1, replies: null)
+  reconnecting 1 after 1000ms
+  end closed
+waits [1000, 1000]
+requests 3
+success 200
   event message # line 1
 line 2
   end closed
@@ -353,6 +359,8 @@ text/plain note
 error 400 json {"ok":false}
 success 200 null
 extra 1
+success 200 null
+defaults d 1
 cancelled
 transport
 decode /data/id an integer

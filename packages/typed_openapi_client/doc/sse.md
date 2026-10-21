@@ -72,8 +72,9 @@ carry the stream; a range is expanded) in the `OperationRequest`.
 persist across events as WHATWG says, not the ones of that event alone.
 `SseDisconnected.cause` is `null` when the server closed the connection, else
 the error: usually a `TransportException` (kind `cancelled` for a cancelled request),
-or, when a reconnection is answered with a status that is not a stream, the
-`Failure` of that answer (`UndocumentedStatus(503)`, an `HttpError`, ...).
+or, when a reconnection is answered with a final status that is not a
+stream, the `Failure` of that answer (`UndocumentedStatus(404)`, an
+`HttpError`, ...).
 `SseDisconnected.lastEventId` is `''` when there was none and the same id a
 reconnection would send as `Last-Event-ID`, so you can resume yourself.
 
@@ -192,9 +193,11 @@ final result = await api.pets.watchPet(
 | `reconnect` | `null` | `true` / `false` as above; `null` keeps the operation's setting |
 | `delay` | 1 s | The first delay when the server sent no `retry` |
 | `maxDelay` | 30 s | The longest delay a doubling reaches |
-| `maxAttempts` | 5 | Attempts in a row that bring no message before the stream ends; `null` never gives up |
+| `maxAttempts` | 5 | Retries after a failure, in a row without a message; `null` never gives up (see [Defaults](#defaults-for-every-call) for omitted versus `null`) |
 | `jitter` | 0 | Share (0 to 1) by which each backoff delay is moved at random either way |
-| `cooldown` | `null` | `SseCooldown(after:, duration:)`: a long pause after many failed attempts in a row |
+| `cooldown` | `null` | `SseCooldown(after:, duration:)`: a long pause after many failed attempts in a row; `SseCooldown.none` switches a default off |
+| `retryOpen` | `null` | Whether a failed opening is retried; unset follows `reconnect`, see [Retrying the opening](#retrying-the-opening) |
+| `retryWhen` | `null` | Replaces the transient-or-final classifier, see [Which failures are retried](#which-failures-are-retried) |
 | `random` | `null` | The `Random` of the jitter; a seeded one makes delays repeatable |
 | `idleTimeout` | `null` | Longest silence on a connected stream; see [Long-lived streams](#long-lived-streams) |
 | `handshakeTimeout` | `null` | Longest wait for the response headers of an attempt |
@@ -215,7 +218,8 @@ The connection ended (the server closed it, or it failed):
    `null` when the server closed the connection, else the error.
 2. It waits `delay`.
 3. It opens the request again with `Last-Event-ID` set to the last id.
-4. The new connection's items follow. A failed attempt (a `TransportError`)
+4. The new connection's items follow. A failed attempt that counts as
+   transient (see [Which failures are retried](#which-failures-are-retried))
    is the next attempt.
 
 ```text
@@ -239,14 +243,17 @@ The stream **ends** with `SseDisconnected` when:
   not given up. A connection that brings only comments, or blocks with just
   `id:` or `retry:`, does not reset it.
 - The request is cancelled (see below).
-- The server answers an attempt with a status that is not a stream: the
-  `Failure` is the `cause`. For example, with an adapter whose second answer
-  is `503`:
+- The server answers an attempt with a status that is not a stream and the
+  failure is final (a 401, 404, ...): the `Failure` is the `cause`. A
+  transient status (408, 429, most 5xx) and a `TransportError` of kind
+  `connection` or `timeout` are retried instead; a `TransportError` of kind
+  `other` ends the stream. For example, with an adapter whose second answer
+  is `404`:
 
   ```text
   SseEvent(a, event=message, id="")
   SseReconnecting(attempt=1, delay=1000ms, cause=null)
-  SseDisconnected(cause=UndocumentedStatus(503), lastEventId="", retry=null, receivedMessage=false)
+  SseDisconnected(cause=UndocumentedStatus(404), lastEventId="", retry=null, receivedMessage=false)
   ```
 
 - The server answers `204 No Content`, which tells a client to stop
@@ -266,7 +273,9 @@ The stream **ends** with `SseDisconnected` when:
 
   That is six requests: the first and five reconnections.
 
-An exception or `Error` thrown on an attempt, by a `wait` or an interceptor,
+An `Exception` thrown by `SseOptions.wait` ends the stream with a last
+`SseDisconnected` whose `cause` is that exception; during the opening the
+method returns the failure it was waiting after instead. An `Error` thrown on an attempt, by a `wait`, the transport or an interceptor,
 is the stream's one error, never the zone's.
 
 ### Long-lived streams
@@ -305,13 +314,15 @@ on resume. Choose a value above the server's heartbeat interval.
 **Handshake timeout.** `handshakeTimeout` bounds the wait for the response
 headers of each attempt, the first and every reconnection. When it runs out
 the request is cancelled and the attempt fails with a `TransportException`
-of kind `timeout`: a failed first attempt is the `TransportError` the method
-returns, a failed reconnection is retried like any refused one. It does not
-limit how long the body takes.
+of kind `timeout`: a failed attempt is retried like a refused connection
+(kind `timeout` is transient; see
+[Retrying the opening](#retrying-the-opening)). Only when the opening is not
+retried is a failed first attempt the `TransportError` the method returns. It
+does not limit how long the body takes.
 
 **Unbounded attempts.** `maxAttempts: null` reconnects until the call is
-cancelled, the listener cancels or the server answers with a status that is
-not a stream (or `204`).
+cancelled, the listener cancels or the server answers with a final status
+(or `204`). Transient failures keep being retried.
 
 **Backoff.** The delay before attempt *n* is computed as above, then moved
 by `jitter`: with `jitter: 0.2` a 4 s delay is a random value from 3.2 to
@@ -338,7 +349,7 @@ emits.
 
 | `SseTraceKind` | When | Fields set |
 | --- | --- | --- |
-| `connect` | A request is about to be sent | `attempt`: the number of the connection (1, then 2 for the first reconnection) |
+| `connect` | A request is about to be sent | `attempt`: the number of the connection (1, then 2 for the first retry or reconnection) |
 | `open` | The response headers arrived | `statusCode` |
 | `event` | A message arrived, also one that does not decode or that is dropped | `event`, `eventId` |
 | `heartbeat` | A comment line arrived | |
@@ -347,7 +358,10 @@ emits.
 | `closed` | The stream is over: its last item went out, or the listener cancelled | |
 
 Every trace has `streamId`, the correlation id of the call: the same on all
-its connections, different for every call in the program. A typical stream:
+its connections, different for every call in the program. It also has
+`operation` (`OperationInfo`: `operationId`, `method`, `pathTemplate`,
+`tags`), so one `onTrace` shared through the defaults can tell the streams
+apart; `toString` prints the `operationId`. A typical stream:
 `connect 1`, `open 200`, `heartbeat`, `event`, `reconnecting 1`,
 `connect 2`, `open 200`, ..., `closed`.
 
@@ -373,12 +387,151 @@ await api.pets.watchPet(
 );
 ```
 
+## Defaults for every call
+
+Give the options once, when the client is built. The generated root and group
+classes take `defaults`, which the client merges with each call's
+`CallOptions` before anything else reads them:
+
+```dart
+final client = CoreApiClient(
+  DioTransport(dio),
+  defaults: CallOptions(
+    sse: SseOptions(
+      reconnect: true,
+      maxAttempts: null, // never give up
+      jitter: 0.2,
+      cooldown: SseCooldown(after: 10, duration: Duration(minutes: 5)),
+      idleTimeout: Duration(seconds: 60),
+      handshakeTimeout: Duration(seconds: 30),
+      onTrace: (t) => debugPanel.add('${t.operation.operationId} $t'),
+      // retryOpen: unset, follows reconnect -> on
+    ),
+  ),
+);
+
+// A call passes nothing, or only what differs.
+final result = await client.customerEvents.inboxUnreadCount(call: CallOptions(cancel: signal));
+```
+
+A value the call sets wins; a value it leaves unset falls back to the
+default. `CallOptions.merge` and `SseOptions.merge` do this.
+
+A default `cancel` is scoped to the client's lifetime. Each call and stream
+adds a listener to the signal that stays until the signal fires, and once it
+has fired every later call of that client returns `Cancelled`, because a
+signal stays cancelled. Build a new client with a new signal after that. Use
+it for a session-scoped client that is thrown away on logout (the signal
+fires, the client goes), not for a client that lives as long as the app and
+makes unbounded calls: pass `call.cancel` there.
+
+| Field | Merge |
+| --- | --- |
+| `cancel` | `call.cancel ?? defaults.cancel`. A default signal cancels every call that brings no signal of its own; it is not combined with the call's. See the note below |
+| `headers` | Three layers, lowest to highest: the default headers, the operation's own headers (its header parameters, `Accept`, `Content-Type`, `Content-Length`, `Last-Event-ID`), the call's headers. So a default `Accept` never replaces `text/event-stream`, and a default `X-Tenant` does not beat the header argument of a method. Names compare case-insensitively and the call keeps its spelling. A `null` value in the call removes a default header. A default `Last-Event-ID` is ignored on an event stream |
+| `extra` | Union. The call wins per key; a `null` is a value |
+| `onSendProgress`, `onReceiveProgress` | `call ?? defaults` |
+| `sse` | `SseOptions.merge`, field by field: a field the call leaves `null` takes the default's |
+
+Every `SseOptions` field is nullable and `null` means unset; the built-in
+values apply after the merge (`delay` 1 s, `maxDelay` 30 s, `maxAttempts` 5,
+`jitter` 0). To switch a default off in one call, write the off value:
+`Duration.zero` for `idleTimeout` and `handshakeTimeout`, `jitter: 0`,
+`SseCooldown.none`, `retryOpen: false`. `onTrace`, `random` and `wait` have no
+off value; pass `(_) {}` for no trace.
+
+`maxAttempts` is the one field where `null` is a value. Leaving the argument
+out is unset and inherits the default; writing `maxAttempts: null` means
+never give up and wins over a default of 5. A call that leaves it out
+inherits an unlimited default too.
+
+A plain request ignores `sse`. `ClientSender(transport, defaults: ...)` takes
+the same value if you build a sender by hand.
+
+## Retrying the opening
+
+A stream that fails to open used to return the `Failure` at once. Now the
+opening is retried on transient failures, with the same backoff, jitter,
+cooldown and attempt limit as a reconnection, and the failed attempts count
+together with the reconnections of that call.
+
+- The `Future` **waits**: it completes when the stream opens, with a final
+  `Failure` (the last one when `maxAttempts` is used up), or with
+  `Cancelled`. The caller sees the retries only through `onTrace`.
+- Cancel through `call.cancel` or a default `cancel`; there is no
+  subscription yet. A cancel during a backoff completes the `Future` with
+  `Cancelled` at once, and a cancel during a handshake aborts the request.
+- `SseOptions.retryOpen` unset follows the reconnection policy: the opening
+  is retried exactly when the stream would reconnect. So a GET with
+  `reconnect: true` also survives a bad first attempt. `retryOpen: false`
+  keeps the fail-fast opening, for example to report a wrong endpoint at
+  startup.
+- A stream whose policy is `SseReconnection.off` (a POST that does not enable
+  reconnection) is never retried, even with `retryOpen: true`: the server may
+  have received the request. This wins silently, so shared defaults never
+  throw on a POST stream.
+- A body that cannot be sent twice (`FileUpload.stream`, or a multipart part
+  with a stream file) is never retried and the stream never reconnects: the
+  failure is returned or the stream ends.
+- A `Last-Event-ID` in `call.headers` goes with every attempt.
+- `maxAttempts` counts retries after a failure: with 5 an opening is tried at
+  most 6 times. `maxAttempts: 0` keeps the old fail-fast opening.
+- Keep event streams out of Dio retry interceptors (`dio_smart_retry` and
+  similar): they would multiply the attempts.
+
+For each failed attempt the trace is `connect`, `open` (when a status
+arrived), `error`, `reconnecting`. On a final failure or when the attempts
+are used up it is `error`, then `closed`. A cancel during the backoff gives
+`error`, `reconnecting`, `error` (the cancel), `closed`. A `wait` that throws
+an `Exception` gives `error`, `reconnecting`, `closed`: the failure it was
+waiting after is traced once.
+
+### Which failures are retried
+
+One classifier, `SseRetry.isTransient`, decides for every failed attempt, the
+opening and each reconnection:
+
+| Failure | Result |
+| --- | --- |
+| `Cancelled` | final, never classified |
+| `TransportError` kind `connection` or `timeout` | transient |
+| `TransportError` kind `other` (Dio's `badCertificate`, `badResponse`, `unknown`, the web refusal of event streams) | final |
+| status 408, 429 | transient |
+| status 5xx except 501 and 505 | transient |
+| any other status (400, 401, 403, 404, 409, 410, 422, a 2xx or 3xx that is not a stream status) | final |
+| `DecodeError` with a status | classified by that status |
+| `DecodeError` without a status | final |
+
+The status is read from `HttpError`, `UndocumentedStatus` and `DecodeError`,
+so a 503 from a proxy with an HTML body is transient. A connection that
+opened and then ended is not classified; it reconnects as before. A `204`
+ends the stream and is never retried.
+
+`retryWhen` replaces the classifier. Extend it rather than restate it:
+
+```dart
+SseOptions(retryWhen: (f) => SseRetry.isTransient(f) || f is TransportError)
+```
+
+An `Exception` thrown by `retryWhen` counts as final; an `Error` propagates.
+
+### Retry-After
+
+On a failure that is retried (the classifier, or `retryWhen`, accepts it)
+and carries `Retry-After` (delta-seconds or an HTTP date in IMF-fixdate,
+RFC 850 or asctime form) the delay of that attempt is the larger of the header and the backoff delay, jitter included. A date is
+measured against the response's `Date` header, else the clock. `maxDelay`
+does not cap it, but a delay above 24 hours is cut to 24 hours (a browser
+fires a timer above 2^31-1 ms at once), and it does not stick to later
+attempts. A value that
+cannot be parsed, or that is zero or past, falls back to the backoff.
+
 ## Cancel and pause
 
 - **Cancelling the subscription** (`subscription.cancel()`) cancels the
   request and closes the connection, also one a reconnection has in flight.
   Use it when the screen goes away.
-- **Cancelling `call.cancel`** (a `CancelSignal`) ends the stream with a last
+- **Cancelling `call.cancel`** (a `CancelSignal`, or the default `cancel`) ends the stream with a last
   `SseDisconnected(cause: TransportException(kind: cancelled))`, also during a wait:
 
   ```text
@@ -387,8 +540,9 @@ await api.pets.watchPet(
 
 - **Pausing** the listener pauses the connection. A pause during a wait or a
   reopen holds the next connection until you resume.
-- An error status at open (`401`) is not a stream: it is decoded by
-  `decodeError`, here `UndocumentedStatus(401)`.
+- A final error status at open (`401`) is not a stream: it is decoded by
+  `decodeError`, here `UndocumentedStatus(401)`. A transient one (408, 429,
+  5xx) is retried first when the opening is retried.
 
 ## Web
 

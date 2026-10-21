@@ -212,7 +212,7 @@ None of these codes can be given another level. See [Diagnostics](diagnostics.md
 A JSON Schema of the config, [`typed_openapi.schema.json`](../schema/typed_openapi.schema.json), gives an editor completion and checking while you edit `typed_openapi.yaml`. It is generated from the key catalog that `ConfigLoader` reads, and a test (`config_schema_test.dart` in `typed_openapi_core`) checks that the loader accepts what the schema accepts, and rejects what it rejects, for a list of documents. Point the editor at it with this as the first line of the file (read by the YAML language server, for example the YAML extension of VS Code):
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/4akloon/typed_openapi/typed_openapi-v0.1.0/packages/typed_openapi/schema/typed_openapi.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/4akloon/typed_openapi/typed_openapi-v0.2.0/packages/typed_openapi/schema/typed_openapi.schema.json
 ```
 
 That URL is pinned to the tag of release 0.1.0; use the tag of the version you have. In a checkout a relative path to the file works as well. The schema checks the shape only: that a key is known, has the right type and takes one of its values. A missing `input` file and overlapping outputs stay with [`check`](cli.md#check) (TOA904), and a few things the loader rejects the schema cannot say (one code written under both its id and its name, equal `input_suffix` and `patch_suffix`, an `operation_prefix` that is not a regular expression). The schema is not published to SchemaStore.

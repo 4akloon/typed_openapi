@@ -82,6 +82,63 @@ void main() {
     expect(a.first.streamId, isNot(b.first.streamId));
   });
 
+  test('every trace carries the operation of the request', () async {
+    final traces = <SseTrace>[];
+    var calls = 0;
+    await run(
+      FakeTransport(
+        (_) => calls++ == 0 ? stream('data: a\n\n') : stream('', 204),
+      ),
+      traces,
+    );
+    expect(traces, isNotEmpty);
+    for (final trace in traces) {
+      expect(trace.operation.operationId, 'w');
+      expect(trace.operation.method, 'GET');
+      expect(trace.operation.pathTemplate, '/w');
+    }
+  });
+
+  test(
+    'two streams of one operation have different stream ids but the same '
+    'operation',
+    () async {
+      final a = <SseTrace>[];
+      final b = <SseTrace>[];
+      final transport = FakeTransport((_) => stream('data: x\n\n', 204));
+      await run(transport, a);
+      await run(transport, b);
+      expect(a.first.streamId, isNot(b.first.streamId));
+      expect(a.first.operation.operationId, b.first.operation.operationId);
+    },
+  );
+
+  test('an onTrace from the client defaults names the operation', () async {
+    final traces = <SseTrace>[];
+    final sender = ClientSender(
+      FakeTransport((_) => stream('data: x\n\n', 204)),
+      defaults: CallOptions(sse: SseOptions(onTrace: traces.add)),
+    );
+    final result = await sender.openEvents<String, Never>(
+      request,
+      (m) => m.data,
+      (r) => r.undocumented(),
+    );
+    await (result as Success<Stream<SseItem<String>>, Never>).data.toList();
+    expect(traces, isNotEmpty);
+    for (final trace in traces) {
+      expect(trace.operation.operationId, 'w');
+      expect(trace.operation.pathTemplate, '/w');
+    }
+  });
+
+  test('toString names the operation', () async {
+    final traces = <SseTrace>[];
+    await run(FakeTransport((_) => stream('', 204)), traces);
+    final text = traces.first.toString();
+    expect(text, 'SseTrace(#${traces.first.streamId} w connect attempt: 1)');
+  });
+
   test(
     'a dropped event and an event that does not decode are traced',
     () async {

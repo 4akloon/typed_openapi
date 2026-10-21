@@ -14,7 +14,7 @@ final class RootNames {
     : members = NameScope(
         reserved: {...DartNames.reservedWords, ...DartNames.objectMembers},
         reservedSuffix: '_',
-      );
+      )..reserve('defaults');
 
   static const _names = DartNames();
 

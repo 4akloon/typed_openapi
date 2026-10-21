@@ -34,8 +34,12 @@ import '../models/status.dart';
 
 /// The operations of the `PetsApi` group.
 class PetsApi {
-  /// Sends the requests through [transport].
-  PetsApi(ClientTransport transport) : _sender = ClientSender(transport);
+  /// Sends the requests through [transport]. The options of each call win over
+  /// [defaults], field by field.
+  PetsApi(
+    ClientTransport transport, {
+    CallOptions defaults = const CallOptions(),
+  }) : _sender = ClientSender(transport, defaults: defaults);
 
   final ClientSender _sender;
 

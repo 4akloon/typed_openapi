@@ -55,7 +55,7 @@ The method first returns a `Result`: a status the spec does not list as a stream
 
 The stream never emits errors; problems are items. The full runtime behaviour (WHATWG parsing, `Last-Event-ID`, backoff, cancellation, web adapters) is in the runtime guide, [SSE](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/doc/sse.md). For a stream that runs for hours it also documents the idle and handshake timeouts, unbounded reconnection with jitter and a cooldown, and the `onTrace` hook ([Long-lived streams](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/doc/sse.md#long-lived-streams), [Tracing](https://github.com/4akloon/typed_openapi/blob/main/packages/typed_openapi_client/doc/sse.md#tracing)); all are options of `CallOptions.sse`, so the generated methods do not change. On the web, the default Dio adapter delivers the body only when the connection closes, so use a streaming adapter there.
 
-> **Note:** `openEvents` needs its stream listened to or cancelled. Cancelling the listener cancels the request. To cancel from outside, pass a `CancelToken` in `CallOptions`, see [Operations](operations.md).
+> **Note:** `openEvents` needs its stream listened to or cancelled. Cancelling the listener cancels the request. To cancel from outside, pass a `CancelSignal` in `CallOptions(cancel: ...)`, see [Operations](operations.md).
 
 ## What the data type is
 
@@ -306,7 +306,9 @@ info TOA665 event-stream-reconnect-off: sse.reconnect in the config applies to G
   fix: Enable it for this operation if the request can be repeated. Override: ...
 ```
 
-A listener cancel, an error status (the `Failure` is the stream's `cause`) and a `204` end the stream instead of reconnecting.
+Options you give every stream (reconnection, jitter, timeouts, `onTrace`) go once into the constructor of the client, `PetstoreClient(transport, defaults: CallOptions(sse: SseOptions(...)))`; a call's own options win field by field. A GET stream that reconnects also retries its opening on transient failures (408, 429, most 5xx, a refused or timed-out connection), and a `Retry-After` header lengthens the wait. A stream whose reconnection is `.off` is never retried. See the runtime guide, "Defaults for every call" and "Retrying the opening".
+
+A listener cancel, a final error status (the `Failure` is the stream's `cause`) and a `204` end the stream instead of reconnecting. A transient error status (408, 429, 5xx except 501 and 505) is retried; see `SseRetry` and `retryWhen` in the runtime guide.
 
 ## The `sse` overrides
 

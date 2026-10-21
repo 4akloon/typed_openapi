@@ -9,10 +9,10 @@ Add the packages with `dart pub add dio typed_openapi_client typed_openapi_dio` 
 ```yaml
 dependencies:
   dio: ^5.11.1
-  typed_openapi_client: ^0.2.0
-  typed_openapi_dio: ^0.2.0
+  typed_openapi_client: ^0.3.0
+  typed_openapi_dio: ^0.3.0
 dev_dependencies:
-  typed_openapi: ^0.2.0
+  typed_openapi: ^0.3.0
 ```
 
 The minimum SDK is Dart 3.10, for the generator and for generated code. Run it with `dart run typed_openapi <command>`.
@@ -118,6 +118,8 @@ import 'package:typed_openapi_dio/typed_openapi_dio.dart';
 Future<void> main() async {
   final dio = Dio(BaseOptions(baseUrl: 'http://localhost:3000'));
   final client = ShopClient(DioTransport(dio));
+  // Options for every call go once into the constructor:
+  // ShopClient(DioTransport(dio), defaults: CallOptions(sse: SseOptions(reconnect: true)))
 
   final result = await client.products.findOne(id: '42');
   switch (result) {

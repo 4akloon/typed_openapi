@@ -48,6 +48,14 @@ void main() {
       expect(change.pointer?.value, startsWith('#/paths/'));
     });
 
+    test('a tag named defaults gets defaults2', () {
+      final fixture = IrFixture(_spec('defaults'));
+      expect(fixture.build().groups.single.field, 'defaults2');
+      final [change] = fixture.reportedOf(.nameCollision);
+      expect(change.message, contains('"defaults2"'));
+      expect(change.pointer?.value, startsWith('#/paths/'));
+    });
+
     test('is reported: a group field named like a reserved word', () {
       final fixture = IrFixture(_spec('class'));
       expect(fixture.build().groups.single.field, 'class_');

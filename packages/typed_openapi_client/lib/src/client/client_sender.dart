@@ -36,15 +36,31 @@ import 'response_reader.dart';
 ///   caught: an [Error] thrown by the decoder or the transport reaches the
 ///   caller.
 final class ClientSender {
-  /// Sends requests through [transport]; [boundary] makes the boundary of
-  /// each multipart body (random by default, fixed in tests).
-  ClientSender(this.transport, {String Function()? boundary})
-    : _builder = RequestBuilder(BodyEncoder(boundary ?? _randomBoundary));
+  /// Sends requests through [transport]; [defaults] are merged under the
+  /// options of every call ([CallOptions.merge]); [boundary] makes the
+  /// boundary of each multipart body (random by default, fixed in tests).
+  ClientSender(
+    this.transport, {
+    this.defaults = const CallOptions(),
+    String Function()? boundary,
+  }) : _builder = RequestBuilder(
+         BodyEncoder(boundary ?? _randomBoundary),
+         defaultHeaders: defaults.headers,
+       ),
+       _options = defaults.withoutHeaders();
 
   /// The transport every request goes through.
   final ClientTransport transport;
 
+  /// The options every call starts from; a call's own options win field by
+  /// field.
+  final CallOptions defaults;
+
   final RequestBuilder _builder;
+
+  // The defaults but their headers, which the builder layers under the
+  // operation's; merging a call into this keeps the call's headers alone.
+  final CallOptions _options;
 
   static const _results = ClientResults();
 
@@ -54,8 +70,9 @@ final class ClientSender {
     Result<T, E> Function(RawResponse response) decode, {
     CallOptions? call,
   }) async {
-    final sent = _builder.build(request, call);
-    if (call?.cancel case final cancel? when cancel.isCancelled) {
+    final merged = _options.merge(call);
+    final sent = _builder.build(request, merged);
+    if (merged.cancel case final cancel? when cancel.isCancelled) {
       return _results.cancelledBefore(cancel);
     }
     final TransportResponse response;
@@ -64,7 +81,7 @@ final class ClientSender {
     } on TransportException catch (e, stackTrace) {
       return _results.failure(e, stackTrace);
     }
-    return _read(response, request.responseKind, call, decode);
+    return _read(response, request.responseKind, merged, decode);
   }
 
   /// Opens a `text/event-stream` operation. A status in
@@ -84,6 +101,16 @@ final class ClientSender {
   /// The stream reconnects (R12.5) when [reconnection] and `call.sse` say
   /// so (see [SseReconnection], [SseOptions] and `SseReconnector`); a 204
   /// No Content never reconnects.
+  ///
+  /// A transient failure of the opening is retried in the same cases, with
+  /// the same delays, `Retry-After` and traces ([SseOptions.retryOpen]). The
+  /// returned [Future] waits meanwhile: it completes when the stream opens,
+  /// when a failure is final, when the attempts are used up (the last
+  /// [Failure]) or with [Cancelled] when `call.cancel` fires, also during a
+  /// wait. There is no listener to cancel before it completes, so cancel
+  /// through `call.cancel`. [SseReconnection.off] and a request body that
+  /// can be read once (`FileUpload.stream`) are never sent twice, whatever
+  /// `retryOpen` says.
   ///
   /// [OperationRequest.streamStatuses] must not be empty (checked by an
   /// `assert`): a generated method always sets it.
@@ -105,7 +132,7 @@ final class ClientSender {
       request,
       decodeEvent,
       decodeError,
-      call: call,
+      call: _options.merge(call),
       reconnection: reconnection,
     );
   }

@@ -4,6 +4,7 @@ import 'dart_writer.dart';
 import 'decoder_writer.dart';
 import 'event_stream_writer.dart';
 import 'event_union_emitter.dart';
+import 'operation_info_writer.dart';
 import 'parts_emitter.dart';
 import 'request_writer.dart';
 import 'status_type_emitter.dart';
@@ -25,12 +26,14 @@ final class OperationEmitter {
 
   OperationEmitter._(this._codec, this._decoder)
     : _request = RequestWriter(_codec),
-      _events = EventStreamWriter(_decoder);
+      _events = EventStreamWriter(_decoder),
+      _info = OperationInfoWriter(_codec);
 
   final TypeCodec _codec;
   final RequestWriter _request;
   final DecoderWriter _decoder;
   final EventStreamWriter _events;
+  final OperationInfoWriter _info;
 
   static const _code = DartCode();
   static const _names = DartNames();
@@ -39,21 +42,26 @@ final class OperationEmitter {
   void write(GroupIr group, DartWriter out) {
     final name = group.name;
     _codec.imports
+      ..fromRuntime('CallOptions')
       ..fromRuntime('ClientSender')
       ..fromRuntime('ClientTransport');
     final members = _privateNames(group);
     out.prose('The operations of the `${_code.docSpan(name)}` group.');
     out.block('class $name', () {
       out
-        ..prose('Sends the requests through [transport].')
-        ..line(
-          '$name(ClientTransport transport) : _sender = ClientSender(transport);',
+        ..prose(
+          'Sends the requests through [transport]. The options of each '
+          'call win over [defaults], field by field.',
         )
+        ..line('$name(')
+        ..line('  ClientTransport transport, {')
+        ..line('  CallOptions defaults = const CallOptions(),')
+        ..line('}) : _sender = ClientSender(transport, defaults: defaults);')
         ..line()
         ..line('final ClientSender _sender;');
       for (final (operation, info, _) in members) {
         out.line();
-        _info(out, operation, info);
+        _info.write(out, operation, info);
       }
       for (final (operation, info, decoder) in members) {
         out.line();
@@ -102,57 +110,6 @@ final class OperationEmitter {
           private.claim('_decode${_names.pascal(operation.name)}').$1,
         ),
     ];
-  }
-
-  void _info(DartWriter out, OperationIr operation, String info) {
-    _codec.imports.fromRuntime('OperationInfo');
-    out.line('static const $info = OperationInfo(');
-    out.indented(() {
-      out
-        ..line(
-          'operationId: '
-          '${_code.string(operation.operationId ?? operation.name)},',
-        )
-        ..line('method: ${_code.string(operation.method)},')
-        ..line('pathTemplate: ${_code.string(operation.path)},');
-      if (operation.tags.isNotEmpty) {
-        out.list('tags: [', [
-          for (final tag in operation.tags) _code.string(tag),
-        ], '],');
-      }
-      if (operation.security.isNotEmpty) {
-        out.line('security: [');
-        out.indented(() {
-          for (final alternative in operation.security) {
-            out.list('[', [for (final use in alternative) _use(use)], '],');
-          }
-        });
-        out.line('],');
-      }
-    });
-    out.line(');');
-  }
-
-  String _use(SecurityUseIr use) {
-    _codec.imports
-      ..fromRuntime('SecurityUse')
-      ..fromRuntime('SecurityScheme');
-    final scheme = use.scheme;
-    final arguments = [
-      _code.string(scheme.name),
-      '.${scheme.kind.name}',
-      if (scheme.parameterName case final v?)
-        'parameterName: ${_code.string(v)}',
-      if (scheme.placement case final v?) 'location: .$v',
-      if (scheme.scheme case final v?) 'scheme: ${_code.string(v)}',
-      if (scheme.bearerFormat case final v?) 'bearerFormat: ${_code.string(v)}',
-      if (scheme.openIdConnectUrl case final v?)
-        'openIdConnectUrl: ${_code.string(v)}',
-    ];
-    final scopes = use.scopes.isEmpty
-        ? ''
-        : ', [${use.scopes.map(_code.string).join(', ')}]';
-    return 'SecurityUse(SecurityScheme(${arguments.join(', ')})$scopes)';
   }
 
   void _method(

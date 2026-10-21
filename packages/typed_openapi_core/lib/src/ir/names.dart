@@ -86,7 +86,7 @@ final class DartNames {
     'SseEventIgnored',
     'SseItem',
     'SseItemDecoder', 'SseMessage', 'SseOptions', 'SseReconnecting',
-    'SseReconnection', 'SseReconnector', 'SseResume', 'SseTrace',
+    'SseReconnection', 'SseReconnector', 'SseResume', 'SseRetry', 'SseTrace',
     'SseTraceKind',
     'Success', 'TransportError', 'TransportException',
     'TransportExceptionKind', 'TransportRequest', 'TransportResponse',

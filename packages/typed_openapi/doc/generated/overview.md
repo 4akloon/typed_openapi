@@ -43,11 +43,14 @@ The root class has a field per group and the servers of the spec. It never sets 
 
 ```dart
 class PetstoreClient {
-  /// Creates the client: every group sends through [transport].
-  PetstoreClient(ClientTransport transport)
-    : defaultApi = DefaultApi(transport),
-      pets = PetsApi(transport),
-      store = StoreApi(transport);
+  /// Creates the client: every group sends through [transport] and merges
+  /// [defaults] under the options of each call.
+  PetstoreClient(
+    ClientTransport transport, {
+    CallOptions defaults = const CallOptions(),
+  }) : defaultApi = DefaultApi(transport, defaults: defaults),
+       pets = PetsApi(transport, defaults: defaults),
+       store = StoreApi(transport, defaults: defaults);
 
   final DefaultApi defaultApi;
   final PetsApi pets;

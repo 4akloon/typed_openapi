@@ -293,6 +293,28 @@ Future<void> main() async {
     }
   }
 
+  // Defaults given to the root client reach a group: a stream opened after
+  // a 503 retries, because the defaults ask for reconnection.
+  waits.clear();
+  adapter = Adapter([
+    (_) => json(503, {'down': true}),
+    (_) => events('data: {"id": "t1"}\n\n'),
+    (_) => events('', 204),
+  ]);
+  final withDefaults = ApiClient(
+    DioTransport(Dio(BaseOptions(baseUrl: 'https://chat.example.com'))
+      ..httpClientAdapter = adapter),
+    defaults: CallOptions(
+      sse: SseOptions(
+        reconnect: true,
+        wait: (delay) async => waits.add(delay.inMilliseconds),
+      ),
+    ),
+  );
+  await printAll(await withDefaults.threads.watchThread(threadId: 't'));
+  print('waits $waits');
+  print('requests ${adapter.requests.length}');
+
   // Text events and an undocumented status.
   adapter = Adapter([(_) => events('data: line 1\ndata: line 2\n\n')]);
   await printAll(await client(adapter).threads.tailLog());
