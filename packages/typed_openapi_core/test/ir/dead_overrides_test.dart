@@ -126,7 +126,7 @@ void main() {
     const kept = 'operations:\n  listPets: {name: pets}\n';
     final withEntry = _fixture(
       generation: _including('pets'),
-      overrides: '${kept}  listOrders: {name: orders}\n',
+      overrides: '$kept  listOrders: {name: orders}\n',
     );
     final without = _fixture(generation: _including('pets'), overrides: kept);
     expect(dead(withEntry), hasLength(1));
