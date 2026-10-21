@@ -1226,8 +1226,9 @@ public APIs of the core and the generator only. Its network use is the `SpecCach
   top section and the version a minor (before 1.0) or major raise, unless
   the CHANGELOG's top section at the base commit is titled `Unreleased` for
   the version in the base pubspec (never published): then the entry is
-  enough. Files are read at HEAD and at the base; a dirty working tree does
-  not count.
+  enough. A line `Semver exemption: <reason>` in that top section, one the
+  base's top section lacks, waives the raise for that release only. Files are
+  read at HEAD and at the base; a dirty working tree does not count.
 - `test/sarif/` - the SARIF output of `SarifReporter` against the SARIF
   2.1.0 JSON schema (`JsonSchema`, in `typed_openapi_test_support`, a validator for
   the draft-04 and draft-07 subset the SARIF and config schemas use) and against GitHub code scanning's required properties
