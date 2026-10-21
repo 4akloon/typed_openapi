@@ -9,10 +9,10 @@ Add the packages with `dart pub add dio typed_openapi_client typed_openapi_dio` 
 ```yaml
 dependencies:
   dio: ^5.11.1
-  typed_openapi_client: ^0.3.0
-  typed_openapi_dio: ^0.3.0
+  typed_openapi_client: ^0.3.1
+  typed_openapi_dio: ^0.3.1
 dev_dependencies:
-  typed_openapi: ^0.3.0
+  typed_openapi: ^0.3.1
 ```
 
 The minimum SDK is Dart 3.10, for the generator and for generated code. Run it with `dart run typed_openapi <command>`.

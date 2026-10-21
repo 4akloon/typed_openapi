@@ -1,3 +1,8 @@
+## 0.3.1 - Unreleased
+
+No changes; the version moves with the others (the four published packages
+share one version).
+
 ## 0.3.0
 
 ### Added

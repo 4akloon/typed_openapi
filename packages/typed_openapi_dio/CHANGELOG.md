@@ -1,3 +1,8 @@
+## 0.3.1 - Unreleased
+
+No changes; the version moves with `typed_openapi_client` 0.3.1 (the four
+published packages share one version).
+
 ## 0.3.0
 
 No changes; the version moves with `typed_openapi_client` 0.3.0 (the four

@@ -34,9 +34,9 @@ pub workspace with seven pure-Dart packages (no Flutter):
 Minimum SDK: Dart 3.10 (`>=3.10.0 <4.0.0`), also for generated code.
 
 The four published packages (core, client, `typed_openapi`, Dio transport)
-share one version, `0.3.0`, released by hand with
+share one version, `0.3.1`, released by hand with
 `docs/release-checklist.md` (the tags and the publish follow the merge); their
-CHANGELOGs say `## 0.3.0 - Unreleased` until the release (a section titled
+CHANGELOGs say `## 0.3.1 - Unreleased` until the release (a section titled
 `## <version> - Unreleased` is a version not yet released).
 
 ## Commands
@@ -444,7 +444,10 @@ Engine folders under `packages/typed_openapi_core/lib/src/`, generator folders
   reached, so only reachable schemas exist, and named at the end: override
   names, then component keys, then inline names by depth. A declaration is
   its `DeclId`: reaching it again gives the same one, named after the first
-  use, and an inline name always resolves to a declaration of the set. A
+  use. An inline enum is a declaration of its own site (a schema property
+  or an operation parameter), never merged with an equal enum elsewhere
+  (`Declarer`); with a lock the first owner keeps the locked name and the
+  other sites get fresh ones. An inline name always resolves to a declaration of the set. A
   schema a custom type replaces declares and reports nothing: its JSON side
   is scalars, lists, maps and `JsonValue`. A structural alias that reaches
   itself with no declaration between is TOA251. An `allOf` parent that an
@@ -602,7 +605,9 @@ Engine folders under `packages/typed_openapi_core/lib/src/`, generator folders
   that branch. `unknownSensitive` is set when any event's data carries a
   secret. `EventUnionNames` (from `ApiNames`, after the status types)
   names it `<Method>Event`, then `<Union>Unknown`, then `<Union><Event>`
-  (`<Union>Event<n>` without letters or digits, TOA668; `2` on a
+  (the event name goes through `DartNames.eventPascal`, which lowercases the
+  all-caps pieces of a name before `pascal`: `USER_CREATED` is
+  `UserCreated`; `<Union>Event<n>` without letters or digits, TOA668; `2` on a
   collision, TOA551); TOA668 and TOA559 point at the branch. No
   `SchemaMapper` change: the variants' types come from `typeOf`.
   TOA654 is only an operation (or its event-stream method, in the `both`
@@ -957,8 +962,9 @@ Engine folders under `packages/typed_openapi_core/lib/src/`, generator folders
   `prune`), `GenerateCommand` (`generate_command.dart`: checks like
   `check`, skips a client with errors (`ClientCheck.errors`) or an output
   that overlaps another's, writes the whole client with `ApiLibrary` and
-  `OutputWriter`, the inputs hash from `ClientCheck.sources` and the
-  client's settings; text report, then a line per client; exit code as
+  `OutputWriter`, the inputs hash of `GenerationInputs` (the generator,
+  the client's name and `line_width`, the IR without locations; not the
+  text of the inputs); text report, then a line per client; exit code as
   `check`; `ClientWriter` writes each client, `ApiLockRun` prints its
   change counts since `typed_openapi.lock` and records its snapshot, or
   with `--locked` refuses a client whose API differs, TOA834, and writes
@@ -1454,7 +1460,7 @@ query is built by the client, so interceptors see an empty
 holds `//`, which Dio would collapse. On the web with Dio's default adapter
 an event stream is refused with `webStreamingMessage` (the adapter delivers
 the body only when the connection closes). Inside the workspace its
-`typed_openapi_client: ^0.3.0` resolves to the package next to it
+`typed_openapi_client: ^0.3.1` resolves to the package next to it
 (`resolution: workspace`); a release that needs a new client publishes the
 client first. Tests: `dio_transport_test.dart` (a fake adapter,
 `test/helpers/fake_adapter.dart`), `web_test.dart` (`@TestOn('browser')`),

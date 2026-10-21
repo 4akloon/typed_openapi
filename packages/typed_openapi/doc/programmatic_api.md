@@ -2,7 +2,7 @@
 
 The pipeline the command line uses lives in two libraries: `package:typed_openapi_core/typed_openapi_core.dart` (the engine: config, checks, diagnostics, the IR) and `package:typed_openapi/typed_openapi.dart` (the generator: the command line, the emitters and the output writer). Together they cover: load a config, check the specs, build the semantic model of each client, write files. It is meant for tools that wrap the generator (a build script, an editor plugin, a test). Everything the CLI reports is also available as data.
 
-> **Note:** The API may change before 1.0 (the current version is 0.3.0). `ApiLibrary` writes the whole client that [`typed_openapi generate`](cli.md#generate) writes; `ModelLibrary` writes only its model files.
+> **Note:** The API may change before 1.0 (the current version is 0.3.1). `ApiLibrary` writes the whole client that [`typed_openapi generate`](cli.md#generate) writes; `ModelLibrary` writes only its model files.
 
 ## Entry points
 
@@ -77,7 +77,7 @@ pets: api.dart, api/default_api.dart, models.dart, models/pet.dart, models/pet_s
 Notes on the example:
 
 - `errors > 0` is the same test `generate` uses to skip a client. Without it you would write models from a spec that has errors.
-- `inputs` is the hash recorded in the manifest `.typed_openapi.json`; the CLI computes it from the files that were read and the client's settings. Pass the same string for the same inputs.
+- `inputs` is the hash recorded in the manifest `.typed_openapi.json`; the CLI computes it from the client's IR, name and line width. Pass the same string for the same inputs.
 - Problems from the writer (TOA830 to TOA833) go to the same bag, so print it after `write` too if you want to see them.
 - An error in the user's input is never thrown. The bag collects it; check `diagnostics.hasErrors` or `ClientCheck.errors`.
 

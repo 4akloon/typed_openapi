@@ -34,8 +34,8 @@ and a transport, such as the Dio one (the generator does not edit your
 ```yaml
 dependencies:
   dio: ^5.11.1
-  typed_openapi_client: ^0.3.0
-  typed_openapi_dio: ^0.3.0
+  typed_openapi_client: ^0.3.1
+  typed_openapi_dio: ^0.3.1
 ```
 
 The SDK floor is Dart 3.10 (`>=3.10.0 <4.0.0`), the same as for generated

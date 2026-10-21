@@ -17,7 +17,7 @@ Every output directory holds `.typed_openapi.json`, written last in the same swa
 
 ```json
 {
-  "generator": "typed_openapi 0.3.0",
+  "generator": "typed_openapi 0.3.1",
   "format": 2,
   "inputs": "a92d74a3cb72...",
   "files": {
@@ -95,7 +95,7 @@ A run never leaves a half-written output.
 3. The old directory is renamed to `<staging>-old`, the staging directory is renamed to the output, and the backup is removed.
 4. When a step fails, the old directory is put back. If that fails too, TOA831 names the backup that holds the old tree, so you can move it back by hand. A failed first run leaves nothing.
 
-A run that changes nothing does not swap at all: when no file is written or deleted and the manifest is the same, the directory is not touched. A run whose spec changed only in comments still updates the manifest (its `inputs` differ), while `written` stays `0`.
+A run that changes nothing does not swap at all: when no file is written or deleted and the manifest is the same, the directory is not touched. A run whose spec changed only in comments, or only in operations the `include` filter leaves out, leaves the manifest as it is (its `inputs` hash covers what generation reads, see [Determinism](#determinism)).
 
 ## Locks
 
@@ -150,11 +150,13 @@ Skipped b: its output overlaps the output of another client (TOA904).
 
 ## Determinism
 
-The same spec and the same config give byte-identical files, on any machine: no timestamps, no absolute paths, sorted output. The `inputs` hash in the manifest is the SHA-256 of:
+The same spec and the same config give byte-identical files, on any machine: no timestamps, no absolute paths, sorted output. The `inputs` hash in the manifest is the SHA-256 of what the code is generated from:
 
-- the content of every file the run read (spec, `$ref`'d files, overrides),
-- the client's settings that change the code (`naming`, `types`, `tri_state`, `union`, `errors`, `sse`, `group_by`, the filters, `line_width`, `preset`, the disabled `rules`),
-- the generator and its version.
+- the generator and its version,
+- the client's name and `line_width`,
+- the client's IR, the typed description of the API that the emitters read (the models, enums, unions and operations that are generated), written without file locations.
+
+A comment, an operation the filters leave out, a component nothing reaches and a setting that does not change the IR (`severity`, the baseline) are not in it, so they do not change the hash; a change of the spec, the config, the overrides, the preset or the rules that changes the generated code does.
 
 Paths are not part of it, so a checkout in another directory gives the same hash. Diagnostics levels (`severity`) and the baseline do not change the code and are not in it. Upgrading `typed_openapi` can change the generated code: treat that as a change of the generator and review the diff.
 

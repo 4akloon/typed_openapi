@@ -88,7 +88,7 @@ Value names are lowerCamelCase of the spec's value, in this order:
 | Value with no letter or digit (`~`, `""`) | `value_`, `value_2`..., `TOA552` info: add `x-enum-varnames` to name it |
 | Two values with the same name | `2`, `3` after the first, `TOA551` |
 | A repeated value | removed, first one kept, `TOA301` |
-| Enum named in the spec at `components.schemas` | that key; an inline enum is named after its property (`TicketKind` for `Ticket.kind`) |
+| Enum named in the spec at `components.schemas` | that key; an inline enum is named after its own site: the property (`TicketKind` for `Ticket.kind`) or the operation and parameter; two inline enums with equal values are two types |
 
 ## Exhaustive or open for switching
 
