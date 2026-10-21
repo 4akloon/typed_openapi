@@ -1,4 +1,5 @@
 import 'package:test/test.dart';
+import 'package:typed_openapi_core/src/diagnostics/diagnostic_code.dart';
 import 'package:typed_openapi_core/src/ir/ir.dart';
 import 'package:typed_openapi_core/src/ir/names.dart';
 
@@ -47,6 +48,7 @@ void main() {
       'HTTP': 'Http',
       'message': 'Message',
       'order2_shipped': 'Order2Shipped',
+      'ORDER_2_SHIPPED': 'Order2Shipped',
       'UserDTO_ready': 'UserDTOReady',
     };
     for (final MapEntry(:key, :value) in cases.entries) {
@@ -55,6 +57,10 @@ void main() {
 
     test('a name with no letter or digit is null', () {
       expect(names.eventPascal('--'), isNull);
+    });
+
+    test('a non-ASCII capital is not lowercased into ASCII', () {
+      expect(names.eventPascal('\u212A_ONE'), isNot(startsWith('K')));
     });
 
     test('pascal is unchanged', () {
@@ -93,5 +99,20 @@ operations:
       'WatchEventUserInboxUnreadCountUpdated',
       'WatchEventUserInboxUnreadCountUpdatedData',
     ]);
+  });
+
+  test('events that give one name are told apart by a suffix', () {
+    final fixture = IrFixture(
+      _spec('''
+              itemSchema:
+                oneOf:
+                  - properties: {event: {const: USER_CREATED}}
+                  - properties: {event: {const: userCreated}}'''),
+    );
+    expect(_names(fixture.build()), [
+      'WatchEventUserCreated',
+      'WatchEventUserCreated2',
+    ]);
+    expect(fixture.reportedOf(DiagnosticCode.nameCollision), isNotEmpty);
   });
 }

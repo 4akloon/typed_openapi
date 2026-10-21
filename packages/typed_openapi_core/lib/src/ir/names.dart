@@ -165,7 +165,7 @@ final class DartNames {
     event
         .split(_separators)
         .map(
-          (piece) => piece.contains(_lowercase) ? piece : piece.toLowerCase(),
+          (piece) => piece.contains(_lowercase) ? piece : _asciiLower(piece),
         )
         .join('_'),
   );
@@ -198,6 +198,13 @@ final class DartNames {
       kind == .type ? pascal(text) : camel(text);
 
   static final _lowercase = RegExp('[a-z]');
+
+  /// Lowercases only ASCII capitals, so a letter such as the Kelvin sign
+  /// (U+212A) is not turned into an ASCII `k`.
+  static String _asciiLower(String piece) => piece.replaceAllMapped(
+    RegExp('[A-Z]'),
+    (match) => match[0]!.toLowerCase(),
+  );
 
   static String _capitalize(String word) =>
       word[0].toUpperCase() + word.substring(1);
