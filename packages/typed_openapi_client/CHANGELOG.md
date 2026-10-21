@@ -1,4 +1,4 @@
-## 0.3.1 - Unreleased
+## 0.3.1
 
 No changes; the version moves with the others (the four published packages
 share one version).

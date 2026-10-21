@@ -1,4 +1,4 @@
-## 0.3.1 - Unreleased
+## 0.3.1
 
 ### Output changes
 - The manifest `.typed_openapi.json` records `typed_openapi 0.3.1` as the
@@ -61,6 +61,9 @@
   per client; when several clients share one overrides file with different
   filters, lower it with `severity: {TOA810: off}` or accept it in the
   baseline.
+
+Semver exemption: a patch release for fixes found in one production client;
+the renamed types are listed above and the fixes cannot wait for a minor.
 
 ## 0.3.0
 

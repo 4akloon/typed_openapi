@@ -36,8 +36,8 @@ Minimum SDK: Dart 3.10 (`>=3.10.0 <4.0.0`), also for generated code.
 The four published packages (core, client, `typed_openapi`, Dio transport)
 share one version, `0.3.1`, released by hand with
 `docs/release-checklist.md` (the tags and the publish follow the merge); their
-CHANGELOGs say `## 0.3.1 - Unreleased` until the release (a section titled
-`## <version> - Unreleased` is a version not yet released).
+CHANGELOGs head `## 0.3.1` (a section titled `## <version> - Unreleased` is a
+version not yet released).
 
 ## Commands
 
