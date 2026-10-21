@@ -43,8 +43,7 @@ final class ClientWriter {
   String write(ClientCheck check) {
     final client = check.client;
     final ir = check.ir;
-    final irJson = check.irJson;
-    if (ir == null || irJson == null || check.errors > 0) {
+    if (ir == null || check.errors > 0) {
       return 'Skipped ${client.name}: its check reports errors; fix them and '
           'run generate again.';
     }
@@ -61,7 +60,7 @@ final class ClientWriter {
     final changes = _writer.write(
       client,
       files,
-      inputs: GenerationInputs.of(client, ir, irJson),
+      inputs: GenerationInputs.of(client, ir),
       protected: protected,
       force: force,
       breakLock: breakLock,

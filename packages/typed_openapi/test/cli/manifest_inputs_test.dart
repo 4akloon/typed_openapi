@@ -6,7 +6,7 @@ import 'package:test/test.dart';
 import 'package:typed_openapi/src/cli/cli.dart';
 import 'package:typed_openapi_test_support/typed_openapi_test_support.dart';
 
-const _spec = '''
+const _spec = r'''
 openapi: 3.1.0
 info: {title: t, version: "1"}
 paths:
@@ -14,7 +14,11 @@ paths:
     get:
       operationId: listPets
       responses:
-        '200': {description: ok}
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Pet'}
   /owners:
     get:
       operationId: listOwners
@@ -22,6 +26,11 @@ paths:
         '200': {description: ok}
 components:
   schemas:
+    Pet:
+      type: object
+      description: A pet.
+      properties:
+        name: {type: string, description: The name., maxLength: 10, default: rex}
     Unused:
       type: object
       properties:
@@ -127,5 +136,41 @@ void main() {
       File(p.join(dir.path, 'gen/api/.typed_openapi.json')).lastModifiedSync(),
       stamp,
     );
+  });
+
+  Future<void> expectChanged(String from, String to) async {
+    final before = await manifestAfter(_spec);
+    expect(await manifestAfter(_spec.replaceAll(from, to)), isNot(before));
+  }
+
+  test('a description of a property changes it', () async {
+    await expectChanged('The name.', 'The pet name.');
+  });
+
+  test('a description of a schema changes it', () async {
+    await expectChanged('A pet.', 'Any pet.');
+  });
+
+  test('a constraint of a property changes it', () async {
+    await expectChanged('maxLength: 10', 'maxLength: 20');
+  });
+
+  test('a default of a property changes it', () async {
+    await expectChanged('default: rex', 'default: max');
+  });
+
+  test('the working directory of the run does not change it', () async {
+    expect(await generate(), 0);
+    final before = manifest();
+    final elsewhere = Directory(p.join(dir.path, 'sub'))..createSync();
+    dir.write('gen2/.keep', '');
+    final out = StringBuffer();
+    final code = await TypedOpenApiCli(
+      out: out,
+      err: out,
+      workingDirectory: elsewhere.path,
+    ).run(['generate', '-c', p.join(dir.path, 'typed_openapi.yaml')]);
+    expect(code, 0, reason: '$out');
+    expect(manifest(), before);
   });
 }

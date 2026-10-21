@@ -288,7 +288,7 @@ components:
     ]);
     expect(create['errors'], 'Never');
     expect(operationJson(ir, 'getPhoto')['responses'], [
-      {'status': '200', 'kind': 'bytes', 'type': 'Uint8List'},
+      {'status': '200', 'kind': 'bytes', 'type': 'Uint8List(binary)'},
     ]);
     expect(ir.declarations.map((d) => d.name), [
       'CreatePetRequest',

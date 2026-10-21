@@ -147,18 +147,23 @@ schemas:
       'name': 'Pet',
       'at': 'api.yaml#/components/schemas/Pet',
       'kind': 'oneOf',
+      'dispatch': 'discriminator',
       'discriminator': 'kind',
+      'unknownName': 'PetUnknown',
       'variants': [
         {
           'type': 'Cat',
+          'name': 'PetCat',
           'values': ['cat', 'kitty'],
         },
         {
           'type': 'Dog',
+          'name': 'PetDog',
           'values': ['dog'],
         },
         {
           'type': 'Bird',
+          'name': 'PetBird',
           'values': ['Bird'],
         },
       ],
@@ -168,10 +173,12 @@ schemas:
       'name': 'Id',
       'at': 'api.yaml#/components/schemas/Id',
       'kind': 'anyOf',
+      'dispatch': 'jsonType',
       'exhaustive': false,
+      'unknownName': 'IdUnknown',
       'variants': [
-        {'type': 'String'},
-        {'type': 'int'},
+        {'type': 'String', 'name': 'IdString'},
+        {'type': 'int', 'name': 'IdInt'},
       ],
     });
     expect(types['Id'], 'Id');

@@ -106,9 +106,139 @@ components:
     mtls: {type: mutualTLS}
 ''';
 
+/// A spec that gives every field of the declarations a value.
+const _declarations = r'''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - {$ref: '#/components/schemas/Pet'}
+                  - {$ref: '#/components/schemas/Status'}
+                  - {type: integer}
+                  - {type: number}
+components:
+  schemas:
+    Pet:
+      type: object
+      description: A pet.
+      deprecated: true
+      required: [id, kind]
+      additionalProperties: {type: string}
+      properties:
+        id: {type: integer, description: The id., minimum: 1, maximum: 9, exclusiveMinimum: 0, exclusiveMaximum: 10, multipleOf: 1}
+        kind: {const: pet}
+        name: {type: string, deprecated: true, default: rex, minLength: 1, maxLength: 5, pattern: '^a'}
+        tags: {type: array, items: {type: string}, minItems: 1, maxItems: 3, uniqueItems: true}
+        meta: {type: object, minProperties: 1, maxProperties: 2}
+        mood: {anyOf: [{type: string}, {enum: ['']}]}
+    Status:
+      type: string
+      description: A status.
+      enum: [a, b]
+      x-enum-descriptions: [First, Second]
+''';
+
+/// A spec that sets the flags the first one leaves off: secrets, direction,
+/// a discriminator and the variants of one JSON type.
+const _flags = r'''
+openapi: 3.1.0
+info: {title: t, version: "1"}
+paths:
+  /owner:
+    post:
+      operationId: saveOwner
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Owner'}
+      responses:
+        '204': {description: ok}
+    get:
+      operationId: getOwner
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Owner'}
+  /animal:
+    get:
+      operationId: getAnimal
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Animal'}
+  /text:
+    get:
+      operationId: getText
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Text'}
+  /status:
+    get:
+      operationId: getStatus
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Status'}
+components:
+  schemas:
+    Status: {type: string, enum: [a, b]}
+    Owner:
+      type: object
+      additionalProperties: {type: string, writeOnly: true}
+      properties:
+        id: {type: integer, readOnly: true}
+        secret: {type: string, writeOnly: true}
+        note: {type: string, x-typed-tri-state: true}
+    Animal:
+      oneOf:
+        - {$ref: '#/components/schemas/Cat'}
+        - {$ref: '#/components/schemas/Dog'}
+      discriminator: {propertyName: kind}
+    Cat:
+      type: object
+      required: [kind]
+      properties:
+        kind: {const: cat}
+        token: {type: string, format: password}
+    Dog:
+      type: object
+      required: [kind]
+      properties:
+        kind: {const: dog}
+    Text:
+      oneOf:
+        - {type: string}
+        - {type: string, minLength: 1}
+        - {type: integer}
+''';
+
 /// The key of the dump a field is written under, when it is not the field's
 /// name; `Class.field` entries are for one class.
 const _renames = {
+  'jsonKey': 'json',
+  'valueType': 'type',
+  'EnumDecl.values': 'cases',
+  'EnumDecl.kind': 'values',
+  'UnionDecl.defaultVariant': 'default',
+  'discriminatorValues': 'values',
   'location': 'at',
   'wireName': 'wire',
   'placement': 'in',
@@ -132,6 +262,11 @@ const _notDumped = {
   'ResponseIr.location',
   'ResponseIr.contentType',
   'ResponseIr.description',
+  // A location or an identity made of one: no emitter reads it (the emitters
+  // use a declaration's id only as a key), and the dump of the manifest hash
+  // leaves locations out so the hash does not depend on where the spec is.
+  'Declaration.id',
+  'FieldIr.location',
 };
 
 /// The classes whose fields the dump must write.
@@ -156,6 +291,19 @@ final _classes = <Type>[
   ServerVariableIr,
   SecurityUseIr,
   SecuritySchemeIr,
+];
+
+/// The classes of the declarations, whose fields are looked up in the
+/// dump of the declarations alone.
+final _declarationClasses = <Type>[
+  Declaration,
+  ModelDecl,
+  FieldIr,
+  ConstraintsIr,
+  EnumDecl,
+  EnumValueIr,
+  UnionDecl,
+  UnionVariantIr,
 ];
 
 void _collectKeys(Object? json, Set<String> keys) {
@@ -204,6 +352,42 @@ void main() {
             '$type.$field',
     ];
     expect(missing, isEmpty, reason: 'Write these fields in IrJson.');
+  });
+
+  test('every field of the declarations is in the dump', () {
+    final declarationKeys = <String>{};
+    const open = GenerationConfig(exhaustive: false, triState: .extension);
+    for (final ir in [
+      IrFixture(_declarations).build(),
+      IrFixture(_flags, generation: open).build(),
+    ]) {
+      _collectKeys(
+        IrJson((_) => 'api.yaml').toJson(ir)['declarations'],
+        declarationKeys,
+      );
+    }
+    final missing = [
+      for (final type in _declarationClasses)
+        for (final field in _fieldsOf(type))
+          if (!_notDumped.contains('$type.$field') &&
+              !declarationKeys.contains(
+                _renames['$type.$field'] ?? _renames[field] ?? field,
+              ))
+            '$type.$field',
+    ];
+    expect(
+      missing,
+      isEmpty,
+      reason: 'Write these fields in IrDeclarationJson.',
+    );
+  });
+
+  test('the dump without locations has no location', () {
+    final ir = IrFixture(_spec).build();
+    expect(
+      const IrJson.withoutLocations().encode(ir),
+      isNot(contains('"at"')),
+    );
   });
 
   test('the classes list has fields to check', () {

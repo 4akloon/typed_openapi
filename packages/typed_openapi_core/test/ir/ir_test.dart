@@ -158,9 +158,14 @@ void main() {
       "at": "api.yaml#/components/schemas/Status",
       "kind": "enum",
       "values": "string",
-      "cases": {
-        "available": "available"
-      }
+      "knownName": "StatusKnown",
+      "unknownName": "StatusUnknown",
+      "cases": [
+        {
+          "name": "available",
+          "value": "available"
+        }
+      ]
     }
   ],
   "groups": [

@@ -9,10 +9,10 @@ import 'ir.dart';
 /// Optional keys are left out when they have no value, so the output stays
 /// as short as the IR allows.
 final class IrOperationJson {
-  /// Creates a writer; [_at] writes a location and [_type] a Dart type.
+  /// Creates a writer; [_at] writes a location or gives null and [_type] a Dart type.
   const IrOperationJson(this._at, this._type);
 
-  final String Function(SpecLocation) _at;
+  final String? Function(SpecLocation) _at;
   final String Function(DartType) _type;
 
   /// The root client: its class and its servers.
@@ -23,7 +23,7 @@ final class IrOperationJson {
         {
           'name': server.name,
           'url': server.url,
-          'at': _at(server.location),
+          'at': ?_at(server.location),
           'description': ?server.description,
           'variables': [
             for (final v in server.variables)
@@ -44,7 +44,7 @@ final class IrOperationJson {
     'name': o.name,
     'method': o.method,
     'path': o.path,
-    'at': _at(o.location),
+    'at': ?_at(o.location),
     'parameters': [for (final p in o.parameters) _parameter(p)],
     if (o.body case final body?) 'body': _body(body),
     'responses': [for (final r in o.responses) _response(r)],
@@ -94,7 +94,7 @@ final class IrOperationJson {
 
   Map<String, Object?> _union(EventUnionIr union) => {
     'name': union.name,
-    'at': _at(union.location),
+    'at': ?_at(union.location),
     if (union.keepUnknown) 'unknownName': union.unknownName,
     'keepUnknown': union.keepUnknown,
     if (union.unknownSensitive) 'unknownSensitive': true,
@@ -151,7 +151,7 @@ final class IrOperationJson {
             'wire': part.wireName,
             'type': _type(part.type),
             if (part.required) 'required': true,
-            'at': _at(part.location),
+            'at': ?_at(part.location),
             'contentType': ?part.contentType,
             'description': ?part.description,
           },

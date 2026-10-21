@@ -618,12 +618,13 @@ Engine folders under `packages/typed_openapi_core/lib/src/`, generator folders
   `MethodBuilder` asks it before it claims the stream method's name
   (TOA663, TOA551) or maps its events, so a stream that is not generated
   declares nothing, claims no name and reports only TOA654.
-  `IrJson` dumps an IR, the operations through `IrOperationJson`: every
-  field of the operation IR (encoding, parts, security, servers, status
-  types, `sensitive`, defaults), except the locations of parameters, bodies
-  and responses and a response's text and media type; `ir_json_test.dart`
-  reads the fields of the IR classes with `dart:mirrors` and fails when one
-  is missing from the dump; the
+  `IrJson` dumps an IR (declarations through `IrDeclarationJson`, types
+  through `IrTypeText`, operations through `IrOperationJson`): every field of
+  every IR class an emitter reads, except locations (`IrJson.withoutLocations`
+  leaves them out all together; the manifest's `inputs` hashes that dump) and
+  a response's text and media type; `ir_json_test.dart` reads the fields of
+  the IR classes with `dart:mirrors` and fails when one is missing from the
+  dump or not exempt with a reason; the
   hidden `typed_openapi ir` command prints it. Naming and mapping codes use
   the second half of each area's hundred: TOA250-TOA256, TOA350-TOA351,
   TOA450-TOA458, TOA550-TOA571, and media types, errors and event streams

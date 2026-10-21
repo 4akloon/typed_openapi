@@ -11,14 +11,16 @@ import '../generate/output_writer.dart';
 /// the root file); everything else the run reads (comments, components no
 /// operation reaches, operations a filter leaves out, the config's text,
 /// the preset and the rules) acts before the IR, so it counts only through
-/// its effect on it. Locations in the IR are relative to the working
-/// directory, never absolute, so the hash is the same on any machine.
+/// its effect on it. The IR is written without locations, which no emitter
+/// reads, so the hash does not depend on where the spec is or on the
+/// working directory of the run.
 final class GenerationInputs {
   const GenerationInputs._();
 
-  /// The hash of what the code of [client] is generated from: its [ir],
-  /// written by [irJson].
-  static String of(ClientConfig client, ClientIr ir, IrJson irJson) {
+  static const _irJson = IrJson.withoutLocations();
+
+  /// The hash of what the code of [client] is generated from: its [ir].
+  static String of(ClientConfig client, ClientIr ir) {
     return sha256
         .convert(
           utf8.encode(
@@ -26,7 +28,7 @@ final class GenerationInputs {
               'generator': OutputWriter.generator,
               'client': client.name,
               'line_width': client.lineWidth,
-              'ir': irJson.toJson(ir),
+              'ir': _irJson.toJson(ir),
             }),
           ),
         )
