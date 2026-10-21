@@ -34,7 +34,10 @@ final class OutsideGeneratedApi {
     if (dropped.isEmpty) return diagnostics;
     final region = OutsideRegion(
       dropped,
-      RefEdges(_spec.documents).collect(),
+      RefEdges(
+        _spec.documents,
+        _client.generation.defaultErrorSchema,
+      ).collect(),
     );
     final uris = {
       for (final document in _spec.documents.loaded)

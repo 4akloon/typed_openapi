@@ -911,9 +911,12 @@ Engine folders under `packages/typed_openapi_core/lib/src/`, generator folders
   errors and warnings that lie outside the generated API: the dropped
   operations (`SpecOperations` and `OperationSelector` recomputed on a scratch
   bag) plus the nodes only they use, found by incoming `$ref`s, `discriminator`
-  mappings and `allOf` subtypes of a discriminated base (`RefEdges`,
-  `OutsideRegion`: candidates reached from the dropped operations lose a
-  member while a node outside the region refers to it, to a fixpoint). It
+  mappings (bare names also in the root document), `allOf` subtypes of a
+  discriminated base at any depth or through aliases (`RefEdges`,
+  `SubtypeEdges`) and the `errors.default_schema`, a use from nowhere
+  (`OutsideRegion`: candidates and dropped operations lose their place while
+  a node outside the region refers to them, to a fixpoint; a node below a
+  dropped operation that is referred to becomes a hole). It
   bypasses `fixedCodes` on purpose; a node nobody places keeps its level.
   `SpecLinter.lint(path, preset:)` (M13) checks one spec file with no config,
   no overrides, no baseline and no IR: it loads, detects the version, runs

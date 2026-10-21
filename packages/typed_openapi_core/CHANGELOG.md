@@ -4,9 +4,12 @@
 - `DiagnosticCode.findingsOutsideGeneratedApi` (`TOA811`, info): `SpecChecker`
   lowers to info the errors and warnings located in operations the client's
   filters or `exclude: true` overrides leave out and in nodes only those
-  operations use (found by incoming references, so a node a generated
-  operation can reach, also through a discriminated subtype or a mapping,
-  keeps its level), and reports how many.
+  operations use (found by incoming references: a node a generated
+  operation refers to, a subtype of a discriminated union at any depth or
+  through aliases, a `discriminator.mapping` target, the
+  `errors.default_schema` or a `$ref` into a left out operation from outside
+  keeps its level; a client's `severity` entry is applied afterwards and
+  wins), and reports how many.
 - `DartNames.eventPascal`, which names the variants of an event union and
   their data types: every all-caps piece of an event name is lowercased after
   its first letter (`USER_CREATED` is `UserCreated`, not `USERCREATED`).

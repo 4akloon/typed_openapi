@@ -4,23 +4,28 @@ import '../model/spec_node.dart';
 import '../resolve/ref_target.dart';
 import '../resolve/spec_documents.dart';
 import 'ref_edge.dart';
+import 'subtype_edges.dart';
 
 /// Finds the references between the nodes of every loaded document by
 /// walking the plain trees, so a `$ref` that does not resolve, or sits where
 /// the model drops it, does not stop the walk.
 ///
-/// Besides `$ref`, a `discriminator.mapping` value refers to a schema, and a
-/// schema that extends a discriminated base with `allOf` is used by the base,
-/// since the generated union holds it.
+/// Besides `$ref`, a `discriminator.mapping` value refers to a schema, the
+/// schemas that extend a discriminated base are used by it ([SubtypeEdges]),
+/// and the IR reads the `errors.default_schema` by name, which no `$ref`
+/// shows: it is a use from outside every operation.
 final class RefEdges {
-  /// Creates a finder over [_documents].
-  const RefEdges(this._documents);
+  /// Creates a finder over [_documents]; [_defaultErrorSchema] is the key the
+  /// config names in `errors.default_schema`.
+  const RefEdges(this._documents, [this._defaultErrorSchema]);
 
   final SpecDocuments _documents;
+  final String? _defaultErrorSchema;
 
   /// Every reference of the loaded documents.
   List<RefEdge> collect() {
     final edges = <RefEdge>[];
+    final subtypes = SubtypeEdges(_documents);
     for (final document in _documents.loaded) {
       final stack = <(Object?, JsonPointer)>[(document.root, JsonPointer.root)];
       while (stack.isNotEmpty) {
@@ -28,6 +33,7 @@ final class RefEdges {
         switch (node) {
           case Map<String, Object?>():
             _readObject(document, node, pointer, edges);
+            subtypes.read(document.uri, node, pointer);
             for (final MapEntry(:key, :value) in node.entries) {
               stack.add((value, pointer.child(key)));
             }
@@ -38,7 +44,17 @@ final class RefEdges {
         }
       }
     }
-    return edges;
+    final root = _documents.root.uri;
+    final name = _defaultErrorSchema;
+    return [
+      ...edges,
+      ...subtypes.edges(),
+      if (name != null)
+        RefEdge(
+          SpecLocation(root, JsonPointer.root),
+          SpecLocation(root, _schemaPointer(name)),
+        ),
+    ];
   }
 
   void _readObject(
@@ -57,19 +73,10 @@ final class RefEdges {
         if (value is String) _addMapping(edges, document, here, value);
       }
     }
-    if (node['allOf'] case final List<Object?> parts) {
-      for (final part in parts) {
-        if (part is! Map<String, Object?>) continue;
-        final extended = part[r'$ref'];
-        if (extended is! String) continue;
-        final base = RefTarget.parse(extended, document.uri);
-        if (base is ResolvableRef && _hasDiscriminator(base.location)) {
-          edges.add(RefEdge(base.location, here));
-        }
-      }
-    }
   }
 
+  /// A mapping value that is a bare name is a `components.schemas` key of
+  /// the root document for the IR; the holder's document is kept as well.
   void _addMapping(
     List<RefEdge> edges,
     SpecDocument document,
@@ -80,16 +87,13 @@ final class RefEdges {
       _add(edges, schema, RefTarget.parse(value, document.uri));
       return;
     }
-    final named = JsonPointer.root.child('components').child('schemas');
-    edges.add(
-      RefEdge(schema, SpecLocation(document.uri, named.child(value))),
-    );
+    for (final uri in {document.uri, _documents.root.uri}) {
+      edges.add(RefEdge(schema, SpecLocation(uri, _schemaPointer(value))));
+    }
   }
 
-  bool _hasDiscriminator(SpecLocation base) {
-    final value = _documents[base.document]?.valueAt(base.pointer)?.$1;
-    return value is Map<String, Object?> && value['discriminator'] is Map;
-  }
+  static JsonPointer _schemaPointer(String name) =>
+      JsonPointer.root.child('components').child('schemas').child(name);
 
   void _add(List<RefEdge> edges, SpecLocation source, RefTarget target) {
     if (target is ResolvableRef) edges.add(RefEdge(source, target.location));

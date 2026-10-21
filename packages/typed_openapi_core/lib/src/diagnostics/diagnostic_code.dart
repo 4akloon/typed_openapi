@@ -1248,8 +1248,14 @@ enum DiagnosticCode {
   /// and responses those operations use, were lowered to info. The whole
   /// spec is still read, so the findings stay visible under their own codes
   /// and messages, but they no longer stop the client from being generated.
-  /// A component that a generated operation (or any node outside the left
-  /// out operations) also refers to keeps its level.
+  /// A node that anything outside the left out operations also uses keeps
+  /// its level: a generated operation that refers to it, a discriminated base
+  /// whose union holds it as a subtype (through `allOf`, also through other
+  /// subtypes or aliases), a `discriminator.mapping`, the
+  /// `errors.default_schema`, or a `$ref` from such a place into a left out
+  /// operation. A `severity` entry of the client is applied after the
+  /// lowering and sets the level outright: `TOA100: error` makes the finding
+  /// block the client again.
   ///
   /// Example: `GET /social-networks/facebook/auth-links` has a response with
   /// `$ref: "#/components/schemas/"` (`invalid-ref`) while `include` does not

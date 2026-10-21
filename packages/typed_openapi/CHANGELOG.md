@@ -41,8 +41,10 @@
   overrides `exclude: true` leave out (or in a schema only such operations
   use) no longer stops `generate`: the finding keeps its code and message but
   is reported as info, and `TOA811` (`findings-outside-generated-api`, info)
-  says how many were lowered. A schema that a generated operation also
-  reaches keeps its level.
+  says how many were lowered. A node that anything else uses (a generated
+  operation, a discriminated union and its subtypes, a mapping,
+  `errors.default_schema`) keeps its level, and a client's `severity` entry
+  still sets the level outright (`TOA100: error` blocks again).
 - The `inputs` hash of the manifest covers what generation reads (the
   generator, the client's name, `line_width` and the IR without locations),
   not the text of the input files: a comment, or a backend change to an
