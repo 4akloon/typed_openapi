@@ -57,8 +57,8 @@ final class Declarer {
   ) => declare(schema, scope, PendingDeclaration(id)..hint = hint);
 
   /// The declaration of [schema] that [seed] starts: the one it has already
-  /// when it is reached again, else [seed], filled in. An inline enum equal
-  /// to an earlier one is that enum.
+  /// when it is reached again, else [seed], filled in. Every location has its
+  /// own declaration, an inline enum too.
   DartType declare(
     SchemaObject schema,
     MappingScope scope,
@@ -74,10 +74,7 @@ final class Declarer {
     final draft = values == null || kind == null
         ? null
         : EnumDraft.of(values, kind, _enums.labels(schema, values));
-    final key = draft == null || seed.componentKey != null ? null : draft.key;
-    final known = key == null ? null : state.inlineEnums[key];
-    if (known != null) return NamedType(known.id, nullable: nullable);
-    _register(seed, schema, draft, key);
+    _register(seed, schema, draft);
     _fill(schema, seed, scope, draft);
     return NamedType(id, nullable: nullable);
   }
@@ -112,7 +109,6 @@ final class Declarer {
     PendingDeclaration pending,
     SchemaObject schema,
     EnumDraft? draft,
-    String? enumKey,
   ) {
     final state = _tools.state;
     pending.jsonKind = switch (draft?.kind) {
@@ -124,7 +120,6 @@ final class Declarer {
     };
     pending.depth = (pending.hint?.parent?.depth ?? -1) + 1;
     state.pending[pending.id] = pending;
-    if (enumKey != null) state.inlineEnums[enumKey] = pending;
   }
 
   /// The JSON type of the values of a declaration that is no enum: an object

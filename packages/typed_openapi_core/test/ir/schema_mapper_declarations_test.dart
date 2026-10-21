@@ -9,8 +9,8 @@ import '../helpers/ir_fixture.dart';
 import '../helpers/mapping.dart';
 
 void main() {
-  test('names inline schemas after their parent and dedupes inline enums '
-      '(R5.4)', () {
+  test('names inline schemas after their parent, an equal inline enum '
+      'included (R5.4)', () {
     final fixture = IrFixture('''
 openapi: 3.1.0
 info: {title: t, version: "1"}
@@ -36,11 +36,12 @@ components:
       'Order',
       'OrderItemsItem',
       'OrderPricesValue',
+      'OrderState',
       'OrderStatus',
     ]);
     expect(fieldsOf(ir, 'Order'), [
       'status(status): OrderStatus?',
-      'state(state): OrderStatus?',
+      'state(state): OrderState?',
       'items(items): List<OrderItemsItem>?',
       'kind(kind): String?',
       'prices(prices): Map<String, OrderPricesValue>?',
@@ -248,7 +249,7 @@ components:
     test('names an inline enum after a declaration that exists', () {
       // Two uses of one list alias whose item is an object with an enum, and
       // a second owner of an equal enum: every hint resolves to a declared
-      // parent, in either mapping order.
+      // parent, in either mapping order, and each site has its own enum.
       const spec = r'''
 openapi: 3.1.0
 info: {title: t, version: "1"}
@@ -281,7 +282,7 @@ components:
         expect(names.toSet().length, names.length, reason: '$order');
         expect(names, contains('Other'), reason: '$order');
         expect(names, contains('TagsItem'), reason: '$order');
-        expect(names.where((n) => n.endsWith('Kind')), hasLength(1));
+        expect(names.where((n) => n.endsWith('Kind')), hasLength(2));
       }
     });
 
