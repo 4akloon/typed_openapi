@@ -1243,6 +1243,27 @@ enum DiagnosticCode {
     .warning,
   ),
 
+  /// Findings located in operations that the client's `include`, `exclude` or
+  /// an overrides `exclude: true` leave out, or only in schemas, parameters
+  /// and responses those operations use, were lowered to info. The whole
+  /// spec is still read, so the findings stay visible under their own codes
+  /// and messages, but they no longer stop the client from being generated.
+  /// A component that a generated operation (or any node outside the left
+  /// out operations) also refers to keeps its level.
+  ///
+  /// Example: `GET /social-networks/facebook/auth-links` has a response with
+  /// `$ref: "#/components/schemas/"` (`invalid-ref`) while `include` does not
+  /// list that operation.
+  ///
+  /// Fix: Nothing to do for the client. Fix the spec at the source when the
+  /// operation should be generated later, or lower the level of this note
+  /// with `severity` (`TOA811: off`).
+  findingsOutsideGeneratedApi(
+    'TOA811',
+    'findings-outside-generated-api',
+    .info,
+  ),
+
   /// The baseline file a client names does not exist.
   ///
   /// Example: `baseline: baseline.yaml` in the config when the file is not

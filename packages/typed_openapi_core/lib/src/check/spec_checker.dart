@@ -17,6 +17,7 @@ import '../normalize/normalizer.dart';
 import '../overrides/override_loader.dart';
 import '../snapshot/api_lock_names.dart';
 import 'client_check.dart';
+import 'outside_generated_api.dart';
 
 export 'client_check.dart';
 
@@ -219,7 +220,7 @@ final class SpecChecker {
     final ir = IrBuilder(found, names: names).build(normalized, client);
     return ClientCheck(
       client,
-      found.all,
+      OutsideGeneratedApi(normalized, client, names).apply(found.all),
       AnchorIndex(normalized.model, normalized.documents),
       ir: ir,
       irJson: IrJson(normalized.documents.displayPath),

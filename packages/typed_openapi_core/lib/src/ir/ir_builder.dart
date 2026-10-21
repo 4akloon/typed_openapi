@@ -1,7 +1,6 @@
 import '../config/project_config.dart';
 import '../diagnostics/diagnostic_bag.dart';
 import '../diagnostics/json_pointer.dart';
-import '../model/operation.dart';
 import '../model/spec_node.dart';
 import '../normalize/normalizer.dart';
 import 'api_names.dart';
@@ -16,6 +15,7 @@ import 'operation_builder.dart';
 import 'operation_checks.dart';
 import 'operation_selector.dart';
 import 'schema_mapper.dart';
+import 'spec_operations.dart';
 
 /// Builds the semantic IR of a client from its normalized spec (M6).
 ///
@@ -39,7 +39,7 @@ final class IrBuilder {
     // Reads the setting once, so a key that is not in the spec is reported
     // even when no operation is generated.
     final defaultError = context.defaultErrorSchema;
-    final (all, refs) = _operations(context);
+    final (all, refs) = SpecOperations.of(context);
     final selected = OperationSelector(context).select(all);
     final directions = DirectionIndex(
       spec.model,
@@ -228,37 +228,5 @@ final class IrBuilder {
       ),
       fix: fixes.join(' '),
     );
-  }
-
-  /// The operations of `paths`, by location, with `additionalOperations`
-  /// (OpenAPI 3.2), and how many operations are written as a `$ref` and so
-  /// left out. A path item shared through `$ref` gives its operations to
-  /// every path that uses it.
-  static (List<SpecOperation>, int) _operations(IrContext context) {
-    final result = <SpecOperation>[];
-    var refs = 0;
-    for (final MapEntry(key: path, :value)
-        in context.model.document.paths.entries) {
-      final item = context.model.resolve(value);
-      if (item == null) continue;
-      for (final MapEntry(key: method, value: operation)
-          in <MapEntry<String, Operation>>[
-            ...item.operations.entries,
-            ...item.additionalOperations.entries,
-          ]) {
-        // An operation written as a `$ref` is empty; TOA107 reports it.
-        if (operation.unknownKeys.containsKey(r'$ref')) {
-          refs++;
-          continue;
-        }
-        result.add(SpecOperation(operation, method, path, item));
-      }
-    }
-    result.sort((a, b) {
-      final byPath = a.path.compareTo(b.path);
-      if (byPath != 0) return byPath;
-      return a.method.compareTo(b.method);
-    });
-    return (result, refs);
   }
 }
